@@ -35,7 +35,7 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 
 main{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
 .stepper{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
-.step{flex:1;min-width:150px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);cursor:pointer;user-select:none;transition:.15s}
+.step{flex:1;min-width:112px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);cursor:pointer;user-select:none;transition:.15s}
 .step .num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:var(--lav2);color:var(--accent);flex:none}
 .step .lbl{font-weight:600;font-size:14px}
 .step .sub{font-size:12px;color:var(--muted)}
@@ -88,6 +88,7 @@ table.t td select{min-width:120px}
 .predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
+.adv-opts{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .fig-prev{margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;position:sticky;top:90px}
 .fig-prev canvas{width:100%;display:block}
 .fig-prev .legend-note{text-align:center;margin-top:4px}
@@ -218,26 +219,30 @@ footer b{color:var(--purple)}
       <div id="repList"></div>
       <div id="repEditor"></div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="1">← Back</button><button class="btn primary" data-go="3">Next: Timepoints & options →</button></div>
+    <div class="nav"><button class="btn ghost" data-go="1">← Back</button><button class="btn primary" data-go="3">Next: Timepoints →</button></div>
   </section>
 
   <!-- STEP 3 -->
   <section class="panel" id="p3">
     <div class="card">
       <h2>3 · Timepoints</h2>
-      <p class="hint">Rename how each timepoint appears in tables and charts.</p>
-      <div class="tbl-wrap" style="max-height:340px"><table class="t" id="tpTbl"></table></div>
+      <p class="hint">Each repeated outcome has its own timepoints: tick which enter, rename them and set their order for that outcome only. Labels you type here are used in its table, comments and figure.</p>
+      <div id="tpVars"></div>
     </div>
     <div class="card">
-      <h2>Analysis & report options</h2>
-      <div class="grid g4">
-        <div><label class="f">Decimal places</label><select id="optDec"><option>1</option><option selected>2</option><option>3</option></select></div>
-        <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
-        <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
-        <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option><option value="custom">Custom colours…</option></select></div>
-      </div>
-      <h3>Tests</h3>
+      <h2>Shared timepoint names</h2>
+      <p class="hint">Default names for the timepoint tokens found in column names. Outcomes use these unless you renamed a timepoint above. Unticking a token here leaves it out of every outcome.</p>
+      <div class="tbl-wrap" style="max-height:340px"><table class="t" id="tpTbl"></table></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="2">← Back</button><button class="btn primary" data-go="4">Next: Tests →</button></div>
+  </section>
+
+  <!-- STEP 4 -->
+  <section class="panel" id="p4">
+    <div class="card">
+      <h2>4 · Statistical tests</h2>
       <div class="grid g4" style="margin-bottom:8px">
+        <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
         <div><label class="f">Normality test</label><select id="optNormality"><option value="sw" selected>Shapiro-Wilk</option><option value="ks">Kolmogorov-Smirnov (Lilliefors)</option></select></div>
         <div><label class="f">Effect of binary variables</label><select id="optCatEffect"><option value="rr" selected>Relative risk (RR)</option><option value="or">Odds ratio (OR)</option></select></div>
       </div>
@@ -245,35 +250,83 @@ footer b{color:var(--purple)}
         <div>
           <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
           <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — paired t / Wilcoxon for two timepoints; repeated-measures ANOVA (Greenhouse-Geisser) or Friedman for more, with Bonferroni post hoc versus the first timepoint</span></label>
-        </div>
-        <div>
-          <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
-          <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots of significant pairs</span></label>
-        </div>
-      </div>
-      <div class="grid g2" style="margin-top:6px">
-        <div>
           <label class="check"><input type="checkbox" id="optWelch"><span><b>Welch's ANOVA + Games-Howell</b> post hoc when variances are unequal (Levene P &lt; 0.05), 3+ groups</span></label>
           <label class="check"><input type="checkbox" id="optDunn"><span><b>Dunn's test</b> (Bonferroni) as the post hoc after Kruskal-Wallis, instead of pairwise Mann-Whitney</span></label>
         </div>
         <div>
+          <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
+          <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots of significant pairs</span></label>
           <label class="check"><input type="checkbox" id="optChiPost"><span><b>Pairwise post hoc for categorical variables</b> — Chi-square / Fisher between each two groups (Bonferroni), 3+ groups</span></label>
           <label class="check"><input type="checkbox" id="optMixed"><span><b>Group × time interaction</b> — mixed (split-plot) ANOVA with Greenhouse-Geisser, parametric repeated outcomes</span></label>
         </div>
       </div>
-      <h3>Comments</h3>
-      <div class="grid g2">
-        <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option></select></div>
-        <div><label class="check" style="margin-top:24px"><input type="checkbox" id="optNotSig"><span>Write “not significantly” instead of “insignificantly”</span></label></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="3">← Back</button><button class="btn primary" data-go="5">Next: Tables →</button></div>
+  </section>
+
+  <!-- STEP 5 -->
+  <section class="panel" id="p5">
+    <div class="card">
+      <h2>5 · Tables</h2>
+      <h3>Numbers</h3>
+      <div class="grid g4">
+        <div><label class="f">Decimal places</label><select id="optDec"><option>1</option><option selected>2</option><option>3</option></select></div>
+        <div><label class="f">Percentage decimals</label><select id="optPctDec"><option value="0">0 — 33%</option><option value="1" selected>1 — 33.3%</option><option value="2">2 — 33.33%</option></select></div>
+        <div><label class="f">Mean and SD</label><select id="optMeanStyle"><option value="pm" selected>Mean ± SD</option><option value="paren">Mean (SD)</option></select></div>
+        <div><label class="f">Median and IQR</label><select id="optIqrStyle"><option value="dash" selected>25 - 30</option><option value="endash">25–30</option><option value="bracket">[25, 30]</option></select></div>
+        <div><label class="f">Second row of numeric variables</label><select id="optSecondRow"><option value="auto" selected>Range (mean) / IQR (median)</option><option value="ci">95% CI of the mean / IQR</option><option value="none">None — one row per variable</option></select></div>
+        <div><label class="f">P values</label><select id="optPDigits"><option value="3" selected>3 decimals (&lt;0.001)</option><option value="4">4 decimals (&lt;0.0001)</option></select></div>
+        <div><label class="f">P value column heading</label><select id="optPHead"><option selected>P value</option><option>P</option><option>p-value</option></select></div>
+        <div><label class="f">Mark of significant P values</label><select id="optSigSym"><option value="*" selected>* (asterisk)</option><option value="†">† (dagger)</option><option value="">none</option></select></div>
       </div>
-      <h3>Word report</h3>
+      <div class="grid g2" style="margin-top:10px">
+        <div>
+          <label class="check"><input type="checkbox" id="optShowStat"><span><b>Test statistic column</b> — t, F, U, H or χ² value of the test behind each P value</span></label>
+          <label class="check"><input type="checkbox" id="optMissingNote"><span><b>Missing data</b> — number of missing values per variable in the table footnote</span></label>
+        </div>
+      </div>
+      <h3>Word document</h3>
       <div class="grid g4">
         <div><label class="f">Table style</label><select id="optTable"><option value="grid" selected>Grid (all borders, shaded header)</option><option value="apa">Three-line academic (APA)</option></select></div>
         <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
+        <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option></select></div>
+        <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
       </div>
-      <h3>Figures</h3>
+      <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand" checked><span><b>Prof MSE branding</b> in the Word header</span></label></div>
+      <p class="legend-note">Table titles can be edited in the report preview (step 10).</p>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="4">← Back</button><button class="btn primary" data-go="6">Next: Comments →</button></div>
+  </section>
+
+  <!-- STEP 6 -->
+  <section class="panel" id="p6">
+    <div class="card">
+      <h2>6 · Comments</h2>
+      <div class="grid g4">
+        <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option></select></div>
+        <div><label class="f">P value wording</label><select id="optPWord"><option value="P value" selected>(P value = 0.013)</option><option value="P">(P = 0.013)</option><option value="p">(p = 0.013)</option></select></div>
+        <div><label class="f">Comment placement</label><select id="optCommentPlace"><option value="after" selected>After each table</option><option value="before">Before each table</option><option value="none">No comments</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:10px">
+        <div>
+          <label class="check"><input type="checkbox" id="optNotSig"><span>Write “not significantly” instead of “insignificantly”</span></label>
+          <label class="check"><input type="checkbox" id="optCommentEffect"><span><b>Effect sizes in comments</b> — the difference or RR/OR with 95% CI for significant two-group comparisons</span></label>
+          <label class="check"><input type="checkbox" id="optSummary"><span><b>Summary of key findings</b> — a closing paragraph listing every significant result</span></label>
+        </div>
+      </div>
+      <p class="legend-note">Every comment can still be edited by hand in the report preview (step 10).</p>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="5">← Back</button><button class="btn primary" data-go="7">Next: Figures →</button></div>
+  </section>
+
+  <!-- STEP 7 -->
+  <section class="panel" id="p7">
+    <div class="card">
+      <h2>7 · Figures</h2>
       <div class="grid g4">
         <div><label class="f">Figures to include</label><select id="optFigures"><option value="all" selected>All results</option><option value="sig">Significant results only</option><option value="none">None (tables only)</option></select></div>
+        <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
+        <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option><option value="custom">Custom colours…</option></select></div>
         <div><label class="f">Error bars (mean charts)</label><select id="optErrorBar"><option value="sd" selected>Standard deviation (SD)</option><option value="sem">Standard error (SEM)</option><option value="ci">95% confidence interval</option></select></div>
         <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option></select></div>
         <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
@@ -284,15 +337,20 @@ footer b{color:var(--purple)}
         <label class="f">Custom colours (group 1, 2, 3 …)</label>
         <div class="row"><span id="customColors" class="row" style="gap:6px"></span><button class="btn ghost small" id="customReset" type="button">Reset</button></div>
       </div>
-      <div class="grid g4" style="margin-top:12px">
+      <h3>Chart appearance</h3>
+      <div class="grid g4">
         <div><label class="f">Chart text size</label><select id="optChartText"><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
         <div><label class="f">Chart shape</label><select id="optAspect"><option value="wide" selected>Wide</option><option value="standard">Standard (4:3)</option><option value="square">Square</option></select></div>
         <div><label class="f">Bar fill</label><select id="optBarFill"><option value="gradient" selected>Gradient</option><option value="solid">Solid</option><option value="outline">Outline only</option><option value="hatched">Hatched (black &amp; white print)</option></select></div>
+        <div><label class="f">Bar width</label><select id="optBarWidth"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="wide">Wide</option></select></div>
         <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
+        <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
+      </div>
+      <h3>Legend</h3>
+      <div class="grid g4">
         <div><label class="f">Legend position</label><select id="optLegend"><option value="bottom" selected>Bottom</option><option value="top">Top</option><option value="right">Right</option><option value="inside">Inside the plot</option><option value="none">Hidden</option></select></div>
         <div><label class="f">Legend text size</label><select id="optLegendSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option></select></div>
         <div><label class="f">Legend title (optional)</label><input type="text" id="optLegendTitle" placeholder="e.g. Groups"></div>
-        <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
       </div>
       <div class="grid g2" style="margin-top:12px">
         <div>
@@ -301,12 +359,12 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optLegendFrame"><span><b>Frame</b> around the legend</span></label>
           <label class="check"><input type="checkbox" id="optNLabels"><span><b>Group sizes</b> on the charts — “A group (n=30)”</span></label>
           <label class="check"><input type="checkbox" id="optValueLabels"><span><b>Value labels</b> on bar charts of means / medians</span></label>
-          <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
-          <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
         </div>
         <div>
+          <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
+          <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
+          <label class="check"><input type="checkbox" id="optBoxMean"><span><b>Mean marker</b> (◆) on box plots</span></label>
           <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
-          <label class="check"><input type="checkbox" id="optBrand" checked><span><b>Prof MSE branding</b> in the Word header</span></label>
         </div>
       </div>
     </div>
@@ -321,8 +379,13 @@ footer b{color:var(--purple)}
         </div>
       </div>
     </div>
+    <div class="nav"><button class="btn ghost" data-go="6">← Back</button><button class="btn primary" data-go="8">Next: Advanced analyses →</button></div>
+  </section>
+
+  <!-- STEP 8 -->
+  <section class="panel" id="p8">
     <div class="card">
-      <h2>Advanced analyses</h2>
+      <h2>8 · Advanced analyses</h2>
       <p class="hint">Optional. Each analysis adds its own table (and ROC figure) after the main results. Categorical predictors are compared with their first level (group order / levels order from step 2). Patients with missing values are left out of that analysis.</p>
       <div id="advList" class="grid"></div>
       <div class="row" id="advAdd" style="margin-top:12px">
@@ -339,13 +402,13 @@ footer b{color:var(--purple)}
         <button class="btn ghost small" data-advadd="cronbach" type="button">+ Cronbach's alpha</button>
       </div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="2">← Back</button><button class="btn primary" data-go="4">Next: Flowchart →</button></div>
+    <div class="nav"><button class="btn ghost" data-go="7">← Back</button><button class="btn primary" data-go="9">Next: Flowchart →</button></div>
   </section>
 
-  <!-- STEP 4 -->
-  <section class="panel" id="p4">
+  <!-- STEP 9 -->
+  <section class="panel" id="p9">
     <div class="card">
-      <div class="row"><h2>4 · Flowchart</h2><span class="spacer"></span><label class="check"><input type="checkbox" id="cEnabled" checked><span>Include in report</span></label></div>
+      <div class="row"><h2>9 · Flowchart</h2><span class="spacer"></span><label class="check"><input type="checkbox" id="cEnabled" checked><span>Include in report</span></label></div>
       <div class="grid g3" style="margin:6px 0 4px"><div><label class="f">Flowchart type</label><select id="cType">
         <option value="consort">CONSORT 2010 — randomized trial</option><option value="strobe">STROBE — observational study</option>
         <option value="stard">STARD 2015 — diagnostic accuracy</option><option value="simple">Simple flowchart — custom steps</option></select></div></div>
@@ -355,21 +418,21 @@ footer b{color:var(--purple)}
         <div><canvas id="consortCanvas" class="consort-prev"></canvas></div>
       </div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="3">← Back</button><button class="btn primary" data-go="5">Run analysis →</button></div>
+    <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Run analysis →</button></div>
   </section>
 
-  <!-- STEP 5 -->
-  <section class="panel" id="p5">
+  <!-- STEP 10 -->
+  <section class="panel" id="p10">
     <div class="card">
       <div class="row">
-        <h2>5 · Report</h2><span class="spacer"></span>
+        <h2>10 · Report</h2><span class="spacer"></span>
         <button class="btn ghost" id="btnRerun">↻ Re-run</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
       <p class="hint">Review everything below. You can edit the text boxes — your edits go into the Word file.</p>
       <div id="report"></div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="4">← Back</button><span></span></div>
+    <div class="nav"><button class="btn ghost" data-go="9">← Back</button><span></span></div>
   </section>
 </main>
 <footer>© <b>Prof MSE</b> – Medical Research · Easy Stat v1.0 · runs fully offline in your browser</footer>
@@ -21216,13 +21279,30 @@ const Stats = (() => {
     const correct = mu.filter((m, i) => (m >= 0.5) === (y[i] === 1)).length;
     // separation shows as huge coefficients that never settle
     const unstable = !converged || terms.slice(1).some(t => Math.abs(t.B) > 15 || !isFinite(t.se));
-    return { terms, n, events: ny, m2LL: -2 * LL, chi, dfModel: k, pModel: k ? 1 - jStat.chisquare.cdf(chi, k) : NaN, coxSnell: cs, nagelkerke: nag, accuracy: correct / n, converged, unstable, iter };
+    return { terms, n, events: ny, m2LL: -2 * LL, chi, dfModel: k, pModel: k ? 1 - jStat.chisquare.cdf(chi, k) : NaN, coxSnell: cs, nagelkerke: nag, accuracy: correct / n, converged, unstable, iter, fitted: mu };
+  }
+
+  // Hosmer–Lemeshow goodness of fit: patients sorted by predicted risk, g groups of (nearly) equal size, df = g − 2
+  function hosmerLemeshow(y, prob, g = 10) {
+    const n = y.length, idx = prob.map((_, i) => i).sort((a, b) => prob[a] - prob[b]);
+    g = Math.min(g, n);
+    let chi = 0;
+    for (let q = 0; q < g; q++) {
+      const part = idx.slice(Math.round(q * n / g), Math.round((q + 1) * n / g));
+      if (!part.length) continue;
+      const o1 = sum(part.map(i => y[i])), e1 = sum(part.map(i => prob[i])), m = part.length, o0 = m - o1, e0 = m - e1;
+      if (e1 > 0) chi += (o1 - e1) ** 2 / e1;
+      if (e0 > 0) chi += (o0 - e0) ** 2 / e0;
+    }
+    const df = g - 2;
+    return { chi, df, p: df > 0 ? 1 - jStat.chisquare.cdf(chi, df) : NaN };
   }
 
   /* ---------- ROC curve ---------- */
   // values: test results; pos: booleans (true = condition present). Higher values are taken as positive;
   // when the AUC is below 0.5 the direction is flipped (lower values positive) and reported.
-  function roc(values, pos) {
+  // cutoff: 'youden' (max sensitivity + specificity − 1) or 'closest' (nearest to the top-left corner)
+  function roc(values, pos, cutoff = 'youden') {
     let higher = true;
     const run = (vals) => {
       const P = vals.filter((_, i) => pos[i]), N = vals.filter((_, i) => !pos[i]), n1 = P.length, n0 = N.length;
@@ -21243,7 +21323,8 @@ const Stats = (() => {
       const tp = values.filter((v, i) => pos[i] && sgn * (v - c) > 0).length, fp = values.filter((v, i) => !pos[i] && sgn * (v - c) > 0).length;
       return { cut: c, sens: tp / n1, spec: 1 - fp / n0, tp, fp, fn: n1 - tp, tn: n0 - fp };
     });
-    const best = points.slice(1, -1).reduce((b, q) => (q.sens + q.spec > b.sens + b.spec ? q : b), points[1] || points[0]);
+    const score = cutoff === 'closest' ? q => -((1 - q.sens) ** 2 + (1 - q.spec) ** 2) : q => q.sens + q.spec;
+    const best = points.slice(1, -1).reduce((b, q) => (score(q) > score(b) ? q : b), points[1] || points[0]);
     return {
       auc, se, lo: Math.max(0, auc - 1.959964 * se), hi: Math.min(1, auc + 1.959964 * se), p, n1, n0, higher,
       points: points.map(q => ({ fpr: 1 - q.spec, tpr: q.sens })),
@@ -21279,7 +21360,7 @@ const Stats = (() => {
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
     pairedT, wilcoxonSigned, pearson, spearman, bonferroni,
-    invert, linearRegression, logisticRegression, roc,
+    invert, linearRegression, logisticRegression, hosmerLemeshow, roc,
     welchAnova, gamesHowell, dunn, chiSquarePairwise, mixedAnova, kaplanMeier, logRank, ancova,
     lilliefors, oddsRatio, mcnemar, cohenKappa, icc, blandAltman, cronbach, clopperPearson, diagnostic2x2, coxRegression
   };
@@ -21301,13 +21382,20 @@ const Analysis = (() => {
     const r = Math.round(v * 10 ** d) / 10 ** d;
     return (Object.is(r, -0) ? 0 : r).toString();
   }
+  // number formats of the current run (step 5 options): P decimals, significance mark, mean/SD, IQR and percent styles
+  let FMT = { pDig: 3, sig: '*', mean: 'pm', iqr: 'dash', pct: 1 };
   function fmtP(p, alpha) {
     if (p === null || p === undefined || !isFinite(p)) return '—';
-    const s = p < 0.001 ? '<0.001' : p.toFixed(3);
-    return s + (p <= alpha ? '*' : '');
+    const thr = 10 ** -FMT.pDig, s = p < thr ? '<' + thr.toFixed(FMT.pDig) : p.toFixed(FMT.pDig);
+    return s + (p <= alpha ? FMT.sig : '');
   }
   // p-value as used inside sentences: "= 0.013" or "< 0.001"
-  const pTxt = p => p < 0.001 ? '< 0.001' : '= ' + p.toFixed(3);
+  const pTxt = p => { const thr = 10 ** -FMT.pDig; return p < thr ? '< ' + thr.toFixed(FMT.pDig) : '= ' + p.toFixed(FMT.pDig); };
+  const msd = (m, sdv, d) => FMT.mean === 'paren' ? `${fmt(m, d)} (${fmt(sdv, d)})` : `${fmt(m, d)} ± ${fmt(sdv, d)}`;
+  const iqrTxt = (a, b, d) => FMT.iqr === 'bracket' ? `[${fmt(a, d)}, ${fmt(b, d)}]` : FMT.iqr === 'endash' ? `${fmt(a, d)}–${fmt(b, d)}` : `${fmt(a, d)} - ${fmt(b, d)}`;
+  const medIqr = (dd, d) => FMT.iqr === 'bracket' ? `${fmt(dd.median, d)} ${iqrTxt(dd.q1, dd.q3, d)}` : `${fmt(dd.median, d)} (${iqrTxt(dd.q1, dd.q3, d)})`;
+  const pctTxt = v => fmt(v, FMT.pct);
+  const meanSdName = lower => (FMT.mean === 'paren' ? 'Mean (SD)' : 'Mean ± SD').replace(/^M/, lower ? 'm' : 'M');
   function listJoin(a) {
     if (a.length <= 1) return a.join('');
     return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
@@ -21345,23 +21433,23 @@ const Analysis = (() => {
     let param = dist === 'param' ? true : dist === 'nonparam' ? false : normal;
     if (groupVals.some(g => g.length < 2)) return { desc, sw, normal, param, p: NaN, pairs: [], test: '—' };
     const pr = pairs(k);
-    let p, test, pw = [];
+    let p, test, pw = [], stat = '—';
     if (param) {
       if (k === 2) {
         const lev = S.levene(groupVals), eq = !(lev < 0.05);
         const t = S.tTest(groupVals[0], groupVals[1], eq);
-        p = t.p; test = eq ? 't-test' : 'Welch t-test';
+        p = t.p; test = eq ? 't-test' : 'Welch t-test'; stat = `t = ${fmt(t.t, 2)}`;
         used.add(eq ? 'ttest' : 'welch');
         pw = [{ i: 0, j: 1, p: t.p, diff: t.diff, lo: t.lo, hi: t.hi }];
       } else if (opts.welch && S.levene(groupVals) < 0.05) {
         // unequal variances: Welch's ANOVA with Games–Howell post hoc
         const w = S.welchAnova(groupVals);
-        p = w.p; test = 'Welch ANOVA';
+        p = w.p; test = 'Welch ANOVA'; stat = `F = ${fmt(w.F, 2)}`;
         used.add('welchAnova');
         pw = S.gamesHowell(groupVals);
       } else {
         const a = S.anova(groupVals);
-        p = a.p; test = 'ANOVA';
+        p = a.p; test = 'ANOVA'; stat = `F = ${fmt(a.F, 2)}`;
         used.add('anova');
         pw = S.tukey(groupVals);
       }
@@ -21369,13 +21457,13 @@ const Analysis = (() => {
     } else {
       if (k === 2) {
         const m = S.mannWhitney(groupVals[0], groupVals[1]);
-        p = m.p; test = 'Mann-Whitney';
+        p = m.p; test = 'Mann-Whitney'; stat = `U = ${fmt(m.U, 1)}`;
         used.add('mw');
         const hl = S.hodgesLehmann(groupVals[0], groupVals[1]);
         pw = [{ i: 0, j: 1, p: m.p, ...hl }];
       } else {
         const kw = S.kruskalWallis(groupVals);
-        p = kw.p; test = 'Kruskal-Wallis';
+        p = kw.p; test = 'Kruskal-Wallis'; stat = `H = ${fmt(kw.H, 2)}`;
         used.add('kw');
         const dn = opts.dunn ? S.dunn(groupVals) : null;
         if (dn) used.add('dunn');
@@ -21383,7 +21471,7 @@ const Analysis = (() => {
       }
       used.add('nonparam');
     }
-    return { desc, sw, normal, param, p, test, pairs: pw };
+    return { desc, sw, normal, param, p, test, stat, pairs: pw };
   }
 
   /* ---------- categorical analysis between groups ---------- */
@@ -21393,12 +21481,12 @@ const Analysis = (() => {
     const ns = groupVals.map(g => g.length);
     const pct = table.map(r => r.map((c, j) => ns[j] ? 100 * c / ns[j] : 0));
     const nonEmpty = table.filter(r => S.sum(r) > 0);
-    let p = NaN, test = '—';
+    let p = NaN, test = '—', stat = '—';
     if (nonEmpty.length >= 2 && ns.filter(n => n > 0).length >= 2) {
       const cs = S.chiSquare(nonEmpty);
-      p = cs.p; test = 'Chi-square'; used.add('chi');
+      p = cs.p; test = 'Chi-square'; used.add('chi'); stat = `χ² = ${fmt(cs.chi, 2)}`;
       if (opts.fisher && nonEmpty.length === 2 && k === 2 && cs.minE < 5) {
-        p = S.fisher2x2(nonEmpty).p; test = "Fisher's exact"; used.add('fisher');
+        p = S.fisher2x2(nonEmpty).p; test = "Fisher's exact"; used.add('fisher'); stat = 'FE';
       }
     } else if (nonEmpty.length === 1) { p = 1; test = 'Chi-square'; used.add('chi'); }
     used.add('cat');
@@ -21410,7 +21498,7 @@ const Analysis = (() => {
     // optional Bonferroni-adjusted pairwise comparisons once the overall test is significant (3+ groups)
     let catPairs = null;
     if (opts.chiPost && k > 2 && p <= opts.alpha) { catPairs = S.chiSquarePairwise(table, opts.fisher); used.add('chiPost'); }
-    return { table, pct, ns, p, test, rr, binary, pairs: catPairs };
+    return { table, pct, ns, p, test, stat, rr, binary, pairs: catPairs };
   }
 
   /* ---------- within-group repeated measures ---------- */
@@ -21566,9 +21654,10 @@ const Analysis = (() => {
   // "P value = 0.01" / "= 0.01 and 0.02 respectively" / "< 0.001 in each"
   function pList(ps) {
     if (ps.length === 1) return pTxt(ps[0]);
-    if (ps.every(p => p < 0.001)) return '< 0.001 in each';
+    const thr = 10 ** -FMT.pDig;
+    if (ps.every(p => p < thr)) return `< ${thr.toFixed(FMT.pDig)} in each`;
     const vals = listJoin(ps.map(p => pTxt(p).replace(/^= /, '')));
-    return (ps[0] < 0.001 ? '' : '= ') + vals + ' respectively';
+    return (ps[0] < thr ? '' : '= ') + vals + ' respectively';
   }
 
   /* ---------- repeated-measure controls ---------- */
@@ -21586,7 +21675,7 @@ const Analysis = (() => {
       if (!cols.length) continue;
       if (v.split || cols.length === 1) {
         cols.forEach((c, i) => out.push({ ...v, id: v.id + '_' + i, kind: 'single', type: 'numeric', cols: [c], pos: v.pos + i * 1e-3,
-          label: `${plain(v.label)} at ${cfg.tpLabels[c.tp] || c.tp}${(v.label.match(/\s*\([^)]*\)\s*$/) || [''])[0]}`, table: v.splitTable || 'Other outcomes' }));
+          label: `${plain(v.label)} at ${c.label || cfg.tpLabels[c.tp] || c.tp}${(v.label.match(/\s*\([^)]*\)\s*$/) || [''])[0]}`, table: v.splitTable || 'Other outcomes' }));
       } else out.push({ ...v, cols });
     }
     return out;
@@ -21597,7 +21686,7 @@ const Analysis = (() => {
   function columnLabel(cfg, col) {
     if (col === cfg.groupCol) return 'Group';
     for (const v of cfg.variables) for (const c of v.cols) if (c.col === col)
-      return v.kind === 'repeated' ? `${plain(v.label)} at ${cfg.tpLabels[c.tp] || c.tp}` : v.label;
+      return v.kind === 'repeated' ? `${plain(v.label)} at ${c.label || cfg.tpLabels[c.tp] || c.tp}` : v.label;
     return col;
   }
   // numeric when ≥90% of values are numbers with more than two distinct values; otherwise categorical
@@ -21635,6 +21724,48 @@ const Analysis = (() => {
   // "Sepsis group" when the outcome is the study group itself, otherwise "<outcome> (<positive value>)"
   const eventName = (cfg, a) => a.outcome === cfg.groupCol ? (cfg.groupLabels[a.positive] || a.positive) : `${lowerFirst(columnLabel(cfg, a.outcome))} (${a.positive})`;
 
+  // variable selection for regression models; a predictor (all its dummy terms together) is kept or dropped as one unit.
+  // fit(list) returns a model whose terms follow the list after `off` leading terms (1 = intercept)
+  const P_REMOVE = 0.10, P_ENTER = 0.05;
+  function selectModel(preds, fit, method, off) {
+    const predP = (m, list) => { let i = off; return list.map(e => { const ps = e.terms.map((_, k) => m.terms[i + k].p); i += e.terms.length; return Math.min(...ps); }); };
+    if (method === 'backward') {
+      let list = preds.slice(), m = fit(list);
+      while (m && list.length > 1) {
+        const ps = predP(m, list), worst = ps.indexOf(Math.max(...ps));
+        if (!(ps[worst] > P_REMOVE)) break;
+        list = list.filter((_, i) => i !== worst);
+        m = fit(list);
+      }
+      return { model: m, kept: m ? list : [] };
+    }
+    if (method === 'forward') {
+      let list = [], m = null;
+      for (;;) {
+        let best = null;
+        for (const e of preds.filter(x => !list.includes(x))) {
+          const t = fit([...list, e]);
+          if (!t) continue;
+          const p = predP(t, [...list, e]).pop();
+          if (!best || p < best.p) best = { e, p, t };
+        }
+        if (!best || !(best.p < P_ENTER)) break;
+        list.push(best.e); m = best.t;
+      }
+      return { model: m, kept: list };
+    }
+    const m = fit(preds);
+    return { model: m, kept: m ? preds : [] };
+  }
+  const methodNote = method => method === 'backward' ? `Multivariable model by backward elimination (P to remove > ${P_REMOVE}); —: not retained`
+    : method === 'forward' ? `Multivariable model by forward selection (P to enter < ${P_ENTER}); —: not entered` : '';
+  // variance inflation factor of each design column
+  const vifs = X => X[0].map((_, j) => {
+    if (X[0].length < 2) return 1;
+    const r = S.linearRegression(X.map(row => row.filter((_, c) => c !== j)), X.map(row => row[j]));
+    return r && r.r2 < 1 ? 1 / (1 - r.r2) : Infinity;
+  });
+
   function regressionSection(a, cfg, rows, alpha, d, used) {
     const logistic = a.type === 'logistic';
     const outLabel = columnLabel(cfg, a.outcome);
@@ -21646,23 +21777,31 @@ const Analysis = (() => {
       const rs = rows.filter(r => yOk(r) && list.every(e => e.ok(r)));
       const X = rs.map(r => list.flatMap(e => e.terms.map(t => t.get(r)))), y = rs.map(yOf);
       if (rs.length < list.reduce((s, e) => s + e.terms.length, 0) + 3) return null;
-      return logistic ? S.logisticRegression(X, y) : S.linearRegression(X, y);
+      const m = logistic ? S.logisticRegression(X, y) : S.linearRegression(X, y);
+      if (m) { m.X = X; m.y = y; }
+      return m;
     };
-    const multi = fitOn(preds);
+    const { model: multi, kept } = selectModel(preds, fitOn, a.method, 1);
     const uni = a.univariable || !multi ? preds.map(e => fitOn([e])) : null;
     used.add(logistic ? 'logistic' : 'linear');
+    if (a.method === 'backward' || a.method === 'forward') used.add('sel_' + a.method);
     const est = t => logistic ? `${fmt(t.or, 2)} (${fmt(t.lo, 2)}-${fmt(t.hi, 2)})` : `${fmt(t.B, d)} (${fmt(t.lo, d)} to ${fmt(t.hi, d)})`;
     const effName = logistic ? 'OR (95% CI)' : 'B (95% CI)';
     const head = [''];
     if (uni) head.push(`Univariable ${effName}`, 'P value');
-    if (multi) { head.push(`${uni ? 'Multivariable ' : ''}${effName}`); if (!logistic) head.push('β'); head.push('P value'); }
-    // one row per design term: univariable estimate from that predictor's own model, multivariable from the joint model
+    const showVif = !logistic && a.vif && multi;
+    if (multi) { head.push(`${uni ? 'Multivariable ' : ''}${effName}`); if (!logistic) head.push('β'); if (showVif) head.push('VIF'); head.push('P value'); }
+    const vif = showVif ? vifs(multi.X) : null;
+    // one row per design term: univariable estimate from that predictor's own model, multivariable from the final model
     const terms = [];
-    preds.forEach((e, pi) => e.terms.forEach((t, k) => terms.push({ label: t.label, u: uni && uni[pi] ? uni[pi].terms[k + 1] : null, m: multi ? multi.terms[1 + terms.length] : null })));
-    const trows = terms.map(({ label, u, m }) => {
+    preds.forEach((e, pi) => {
+      const ki = kept.indexOf(e), offset = 1 + kept.slice(0, Math.max(0, ki)).reduce((n, x) => n + x.terms.length, 0);
+      e.terms.forEach((t, k) => terms.push({ label: t.label, u: uni && uni[pi] ? uni[pi].terms[k + 1] : null, m: multi && ki >= 0 ? multi.terms[offset + k] : null, vif: vif && ki >= 0 ? vif[offset - 1 + k] : null }));
+    });
+    const trows = terms.map(({ label, u, m, vif: v }) => {
       const row = [{ t: [label], b: true }];
       if (uni) row.push({ t: [u ? est(u) : '—'] }, { t: [u ? fmtP(u.p, alpha) : '—'] });
-      if (multi) { row.push({ t: [est(m)] }); if (!logistic) row.push({ t: [fmt(m.beta, 2)] }); row.push({ t: [fmtP(m.p, alpha)] }); }
+      if (multi) { row.push({ t: [m ? est(m) : '—'] }); if (!logistic) row.push({ t: [m ? fmt(m.beta, 2) : '—'] }); if (showVif) row.push({ t: [v != null ? fmt(v, 2) : '—'] }); row.push({ t: [m ? fmtP(m.p, alpha) : '—'] }); }
       return row;
     });
     const sigM = terms.filter(x => x.m && x.m.p <= alpha).map(x => ({ label: x.label, t: x.m }));
@@ -21676,7 +21815,10 @@ const Analysis = (() => {
       if (logistic) f.push(`Model: n=${multi.n} (${multi.events} with ${outLabel} = ${a.positive}), χ²(${multi.dfModel}) = ${fmt(multi.chi, 2)}, P ${pTxt(multi.pModel)}, Nagelkerke R² = ${fmt(multi.nagelkerke, 3)}, correctly classified ${fmt(100 * multi.accuracy, 1)}%`);
       else f.push(`Model: n=${multi.n}, R² = ${fmt(multi.r2, 3)}, adjusted R² = ${fmt(multi.adjR2, 3)}, F(${multi.dfModel}, ${multi.df}) = ${fmt(multi.F, 2)}, P ${pTxt(multi.pModel)}`);
       if (logistic && multi.unstable) f.push('Warning: the model did not converge or shows separation, so its estimates are unreliable');
+      if (logistic && a.hl) { const h = S.hosmerLemeshow(multi.y, multi.fitted); f.push(`Hosmer-Lemeshow χ²(${h.df}) = ${fmt(h.chi, 2)}, P ${pTxt(h.p)}${h.p > alpha ? ' (good fit)' : ' (poor fit)'}`); }
+      if (showVif) f.push('VIF: Variance inflation factor (values above 5 suggest collinearity)');
     }
+    if (methodNote(a.method)) f.push(methodNote(a.method));
     const refs = preds.filter(e => e.ref).map(e => `${e.label}: reference = ${e.ref}`);
     if (refs.length) f.push(refs.join(', '));
     // comment
@@ -21704,12 +21846,12 @@ const Analysis = (() => {
     const outLabel = columnLabel(cfg, a.outcome);
     const tests = a.predictors.filter(c => c !== a.outcome && columnKind(cfg, rows, c) === 'numeric');
     if (!tests.length) return null;
-    used.add('roc');
+    used.add(a.cutoff === 'closest' ? 'rocClosest' : 'roc');
     const res = tests.map(col => {
       const rs = rows.filter(r => toCat(r[a.outcome]) !== null && isFinite(toNum(r[col])));
       const pos = rs.map(r => toCat(r[a.outcome]) === a.positive);
       if (pos.filter(Boolean).length < 2 || pos.filter(x => !x).length < 2) return { col, label: columnLabel(cfg, col), r: null };
-      return { col, label: columnLabel(cfg, col), r: S.roc(rs.map(r => toNum(r[col])), pos) };
+      return { col, label: columnLabel(cfg, col), r: S.roc(rs.map(r => toNum(r[col])), pos, a.cutoff) };
     });
     const pct = v => `${fmt(100 * v, 1)}%`;
     const head = ['', 'AUC (95% CI)', 'P value', 'Cut-off', 'Sensitivity', 'Specificity', 'PPV', 'NPV', 'Accuracy'];
@@ -21721,7 +21863,8 @@ const Analysis = (() => {
     const sent = res.filter(x => x.r).map(({ label, r }) => r.p <= alpha
       ? `${cap(plain(label))} ${r.higher ? '' : '(lower values) '}could significantly predict ${what} with ${grade(r.auc)} discrimination (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)}); at a cut-off of ${r.higher ? '>' : '≤'} ${fmt(r.cutoff.cut, d)}, sensitivity was ${pct(r.cutoff.sens)} and specificity was ${pct(r.cutoff.spec)}.`
       : `${cap(plain(label))} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}, P value ${pTxt(r.p)}).`);
-    const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', 'Cut-off: Youden index'];
+    res.filter(x => !x.r).forEach(x => sent.push(`The ROC curve of ${lowerFirst(plain(x.label))} could not be estimated: fewer than two patients with or without ${what}.`));
+    const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', a.cutoff === 'closest' ? 'Cut-off: closest to the top-left corner of the ROC curve' : 'Cut-off: Youden index'];
     if (res.some(x => x.r && !x.r.higher)) f.push('≤: lower values predict the outcome');
     const ok = res.filter(x => x.r);
     const n1 = ok.length ? ok[0].r.n1 : 0, n0 = ok.length ? ok[0].r.n0 : 0;
@@ -21750,7 +21893,7 @@ const Analysis = (() => {
     const desc = byG.map(S.describe);
     const head = ['', ...gl.map((g, i) => `${g} (n=${byG[i].length})`), 'P value'];
     const trows = [
-      [{ t: ['Mean ± SD (unadjusted)'], b: true }, ...desc.map(x => ({ t: [`${fmt(x.mean, d)} ± ${fmt(x.sd, d)}`] })), { t: [fmtP(unadj, alpha)] }],
+      [{ t: [`${meanSdName()} (unadjusted)`], b: true }, ...desc.map(x => ({ t: [msd(x.mean, x.sd, d)] })), { t: [fmtP(unadj, alpha)] }],
       [{ t: ['Adjusted mean (95% CI)'], b: true }, ...res.adj.map(x => ({ t: [`${fmt(x.mean, d)} (${fmt(x.mean - tc * x.se, d)} to ${fmt(x.mean + tc * x.se, d)})`] })), { t: [fmtP(res.p, alpha)] }]
     ];
     const pairLine = q => `${gl[q.i]} vs ${gl[q.j]}: ${fmt(q.diff, d)} (${fmt(q.lo, d)} to ${fmt(q.hi, d)})${k > 2 ? `, P=${fmtP(q.p, alpha)}` : ''}`;
@@ -21820,19 +21963,23 @@ const Analysis = (() => {
       if (ev.filter(Boolean).length < 2) return null;
       return S.coxRegression(rs.map(r => list.flatMap(e => e.terms.map(t => t.get(r)))), rs.map(r => toNum(r[a.outcome])), ev);
     };
-    const multi = fitOn(preds), uni = a.univariable ? preds.map(e => fitOn([e])) : null;
+    const { model: multi, kept } = selectModel(preds, fitOn, a.method, 0), uni = a.univariable ? preds.map(e => fitOn([e])) : null;
     if (!multi && !uni) return null;
     used.add('cox');
+    if (a.method === 'backward' || a.method === 'forward') used.add('sel_' + a.method);
     const est = t => `${fmt(t.hr, 2)} (${fmt(t.lo, 2)}-${fmt(t.hi, 2)})`;
     const head = [''];
     if (uni) head.push('Univariable HR (95% CI)', 'P value');
     if (multi) head.push(`${uni ? 'Multivariable ' : ''}HR (95% CI)`, 'P value');
     const terms = [];
-    preds.forEach((e, pi) => e.terms.forEach((t, k) => terms.push({ label: t.label, u: uni && uni[pi] ? uni[pi].terms[k] : null, m: multi ? multi.terms[terms.length] : null })));
+    preds.forEach((e, pi) => {
+      const ki = kept.indexOf(e), offset = kept.slice(0, Math.max(0, ki)).reduce((n, x) => n + x.terms.length, 0);
+      e.terms.forEach((t, k) => terms.push({ label: t.label, u: uni && uni[pi] ? uni[pi].terms[k] : null, m: multi && ki >= 0 ? multi.terms[offset + k] : null }));
+    });
     const trows = terms.map(({ label, u, m }) => {
       const row = [{ t: [label], b: true }];
       if (uni) row.push({ t: [u ? est(u) : '—'] }, { t: [u ? fmtP(u.p, alpha) : '—'] });
-      if (multi) row.push({ t: [est(m)] }, { t: [fmtP(m.p, alpha)] });
+      if (multi) row.push({ t: [m ? est(m) : '—'] }, { t: [m ? fmtP(m.p, alpha) : '—'] });
       return row;
     });
     const sig = terms.filter(x => (x.m || x.u) && (x.m || x.u).p <= alpha);
@@ -21841,6 +21988,7 @@ const Analysis = (() => {
     f.push('HR: Hazard ratio', 'CI: Confidence interval', `Event: ${evLabel} = ${a.positive}`);
     if (multi) f.push(`Model: n=${multi.n} (${multi.events} events), likelihood ratio χ²(${multi.df}) = ${fmt(multi.chi, 2)}, P ${pTxt(multi.pModel)}`);
     if (multi && multi.unstable) f.push('Warning: the model did not converge or has extreme estimates, so they are unreliable');
+    if (methodNote(a.method)) f.push(methodNote(a.method));
     const refs = preds.filter(e => e.ref).map(e => `${e.label}: reference = ${e.ref}`);
     if (refs.length) f.push(refs.join(', '));
     const what = lowerFirst(plain(evLabel));
@@ -21912,8 +22060,8 @@ const Analysis = (() => {
     const ci = (lo, hi, dd = d) => `${fmt(lo, dd)} to ${fmt(hi, dd)}`;
     const head = ['', 'Value', '95% CI', 'P value'];
     const trows = [
-      [{ t: [`${plain(l1)} (mean ± SD)`], b: true }, { t: [`${fmt(dx.mean, d)} ± ${fmt(dx.sd, d)}`] }, { t: ['—'] }, { t: ['—'] }],
-      [{ t: [`${plain(l2)} (mean ± SD)`], b: true }, { t: [`${fmt(dy.mean, d)} ± ${fmt(dy.sd, d)}`] }, { t: ['—'] }, { t: ['—'] }],
+      [{ t: [`${plain(l1)} (${meanSdName(true)})`], b: true }, { t: [msd(dx.mean, dx.sd, d)] }, { t: ['—'] }, { t: ['—'] }],
+      [{ t: [`${plain(l2)} (${meanSdName(true)})`], b: true }, { t: [msd(dy.mean, dy.sd, d)] }, { t: ['—'] }, { t: ['—'] }],
       [{ t: ['Mean difference (bias)'], b: true }, { t: [fmt(ba.bias, d)] }, { t: [ci(ba.biasLo, ba.biasHi)] }, { t: [fmtP(ba.p, alpha)] }],
       [{ t: ['95% limits of agreement'], b: true }, { t: [ci(ba.lo, ba.hi)] }, { t: ['—'] }, { t: ['—'] }],
       [{ t: ['ICC, single measures'], b: true }, { t: [fmt(ic.single, 3)] }, { t: [ci(ic.lo, ic.hi, 3)] }, { t: [fmtP(ic.p, alpha)] }],
@@ -21964,8 +22112,8 @@ const Analysis = (() => {
     const res = S.cronbach(rs.map(r => cols.map(c => toNum(r[c]))));
     used.add('cronbach');
     const grade = v => v >= 0.9 ? 'excellent' : v >= 0.8 ? 'good' : v >= 0.7 ? 'acceptable' : v >= 0.6 ? 'questionable' : v >= 0.5 ? 'poor' : 'unacceptable';
-    const head = ['Item', 'Mean ± SD', 'Corrected item-total correlation', "Cronbach's α if item deleted"];
-    const trows = cols.map((c, i) => [{ t: [columnLabel(cfg, c)], b: true }, { t: [`${fmt(res.items[i].mean, d)} ± ${fmt(res.items[i].sd, d)}`] }, { t: [fmt(res.items[i].rit, 3)] }, { t: [fmt(res.items[i].alphaDeleted, 3)] }]);
+    const head = ['Item', meanSdName(), 'Corrected item-total correlation', "Cronbach's α if item deleted"];
+    const trows = cols.map((c, i) => [{ t: [columnLabel(cfg, c)], b: true }, { t: [msd(res.items[i].mean, res.items[i].sd, d)] }, { t: [fmt(res.items[i].rit, 3)] }, { t: [fmt(res.items[i].alphaDeleted, 3)] }]);
     trows.push([{ t: ['Overall'], b: true }, { t: [`α = ${fmt(res.alpha, 3)} (95% CI ${fmt(res.lo, 3)} to ${fmt(res.hi, 3)})`], span: 3 }]);
     const weak = cols.filter((_, i) => res.items[i].alphaDeleted > res.alpha).map(c => lowerFirst(plain(columnLabel(cfg, c))));
     const sent = [`The internal consistency of the ${res.k} items was ${grade(res.alpha)} (Cronbach's α = ${fmt(res.alpha, 3)}, 95% CI ${fmt(res.lo, 3)} to ${fmt(res.hi, 3)}, n = ${res.n}).`];
@@ -21979,7 +22127,12 @@ const Analysis = (() => {
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
     const detailed = opts.commentStyle === 'detailed';
     normality = normalityTest(opts.normality);
-    const wording = s => opts.notSig ? s.replace(/insignificant(ly)?/g, 'not significant$1') : s;
+    const wording = s => {
+      if (opts.notSig) s = s.replace(/insignificant(ly)?/g, 'not significant$1');
+      if (opts.pWord && opts.pWord !== 'P value') s = s.replace(/\bP value\b/g, opts.pWord);
+      return s;
+    };
+    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1 };
     const used = new Set();
     // error bars of mean charts: SD (default), SEM or 95% CI of the mean
     const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
@@ -22030,8 +22183,8 @@ const Analysis = (() => {
       const f = [];
       if (flags.sig) f.push(`*: Significant as P value ≤ ${alpha}`);
       const dp = [];
-      if (flags.param) dp.push('mean ± SD');
-      if (flags.nonparam) dp.push('median (IQR)');
+      if (flags.param) dp.push(meanSdName(true));
+      if (flags.nonparam) dp.push(FMT.iqr === 'bracket' ? 'median [IQR]' : 'median (IQR)');
       if (flags.cat) dp.push('frequency (%)');
       if (dp.length) f.push(`Data are presented as ${listJoin(dp)}`);
       if (flags.effect) {
@@ -22046,16 +22199,25 @@ const Analysis = (() => {
         }
       }
       if (flags.posthoc && numbered) f.push(pr.map((_, i) => `P${i + 1}: P value between ${pairNames[i]}`).join(', '));
+      if (opts.showStat && flags.stats) {
+        const ab = { 't =': "t: Student's / Welch's t-test", 'F =': 'F: ANOVA', 'U =': 'U: Mann-Whitney test', 'H =': 'H: Kruskal-Wallis test', 'χ²': 'χ²: Chi-square test', 'FE': "FE: Fisher's exact test" };
+        const seen = Object.keys(ab).filter(k => flags.stats.some(x => String(x).startsWith(k)));
+        if (seen.length) f.push(seen.map(k => ab[k]).join(', '));
+      }
+      if (flags.ci) f.push('95% CI: 95% confidence interval of the mean');
+      if (opts.missingNote && flags.missing) f.push(flags.missing.length ? `Missing data: ${flags.missing.join(', ')}` : 'No missing data');
       if (note) f.push(note);
       return f.join(', ') + '.';
     }
+    // missing values of one column among the analysed patients
+    const missingIn = (col, numeric) => byGroup.flat().filter(r => numeric ? !isFinite(toNum(r[col])) : toCat(r[col]) === null).length;
 
     const groupHeads = gl.map((g, i) => `${g} (n=${gN[i]})`);
 
     for (const b of blocks) {
       if (b.kind === 'repeated') {
         const v = b.vars[0];
-        const tps = v.cols.map(c => cfg.tpLabels[c.tp] || c.tp);
+        const tps = v.cols.map(c => c.label || cfg.tpLabels[c.tp] || c.tp);
         const per = v.cols.map(c => byGroup.map(rs => rs.map(r => toNum(r[c.col])).filter(isFinite)));
         // decide parametric for the whole outcome
         let param;
@@ -22070,12 +22232,14 @@ const Analysis = (() => {
         const anySig = results.some(r => r.p <= alpha);
         const showPost = numbered && anySig;
         const head = ['', ...groupHeads, 'P value'];
+        if (opts.showStat) head.push('Test');
         if (showPost) head.push('Post hoc');
         if (opts.effect) head.push('MD (95% CI)');
         const trows = results.map((r, t) => {
           const cells = [{ t: [tps[t]], b: true }];
-          r.desc.forEach(dd => cells.push({ t: [param ? `${fmt(dd.mean, d)} ± ${fmt(dd.sd, d)}` : `${fmt(dd.median, d)} (${fmt(dd.q1, d)} - ${fmt(dd.q3, d)})`] }));
+          r.desc.forEach(dd => cells.push({ t: [param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)] }));
           cells.push({ t: [fmtP(r.p, alpha)] });
+          if (opts.showStat) cells.push({ t: [r.stat], small: true });
           if (showPost) cells.push({ t: r.p <= alpha ? postHocLines(r) : ['---'], small: true });
           if (opts.effect) cells.push({ t: effectLines(r), small: true });
           return cells;
@@ -22104,6 +22268,11 @@ const Analysis = (() => {
         }
         let comment = repeatedComment(plain(v.label), tps, results, gl, alpha, detailed);
         if (within) comment += ' ' + withinComment(plain(v.label), tps, within, results, gl, alpha, param);
+        // optional effect sizes for the significant timepoints of a two-group comparison
+        if (opts.commentEffect && k === 2) {
+          const sig = results.map((r, t) => ({ q: r.pairs[0], t, p: r.p })).filter(x => x.p <= alpha && x.q && isFinite(x.q.diff));
+          if (sig.length) comment += ` The ${param ? 'mean' : 'median'} difference${sig.length > 1 ? 's' : ''} (${gl[0]} − ${gl[1]}) ${sig.length > 1 ? 'were' : 'was'} ${listJoin(sig.map(x => `${fmt(x.q.diff, d)} (95% CI ${fmt(x.q.lo, d)} to ${fmt(x.q.hi, d)}) at ${tps[x.t]}`))}.`;
+        }
         if (mixed) comment += mixed.interaction.p <= alpha
           ? ` There was a significant group × time interaction (P value ${pTxt(mixed.interaction.p)}), indicating that the change in ${lowerFirst(plain(v.label))} over time differed between the groups.`
           : ` The group × time interaction was insignificant (P value ${pTxt(mixed.interaction.p)}), indicating a similar pattern of change over time in the groups.`;
@@ -22111,7 +22280,8 @@ const Analysis = (() => {
         const marks = opts.sigMarks ? { sigCat: results.map(r => r.p), alpha } : {};
         sections.push({
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
-          footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost }, [withinNote, v.note].filter(Boolean).join(', ')),
+          footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost, stats: results.map(r => r.stat),
+            missing: v.cols.map((c, t) => [tps[t], missingIn(c.col, true)]).filter(x => x[1]).map(([t, m]) => `${t} (n=${m})`) }, [withinNote, v.note].filter(Boolean).join(', ')),
           comment: wording(comment),
           figures: v.chart === 'none' ? [] : [(() => {
             // per-variable chart type overrides the global chart style
@@ -22121,10 +22291,10 @@ const Analysis = (() => {
             sig: sigAny, vid: v.id,
             caption: v.caption || `${v.label} of the studied groups${meanChart && param ? errNote : ''}`,
             spec: meanChart
-              ? { type: ct === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks, ...(ct === 'line' ? {} : valueLabels),
+              ? { type: ct === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.ylabel || v.label, xLabel: 'Time', ...marks, ...(ct === 'line' ? {} : valueLabels),
                   series: withN(gl, gN).map((g, i) => ({ name: g, values: results.map(r => param ? r.desc[i].mean : r.desc[i].median),
                     err: results.map(r => param ? errOf(r.desc[i]) : null), lo: param ? null : results.map(r => r.desc[i].q1), hi: param ? null : results.map(r => r.desc[i].q3) })) }
-              : { type: 'box', categories: tps, yLabel: v.label, points: opts.points || ct === 'dot', ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
+              : { type: 'box', categories: tps, yLabel: v.ylabel || v.label, points: opts.points || ct === 'dot', ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
             };
           })()],
           meta: { param, results, within, tps }
@@ -22149,11 +22319,13 @@ const Analysis = (() => {
         const twoCol = res.some(r => r.num || (r.cat && !isCompact(r)));
         const effHead = hasNum && hasRR ? `MD/${EF} (95% CI)` : hasRR ? `${EF} (95% CI)` : 'MD (95% CI)';
         const head = [{ t: '', span: twoCol ? 2 : 1 }, ...groupHeads, 'P value'];
+        if (opts.showStat) head.push('Test');
         if (showPost) head.push('Post hoc');
         if (opts.effect) head.push(effHead);
         const trows = [];
         const tail = (r, span) => {
           const cells = [{ t: [fmtP((r.num || r.cat).p, alpha)], rs: span }];
+          if (opts.showStat) cells.push({ t: [(r.num || r.cat).stat], rs: span, small: true });
           if (showPost) cells.push({ t: r.num && r.num.p <= alpha ? postHocLines(r.num) : r.cat && r.cat.pairs ? postHocLines(r.cat) : ['---'], rs: span, small: true });
           if (opts.effect) cells.push({ t: r.num ? effectLines(r.num) : (r.cat.binary ? rrLines(r.cat) : ['---']), rs: span, small: true });
           return cells;
@@ -22161,19 +22333,27 @@ const Analysis = (() => {
         for (const r of res) {
           if (r.num) {
             const n = r.num, P = n.param;
-            const first = [{ t: [r.v.label], b: true, rs: 2 }, { t: [P ? 'Mean ± SD' : 'Median'] },
-              ...n.desc.map(dd => ({ t: [P ? `${fmt(dd.mean, d)} ± ${fmt(dd.sd, d)}` : fmt(dd.median, d)] })), ...tail(r, 2)];
-            const second = [{ t: [P ? 'Range' : 'IQR'] }, ...n.desc.map(dd => ({ t: [P ? `${fmt(dd.min, d)} - ${fmt(dd.max, d)}` : `${fmt(dd.q1, d)} - ${fmt(dd.q3, d)}`] }))];
-            trows.push(first, second);
+            if (opts.secondRow === 'none') {
+              // one row: "Mean ± SD" or "Median (IQR)" in a single cell
+              trows.push([{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] },
+                ...n.desc.map(dd => ({ t: [P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)] })), ...tail(r, 1)]);
+            } else {
+              const first = [{ t: [r.v.label], b: true, rs: 2 }, { t: [P ? meanSdName() : 'Median'] },
+                ...n.desc.map(dd => ({ t: [P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d)] })), ...tail(r, 2)];
+              const ci = dd => { const h = jStat.studentt.inv(0.975, dd.n - 1) * dd.sd / Math.sqrt(dd.n); return `${fmt(dd.mean - h, d)} to ${fmt(dd.mean + h, d)}`; };
+              const second = [{ t: [P ? (opts.secondRow === 'ci' ? '95% CI' : 'Range') : 'IQR'] },
+                ...n.desc.map(dd => ({ t: [P ? (opts.secondRow === 'ci' ? ci(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d)] }))];
+              trows.push(first, second);
+            }
           } else if (isCompact(r)) {
             const c = r.cat;
-            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...c.table[0].map((cnt, j) => ({ t: [`${cnt} (${fmt(c.pct[0][j], 1)}%)`] })), ...tail(r, 1)]);
+            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...c.table[0].map((cnt, j) => ({ t: [`${cnt} (${pctTxt(c.pct[0][j])}%)`] })), ...tail(r, 1)]);
           } else {
             const c = r.cat, L = r.levels.length;
             r.levels.forEach((lv, li) => {
               const row = [];
               if (li === 0) row.push({ t: [r.v.label], b: true, rs: L });
-              row.push({ t: [lv] }, ...c.table[li].map((cnt, j) => ({ t: [`${cnt} (${fmt(c.pct[li][j], 1)}%)`] })));
+              row.push({ t: [lv] }, ...c.table[li].map((cnt, j) => ({ t: [`${cnt} (${pctTxt(c.pct[li][j])}%)`] })));
               if (li === 0) row.push(...tail(r, L));
               trows.push(row);
             });
@@ -22182,11 +22362,18 @@ const Analysis = (() => {
         // comment
         // detailed style: "Age (Group A: 45.2 ± 8.1, Group B: 44.9 ± 7.6)" with P values on every sentence
         const values = r => {
-          if (r.num) return r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? `${fmt(dd.mean, d)} ± ${fmt(dd.sd, d)}` : `${fmt(dd.median, d)} (${fmt(dd.q1, d)} - ${fmt(dd.q3, d)})`}`).join(', ');
+          if (r.num) return r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)}`).join(', ');
           if (isCompact(r)) return r.cat.pct[0].map((p, i) => `${gl[i]}: ${fmt(p, 1)}%`).join(', ');
           return '';
         };
         const withValues = (r, lab) => detailed && values(r) ? `${lab} (${values(r)})` : lab;
+        // optional effect size inside the P value brackets of a significant two-group comparison
+        const effTxt = r => {
+          if (!opts.commentEffect || k !== 2) return '';
+          if (r.num) { const q = r.num.pairs[0]; return q && isFinite(q.diff) ? `; MD = ${fmt(q.diff, d)}, 95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}` : ''; }
+          const q = r.cat.rr && r.cat.rr[0];
+          return q && q.rr !== null && q.rr !== undefined ? `; ${EF} = ${fmt(q.rr, 2)}, 95% CI ${fmt(q.lo, 2)}-${fmt(q.hi, 2)}` : '';
+        };
         const nsRes = res.filter(r => !((r.num || r.cat).p <= alpha));
         const sent = [];
         if (detailed) nsRes.forEach(r => {
@@ -22200,15 +22387,15 @@ const Analysis = (() => {
         for (const r of res.filter(r => (r.num || r.cat).p <= alpha)) {
           // compact categorical sentences already quote their percentages
           const lab = isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label));
-          if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps)}.`); }
+          if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps).replace(/\)$/, effTxt(r) + ')')}.`); }
           else {
             const c = r.cat, row = 0;
             const best = c.pct[row].indexOf(Math.max(...c.pct[row]));
             if (isCompact(r)) {
               if (k === 2) {
                 const lo = 1 - best;
-                sent.push(`${cap(lab)} was significantly higher in ${gl[best]} than ${gl[lo]} (${fmt(c.pct[0][best], 1)}% vs ${fmt(c.pct[0][lo], 1)}%, P value ${pTxt(c.p)}).`);
-              } else sent.push(`${cap(lab)} was significantly different ${amongTxt(k)} (P value ${pTxt(c.p)}), being highest in ${gl[best]} (${fmt(c.pct[0][best], 1)}%).`);
+                sent.push(`${cap(lab)} was significantly higher in ${gl[best]} than ${gl[lo]} (${pctTxt(c.pct[0][best])}% vs ${pctTxt(c.pct[0][lo])}%, P value ${pTxt(c.p)}${effTxt(r)}).`);
+              } else sent.push(`${cap(lab)} was significantly different ${amongTxt(k)} (P value ${pTxt(c.p)}), being highest in ${gl[best]} (${pctTxt(c.pct[0][best])}%).`);
             } else sent.push(`The distribution of ${lowerFirst(lab)} was significantly different ${amongTxt(k)} (P value ${pTxt(c.p)}).`);
             if (c.pairs) {
               const sp = c.pairs.filter(q => q.p <= alpha);
@@ -22217,7 +22404,9 @@ const Analysis = (() => {
             }
           }
         }
-        const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: opts.effect, rr: hasRR, posthoc: showPost };
+        const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: opts.effect, rr: hasRR, posthoc: showPost,
+          stats: res.map(r => (r.num || r.cat).stat), ci: opts.secondRow === 'ci' && res.some(r => r.num && r.num.param),
+          missing: res.map(r => [plain(r.v.label), missingIn(r.v.cols[0].col, !!r.num)]).filter(x => x[1]).map(([l, m]) => `${l} (n=${m})`) };
         const notes = b.vars.map(v => v.note).filter(Boolean).join(', ');
         // significance brackets between groups: pairwise P values once the overall test is significant
         const brackets = x => {
@@ -22244,29 +22433,29 @@ const Analysis = (() => {
                   series: withN(gl, r.num.desc.map(x => x.n)).map((g, i) => { const n = new Array(edges.length).fill(0); r.gv[i].forEach(v => n[bin(v)]++); return { name: g, values: n }; }) } };
             }
             if (ct === 'dot') return { caption: `${r.v.label} of the studied groups (${P ? 'mean ± SD' : 'median and IQR'})`,
-              spec: { type: 'dot', perGroup: true, categories: cats, yLabel: r.v.label, median: !P, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
+              spec: { type: 'dot', perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, median: !P, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
             const bar = ct === 'bar' || (ct === 'auto' && P && opts.chartStyle !== 'box');
             if (bar && !P) return { caption: `${r.v.label} of the studied groups (median and IQR)`,
-              spec: { type: 'bar', perGroup: true, categories: cats, yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.median), lo: r.num.desc.map(x => x.q1), hi: r.num.desc.map(x => x.q3) }] } };
+              spec: { type: 'bar', perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.median), lo: r.num.desc.map(x => x.q1), hi: r.num.desc.map(x => x.q3) }] } };
             return {
               caption: `${r.v.label} of the studied groups${bar ? errNote : ''}`,
               spec: bar
-                ? { type: 'bar', perGroup: true, categories: cats, yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(errOf) }] }
-                : { type: 'box', perGroup: true, categories: cats, yLabel: r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
+                ? { type: 'bar', perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(errOf) }] }
+                : { type: 'box', perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
             };
           }
           const c = r.cat;
           if (ct === 'stacked' || ct === 'pie') return {
             caption: `${r.v.label} of the studied groups`,
-            spec: { type: ct, categories: withN(gl, c.ns), yLabel: '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
+            spec: { type: ct, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
           if (isCompact(r)) return {
             caption: `${r.v.label} of the studied groups`,
-            spec: { type: 'bar', perGroup: true, percent: true, labels: true, categories: withN(gl, c.ns), yLabel: '% of the studied patients', ...brackets(c), series: [{ name: r.levels[0], values: c.pct[0] }] }
+            spec: { type: 'bar', perGroup: true, percent: true, labels: true, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', ...brackets(c), series: [{ name: r.levels[0], values: c.pct[0] }] }
           };
           return {
             caption: `${r.v.label} of the studied groups`,
-            spec: { type: 'bar', percent: true, labels: true, categories: withN(gl, c.ns), yLabel: '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
+            spec: { type: 'bar', percent: true, labels: true, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
         }
         sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res } });
@@ -22294,15 +22483,32 @@ const Analysis = (() => {
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
         agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, linear: regressionSection, logistic: regressionSection }[a.type];
-      const sec = make(a, cfg, rows, alpha, d, used, G);
-      if (sec) { sec.comment = wording(sec.comment); sections.push(sec); }
+      // patients: all, each study group separately, or one group (not for analyses that compare the groups)
+      const compares = ['ancova', 'survival', 'mcnemar'].includes(a.type);
+      const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
+        : a.subset === 'each' ? groups.map(g => ({ g, rows: rows.filter(r => toCat(r[cfg.groupCol]) === g) }))
+        : groups.includes(a.subset) ? [{ g: a.subset, rows: rows.filter(r => toCat(r[cfg.groupCol]) === a.subset) }] : [{ g: null, rows }];
+      for (const sub of subsets) {
+        const sec = make(a, cfg, sub.rows, alpha, d, used, G);
+        if (!sec) continue;
+        if (a.title && a.title.trim()) sec.title = a.title.trim();
+        if (sub.g !== null) sec.title += ` in ${cfg.groupLabels[sub.g] || sub.g}`;
+        sec.comment = wording(sec.comment);
+        sections.push(sec);
+      }
     }
 
     // which figures go in the report: all, only those of significant results, or none
     if (opts.figures === 'none') sections.forEach(s => { s.figures = []; });
     else if (opts.figures === 'sig') sections.forEach(s => { s.figures = s.figures.filter(f => f.sig !== false); });
 
-    return { sections, used, groups: gl, gN, k, methods: methodsText(used, k, cfg), intro: introText(cfg, gl, gN), flowCaption: flowCaption(cfg) };
+    // table headings and footnotes follow the chosen P value heading and significance mark
+    sections.forEach(sec => {
+      if (opts.pHead && opts.pHead !== 'P value') sec.head = sec.head.map(h => h === 'P value' ? opts.pHead : h && h.t === 'P value' ? { ...h, t: opts.pHead } : h);
+      if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
+    });
+    return { sections, used, groups: gl, gN, k, methods: methodsText(used, k, cfg), intro: introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
+      summary: opts.summary ? keyFindings(sections) : '' };
   }
 
   // Correlation table across all analysed patients: single numeric variables and each repeated outcome at its last timepoint
@@ -22312,7 +22518,7 @@ const Analysis = (() => {
     for (const v of vars) {
       if (v.type !== 'numeric') continue;
       const c = v.kind === 'repeated' ? v.cols[v.cols.length - 1] : v.cols[0];
-      const label = v.kind === 'repeated' ? `${plain(v.label)} at ${cfg.tpLabels[c.tp] || c.tp}` : v.label;
+      const label = v.kind === 'repeated' ? `${plain(v.label)} at ${c.label || cfg.tpLabels[c.tp] || c.tp}` : v.label;
       items.push({ label, vals: rows.map(r => toNum(r[c.col])) });
     }
     if (items.length < 2) return null;
@@ -22346,6 +22552,18 @@ const Analysis = (() => {
     });
     return { kind: 'correlation', title: `Correlation between the studied variables in all patients (n=${rows.length})`, head, rows: trows,
       footnote: f.join(', ') + '.', comment: sent.join(' '), figures, meta: { pairs: pr, items: items.map(it => it.label) } };
+  }
+
+  // "Summary of key findings": every sentence of the comments that reports a significant result
+  function keyFindings(sections) {
+    const out = [];
+    sections.forEach(sec => (sec.comment || '').split(/(?<=\.)\s+(?=[A-Z])/).forEach(t => {
+      // judge the sentence after removing its negative phrases, so "A was significantly lower …, and insignificantly different …" is kept
+      if (/none of|^no significant/i.test(t.trim())) return;
+      const pos = t.replace(/insignificant\w*|not significant\w*|no significant|did not change significantly|could not significantly/gi, '');
+      if (/significant|independent predictor/i.test(pos)) out.push(t.trim());
+    }));
+    return out.length ? out.join(' ') : 'No statistically significant differences were found.';
   }
 
   function isCompact(r) {
@@ -22403,9 +22621,11 @@ const Analysis = (() => {
     if (used.has('icc')) s.push('Agreement between quantitative measurements was assessed using the intraclass correlation coefficient (ICC; two-way random effects, absolute agreement) and Bland-Altman analysis with 95% limits of agreement.');
     if (used.has('diagnostic')) s.push('Diagnostic accuracy was expressed as sensitivity, specificity, positive and negative predictive values, likelihood ratios and accuracy, with exact (Clopper-Pearson) 95% CI.');
     if (used.has('cronbach')) s.push("Internal consistency was assessed using Cronbach's alpha (α) coefficient.");
+    if (used.has('sel_backward')) s.push(`Multivariable models were built by backward elimination (P to remove > ${P_REMOVE}).`);
+    if (used.has('sel_forward')) s.push(`Multivariable models were built by forward selection (P to enter < ${P_ENTER}).`);
     if (used.has('linear')) s.push('Multiple linear regression was used to identify predictors of quantitative outcomes, reporting unstandardized (B) and standardized (β) coefficients with 95% CI.');
     if (used.has('logistic')) s.push('Binary logistic regression was used to identify predictors of binary outcomes, reporting odds ratios (OR) with 95% CI; model fit was assessed by the omnibus chi-square test and Nagelkerke R².');
-    if (used.has('roc')) s.push('Receiver operating characteristic (ROC) curve analysis was used to assess diagnostic performance; the area under the curve (AUC) was reported with its 95% CI (DeLong method), and the optimal cut-off was chosen by the Youden index.');
+    if (used.has('roc') || used.has('rocClosest')) s.push(`Receiver operating characteristic (ROC) curve analysis was used to assess diagnostic performance; the area under the curve (AUC) was reported with its 95% CI (DeLong method), and the optimal cut-off was chosen by ${[used.has('roc') ? 'the Youden index' : '', used.has('rocClosest') ? 'the point closest to the top-left corner of the curve' : ''].filter(Boolean).join(' or ')}.`);
     s.push(`A two tailed P value ≤ ${o.alpha} was considered statistically significant.`);
     return s.join(' ');
   }
@@ -22480,7 +22700,10 @@ const Charts = (() => {
   const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300] };
   const TEXT = { normal: 1, large: 1.25, xlarge: 1.5 };
   const DEFAULT_STYLE = { text: 'normal', aspect: 'wide', barFill: 'gradient', grid: true, arrows: true, legend: 'bottom', res: 1, yAxis: 'auto',
-    legendSize: 'normal', legendTitle: '', legendFrame: false };
+    legendSize: 'normal', legendTitle: '', legendFrame: false, barWidth: 'normal', boxMean: false };
+  // bar / box width multiplier, never wider than the category slot
+  const BAR_W = { thin: 0.7, normal: 1, wide: 1.3 };
+  const widthOf = (st, frac) => Math.min(0.95, frac * (BAR_W[st.barWidth] || 1));
   const LEGEND_SIZE = { small: 0.85, normal: 1, large: 1.2 };
   const palette = p => Array.isArray(p) && p.length ? p : PALETTES[p] || PALETTES.brand;
 
@@ -22701,7 +22924,7 @@ const Charts = (() => {
 
     if (spec.type === 'bar') {
       const slots = perGroup ? 1 : ns;
-      const gw = cw * (perGroup ? 0.42 : 0.78), bw = gw / slots;
+      const gw = cw * widthOf(st, perGroup ? 0.42 : 0.78), bw = gw / slots;
       spec.series.forEach((s, si) => s.values.forEach((v, ci) => {
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
@@ -22730,7 +22953,7 @@ const Charts = (() => {
       });
     } else if (spec.type === 'stacked') {
       // one 100% bar per group, segments = categories
-      const w = cw * 0.5;
+      const w = cw * widthOf(st, 0.5);
       spec.categories.forEach((_, ci) => {
         let base = 0;
         spec.series.forEach((s, si) => {
@@ -22763,7 +22986,7 @@ const Charts = (() => {
       });
     } else if (spec.type === 'box') {
       const slots = perGroup ? 1 : ns;
-      const gw = cw * (perGroup ? 0.36 : 0.8), bw = gw / slots;
+      const gw = cw * widthOf(st, perGroup ? 0.36 : 0.8), bw = gw / slots;
       spec.series.forEach((s, si) => s.data.forEach((arr, ci) => {
         if (!arr.length) return;
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
@@ -22778,6 +23001,13 @@ const Charts = (() => {
         ctx.stroke();
         ctx.setLineDash([]); ctx.lineWidth = 5;
         ctx.beginPath(); ctx.moveTo(cx - w / 2, y(b.med)); ctx.lineTo(cx + w / 2, y(b.med)); ctx.stroke();
+        if (st.boxMean) {
+          // mean as a diamond
+          const m = Stats.mean(arr), r = 11;
+          ctx.fillStyle = '#fff'; ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.moveTo(cx, y(m) - r); ctx.lineTo(cx + r, y(m)); ctx.lineTo(cx, y(m) + r); ctx.lineTo(cx - r, y(m)); ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.strokeStyle = color;
+        }
         ctx.lineWidth = 2.5;
         if (spec.points) {
           // every observation as a translucent dot (outliers included)
@@ -23197,7 +23427,8 @@ const Report = (() => {
   const D = () => window.docx;
   const DEFAULT_FONT = 'Times New Roman';
   let BODY_FONT = DEFAULT_FONT; // set per build from the report options
-  const PAGE_W = 9026; // A4 text width with 1" margins (DXA)
+  const PORTRAIT_W = 9026, LANDSCAPE_W = 13958; // A4 text width with 1" margins (DXA)
+  let PAGE_W = PORTRAIT_W; // set per build from the page orientation
 
   const dataUrlToBytes = url => {
     const b = atob(url.split(',')[1]), u = new Uint8Array(b.length);
@@ -23245,7 +23476,7 @@ const Report = (() => {
         const name = h.t || '';
         // very wide tables (e.g. ROC) need roomier label and P value columns
         const wide = nCols > 7;
-        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : /P value/.test(name) ? (wide ? 0.95 : 0.7) : 1.15);
+        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : /^(P value|P|p-value)$/.test(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
       }
     });
     const tot = weights.reduce((a, b) => a + b, 0);
@@ -23335,6 +23566,8 @@ const Report = (() => {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
     BODY_FONT = opts.font || DEFAULT_FONT;
+    const landscape = opts.orientation === 'landscape';
+    PAGE_W = landscape ? LANDSCAPE_W : PORTRAIT_W;
     const children = [];
     if (opts.title) children.push(para(opts.title, { bold: true, size: 32, align: AlignmentType.CENTER, after: 240, color: brand ? '7B2FBE' : undefined }));
     if (model.methods) {
@@ -23360,16 +23593,21 @@ const Report = (() => {
     const atEnd = arrangeFigures(model.sections, opts.figPlacement);
     for (const s of model.sections) {
       if (s.tableOn !== false) {
-        children.push(caption(`Table ${tab++}: ${s.title}`));
+        if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment));
+        children.push(caption(`Table ${tab++}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`));
         children.push(table(s.head, s.rows, brand, opts.tableStyle));
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
-        if (s.comment) children.push(para(s.comment));
+        if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));
       }
       if (!atEnd) placeFigures(s.figures);
     }
     if (atEnd && atEnd.some(f => f.url)) {
       children.push(heading('Figures', brand));
       placeFigures(atEnd);
+    }
+    if (model.summary) {
+      children.push(heading('Summary of key findings', brand));
+      children.push(para(model.summary));
     }
 
     const headerKids = [];
@@ -23388,7 +23626,7 @@ const Report = (() => {
       title: opts.title || 'Statistical report',
       styles: { default: { document: { run: { font: BODY_FONT, size: 24 } } } },
       sections: [{
-        properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } } },
+        properties: { page: { size: landscape ? { width: 11906, height: 16838, orientation: D().PageOrientation.LANDSCAPE } : { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } } },
         headers: { default: new Header({ children: headerKids }) },
         footers: {
           default: new Footer({
@@ -23648,7 +23886,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
 (() => {
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const STEPS = [['Upload', 'Excel file'], ['Variables', 'Groups & roles'], ['Timepoints', 'Options'], ['Flowchart', 'CONSORT / STROBE …'], ['Report', 'Preview & Word']];
+  const STEPS = [['Upload', 'Excel file'], ['Variables', 'Groups & roles'], ['Timepoints', 'Per outcome'], ['Tests', 'Statistics'], ['Tables', 'Layout & numbers'],
+    ['Comments', 'Text'], ['Figures', 'Charts'], ['Advanced', 'Regression, ROC …'], ['Flowchart', 'CONSORT / STROBE …'], ['Report', 'Preview & Word']];
   const TP_RE = /^(baseline|base|bl|pre|post|preop|postop|before|after|final|end|(t|v|visit|day|d|week|wk|w|month|mo|m|h|hr|y|yr|session)\d+(\.\d+)?|\d+(\.\d+)?(h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks|m|mo|mon|month|months|y|yr|yrs|year|years|min|mins))$/i;
   const UNIT_RE = /^(\d+(\.\d+)?-\d+(\.\d+)?|years?|yrs|months?|days?|weeks?|hours?|deg|degrees?|kg|g|cm|mm|m2|kg\/m2|mmhg|bpm|percent|pct|%|min|mins|sec|ml|mg|mg\/dl|mmol\/l|iu|u\/l|ng|pg|ug|mcg|µg|mmol|umol|µmol|meq|x?10e\d+)$/i;
   // a unit followed by one of these reads as "per": mg_L → mg/L, kg_m2 → kg/m2
@@ -23665,6 +23904,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
     welch: false, dunn: false, chiPost: false, mixed: false, normality: 'sw', catEffect: 'rr',
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
+    pctDecimals: 1, meanStyle: 'pm', iqrStyle: 'dash', secondRow: 'auto', pDigits: 3, pHead: 'P value', sigSym: '*', showStat: false, missingNote: false,
+    orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -23677,13 +23918,16 @@ if (typeof module !== 'undefined') module.exports = Examples;
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
     legendSize: ['optLegendSize'], legendTitle: ['optLegendTitle'], legendFrame: ['optLegendFrame', true],
     normality: ['optNormality'], catEffect: ['optCatEffect'], welch: ['optWelch', true],
-    figPlacement: ['optFigPlacement'], captionStyle: ['optCaptionStyle'], chartTitle: ['optChartTitle', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
+    figPlacement: ['optFigPlacement'], captionStyle: ['optCaptionStyle'], chartTitle: ['optChartTitle', true],
+    pctDecimals: ['optPctDec'], meanStyle: ['optMeanStyle'], iqrStyle: ['optIqrStyle'], secondRow: ['optSecondRow'], pDigits: ['optPDigits'], pHead: ['optPHead'],
+    sigSym: ['optSigSym'], showStat: ['optShowStat', true], missingNote: ['optMissingNote', true], orientation: ['optOrientation'], tableCaption: ['optTableCaption'],
+    pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
   const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
-    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame });
+    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -23723,8 +23967,11 @@ if (typeof module !== 'undefined') module.exports = Examples;
     renderStepper();
     if (n === 2) renderVariables();
     if (n === 3) renderTimepoints();
-    if (n === 4) renderConsortForm();
-    if (n === 5) runAnalysis();
+    if (n >= 4 && n <= 8) renderOptions();
+    if (n === 7) renderFigureTable();
+    if (n === 8) renderAdvanced();
+    if (n === 9) renderConsortForm();
+    if (n === 10) runAnalysis();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(+g.dataset.go); });
@@ -23948,7 +24195,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
         <td><input type="checkbox" data-k="include" ${v.include ? 'checked' : ''}></td>
         <td><input type="text" data-k="label" value="${esc(v.label)}"></td>
         <td class="mono" title="${esc(v.cols.map(c => c.col).join('\n'))}">${v.kind === 'repeated' ? `<span class="chip info">repeated × ${v.cols.length}</span><div class="tpchks">${v.cols.map((c, i) =>
-          `<label title="${esc(c.col)}"><input type="checkbox" data-vtp="${i}" ${c.include !== false ? 'checked' : ''}>${esc(cfg.tpLabels[c.tp] || c.tp)}</label>`).join('')}</div>` : esc(v.cols[0].col)}</td>
+          `<label title="${esc(c.col)}"><input type="checkbox" data-vtp="${i}" ${c.include !== false ? 'checked' : ''}>${esc(c.label || cfg.tpLabels[c.tp] || c.tp)}</label>`).join('')}</div>` : esc(v.cols[0].col)}</td>
         <td>${v.kind === 'repeated' ? `<select data-k="split" title="Analyse the timepoints together, or each as its own variable"><option value="">repeated measure</option><option value="1" ${v.split ? 'selected' : ''}>separate variables</option></select>` : `<select data-k="type"><option value="numeric" ${v.type === 'numeric' ? 'selected' : ''}>numeric</option><option value="categorical" ${v.type === 'categorical' ? 'selected' : ''}>categorical</option></select>`}</td>
         <td>${v.type === 'numeric' ? `<select data-k="dist"><option value="auto" ${v.dist === 'auto' ? 'selected' : ''}>Auto</option><option value="param" ${v.dist === 'param' ? 'selected' : ''}>Parametric</option><option value="nonparam" ${v.dist === 'nonparam' ? 'selected' : ''}>Non-parametric</option></select><div style="margin-top:4px">${swChip(v)}</div>` : swChip(v)}</td>
         <td>${v.kind === 'repeated' ? (v.split ? `<input type="text" data-k="splitTable" value="${esc(v.splitTable || 'Other outcomes')}">` : '<span class="legend-note">own table</span>') : `<input type="text" data-k="table" value="${esc(v.table)}">`}</td>
@@ -23979,7 +24226,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   function renderRepeated() {
     const cfg = state.cfg, reps = cfg.variables.filter(v => v.kind === 'repeated');
     $('#repList').innerHTML = reps.length ? reps.map(v => `<div class="gcard row" style="margin-bottom:6px">
-        <div style="flex:1"><b>${esc(v.label)}</b> <span class="legend-note">— ${v.cols.map(c => `${esc(tpText(c.tp))} <span class="mono">(${esc(c.col)})</span>`).join(' → ')}</span></div>
+        <div style="flex:1"><b>${esc(v.label)}</b> <span class="legend-note">— ${v.cols.map(c => `${esc(c.label || tpText(c.tp))} <span class="mono">(${esc(c.col)})</span>`).join(' → ')}</span></div>
         <button class="btn ghost small" data-repedit="${v.id}" type="button">✎ Edit</button>
         <button class="btn ghost small" data-repungroup="${v.id}" type="button" title="Turn the columns back into single variables">Ungroup</button></div>`).join('')
       : '<p class="legend-note">No repeated measures yet. Create one from columns measured at several timepoints.</p>';
@@ -23992,7 +24239,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       <div class="grid g2"><div><label class="f">Name (outcome label)</label><input type="text" id="repName" value="${esc(repEdit.label)}" placeholder="e.g. Pain score"></div></div>
       <label class="f" style="margin-top:10px">Columns in time order — give each its timepoint label (this order is kept in tables and charts)</label>
       <table class="t"><thead><tr><th>#</th><th>Column</th><th>Timepoint label</th><th></th></tr></thead><tbody>${repEdit.cols.map((c, i) => `<tr>
-        <td>${i + 1}</td><td class="mono">${esc(c.col)}</td><td><input type="text" data-reptp="${i}" value="${esc(tpText(c.tp))}"></td>
+        <td>${i + 1}</td><td class="mono">${esc(c.col)}</td><td><input type="text" data-reptp="${i}" value="${esc(c.label ?? tpText(c.tp))}"></td>
         <td><button class="btn ghost small" data-repmove="${i},-1" type="button">↑</button> <button class="btn ghost small" data-repmove="${i},1" type="button">↓</button> <button class="btn ghost small" data-repdel="${i}" type="button">✕</button></td></tr>`).join('') || '<tr><td colspan="4" class="legend-note">Add at least two columns.</td></tr>'}</tbody></table>
       <div class="row" style="margin-top:8px"><select id="repAdd" style="max-width:320px"><option value="">+ Add a column…</option>${avail.map(h => `<option>${esc(h)}</option>`).join('')}</select>
         <span class="spacer"></span><button class="btn ghost" data-repact="cancel" type="button">Cancel</button><button class="btn primary" data-repact="save" type="button">Save repeated measure</button></div>
@@ -24015,7 +24262,11 @@ if (typeof module !== 'undefined') module.exports = Examples;
       const existing = cfg.tpOrder.find(t => tpText(t).toLowerCase() === labels[i].toLowerCase());
       const tp = existing || labels[i];
       if (!existing) { cfg.tpOrder.push(tp); cfg.tpLabels[tp] = labels[i]; }
-      return { col: c.col, tp };
+      // the label belongs to this outcome; only a different spelling from the shared name is stored
+      const col = { col: c.col, tp };
+      if (c.include === false) col.include = false;
+      if (labels[i] !== tpText(tp)) col.label = labels[i];
+      return col;
     });
     const old = repEdit.id ? cfg.variables.find(v => v.id === repEdit.id) : null;
     const chosen = new Set(cols.map(c => c.col));
@@ -24069,13 +24320,51 @@ if (typeof module !== 'undefined') module.exports = Examples;
         <td><input type="text" data-tp="${esc(t)}" value="${esc(cfg.tpLabels[t])}"></td>
         <td><button class="btn ghost small" data-tpmove="${i},-1">↑</button> <button class="btn ghost small" data-tpmove="${i},1">↓</button></td></tr>`).join('')}</tbody>`
       : '<tbody><tr><td>No repeated measures detected.</td></tr></tbody>';
-    const o = cfg.options;
+    renderTpVars();
+  }
+  // option controls of steps 4–8 show the saved options
+  function renderOptions() {
+    const o = state.cfg.options;
     for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
     $('#customColors').innerHTML = o.customColors.map((col, i) => `<input type="color" data-ccol="${i}" value="${esc(col)}" title="Colour ${i + 1}">`).join('');
     $('#customBox').style.display = o.palette === 'custom' ? '' : 'none';
-    renderFigureTable();
-    renderAdvanced();
   }
+
+  /* ---------- timepoints per outcome (step 3) ---------- */
+  const colTp = c => c.label || state.cfg.tpLabels[c.tp] || c.tp;
+  function renderTpVars() {
+    const reps = state.cfg.variables.filter(v => v.kind === 'repeated');
+    $('#tpVars').innerHTML = reps.length ? reps.map(v => `<div class="gcard" style="margin-bottom:10px"><div class="row"><h4 style="margin:0">${esc(v.label)}</h4><span class="spacer"></span>
+        <span class="legend-note">${v.include ? '' : 'not included (step 2) · '}${v.split ? 'analysed as separate variables · ' : ''}${v.ownOrder ? 'own order' : 'shared order'}</span></div>
+      <table class="t" style="margin-top:6px"><thead><tr><th>Use</th><th>Column</th><th>Timepoint label for this outcome</th><th>Order</th></tr></thead><tbody>${v.cols.map((c, i) => `<tr>
+        <td><input type="checkbox" data-tv="${v.id}:${i}" data-tf="include" ${c.include !== false ? 'checked' : ''}></td><td class="mono">${esc(c.col)}</td>
+        <td><input type="text" data-tv="${v.id}:${i}" data-tf="label" value="${esc(colTp(c))}"></td>
+        <td><button class="btn ghost small" data-tvmove="${v.id}:${i}:-1" type="button">↑</button> <button class="btn ghost small" data-tvmove="${v.id}:${i}:1" type="button">↓</button></td></tr>`).join('')}</tbody></table></div>`).join('')
+      : '<p class="legend-note">No repeated measures. Create one in step 2 (Repeated measures).</p>';
+  }
+  function readTpVars() {
+    document.querySelectorAll('#tpVars [data-tv]').forEach(el => {
+      const [id, i] = el.dataset.tv.split(':'), v = state.cfg.variables.find(x => x.id === id); if (!v) return;
+      const c = v.cols[+i];
+      if (el.dataset.tf === 'include') c.include = el.checked;
+      else {
+        const t = el.value.trim();
+        // a label equal to the shared name is not an override
+        if (!t || t === (state.cfg.tpLabels[c.tp] || c.tp)) delete c.label; else c.label = t;
+      }
+    });
+  }
+  $('#tpVars').addEventListener('click', e => {
+    const b = e.target.closest('[data-tvmove]'); if (!b) return;
+    readUiIntoCfg();
+    const [id, i, d] = b.dataset.tvmove.split(':'), v = state.cfg.variables.find(x => x.id === id), a = v.cols, j = +i + +d;
+    if (j < 0 || j >= a.length) return;
+    // the outcome now keeps its own order; start from the order currently in use
+    if (!v.ownOrder) { const ord = t => { const k = state.cfg.tpOrder.indexOf(t); return k < 0 ? 1e9 : k; }; a.sort((x, y) => ord(x.tp) - ord(y.tp)); v.ownOrder = true; }
+    const from = +i, to = j;
+    [a[from], a[to]] = [a[to], a[from]];
+    renderTpVars();
+  });
   /* ---------- figures by variable + live preview ---------- */
   const CHART_TYPES = {
     repeated: [['auto', 'Auto (chart style)'], ['bar', 'Bars'], ['line', 'Lines over time'], ['box', 'Box plots'], ['dot', 'Box plots + every patient'], ['none', 'No figure']],
@@ -24085,10 +24374,11 @@ if (typeof module !== 'undefined') module.exports = Examples;
   const chartKind = v => v.kind === 'repeated' ? 'repeated' : v.type;
   function renderFigureTable() {
     const vars = state.cfg.variables.filter(v => v.include);
-    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
+    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
       <td><b>${esc(v.label)}</b><div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
       <td><select data-fv="${v.id}" data-fk="chart">${CHART_TYPES[chartKind(v)].map(([k, l]) => `<option value="${k}" ${(v.chart || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input type="text" data-fv="${v.id}" data-fk="caption" value="${esc(v.caption || '')}" placeholder="${esc(v.label)} of the studied groups"></td>
+      <td><input type="text" data-fv="${v.id}" data-fk="ylabel" value="${esc(v.ylabel || '')}" placeholder="${esc(v.type === 'categorical' ? '% of the studied patients' : v.label)}"></td>
       <td><button class="btn ghost small" data-fprev="${v.id}" type="button" title="Preview this figure">👁</button></td></tr>`).join('')}</tbody>`;
     const cur = $('#figPrevVar').value;
     $('#figPrevVar').innerHTML = vars.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
@@ -24099,7 +24389,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   const schedulePreview = () => { clearTimeout(prevTimer); prevTimer = setTimeout(drawFigurePreview, 200); };
   // runs the analysis for the chosen variable only, with the options as they stand on the page
   function drawFigurePreview() {
-    if (!$('#p3').classList.contains('active')) return;
+    if (!isActive(7)) return;
     readUiIntoCfg();
     const cfg = state.cfg, v = cfg.variables.find(x => x.id === $('#figPrevVar').value), cv = $('#figPrevCanvas');
     if (!v) { cv.width = cv.height = 0; $('#figPrevNote').textContent = 'No variable selected.'; return; }
@@ -24114,8 +24404,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
       $('#figPrevNote').textContent = `${Report.figLabel(1, cfg.options.captionStyle)} ${f.caption}`;
     } catch (err) { console.error(err); $('#figPrevNote').textContent = 'Preview failed: ' + err.message; }
   }
-  $('#p3').addEventListener('input', schedulePreview);
-  $('#p3').addEventListener('change', schedulePreview);
+  $('#p7').addEventListener('input', schedulePreview);
+  $('#p7').addEventListener('change', schedulePreview);
   $('#figTbl').addEventListener('click', e => { const b = e.target.closest('[data-fprev]'); if (b) { $('#figPrevVar').value = b.dataset.fprev; schedulePreview(); } });
 
   $('#tpTbl').addEventListener('click', e => {
@@ -24171,11 +24461,26 @@ if (typeof module !== 'undefined') module.exports = Examples;
           <label class="check" style="margin:0"><input type="checkbox" data-af="include" ${a.include !== false ? 'checked' : ''}><span>Include</span></label>
           <button class="btn ghost small" data-advdel="${ai}" type="button">✕ Remove</button></div>
         <div class="grid g3" style="margin-top:8px">${fields}${uni}</div>
+        <div class="grid g4 adv-opts">${advOptions(a)}</div>
         ${t === 'survival' ? '<p class="legend-note" style="margin:6px 0 0">Curves are drawn for each study group; patients without the event are censored at their follow-up time.</p>' : t === 'mcnemar' ? '<p class="legend-note" style="margin:6px 0 0">Tested in each study group and in all patients together.</p>' : !withPreds ? '' : `
         <label class="f" style="margin-top:8px">${predLabel}</label>
         <div class="predlist">${preds.filter(c => c.col !== a.outcome).map(c => `<label><input type="checkbox" data-apred="${esc(c.col)}" ${(a.predictors || []).includes(c.col) ? 'checked' : ''}>${esc(c.label)} <span class="legend-note">${c.kind === 'numeric' ? 'num' : 'cat'}</span></label>`).join('')}</div>`}
       </div>`;
     }).join('') : '<p class="legend-note">No advanced analyses yet — add one below.</p>';
+  }
+  // per-analysis options: title, patients (subset), variable selection and type-specific extras
+  function advOptions(a) {
+    const t = a.type, sel = (key, opts, v) => `<select data-af="${key}">${opts.map(([k, l]) => `<option value="${esc(k)}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    const box = (key, label) => `<label class="check" style="margin-top:22px"><input type="checkbox" data-af="${key}" ${a[key] ? 'checked' : ''}><span>${label}</span></label>`;
+    const out = [`<div><label class="f">Title (optional)</label><input type="text" data-af="title" value="${esc(a.title || '')}" placeholder="automatic"></div>`];
+    if (!['ancova', 'survival', 'mcnemar'].includes(t))
+      out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
+    if (['linear', 'logistic', 'cox'].includes(t))
+      out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
+    if (t === 'linear') out.push(`<div>${box('vif', 'Collinearity (VIF)')}</div>`);
+    if (t === 'logistic') out.push(`<div>${box('hl', 'Hosmer-Lemeshow goodness of fit')}</div>`);
+    if (t === 'roc') out.push(`<div><label class="f">Optimal cut-off</label>${sel('cutoff', [['youden', 'Youden index'], ['closest', 'Closest to top-left corner']], a.cutoff)}</div>`);
+    return out.join('');
   }
   function readAdvanced() {
     document.querySelectorAll('[data-adv]').forEach(card => {
@@ -24311,7 +24616,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const tgt = $('#consortCanvas');
     tgt.width = cv.width; tgt.height = cv.height; tgt.getContext('2d').drawImage(cv, 0, 0);
   }
-  $('#p4').addEventListener('input', e => {
+  $('#p9').addEventListener('input', e => {
     if (e.target.id === 'cType') return;
     readConsort();
     const el = e.target, c = state.cfg.consort;
@@ -24335,9 +24640,32 @@ if (typeof module !== 'undefined') module.exports = Examples;
   });
 
   /* ---------- read UI into cfg ---------- */
+  // each step's controls are read only while that step is on screen, so a hidden, older copy never overwrites the setup
+  const isActive = n => $('#p' + n).classList.contains('active');
   function readUiIntoCfg() {
     const cfg = state.cfg; if (!cfg) return;
     cfg.study.title = $('#studyTitle').value; cfg.study.software = $('#software').value;
+    if (isActive(2)) readVariables();
+    if (isActive(3)) {
+      document.querySelectorAll('[data-tp]').forEach(el => cfg.tpLabels[el.dataset.tp] = el.value.trim() || el.dataset.tp);
+      document.querySelectorAll('[data-tpinc]').forEach(el => { cfg.tpInclude[el.dataset.tpinc] = el.checked; });
+      readTpVars();
+    }
+    const o = cfg.options;
+    for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) {
+      const el = $('#' + id);
+      if (!el.closest('.panel').classList.contains('active')) continue;
+      o[k] = box ? el.checked : typeof DEFAULT_OPTIONS[k] === 'number' ? +el.value : el.value;
+    }
+    if (isActive(7)) {
+      document.querySelectorAll('[data-ccol]').forEach(el => { o.customColors[+el.dataset.ccol] = el.value; });
+      document.querySelectorAll('#figTbl [data-fv]').forEach(el => { const v = cfg.variables.find(x => x.id === el.dataset.fv); if (v) v[el.dataset.fk] = el.value.trim(); });
+    }
+    if (isActive(8)) readAdvanced();
+    if (isActive(9)) readConsort();
+  }
+  function readVariables() {
+    const cfg = state.cfg;
     document.querySelectorAll('[data-glabel]').forEach(el => cfg.groupLabels[el.dataset.glabel] = el.value.trim() || el.dataset.glabel);
     document.querySelectorAll('[data-ginc]').forEach(el => cfg.groupInclude[el.dataset.ginc] = el.checked);
     document.querySelectorAll('#varsTbl tr[data-vid]').forEach(tr => {
@@ -24353,19 +24681,6 @@ if (typeof module !== 'undefined') module.exports = Examples;
       });
       tr.querySelectorAll('[data-vtp]').forEach(el => { v.cols[+el.dataset.vtp].include = el.checked; });
     });
-    document.querySelectorAll('[data-tp]').forEach(el => cfg.tpLabels[el.dataset.tp] = el.value.trim() || el.dataset.tp);
-    document.querySelectorAll('[data-tpinc]').forEach(el => { cfg.tpInclude[el.dataset.tpinc] = el.checked; });
-    if ($('#p3').classList.contains('active')) {
-      const o = cfg.options;
-      for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) {
-        const el = $('#' + id);
-        o[k] = box ? el.checked : typeof DEFAULT_OPTIONS[k] === 'number' ? +el.value : el.value;
-      }
-      document.querySelectorAll('[data-ccol]').forEach(el => { o.customColors[+el.dataset.ccol] = el.value; });
-      document.querySelectorAll('#figTbl [data-fv]').forEach(el => { const v = cfg.variables.find(x => x.id === el.dataset.fv); if (v) v[el.dataset.fk] = el.value.trim(); });
-      readAdvanced();
-    }
-    if ($('#p4').classList.contains('active')) readConsort();
   }
 
   /* ---------- step 5: analysis + preview ---------- */
@@ -24383,7 +24698,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
         syncAssessed(ensureConsort());
         const cfg = state.cfg;
         const res = Analysis.run(state.data, cfg);
-        res.sections.forEach(s => s.figures.forEach(f => { f.key = f.caption; renderFigure(f, cfg.options); }));
+        res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => { f.key = f.caption; renderFigure(f, cfg.options); }); });
         const pal = chartPalette(cfg.options);
         const gl = res.groups;
         if (cfg.consort.enabled) {
@@ -24405,7 +24720,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
 
   // export selection: keys of items left out of the Word file (kept across re-runs and in saved setups);
   // a figure keeps its original caption as key, so editing the caption keeps the choice
-  const exKey = { methods: () => 'methods', consort: () => 'consort', table: s => 't:' + s.title, figure: f => 'f:' + (f.key || f.caption) };
+  const exKey = { methods: () => 'methods', consort: () => 'consort', table: s => 't:' + (s.key || s.title), figure: f => 'f:' + (f.key || f.caption) };
   const isOut = key => !!state.cfg.exportExclude[key];
   const exBox = (key, label) => `<label class="check exp"><input type="checkbox" data-export="${esc(key)}" ${isOut(key) ? '' : 'checked'}><span>${label}</span></label>`;
   // pull the editable text back into the result before re-rendering or exporting
@@ -24415,6 +24730,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     if ($('#edIntro')) r.intro = $('#edIntro').value;
     document.querySelectorAll('[data-comment]').forEach(t => { r.sections[+t.dataset.comment].comment = t.value; });
     document.querySelectorAll('[data-fcap]').forEach(t => { const [si, fi] = t.dataset.fcap.split(':').map(Number); r.sections[si].figures[fi].caption = t.value; });
+    document.querySelectorAll('[data-ttl]').forEach(t => { r.sections[+t.dataset.ttl].title = t.value; });
+    if ($('#edSummary')) r.summary = $('#edSummary').value;
   }
   function renderReport() {
     const r = state.result;
@@ -24441,12 +24758,16 @@ if (typeof module !== 'undefined') module.exports = Examples;
     };
     r.sections.forEach((s, i) => {
       const tk = exKey.table(s), tOut = isOut(tk);
-      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported' : `Table ${tab++}`}: ${esc(s.title)}</div>${exBox(tk, 'Table')}</div><div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
+      const place = o.commentPlace || 'after';
+      const comment = `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
+      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${tab++}${o.tableCaption === 'period' ? '.' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
+        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
         <div class="foot">${esc(s.footnote)}</div>
-        <label class="f">Comment (editable — exported with the table)</label><textarea data-comment="${i}">${esc(s.comment)}</textarea></div>
+        ${place !== 'before' ? comment : ''}</div>
         ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
     });
     if (atEnd && atEnd.length) html += `<div class="report-sec"><h3>Figures</h3><div class="figs">${atEnd.map(figHtml).join('')}</div></div>`;
+    if (r.summary) html += `<div class="report-sec${off('summary')}"><div class="row"><h3>Summary of key findings</h3><span class="spacer"></span>${exBox('summary', 'Include')}</div><textarea id="edSummary">${esc(r.summary)}</textarea></div>`;
     $('#report').innerHTML = html;
   }
   $('#report').addEventListener('change', e => {
@@ -24465,14 +24786,14 @@ if (typeof module !== 'undefined') module.exports = Examples;
   $('#report').addEventListener('click', e => {
     const b = e.target.closest('[data-exall]'); if (!b) return;
     syncEdits();
-    const r = state.result, keys = ['methods', ...(r.consort ? ['consort'] : []), ...r.sections.flatMap(s => [exKey.table(s), ...s.figures.map(exKey.figure)])];
+    const r = state.result, keys = ['methods', ...(r.consort ? ['consort'] : []), ...(r.summary ? ['summary'] : []), ...r.sections.flatMap(s => [exKey.table(s), ...s.figures.map(exKey.figure)])];
     keys.forEach(k => { if (b.dataset.exall === '1') delete state.cfg.exportExclude[k]; else state.cfg.exportExclude[k] = true; });
     const y = window.scrollY; renderReport(); window.scrollTo(0, y);
   });
   // the report model limited to what the user chose to export
   function exportModel(r) {
     return {
-      ...r, methods: isOut('methods') ? '' : r.methods, consort: isOut('consort') ? null : r.consort,
+      ...r, methods: isOut('methods') ? '' : r.methods, consort: isOut('consort') ? null : r.consort, summary: isOut('summary') ? '' : r.summary,
       sections: r.sections.map(s => ({ ...s, tableOn: !isOut(exKey.table(s)), figures: s.figures.filter(f => !isOut(exKey.figure(f))) }))
         .filter(s => s.tableOn || s.figures.length)
     };
@@ -24487,7 +24808,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
       const r = exportModel(state.result);
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = state.cfg.options;
-      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle });
+      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '') + ' - Statistical report.docx';

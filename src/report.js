@@ -3,7 +3,8 @@ const Report = (() => {
   const D = () => window.docx;
   const DEFAULT_FONT = 'Times New Roman';
   let BODY_FONT = DEFAULT_FONT; // set per build from the report options
-  const PAGE_W = 9026; // A4 text width with 1" margins (DXA)
+  const PORTRAIT_W = 9026, LANDSCAPE_W = 13958; // A4 text width with 1" margins (DXA)
+  let PAGE_W = PORTRAIT_W; // set per build from the page orientation
 
   const dataUrlToBytes = url => {
     const b = atob(url.split(',')[1]), u = new Uint8Array(b.length);
@@ -51,7 +52,7 @@ const Report = (() => {
         const name = h.t || '';
         // very wide tables (e.g. ROC) need roomier label and P value columns
         const wide = nCols > 7;
-        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : /P value/.test(name) ? (wide ? 0.95 : 0.7) : 1.15);
+        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : /^(P value|P|p-value)$/.test(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
       }
     });
     const tot = weights.reduce((a, b) => a + b, 0);
@@ -141,6 +142,8 @@ const Report = (() => {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
     BODY_FONT = opts.font || DEFAULT_FONT;
+    const landscape = opts.orientation === 'landscape';
+    PAGE_W = landscape ? LANDSCAPE_W : PORTRAIT_W;
     const children = [];
     if (opts.title) children.push(para(opts.title, { bold: true, size: 32, align: AlignmentType.CENTER, after: 240, color: brand ? '7B2FBE' : undefined }));
     if (model.methods) {
@@ -166,16 +169,21 @@ const Report = (() => {
     const atEnd = arrangeFigures(model.sections, opts.figPlacement);
     for (const s of model.sections) {
       if (s.tableOn !== false) {
-        children.push(caption(`Table ${tab++}: ${s.title}`));
+        if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment));
+        children.push(caption(`Table ${tab++}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`));
         children.push(table(s.head, s.rows, brand, opts.tableStyle));
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
-        if (s.comment) children.push(para(s.comment));
+        if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));
       }
       if (!atEnd) placeFigures(s.figures);
     }
     if (atEnd && atEnd.some(f => f.url)) {
       children.push(heading('Figures', brand));
       placeFigures(atEnd);
+    }
+    if (model.summary) {
+      children.push(heading('Summary of key findings', brand));
+      children.push(para(model.summary));
     }
 
     const headerKids = [];
@@ -194,7 +202,7 @@ const Report = (() => {
       title: opts.title || 'Statistical report',
       styles: { default: { document: { run: { font: BODY_FONT, size: 24 } } } },
       sections: [{
-        properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } } },
+        properties: { page: { size: landscape ? { width: 11906, height: 16838, orientation: D().PageOrientation.LANDSCAPE } : { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } } },
         headers: { default: new Header({ children: headerKids }) },
         footers: {
           default: new Footer({

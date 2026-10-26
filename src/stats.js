@@ -695,13 +695,30 @@ const Stats = (() => {
     const correct = mu.filter((m, i) => (m >= 0.5) === (y[i] === 1)).length;
     // separation shows as huge coefficients that never settle
     const unstable = !converged || terms.slice(1).some(t => Math.abs(t.B) > 15 || !isFinite(t.se));
-    return { terms, n, events: ny, m2LL: -2 * LL, chi, dfModel: k, pModel: k ? 1 - jStat.chisquare.cdf(chi, k) : NaN, coxSnell: cs, nagelkerke: nag, accuracy: correct / n, converged, unstable, iter };
+    return { terms, n, events: ny, m2LL: -2 * LL, chi, dfModel: k, pModel: k ? 1 - jStat.chisquare.cdf(chi, k) : NaN, coxSnell: cs, nagelkerke: nag, accuracy: correct / n, converged, unstable, iter, fitted: mu };
+  }
+
+  // Hosmer–Lemeshow goodness of fit: patients sorted by predicted risk, g groups of (nearly) equal size, df = g − 2
+  function hosmerLemeshow(y, prob, g = 10) {
+    const n = y.length, idx = prob.map((_, i) => i).sort((a, b) => prob[a] - prob[b]);
+    g = Math.min(g, n);
+    let chi = 0;
+    for (let q = 0; q < g; q++) {
+      const part = idx.slice(Math.round(q * n / g), Math.round((q + 1) * n / g));
+      if (!part.length) continue;
+      const o1 = sum(part.map(i => y[i])), e1 = sum(part.map(i => prob[i])), m = part.length, o0 = m - o1, e0 = m - e1;
+      if (e1 > 0) chi += (o1 - e1) ** 2 / e1;
+      if (e0 > 0) chi += (o0 - e0) ** 2 / e0;
+    }
+    const df = g - 2;
+    return { chi, df, p: df > 0 ? 1 - jStat.chisquare.cdf(chi, df) : NaN };
   }
 
   /* ---------- ROC curve ---------- */
   // values: test results; pos: booleans (true = condition present). Higher values are taken as positive;
   // when the AUC is below 0.5 the direction is flipped (lower values positive) and reported.
-  function roc(values, pos) {
+  // cutoff: 'youden' (max sensitivity + specificity − 1) or 'closest' (nearest to the top-left corner)
+  function roc(values, pos, cutoff = 'youden') {
     let higher = true;
     const run = (vals) => {
       const P = vals.filter((_, i) => pos[i]), N = vals.filter((_, i) => !pos[i]), n1 = P.length, n0 = N.length;
@@ -722,7 +739,8 @@ const Stats = (() => {
       const tp = values.filter((v, i) => pos[i] && sgn * (v - c) > 0).length, fp = values.filter((v, i) => !pos[i] && sgn * (v - c) > 0).length;
       return { cut: c, sens: tp / n1, spec: 1 - fp / n0, tp, fp, fn: n1 - tp, tn: n0 - fp };
     });
-    const best = points.slice(1, -1).reduce((b, q) => (q.sens + q.spec > b.sens + b.spec ? q : b), points[1] || points[0]);
+    const score = cutoff === 'closest' ? q => -((1 - q.sens) ** 2 + (1 - q.spec) ** 2) : q => q.sens + q.spec;
+    const best = points.slice(1, -1).reduce((b, q) => (score(q) > score(b) ? q : b), points[1] || points[0]);
     return {
       auc, se, lo: Math.max(0, auc - 1.959964 * se), hi: Math.min(1, auc + 1.959964 * se), p, n1, n0, higher,
       points: points.map(q => ({ fpr: 1 - q.spec, tpr: q.sens })),
@@ -758,7 +776,7 @@ const Stats = (() => {
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
     pairedT, wilcoxonSigned, pearson, spearman, bonferroni,
-    invert, linearRegression, logisticRegression, roc,
+    invert, linearRegression, logisticRegression, hosmerLemeshow, roc,
     welchAnova, gamesHowell, dunn, chiSquarePairwise, mixedAnova, kaplanMeier, logRank, ancova,
     lilliefors, oddsRatio, mcnemar, cohenKappa, icc, blandAltman, cronbach, clopperPearson, diagnostic2x2, coxRegression
   };

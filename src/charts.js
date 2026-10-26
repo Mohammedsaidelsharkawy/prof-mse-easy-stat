@@ -10,7 +10,10 @@ const Charts = (() => {
   const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300] };
   const TEXT = { normal: 1, large: 1.25, xlarge: 1.5 };
   const DEFAULT_STYLE = { text: 'normal', aspect: 'wide', barFill: 'gradient', grid: true, arrows: true, legend: 'bottom', res: 1, yAxis: 'auto',
-    legendSize: 'normal', legendTitle: '', legendFrame: false };
+    legendSize: 'normal', legendTitle: '', legendFrame: false, barWidth: 'normal', boxMean: false };
+  // bar / box width multiplier, never wider than the category slot
+  const BAR_W = { thin: 0.7, normal: 1, wide: 1.3 };
+  const widthOf = (st, frac) => Math.min(0.95, frac * (BAR_W[st.barWidth] || 1));
   const LEGEND_SIZE = { small: 0.85, normal: 1, large: 1.2 };
   const palette = p => Array.isArray(p) && p.length ? p : PALETTES[p] || PALETTES.brand;
 
@@ -231,7 +234,7 @@ const Charts = (() => {
 
     if (spec.type === 'bar') {
       const slots = perGroup ? 1 : ns;
-      const gw = cw * (perGroup ? 0.42 : 0.78), bw = gw / slots;
+      const gw = cw * widthOf(st, perGroup ? 0.42 : 0.78), bw = gw / slots;
       spec.series.forEach((s, si) => s.values.forEach((v, ci) => {
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
@@ -260,7 +263,7 @@ const Charts = (() => {
       });
     } else if (spec.type === 'stacked') {
       // one 100% bar per group, segments = categories
-      const w = cw * 0.5;
+      const w = cw * widthOf(st, 0.5);
       spec.categories.forEach((_, ci) => {
         let base = 0;
         spec.series.forEach((s, si) => {
@@ -293,7 +296,7 @@ const Charts = (() => {
       });
     } else if (spec.type === 'box') {
       const slots = perGroup ? 1 : ns;
-      const gw = cw * (perGroup ? 0.36 : 0.8), bw = gw / slots;
+      const gw = cw * widthOf(st, perGroup ? 0.36 : 0.8), bw = gw / slots;
       spec.series.forEach((s, si) => s.data.forEach((arr, ci) => {
         if (!arr.length) return;
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
@@ -308,6 +311,13 @@ const Charts = (() => {
         ctx.stroke();
         ctx.setLineDash([]); ctx.lineWidth = 5;
         ctx.beginPath(); ctx.moveTo(cx - w / 2, y(b.med)); ctx.lineTo(cx + w / 2, y(b.med)); ctx.stroke();
+        if (st.boxMean) {
+          // mean as a diamond
+          const m = Stats.mean(arr), r = 11;
+          ctx.fillStyle = '#fff'; ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.moveTo(cx, y(m) - r); ctx.lineTo(cx + r, y(m)); ctx.lineTo(cx, y(m) + r); ctx.lineTo(cx - r, y(m)); ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.strokeStyle = color;
+        }
         ctx.lineWidth = 2.5;
         if (spec.points) {
           // every observation as a translucent dot (outliers included)

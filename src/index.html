@@ -35,7 +35,7 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 
 main{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
 .stepper{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
-.step{flex:1;min-width:150px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);cursor:pointer;user-select:none;transition:.15s}
+.step{flex:1;min-width:112px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);cursor:pointer;user-select:none;transition:.15s}
 .step .num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:var(--lav2);color:var(--accent);flex:none}
 .step .lbl{font-weight:600;font-size:14px}
 .step .sub{font-size:12px;color:var(--muted)}
@@ -88,6 +88,7 @@ table.t td select{min-width:120px}
 .predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
+.adv-opts{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .fig-prev{margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;position:sticky;top:90px}
 .fig-prev canvas{width:100%;display:block}
 .fig-prev .legend-note{text-align:center;margin-top:4px}
@@ -218,26 +219,30 @@ footer b{color:var(--purple)}
       <div id="repList"></div>
       <div id="repEditor"></div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="1">← Back</button><button class="btn primary" data-go="3">Next: Timepoints & options →</button></div>
+    <div class="nav"><button class="btn ghost" data-go="1">← Back</button><button class="btn primary" data-go="3">Next: Timepoints →</button></div>
   </section>
 
   <!-- STEP 3 -->
   <section class="panel" id="p3">
     <div class="card">
       <h2>3 · Timepoints</h2>
-      <p class="hint">Rename how each timepoint appears in tables and charts.</p>
-      <div class="tbl-wrap" style="max-height:340px"><table class="t" id="tpTbl"></table></div>
+      <p class="hint">Each repeated outcome has its own timepoints: tick which enter, rename them and set their order for that outcome only. Labels you type here are used in its table, comments and figure.</p>
+      <div id="tpVars"></div>
     </div>
     <div class="card">
-      <h2>Analysis & report options</h2>
-      <div class="grid g4">
-        <div><label class="f">Decimal places</label><select id="optDec"><option>1</option><option selected>2</option><option>3</option></select></div>
-        <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
-        <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
-        <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option><option value="custom">Custom colours…</option></select></div>
-      </div>
-      <h3>Tests</h3>
+      <h2>Shared timepoint names</h2>
+      <p class="hint">Default names for the timepoint tokens found in column names. Outcomes use these unless you renamed a timepoint above. Unticking a token here leaves it out of every outcome.</p>
+      <div class="tbl-wrap" style="max-height:340px"><table class="t" id="tpTbl"></table></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="2">← Back</button><button class="btn primary" data-go="4">Next: Tests →</button></div>
+  </section>
+
+  <!-- STEP 4 -->
+  <section class="panel" id="p4">
+    <div class="card">
+      <h2>4 · Statistical tests</h2>
       <div class="grid g4" style="margin-bottom:8px">
+        <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
         <div><label class="f">Normality test</label><select id="optNormality"><option value="sw" selected>Shapiro-Wilk</option><option value="ks">Kolmogorov-Smirnov (Lilliefors)</option></select></div>
         <div><label class="f">Effect of binary variables</label><select id="optCatEffect"><option value="rr" selected>Relative risk (RR)</option><option value="or">Odds ratio (OR)</option></select></div>
       </div>
@@ -245,35 +250,83 @@ footer b{color:var(--purple)}
         <div>
           <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
           <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — paired t / Wilcoxon for two timepoints; repeated-measures ANOVA (Greenhouse-Geisser) or Friedman for more, with Bonferroni post hoc versus the first timepoint</span></label>
-        </div>
-        <div>
-          <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
-          <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots of significant pairs</span></label>
-        </div>
-      </div>
-      <div class="grid g2" style="margin-top:6px">
-        <div>
           <label class="check"><input type="checkbox" id="optWelch"><span><b>Welch's ANOVA + Games-Howell</b> post hoc when variances are unequal (Levene P &lt; 0.05), 3+ groups</span></label>
           <label class="check"><input type="checkbox" id="optDunn"><span><b>Dunn's test</b> (Bonferroni) as the post hoc after Kruskal-Wallis, instead of pairwise Mann-Whitney</span></label>
         </div>
         <div>
+          <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
+          <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots of significant pairs</span></label>
           <label class="check"><input type="checkbox" id="optChiPost"><span><b>Pairwise post hoc for categorical variables</b> — Chi-square / Fisher between each two groups (Bonferroni), 3+ groups</span></label>
           <label class="check"><input type="checkbox" id="optMixed"><span><b>Group × time interaction</b> — mixed (split-plot) ANOVA with Greenhouse-Geisser, parametric repeated outcomes</span></label>
         </div>
       </div>
-      <h3>Comments</h3>
-      <div class="grid g2">
-        <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option></select></div>
-        <div><label class="check" style="margin-top:24px"><input type="checkbox" id="optNotSig"><span>Write “not significantly” instead of “insignificantly”</span></label></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="3">← Back</button><button class="btn primary" data-go="5">Next: Tables →</button></div>
+  </section>
+
+  <!-- STEP 5 -->
+  <section class="panel" id="p5">
+    <div class="card">
+      <h2>5 · Tables</h2>
+      <h3>Numbers</h3>
+      <div class="grid g4">
+        <div><label class="f">Decimal places</label><select id="optDec"><option>1</option><option selected>2</option><option>3</option></select></div>
+        <div><label class="f">Percentage decimals</label><select id="optPctDec"><option value="0">0 — 33%</option><option value="1" selected>1 — 33.3%</option><option value="2">2 — 33.33%</option></select></div>
+        <div><label class="f">Mean and SD</label><select id="optMeanStyle"><option value="pm" selected>Mean ± SD</option><option value="paren">Mean (SD)</option></select></div>
+        <div><label class="f">Median and IQR</label><select id="optIqrStyle"><option value="dash" selected>25 - 30</option><option value="endash">25–30</option><option value="bracket">[25, 30]</option></select></div>
+        <div><label class="f">Second row of numeric variables</label><select id="optSecondRow"><option value="auto" selected>Range (mean) / IQR (median)</option><option value="ci">95% CI of the mean / IQR</option><option value="none">None — one row per variable</option></select></div>
+        <div><label class="f">P values</label><select id="optPDigits"><option value="3" selected>3 decimals (&lt;0.001)</option><option value="4">4 decimals (&lt;0.0001)</option></select></div>
+        <div><label class="f">P value column heading</label><select id="optPHead"><option selected>P value</option><option>P</option><option>p-value</option></select></div>
+        <div><label class="f">Mark of significant P values</label><select id="optSigSym"><option value="*" selected>* (asterisk)</option><option value="†">† (dagger)</option><option value="">none</option></select></div>
       </div>
-      <h3>Word report</h3>
+      <div class="grid g2" style="margin-top:10px">
+        <div>
+          <label class="check"><input type="checkbox" id="optShowStat"><span><b>Test statistic column</b> — t, F, U, H or χ² value of the test behind each P value</span></label>
+          <label class="check"><input type="checkbox" id="optMissingNote"><span><b>Missing data</b> — number of missing values per variable in the table footnote</span></label>
+        </div>
+      </div>
+      <h3>Word document</h3>
       <div class="grid g4">
         <div><label class="f">Table style</label><select id="optTable"><option value="grid" selected>Grid (all borders, shaded header)</option><option value="apa">Three-line academic (APA)</option></select></div>
         <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
+        <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option></select></div>
+        <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
       </div>
-      <h3>Figures</h3>
+      <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand" checked><span><b>Prof MSE branding</b> in the Word header</span></label></div>
+      <p class="legend-note">Table titles can be edited in the report preview (step 10).</p>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="4">← Back</button><button class="btn primary" data-go="6">Next: Comments →</button></div>
+  </section>
+
+  <!-- STEP 6 -->
+  <section class="panel" id="p6">
+    <div class="card">
+      <h2>6 · Comments</h2>
+      <div class="grid g4">
+        <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option></select></div>
+        <div><label class="f">P value wording</label><select id="optPWord"><option value="P value" selected>(P value = 0.013)</option><option value="P">(P = 0.013)</option><option value="p">(p = 0.013)</option></select></div>
+        <div><label class="f">Comment placement</label><select id="optCommentPlace"><option value="after" selected>After each table</option><option value="before">Before each table</option><option value="none">No comments</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:10px">
+        <div>
+          <label class="check"><input type="checkbox" id="optNotSig"><span>Write “not significantly” instead of “insignificantly”</span></label>
+          <label class="check"><input type="checkbox" id="optCommentEffect"><span><b>Effect sizes in comments</b> — the difference or RR/OR with 95% CI for significant two-group comparisons</span></label>
+          <label class="check"><input type="checkbox" id="optSummary"><span><b>Summary of key findings</b> — a closing paragraph listing every significant result</span></label>
+        </div>
+      </div>
+      <p class="legend-note">Every comment can still be edited by hand in the report preview (step 10).</p>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="5">← Back</button><button class="btn primary" data-go="7">Next: Figures →</button></div>
+  </section>
+
+  <!-- STEP 7 -->
+  <section class="panel" id="p7">
+    <div class="card">
+      <h2>7 · Figures</h2>
       <div class="grid g4">
         <div><label class="f">Figures to include</label><select id="optFigures"><option value="all" selected>All results</option><option value="sig">Significant results only</option><option value="none">None (tables only)</option></select></div>
+        <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
+        <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option><option value="custom">Custom colours…</option></select></div>
         <div><label class="f">Error bars (mean charts)</label><select id="optErrorBar"><option value="sd" selected>Standard deviation (SD)</option><option value="sem">Standard error (SEM)</option><option value="ci">95% confidence interval</option></select></div>
         <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option></select></div>
         <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
@@ -284,15 +337,20 @@ footer b{color:var(--purple)}
         <label class="f">Custom colours (group 1, 2, 3 …)</label>
         <div class="row"><span id="customColors" class="row" style="gap:6px"></span><button class="btn ghost small" id="customReset" type="button">Reset</button></div>
       </div>
-      <div class="grid g4" style="margin-top:12px">
+      <h3>Chart appearance</h3>
+      <div class="grid g4">
         <div><label class="f">Chart text size</label><select id="optChartText"><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
         <div><label class="f">Chart shape</label><select id="optAspect"><option value="wide" selected>Wide</option><option value="standard">Standard (4:3)</option><option value="square">Square</option></select></div>
         <div><label class="f">Bar fill</label><select id="optBarFill"><option value="gradient" selected>Gradient</option><option value="solid">Solid</option><option value="outline">Outline only</option><option value="hatched">Hatched (black &amp; white print)</option></select></div>
+        <div><label class="f">Bar width</label><select id="optBarWidth"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="wide">Wide</option></select></div>
         <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
+        <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
+      </div>
+      <h3>Legend</h3>
+      <div class="grid g4">
         <div><label class="f">Legend position</label><select id="optLegend"><option value="bottom" selected>Bottom</option><option value="top">Top</option><option value="right">Right</option><option value="inside">Inside the plot</option><option value="none">Hidden</option></select></div>
         <div><label class="f">Legend text size</label><select id="optLegendSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option></select></div>
         <div><label class="f">Legend title (optional)</label><input type="text" id="optLegendTitle" placeholder="e.g. Groups"></div>
-        <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
       </div>
       <div class="grid g2" style="margin-top:12px">
         <div>
@@ -301,12 +359,12 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optLegendFrame"><span><b>Frame</b> around the legend</span></label>
           <label class="check"><input type="checkbox" id="optNLabels"><span><b>Group sizes</b> on the charts — “A group (n=30)”</span></label>
           <label class="check"><input type="checkbox" id="optValueLabels"><span><b>Value labels</b> on bar charts of means / medians</span></label>
-          <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
-          <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
         </div>
         <div>
+          <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
+          <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
+          <label class="check"><input type="checkbox" id="optBoxMean"><span><b>Mean marker</b> (◆) on box plots</span></label>
           <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
-          <label class="check"><input type="checkbox" id="optBrand" checked><span><b>Prof MSE branding</b> in the Word header</span></label>
         </div>
       </div>
     </div>
@@ -321,8 +379,13 @@ footer b{color:var(--purple)}
         </div>
       </div>
     </div>
+    <div class="nav"><button class="btn ghost" data-go="6">← Back</button><button class="btn primary" data-go="8">Next: Advanced analyses →</button></div>
+  </section>
+
+  <!-- STEP 8 -->
+  <section class="panel" id="p8">
     <div class="card">
-      <h2>Advanced analyses</h2>
+      <h2>8 · Advanced analyses</h2>
       <p class="hint">Optional. Each analysis adds its own table (and ROC figure) after the main results. Categorical predictors are compared with their first level (group order / levels order from step 2). Patients with missing values are left out of that analysis.</p>
       <div id="advList" class="grid"></div>
       <div class="row" id="advAdd" style="margin-top:12px">
@@ -339,13 +402,13 @@ footer b{color:var(--purple)}
         <button class="btn ghost small" data-advadd="cronbach" type="button">+ Cronbach's alpha</button>
       </div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="2">← Back</button><button class="btn primary" data-go="4">Next: Flowchart →</button></div>
+    <div class="nav"><button class="btn ghost" data-go="7">← Back</button><button class="btn primary" data-go="9">Next: Flowchart →</button></div>
   </section>
 
-  <!-- STEP 4 -->
-  <section class="panel" id="p4">
+  <!-- STEP 9 -->
+  <section class="panel" id="p9">
     <div class="card">
-      <div class="row"><h2>4 · Flowchart</h2><span class="spacer"></span><label class="check"><input type="checkbox" id="cEnabled" checked><span>Include in report</span></label></div>
+      <div class="row"><h2>9 · Flowchart</h2><span class="spacer"></span><label class="check"><input type="checkbox" id="cEnabled" checked><span>Include in report</span></label></div>
       <div class="grid g3" style="margin:6px 0 4px"><div><label class="f">Flowchart type</label><select id="cType">
         <option value="consort">CONSORT 2010 — randomized trial</option><option value="strobe">STROBE — observational study</option>
         <option value="stard">STARD 2015 — diagnostic accuracy</option><option value="simple">Simple flowchart — custom steps</option></select></div></div>
@@ -355,21 +418,21 @@ footer b{color:var(--purple)}
         <div><canvas id="consortCanvas" class="consort-prev"></canvas></div>
       </div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="3">← Back</button><button class="btn primary" data-go="5">Run analysis →</button></div>
+    <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Run analysis →</button></div>
   </section>
 
-  <!-- STEP 5 -->
-  <section class="panel" id="p5">
+  <!-- STEP 10 -->
+  <section class="panel" id="p10">
     <div class="card">
       <div class="row">
-        <h2>5 · Report</h2><span class="spacer"></span>
+        <h2>10 · Report</h2><span class="spacer"></span>
         <button class="btn ghost" id="btnRerun">↻ Re-run</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
       <p class="hint">Review everything below. You can edit the text boxes — your edits go into the Word file.</p>
       <div id="report"></div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="4">← Back</button><span></span></div>
+    <div class="nav"><button class="btn ghost" data-go="9">← Back</button><span></span></div>
   </section>
 </main>
 <footer>© <b>Prof MSE</b> – Medical Research · Easy Stat v1.0 · runs fully offline in your browser</footer>

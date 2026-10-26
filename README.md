@@ -5,12 +5,17 @@ An offline web app that turns an Excel mastersheet into a formatted Word statist
 ## Using it
 
 1. Download `Prof_MSE_Easy_Stat.html` and open it in a modern browser (Chrome, Edge, Firefox). No installation or internet connection is needed.
-2. Follow the 5-step wizard:
+2. Follow the 10-step wizard:
    1. **Upload** the Excel file (or open an example) and enter the study title. The software statement, the first sentence of the Statistical Analysis section, can be picked from templates (Prof MSE Easy Stat, SPSS, R, Stata, GraphPad Prism, SAS, MedCalc, JASP, jamovi, Python, Minitab, Epi Info, Excel).
-   2. **Variables**: confirm the auto-detected group variable, outcomes and baseline characteristics.
-   3. **Options**: set timepoints and analysis options.
-   4. **Flowchart**: choose CONSORT 2010 (randomized trials), STROBE (observational studies), STARD 2015 (diagnostic accuracy) or a simple custom flowchart, and enter the numbers. "Assessed for eligibility" is calculated as excluded + the groups (STARD: excluded + received the index test). The flowchart previews live.
-   5. **Report**: preview the report, then download the Word document.
+   2. **Variables**: confirm the group variable, outcomes and baseline characteristics; create, edit or ungroup repeated measures.
+   3. **Timepoints**: each repeated outcome has its own timepoints — tick which enter, rename them and set their order per outcome.
+   4. **Tests**: significance level, normality test, effect estimates, post hoc and optional tests.
+   5. **Tables**: number formats, second row (range / 95% CI / IQR / none), P value decimals, heading and mark, test-statistic column, missing-data note, table style, font, page orientation, caption style.
+   6. **Comments**: concise or detailed, P value wording, placement (after / before the table / none), effect sizes, summary of key findings.
+   7. **Figures**: chart types per variable with live preview, colours, legend, error bars, bar width, mean markers, placement and captions.
+   8. **Advanced analyses**: regression, ROC, survival, agreement and more, each with its own title, patients (all / each group / one group), variable selection (enter / backward / forward), VIF, Hosmer-Lemeshow and ROC cut-off method.
+   9. **Flowchart**: CONSORT 2010, STROBE, STARD 2015 or a simple custom flowchart. "Assessed for eligibility" is calculated as excluded + the groups (STARD: excluded + received the index test).
+   10. **Report**: preview, edit titles, captions and comments, choose what goes into the Word file, and download it.
 
 `Sample report.docx` is example output generated from simulated data.
 
