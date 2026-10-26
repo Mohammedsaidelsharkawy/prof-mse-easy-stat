@@ -914,7 +914,7 @@ const Analysis = (() => {
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
           footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost, stats: results.map(r => r.stat),
             missing: v.cols.map((c, t) => [tps[t], missingIn(c.col, true)]).filter(x => x[1]).map(([t, m]) => `${t} (n=${m})`) }, [withinNote, v.note].filter(Boolean).join(', ')),
-          comment: wording(comment),
+          comment: wording(comment), brief: opts.paperStyle ? wording(briefRepeated(plain(v.label), tps, results, within, gl, alpha, param, d)) : '', briefSig: !!sigAny,
           figures: v.chart === 'none' ? [] : [(() => {
             // per-variable chart type overrides the global chart style
             const ct = v.chart && v.chart !== 'auto' ? v.chart : opts.chartStyle;
@@ -1090,7 +1090,8 @@ const Analysis = (() => {
             spec: { type: 'bar', percent: true, labels: true, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
         }
-        sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res } });
+        sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res },
+          brief: opts.paperStyle ? wording(briefSingle(res, gl, alpha, d)) : '', briefSig: anySig });
       }
     }
 
@@ -1139,7 +1140,7 @@ const Analysis = (() => {
       if (opts.pHead && opts.pHead !== 'P value') sec.head = sec.head.map(h => h === 'P value' ? opts.pHead : h && h.t === 'P value' ? { ...h, t: opts.pHead } : h);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
     });
-    return { sections, used, groups: gl, gN, k, methods: methodsText(used, k, cfg), intro: introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
+    return { sections, used, groups: gl, gN, k, methods: opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
@@ -1187,15 +1188,103 @@ const Analysis = (() => {
   }
 
   // "Summary of key findings": every sentence of the comments that reports a significant result
-  function keyFindings(sections) {
-    const out = [];
-    sections.forEach(sec => (sec.comment || '').split(/(?<=\.)\s+(?=[A-Z])/).forEach(t => {
-      // judge the sentence after removing its negative phrases, so "A was significantly lower …, and insignificantly different …" is kept
-      if (/none of|^no significant/i.test(t.trim())) return;
+  // sentences of a comment that report a significant result; judged after removing the negative phrases,
+  // so "A was significantly lower …, and insignificantly different …" is kept
+  function significantSentences(text) {
+    return (text || '').split(/(?<=\.)\s+(?=[A-Z])/).map(t => t.trim()).filter(t => {
+      if (!t || /none of|^no significant/i.test(t)) return false;
       const pos = t.replace(/insignificant\w*|not significant\w*|no significant|did not change significantly|could not significantly/gi, '');
-      if (/significant|independent predictor/i.test(pos)) out.push(t.trim());
-    }));
+      return /significant|independent predictor/i.test(pos);
+    });
+  }
+  function keyFindings(sections) {
+    const out = sections.flatMap(sec => significantSentences(sec.comment));
     return out.length ? out.join(' ') : 'No statistically significant differences were found.';
+  }
+
+  /* ---------- journal-paper style text ---------- */
+  // one short sentence per table: the significant variables with their direction, then the rest in one clause
+  function briefSingle(res, gl, alpha, d) {
+    const k = gl.length, val = (n, i) => n.param ? msd(n.desc[i].mean, n.desc[i].sd, d) : `median ${fmt(n.desc[i].median, d)}, IQR ${fmt(n.desc[i].q1, d)}–${fmt(n.desc[i].q3, d)}`;
+    const sig = [], ns = [];
+    res.forEach(r => {
+      const x = r.num || r.cat, lab = lowerFirst(plain(r.v.label));
+      if (!(x.p <= alpha)) { ns.push(lab); return; }
+      if (r.num) {
+        const c = r.num.desc.map(dd => r.num.param ? dd.mean : dd.median), lo = c.indexOf(Math.min(...c)), hi = c.indexOf(Math.max(...c));
+        sig.push(k === 2 ? `${lab} was lower in ${gl[lo]} than in ${gl[hi]} (${val(r.num, lo)} vs ${val(r.num, hi)}; P value ${pTxt(x.p)})`
+          : `${lab} differed among the groups (P value ${pTxt(x.p)}), being lowest in ${gl[lo]} (${val(r.num, lo)})`);
+      } else if (isCompact(r)) {
+        const pc = r.cat.pct[0], hi = pc.indexOf(Math.max(...pc)), lo = pc.indexOf(Math.min(...pc));
+        sig.push(k === 2 ? `${lab} was more frequent in ${gl[hi]} (${pctTxt(pc[hi])}% vs ${pctTxt(pc[lo])}%; P value ${pTxt(x.p)})`
+          : `${lab} differed among the groups (P value ${pTxt(x.p)}), being most frequent in ${gl[hi]} (${pctTxt(pc[hi])}%)`);
+      } else sig.push(`the distribution of ${lab} differed between the groups (P value ${pTxt(x.p)})`);
+    });
+    const nsTxt = ns.length ? `${listJoin(ns)} did not differ significantly ${k === 2 ? 'between' : 'among'} the groups` : '';
+    if (!sig.length) return cap(nsTxt) + '.';
+    return cap(sig.join('; ')) + (nsTxt ? `, whereas ${nsTxt}` : '') + '.';
+  }
+  function briefRepeated(label, tps, results, within, gl, alpha, param, d) {
+    const k = gl.length, lab = lowerFirst(label);
+    const sigT = results.map((r, t) => ({ r, t })).filter(x => x.r.p <= alpha);
+    const center = (r, i) => param ? r.desc[i].mean : r.desc[i].median;
+    const lowest = r => { const c = r.desc.map((_, i) => center(r, i)); return c.indexOf(Math.min(...c)); };
+    let t;
+    if (!sigT.length) t = `${cap(lab)} did not differ significantly ${k === 2 ? 'between' : 'among'} the groups at any timepoint`;
+    else {
+      const when = listJoin(sigT.map(x => tps[x.t])), ps = pList(sigT.map(x => x.r.p));
+      const lows = [...new Set(sigT.map(x => lowest(x.r)))];
+      t = k === 2 && lows.length === 1
+        ? `${cap(lab)} was significantly lower in ${gl[lows[0]]} than in ${gl[1 - lows[0]]} at ${when} (P value ${ps})`
+        : `${cap(lab)} differed significantly ${k === 2 ? 'between' : 'among'} the groups at ${when} (P value ${ps})${lows.length === 1 ? `, being lowest in ${gl[lows[0]]}` : ''}`;
+    }
+    if (within) {
+      const first = results[0], last = results[results.length - 1];
+      const dec = [], inc = [];
+      within.forEach((w, g) => { if (w.p <= alpha) (center(last, g) < center(first, g) ? dec : inc).push(gl[g]); });
+      const parts = [dec.length ? `decreased over time in ${listJoin(dec)}` : '', inc.length ? `increased over time in ${listJoin(inc)}` : ''].filter(Boolean);
+      if (parts.length) t += `; within groups, it ${parts.join(' and ')}`;
+    }
+    return t + '.';
+  }
+  function methodsConcise(used, k, cfg) {
+    const o = cfg.options, s = [cfg.study.software.trim().replace(/\.?$/, '.')];
+    if (used.has('param') || used.has('nonparam')) s.push(`Normality was assessed with the ${o.normality === 'ks' ? 'Kolmogorov-Smirnov (Lilliefors)' : 'Shapiro-Wilk'} test.`);
+    const pres = [];
+    if (used.has('param')) pres.push(FMT.mean === 'paren' ? 'mean (SD)' : 'mean ± SD');
+    if (used.has('nonparam')) pres.push('median (IQR)');
+    if (used.has('cat')) pres.push('n (%)');
+    if (pres.length) s.push(`Data are presented as ${listJoin(pres).replace(/ and ([^,]*)$/, ' or $1')}.`);
+    const cont = [];
+    if (used.has('param')) cont.push(k === 2 ? (used.has('welch') ? "Student's or Welch's t-test" : "Student's t-test")
+      : `one-way ANOVA with Tukey's post hoc test${used.has('welchAnova') ? " (Welch's ANOVA with Games-Howell when variances differed)" : ''}`);
+    if (used.has('nonparam')) cont.push(k === 2 ? 'Mann-Whitney U test' : `Kruskal-Wallis test with ${used.has('dunn') ? "Dunn's" : 'pairwise Mann-Whitney'} post hoc tests`);
+    const cat = used.has('cat') ? `χ² test${used.has('fisher') ? " or Fisher's exact test" : ''}${used.has('chiPost') ? ' (Bonferroni-corrected pairwise comparisons)' : ''}` : '';
+    if (cont.length || cat) s.push(`Groups were compared using ${[cont.length ? `the ${cont.join(' or the ')} for continuous variables` : '', cat ? `the ${cat} for categorical variables` : ''].filter(Boolean).join(' and ')}.`);
+    const w = [];
+    if (used.has('pairedt')) w.push('paired t-test'); if (used.has('wilcoxon')) w.push('Wilcoxon signed-rank test');
+    if (used.has('rmanova')) w.push('repeated-measures ANOVA'); if (used.has('friedman')) w.push('Friedman test');
+    if (w.length || used.has('mixed')) s.push(`Changes over time were assessed with the ${listJoin(w.length ? w : ['mixed ANOVA'])}${used.has('postPairedt') || used.has('postWilcoxon') ? ', with Bonferroni-corrected comparisons against baseline' : ''}${used.has('mixed') && w.length ? ', and the group × time interaction with mixed ANOVA' : ''}.`);
+    if (used.has('pearson') || used.has('spearman')) s.push(`Correlations were assessed with ${[used.has('pearson') ? "Pearson's" : '', used.has('spearman') ? "Spearman's" : ''].filter(Boolean).join(' or ')} coefficient.`);
+    const adv = [['linear', 'multiple linear regression'], ['logistic', 'binary logistic regression'], ['cox', 'Cox proportional hazards regression'], ['ancova', 'ANCOVA'],
+      ['roc', 'ROC curve analysis'], ['rocClosest', 'ROC curve analysis'], ['survival', 'Kaplan-Meier analysis with the log-rank test'], ['mcnemar', 'the McNemar test'], ['kappa', "Cohen's kappa"],
+      ['icc', 'the intraclass correlation coefficient with Bland-Altman analysis'], ['diagnostic', 'sensitivity, specificity and predictive values with exact 95% CI'], ['cronbach', "Cronbach's α"]]
+      .filter(([key]) => used.has(key)).map(x => x[1]).filter((x, i, a) => a.indexOf(x) === i);
+    if (adv.length) s.push(`Additional analyses included ${listJoin(adv)}${used.has('sel_backward') ? ' (backward elimination)' : used.has('sel_forward') ? ' (forward selection)' : ''}.`);
+    s.push(`A two-sided P ≤ ${o.alpha} was considered significant.`);
+    return s.join(' ');
+  }
+  function introConcise(cfg, gl) {
+    const c = cfg.consort;
+    if (!c || !c.enabled) return '';
+    const type = c.type || 'consort', ex = c.excluded.reduce((a, e) => a + (+e.n || 0), 0);
+    if (type === 'consort' || type === 'strobe') {
+      const inc = c.groups.map(g => +g.allocated || 0), an = c.groups.map(g => +g.analysed || 0);
+      const verb = type === 'consort' ? 'randomised' : 'included';
+      const same = inc.every((v, i) => v === an[i]);
+      return `Of ${c.assessed} ${type === 'consort' ? 'patients assessed for eligibility' : 'potentially eligible individuals'}, ${ex} ${ex === 1 ? 'was' : 'were'} excluded and ${S.sum(inc)} ${verb} (${gl.map((g, i) => `${g}: ${inc[i]}`).join(', ')})${same ? `; all were analysed` : `; ${S.sum(an)} were analysed (${gl.map((g, i) => `${g}: ${an[i]}`).join(', ')})`}.`;
+    }
+    return introText(cfg, gl, []);
   }
 
   function isCompact(r) {
@@ -1317,5 +1406,5 @@ const Analysis = (() => {
     return t;
   }
 
-  return { run, normalityTest, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { run, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();

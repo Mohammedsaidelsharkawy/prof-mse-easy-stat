@@ -28,6 +28,13 @@ const Report = (() => {
       children: [new TextRun({ text, bold: true, size: 30, font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
     });
   }
+  function subheading(text, brand) {
+    const { Paragraph, TextRun, HeadingLevel } = D();
+    return new Paragraph({
+      heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, keepNext: true,
+      children: [new TextRun({ text, bold: true, size: 26, font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
+    });
+  }
   function caption(text) {
     const { AlignmentType } = D();
     return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true });
@@ -145,21 +152,28 @@ const Report = (() => {
     const landscape = opts.orientation === 'landscape';
     PAGE_W = landscape ? LANDSCAPE_W : PORTRAIT_W;
     const children = [];
+    // thesis chapters number as "Table 4.1" / "Figure 4.1"; a journal paper uses sentence-case headings and one Results narrative
+    const pre = opts.numberPrefix || '';
     if (opts.title) children.push(para(opts.title, { bold: true, size: 32, align: AlignmentType.CENTER, after: 240, color: brand ? '7B2FBE' : undefined }));
+    if (model.abstract) {
+      children.push(heading('Results for the abstract', brand));
+      children.push(para(model.abstract));
+    }
     if (model.methods) {
-      children.push(heading('Statistical Analysis', brand));
+      children.push(heading(opts.paper ? 'Statistical analysis' : 'Statistical Analysis', brand));
       children.push(para(model.methods));
     }
     if (model.consort || model.sections.length) children.push(heading('Results', brand));
     let fig = 1, tab = 1;
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
-      children.push(image(model.consort.url, model.consort.w, model.consort.h, 600));
-      children.push(caption(`${figLabel(fig++, opts.captionStyle)} ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
-    }
+      children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600));
+      children.push(caption(`${figLabel(pre + fig++, opts.captionStyle)} ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
+    } else if (opts.paper && model.intro) children.push(para(model.intro));
+    if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => t.trim() && children.push(para(t.trim())));
     const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
     const placeFigures = list => {
-      const figs = list.filter(f => f.url).map(f => ({ ...f, label: `${figLabel(fig++, opts.captionStyle)} ${f.caption}` }));
+      const figs = list.filter(f => f.url).map(f => ({ ...f, label: `${figLabel(pre + fig++, opts.captionStyle)} ${f.caption}` }));
       if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
       else for (const f of figs) {
         children.push(image(f.url, f.w, f.h, w1));
@@ -169,8 +183,9 @@ const Report = (() => {
     const atEnd = arrangeFigures(model.sections, opts.figPlacement);
     for (const s of model.sections) {
       if (s.tableOn !== false) {
+        if (opts.sectionHeads) children.push(subheading(s.title, brand));
         if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment));
-        children.push(caption(`Table ${tab++}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`));
+        children.push(caption(`Table ${pre}${tab++}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`));
         children.push(table(s.head, s.rows, brand, opts.tableStyle));
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));

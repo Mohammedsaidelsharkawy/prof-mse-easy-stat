@@ -16,7 +16,7 @@ An offline web app that turns an Excel mastersheet into a formatted Word statist
    7. **Figures**: chart types per variable with live preview, colours, legend, error bars, bar width, mean markers, placement and captions.
    8. **Advanced analyses**: regression, ROC, survival, agreement and more, each with its own title, patients (all / each group / one group), variable selection (enter / backward / forward), VIF, Hosmer-Lemeshow and ROC cut-off method.
    9. **Flowchart**: CONSORT 2010, STROBE, STARD 2015 or a simple custom flowchart. "Assessed for eligibility" is calculated as excluded + the groups (STARD: excluded + received the index test).
-   10. **Report**: preview, edit titles, captions and comments, choose what goes into the Word file, and download it.
+   10. **Report**: choose the format — **Thesis** (full results chapter, comments after each table, optional chapter numbering such as Table 4.1 and subheadings), **Journal paper** (concise statistical analysis, one Results text that cites tables and figures, compact three-line tables, only figures of significant results up to a limit, an abstract-ready results paragraph and word counts) or **As configured** — then preview, edit titles, captions and text, choose what goes into the Word file, and download it. The format changes only the report, never the settings of steps 4–9.
 
 `Sample report.docx` is example output generated from simulated data.
 

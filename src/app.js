@@ -436,7 +436,7 @@
       groupCol, idCols, variables, tpOrder, tpLabels: Object.fromEntries(tpOrder.map(t => [t, tpLabel(t)])),
       options: defaultOptions(),
       study: { title: '', software: $('#software').value },
-      consort: null, tpInclude: {}, advanced: [], exportExclude: {}
+      consort: null, tpInclude: {}, advanced: [], exportExclude: {}, report: { ...DEFAULT_REPORT }
     };
     setGroups(cfg);
     return cfg;
@@ -990,12 +990,49 @@
       rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
+  /* ---------- report format: thesis, journal paper, or as configured ---------- */
+  const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true };
+  // the format adjusts a copy of the options; the options of steps 4–9 are never changed
+  const FORMAT_PRESETS = {
+    custom: {},
+    thesis: { figPlacement: 'after', paperStyle: false },
+    paper: { paperStyle: true, pWord: 'P', secondRow: 'none', commentPlace: 'none', figPlacement: 'end', figPerRow: 2, figWidth: 'medium', tableStyle: 'apa',
+      summary: false, commentStyle: 'concise', showStat: false, missingNote: false, chartTitle: false }
+  };
+  const report = () => (state.cfg.report = { ...DEFAULT_REPORT, ...(state.cfg.report || {}) });
+  function effOptions() {
+    const o = { ...state.cfg.options, ...FORMAT_PRESETS[report().format] };
+    if (report().format === 'thesis' && o.commentPlace === 'none') o.commentPlace = 'after';
+    return o;
+  }
+  function renderFormatBar() {
+    const r = report();
+    document.querySelectorAll('[data-format]').forEach(b => b.classList.toggle('on', b.dataset.format === r.format));
+    $('#fmtThesis').style.display = r.format === 'thesis' ? '' : 'none';
+    $('#fmtPaper').style.display = r.format === 'paper' ? '' : 'none';
+    $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
+  }
+  $('#fmtBar').addEventListener('click', e => {
+    const b = e.target.closest('[data-format]'); if (!b) return;
+    report().format = b.dataset.format; renderFormatBar(); runAnalysis();
+  });
+  $('#fmtBar').addEventListener('change', e => {
+    const r = report();
+    if (e.target.id === 'fmtChapter') r.chapter = e.target.value.trim();
+    else if (e.target.id === 'fmtHeads') r.sectionHeads = e.target.checked;
+    else if (e.target.id === 'fmtMaxFigs') r.maxFigs = +e.target.value;
+    else if (e.target.id === 'fmtAbstract') r.abstract = e.target.checked;
+    else return;
+    syncEdits(); state.result.narrativeEdited = false; renderReport();
+  });
+
   function runAnalysis() {
     busy(true);
+    renderFormatBar();
     setTimeout(() => {
       try {
         syncAssessed(ensureConsort());
-        const cfg = state.cfg;
+        const cfg = { ...state.cfg, options: effOptions() };
         const res = Analysis.run(state.data, cfg);
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => { f.key = f.caption; renderFigure(f, cfg.options); }); });
         const pal = chartPalette(cfg.options);
@@ -1031,41 +1068,94 @@
     document.querySelectorAll('[data-fcap]').forEach(t => { const [si, fi] = t.dataset.fcap.split(':').map(Number); r.sections[si].figures[fi].caption = t.value; });
     document.querySelectorAll('[data-ttl]').forEach(t => { r.sections[+t.dataset.ttl].title = t.value; });
     if ($('#edSummary')) r.summary = $('#edSummary').value;
+    if ($('#edNarrative') && $('#edNarrative').value !== r.narrative) { r.narrative = $('#edNarrative').value; r.narrativeEdited = true; }
+    if ($('#edAbstract') && $('#edAbstract').value !== r.abstract) { r.abstract = $('#edAbstract').value; r.abstractEdited = true; }
   }
+  // what goes into the Word file and how it is numbered — shared by the preview and the export
+  function exportPlan(r) {
+    const o = effOptions(), rep = report(), paper = rep.format === 'paper';
+    const pre = rep.format === 'thesis' && rep.chapter ? rep.chapter + '.' : '';
+    let figs = r.sections.flatMap(s => s.figures).filter(f => !isOut(exKey.figure(f)));
+    if (paper) {
+      // the paper keeps a few figures: repeated outcomes before single variables
+      const kindOf = f => r.sections.find(s => s.figures.includes(f)).kind;
+      // only figures of significant results; the limit is a maximum
+      const ranked = figs.filter(f => f.sig !== false).map((f, i) => ({ f, i, k: kindOf(f) === 'repeated' ? 0 : 1 })).sort((a, b) => a.k - b.k || a.i - b.i);
+      const keep = new Set(ranked.slice(0, rep.maxFigs).map(x => x.f));
+      figs = figs.filter(f => keep.has(f));
+    }
+    const kept = new Set(figs);
+    const filtered = r.sections.map(s => ({ ...s, figures: s.figures.filter(f => kept.has(f)) }));
+    const order = Report.arrangeFigures(filtered, o.figPlacement) || filtered.flatMap(s => s.figures);
+    const consortOn = !!r.consort && !isOut('consort');
+    const figNum = new Map(); let n = consortOn ? 2 : 1;
+    order.forEach(f => figNum.set(f, pre + n++));
+    const tabNum = new Map(); let t = 1;
+    r.sections.forEach(s => { if (!isOut(exKey.table(s))) tabNum.set(s, pre + t++); });
+    return { o, rep, paper, pre, kept, order, figNum, tabNum, consortNum: pre + 1, consortOn };
+  }
+  // the paper's Results narrative: significant findings per table, each citing its table and figure
+  function paperNarrative(r, plan) {
+    const out = [];
+    r.sections.forEach((s, i) => {
+      if (!plan.tabNum.has(s)) return;
+      const figs = s.figures.filter(f => plan.figNum.has(f)).map(f => `Figure ${plan.figNum.get(f)}`);
+      const ref = [`Table ${plan.tabNum.get(s)}`, ...figs].join('; ');
+      const what = s.title.replace(/ of the studied groups$/, '').replace(/^./, c => c.toLowerCase());
+      const b = briefOf(s);
+      if (i === 0 && s.kind === 'single' && !b.sig) out.push(`Baseline characteristics were comparable between the groups (${ref}).`);
+      else if (b.text) out.push(b.text.replace(/\.$/, ` (${ref}).`));
+      else out.push(`No significant differences were found in ${what} (${ref}).`);
+    });
+    return out.join(' ');
+  }
+  // one-sentence summary of a table: the analysis' own summary for main tables, else the key significant sentence
+  function briefOf(s) {
+    if (s.brief) return { text: s.brief, sig: !!s.briefSig };
+    const sent = Analysis.significantSentences(s.comment);
+    const key = sent.filter(x => /independent predictor|could significantly predict|survival was significantly|agreement|internal consistency|sensitivity/i.test(x));
+    return { text: (key.length ? key.slice(0, 1) : sent.slice(0, 2)).join(' '), sig: sent.length > 0 };
+  }
+  // abstract: summaries of the outcome tables with a significant result (baseline left out), at most three
+  const abstractResults = r => r.sections.slice(1).map(briefOf).filter(b => b.sig && b.text).slice(0, 3).map(b => b.text).join(' ')
+    || 'No statistically significant differences were found.';
+  const words = t => (t || '').split(/\s+/).filter(Boolean).length;
+
   function renderReport() {
-    const r = state.result;
-    let fig = 1, tab = 1, html = '';
-    const nIn = 1 + (r.consort ? 1 : 0) + r.sections.reduce((n, s) => n + (isOut(exKey.table(s)) ? 0 : 1) + s.figures.filter(f => !isOut(exKey.figure(f))).length, 0);
+    const r = state.result, plan = exportPlan(r), o = plan.o, lab = n => Report.figLabel(n, o.captionStyle);
+    if (plan.paper && !r.narrativeEdited) r.narrative = paperNarrative(r, plan);
+    if (plan.paper && plan.rep.abstract && !r.abstractEdited) r.abstract = abstractResults(r);
+    let html = '';
     html += `<div class="row exp-bar"><b>In the Word file:</b> <span class="legend-note">untick any section, table or figure to leave it out — numbering follows what is kept.</span><span class="spacer"></span>
       <button class="btn ghost small" data-exall="1" type="button">Include all</button><button class="btn ghost small" data-exall="0" type="button">Exclude all</button></div>`;
     const off = key => isOut(key) ? ' off' : '';
-    html += `<div class="report-sec${off('methods')}"><div class="row"><h3>Statistical Analysis</h3><span class="spacer"></span>${exBox('methods', 'Include')}</div><textarea id="edMethods">${esc(r.methods)}</textarea></div>`;
+    if (plan.paper && plan.rep.abstract) html += `<div class="report-sec"><h3>Results for the abstract</h3><textarea id="edAbstract">${esc(r.abstract)}</textarea><div class="legend-note">${words(r.abstract)} words</div></div>`;
+    html += `<div class="report-sec${off('methods')}"><div class="row"><h3>Statistical analysis</h3><span class="spacer"></span>${exBox('methods', 'Include')}</div><textarea id="edMethods">${esc(r.methods)}</textarea>${plan.paper ? `<div class="legend-note">${words(r.methods)} words</div>` : ''}</div>`;
     html += `<div class="report-sec"><h3>Results</h3>`;
-    if (r.consort) {
-      const out = isOut('consort');
-      html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${out ? 'Not exported:' : Report.figLabel(fig++, state.cfg.options.captionStyle)} ${esc(r.flowCaption)}</div></div>`;
-    }
+    if (r.consort) html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${plan.consortOn ? lab(plan.consortNum) : 'Not exported:'} ${esc(r.flowCaption)}</div></div>`;
+    if (plan.paper) html += `<label class="f" style="margin-top:12px">Results text (written from the significant results, citing tables and figures — edit freely)</label><textarea id="edNarrative" style="min-height:180px">${esc(r.narrative)}</textarea>
+      <div class="legend-note">${words(r.narrative) + words(r.intro)} words in Results · ${words(r.narrative) + words(r.intro) + words(r.methods)} words with the statistical analysis</div>`;
     html += `</div>`;
-    // figure numbers follow the Word layout: after each table, or all at the end (optionally grouped by type)
-    const o = state.cfg.options, lab = n => Report.figLabel(n, o.captionStyle);
-    const atEnd = Report.arrangeFigures(r.sections, o.figPlacement);
-    const num = new Map();
-    (atEnd || r.sections.flatMap(s => s.figures)).forEach(f => { if (!isOut(exKey.figure(f))) num.set(f, fig++); });
+    const atEnd = o.figPlacement === 'end' || o.figPlacement === 'endType';
     const figHtml = f => {
-      const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f), fOut = isOut(fk);
-      return `<figure class="${fOut ? 'off' : ''}"><img src="${f.url}" alt=""><figcaption>${fOut ? 'Not exported:' : lab(num.get(f))} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption"></figcaption>${exBox(fk, 'Figure')}</figure>`;
+      const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f);
+      const label = isOut(fk) ? 'Not exported:' : plan.kept.has(f) ? lab(plan.figNum.get(f)) : (f.sig === false ? 'Not in the paper (not significant):' : `Not in the paper (limit ${plan.rep.maxFigs}):`);
+      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption"></figcaption>${exBox(fk, 'Figure')}</figure>`;
     };
     r.sections.forEach((s, i) => {
-      const tk = exKey.table(s), tOut = isOut(tk);
-      const place = o.commentPlace || 'after';
-      const comment = `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
-      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${tab++}${o.tableCaption === 'period' ? '.' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
+      const tk = exKey.table(s), tOut = isOut(tk), place = o.commentPlace || 'after';
+      const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
+      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
         ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
         <div class="foot">${esc(s.footnote)}</div>
         ${place !== 'before' ? comment : ''}</div>
         ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
     });
-    if (atEnd && atEnd.length) html += `<div class="report-sec"><h3>Figures</h3><div class="figs">${atEnd.map(figHtml).join('')}</div></div>`;
+    if (atEnd) {
+      const all = Report.arrangeFigures(r.sections, o.figPlacement) || [];
+      const sorted = [...all.filter(f => plan.kept.has(f)).sort((a, b) => plan.order.indexOf(a) - plan.order.indexOf(b)), ...all.filter(f => !plan.kept.has(f))];
+      if (sorted.length) html += `<div class="report-sec"><h3>Figures</h3><div class="figs">${sorted.map(figHtml).join('')}</div></div>`;
+    }
     if (r.summary) html += `<div class="report-sec${off('summary')}"><div class="row"><h3>Summary of key findings</h3><span class="spacer"></span>${exBox('summary', 'Include')}</div><textarea id="edSummary">${esc(r.summary)}</textarea></div>`;
     $('#report').innerHTML = html;
   }
@@ -1074,7 +1164,7 @@
     if (e.target.dataset.fcap !== undefined) {
       syncEdits();
       const [si, fi] = e.target.dataset.fcap.split(':').map(Number), f = state.result.sections[si].figures[fi];
-      if (state.cfg.options.chartTitle) { renderFigure(f, state.cfg.options); e.target.closest('figure').querySelector('img').src = f.url; }
+      if (effOptions().chartTitle) { renderFigure(f, effOptions()); e.target.closest('figure').querySelector('img').src = f.url; }
       return;
     }
     const key = e.target.dataset.export; if (key === undefined) return;
@@ -1091,9 +1181,11 @@
   });
   // the report model limited to what the user chose to export
   function exportModel(r) {
+    const plan = exportPlan(r);
     return {
       ...r, methods: isOut('methods') ? '' : r.methods, consort: isOut('consort') ? null : r.consort, summary: isOut('summary') ? '' : r.summary,
-      sections: r.sections.map(s => ({ ...s, tableOn: !isOut(exKey.table(s)), figures: s.figures.filter(f => !isOut(exKey.figure(f))) }))
+      narrative: plan.paper ? r.narrative : '', abstract: plan.paper && plan.rep.abstract ? r.abstract : '',
+      sections: r.sections.map(s => ({ ...s, tableOn: !isOut(exKey.table(s)), figures: s.figures.filter(f => plan.kept.has(f)) }))
         .filter(s => s.tableOn || s.figures.length)
     };
   }
@@ -1106,12 +1198,12 @@
       syncEdits();
       const r = exportModel(state.result);
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
-      const o = state.cfg.options;
-      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+      const o = effOptions(), rp = report();
+      const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper', title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = (state.file || 'data').replace(/\.[^.]+$/, '') + ' - Statistical report.docx';
+      a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('Word report downloaded');

@@ -96,6 +96,14 @@ table.t td select{min-width:120px}
 .predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
+.fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
+.fmt-card b{font-size:15px;color:var(--title)}
+.fmt-card span{font-size:12.5px;color:var(--muted)}
+.fmt-card:hover{border-color:var(--purple)}
+.fmt-card.on{border-color:var(--purple);background:var(--lav);box-shadow:0 0 0 3px rgba(123,47,190,.15)}
+.fmt-opts{margin-top:10px;gap:20px}
+@media (max-width:820px){.fmt-cards{grid-template-columns:1fr}}
 .grid-bar{margin:14px 0 8px;gap:12px}
 table.grid td.miss{background:rgba(192,57,43,.09)}
 table.grid td.rn,table.grid th.rn{color:var(--muted);font-size:12px;white-space:nowrap;position:sticky;left:0;background:var(--card);z-index:2}
@@ -476,7 +484,23 @@ footer b{color:var(--purple)}
         <button class="btn ghost" id="btnRerun">↻ Re-run</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
-      <p class="hint">Review everything below. You can edit the text boxes — your edits go into the Word file.</p>
+      <div id="fmtBar">
+        <label class="f">Report format</label>
+        <div class="fmt-cards">
+          <button type="button" class="fmt-card" data-format="thesis"><b>🎓 Thesis</b><span>Full results chapter: every table with its comment, figures after each table, optional chapter numbering (Table 4.1) and subheadings.</span></button>
+          <button type="button" class="fmt-card" data-format="paper"><b>📄 Journal paper</b><span>Concise: short statistical analysis, one Results text citing tables and figures, compact three-line tables, a few figures, word counts.</span></button>
+          <button type="button" class="fmt-card" data-format="custom"><b>⚙ As configured</b><span>Exactly the settings chosen in steps 4–9.</span></button>
+        </div>
+        <div class="row fmt-opts" id="fmtThesis" style="display:none">
+          <div><label class="f">Chapter number (optional)</label><input type="text" id="fmtChapter" placeholder="e.g. 4 → Table 4.1" style="width:180px"></div>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtHeads"><span>A subheading before each table</span></label>
+        </div>
+        <div class="row fmt-opts" id="fmtPaper" style="display:none">
+          <div><label class="f">Figures in the paper</label><select id="fmtMaxFigs" style="width:auto"><option value="0">None</option><option>1</option><option>2</option><option value="3">3</option><option>4</option><option>5</option><option>6</option></select></div>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtAbstract"><span>Results paragraph for the abstract</span></label>
+        </div>
+      </div>
+      <p class="hint" style="margin-top:12px">Review everything below. You can edit the text boxes — your edits go into the Word file. The format changes only this report; your settings in steps 4–9 stay as they are.</p>
       <div id="report"></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="9">← Back</button><span></span></div>
@@ -22329,7 +22353,7 @@ const Analysis = (() => {
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
           footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost, stats: results.map(r => r.stat),
             missing: v.cols.map((c, t) => [tps[t], missingIn(c.col, true)]).filter(x => x[1]).map(([t, m]) => `${t} (n=${m})`) }, [withinNote, v.note].filter(Boolean).join(', ')),
-          comment: wording(comment),
+          comment: wording(comment), brief: opts.paperStyle ? wording(briefRepeated(plain(v.label), tps, results, within, gl, alpha, param, d)) : '', briefSig: !!sigAny,
           figures: v.chart === 'none' ? [] : [(() => {
             // per-variable chart type overrides the global chart style
             const ct = v.chart && v.chart !== 'auto' ? v.chart : opts.chartStyle;
@@ -22505,7 +22529,8 @@ const Analysis = (() => {
             spec: { type: 'bar', percent: true, labels: true, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
         }
-        sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res } });
+        sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res },
+          brief: opts.paperStyle ? wording(briefSingle(res, gl, alpha, d)) : '', briefSig: anySig });
       }
     }
 
@@ -22554,7 +22579,7 @@ const Analysis = (() => {
       if (opts.pHead && opts.pHead !== 'P value') sec.head = sec.head.map(h => h === 'P value' ? opts.pHead : h && h.t === 'P value' ? { ...h, t: opts.pHead } : h);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
     });
-    return { sections, used, groups: gl, gN, k, methods: methodsText(used, k, cfg), intro: introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
+    return { sections, used, groups: gl, gN, k, methods: opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
@@ -22602,15 +22627,103 @@ const Analysis = (() => {
   }
 
   // "Summary of key findings": every sentence of the comments that reports a significant result
-  function keyFindings(sections) {
-    const out = [];
-    sections.forEach(sec => (sec.comment || '').split(/(?<=\.)\s+(?=[A-Z])/).forEach(t => {
-      // judge the sentence after removing its negative phrases, so "A was significantly lower …, and insignificantly different …" is kept
-      if (/none of|^no significant/i.test(t.trim())) return;
+  // sentences of a comment that report a significant result; judged after removing the negative phrases,
+  // so "A was significantly lower …, and insignificantly different …" is kept
+  function significantSentences(text) {
+    return (text || '').split(/(?<=\.)\s+(?=[A-Z])/).map(t => t.trim()).filter(t => {
+      if (!t || /none of|^no significant/i.test(t)) return false;
       const pos = t.replace(/insignificant\w*|not significant\w*|no significant|did not change significantly|could not significantly/gi, '');
-      if (/significant|independent predictor/i.test(pos)) out.push(t.trim());
-    }));
+      return /significant|independent predictor/i.test(pos);
+    });
+  }
+  function keyFindings(sections) {
+    const out = sections.flatMap(sec => significantSentences(sec.comment));
     return out.length ? out.join(' ') : 'No statistically significant differences were found.';
+  }
+
+  /* ---------- journal-paper style text ---------- */
+  // one short sentence per table: the significant variables with their direction, then the rest in one clause
+  function briefSingle(res, gl, alpha, d) {
+    const k = gl.length, val = (n, i) => n.param ? msd(n.desc[i].mean, n.desc[i].sd, d) : `median ${fmt(n.desc[i].median, d)}, IQR ${fmt(n.desc[i].q1, d)}–${fmt(n.desc[i].q3, d)}`;
+    const sig = [], ns = [];
+    res.forEach(r => {
+      const x = r.num || r.cat, lab = lowerFirst(plain(r.v.label));
+      if (!(x.p <= alpha)) { ns.push(lab); return; }
+      if (r.num) {
+        const c = r.num.desc.map(dd => r.num.param ? dd.mean : dd.median), lo = c.indexOf(Math.min(...c)), hi = c.indexOf(Math.max(...c));
+        sig.push(k === 2 ? `${lab} was lower in ${gl[lo]} than in ${gl[hi]} (${val(r.num, lo)} vs ${val(r.num, hi)}; P value ${pTxt(x.p)})`
+          : `${lab} differed among the groups (P value ${pTxt(x.p)}), being lowest in ${gl[lo]} (${val(r.num, lo)})`);
+      } else if (isCompact(r)) {
+        const pc = r.cat.pct[0], hi = pc.indexOf(Math.max(...pc)), lo = pc.indexOf(Math.min(...pc));
+        sig.push(k === 2 ? `${lab} was more frequent in ${gl[hi]} (${pctTxt(pc[hi])}% vs ${pctTxt(pc[lo])}%; P value ${pTxt(x.p)})`
+          : `${lab} differed among the groups (P value ${pTxt(x.p)}), being most frequent in ${gl[hi]} (${pctTxt(pc[hi])}%)`);
+      } else sig.push(`the distribution of ${lab} differed between the groups (P value ${pTxt(x.p)})`);
+    });
+    const nsTxt = ns.length ? `${listJoin(ns)} did not differ significantly ${k === 2 ? 'between' : 'among'} the groups` : '';
+    if (!sig.length) return cap(nsTxt) + '.';
+    return cap(sig.join('; ')) + (nsTxt ? `, whereas ${nsTxt}` : '') + '.';
+  }
+  function briefRepeated(label, tps, results, within, gl, alpha, param, d) {
+    const k = gl.length, lab = lowerFirst(label);
+    const sigT = results.map((r, t) => ({ r, t })).filter(x => x.r.p <= alpha);
+    const center = (r, i) => param ? r.desc[i].mean : r.desc[i].median;
+    const lowest = r => { const c = r.desc.map((_, i) => center(r, i)); return c.indexOf(Math.min(...c)); };
+    let t;
+    if (!sigT.length) t = `${cap(lab)} did not differ significantly ${k === 2 ? 'between' : 'among'} the groups at any timepoint`;
+    else {
+      const when = listJoin(sigT.map(x => tps[x.t])), ps = pList(sigT.map(x => x.r.p));
+      const lows = [...new Set(sigT.map(x => lowest(x.r)))];
+      t = k === 2 && lows.length === 1
+        ? `${cap(lab)} was significantly lower in ${gl[lows[0]]} than in ${gl[1 - lows[0]]} at ${when} (P value ${ps})`
+        : `${cap(lab)} differed significantly ${k === 2 ? 'between' : 'among'} the groups at ${when} (P value ${ps})${lows.length === 1 ? `, being lowest in ${gl[lows[0]]}` : ''}`;
+    }
+    if (within) {
+      const first = results[0], last = results[results.length - 1];
+      const dec = [], inc = [];
+      within.forEach((w, g) => { if (w.p <= alpha) (center(last, g) < center(first, g) ? dec : inc).push(gl[g]); });
+      const parts = [dec.length ? `decreased over time in ${listJoin(dec)}` : '', inc.length ? `increased over time in ${listJoin(inc)}` : ''].filter(Boolean);
+      if (parts.length) t += `; within groups, it ${parts.join(' and ')}`;
+    }
+    return t + '.';
+  }
+  function methodsConcise(used, k, cfg) {
+    const o = cfg.options, s = [cfg.study.software.trim().replace(/\.?$/, '.')];
+    if (used.has('param') || used.has('nonparam')) s.push(`Normality was assessed with the ${o.normality === 'ks' ? 'Kolmogorov-Smirnov (Lilliefors)' : 'Shapiro-Wilk'} test.`);
+    const pres = [];
+    if (used.has('param')) pres.push(FMT.mean === 'paren' ? 'mean (SD)' : 'mean ± SD');
+    if (used.has('nonparam')) pres.push('median (IQR)');
+    if (used.has('cat')) pres.push('n (%)');
+    if (pres.length) s.push(`Data are presented as ${listJoin(pres).replace(/ and ([^,]*)$/, ' or $1')}.`);
+    const cont = [];
+    if (used.has('param')) cont.push(k === 2 ? (used.has('welch') ? "Student's or Welch's t-test" : "Student's t-test")
+      : `one-way ANOVA with Tukey's post hoc test${used.has('welchAnova') ? " (Welch's ANOVA with Games-Howell when variances differed)" : ''}`);
+    if (used.has('nonparam')) cont.push(k === 2 ? 'Mann-Whitney U test' : `Kruskal-Wallis test with ${used.has('dunn') ? "Dunn's" : 'pairwise Mann-Whitney'} post hoc tests`);
+    const cat = used.has('cat') ? `χ² test${used.has('fisher') ? " or Fisher's exact test" : ''}${used.has('chiPost') ? ' (Bonferroni-corrected pairwise comparisons)' : ''}` : '';
+    if (cont.length || cat) s.push(`Groups were compared using ${[cont.length ? `the ${cont.join(' or the ')} for continuous variables` : '', cat ? `the ${cat} for categorical variables` : ''].filter(Boolean).join(' and ')}.`);
+    const w = [];
+    if (used.has('pairedt')) w.push('paired t-test'); if (used.has('wilcoxon')) w.push('Wilcoxon signed-rank test');
+    if (used.has('rmanova')) w.push('repeated-measures ANOVA'); if (used.has('friedman')) w.push('Friedman test');
+    if (w.length || used.has('mixed')) s.push(`Changes over time were assessed with the ${listJoin(w.length ? w : ['mixed ANOVA'])}${used.has('postPairedt') || used.has('postWilcoxon') ? ', with Bonferroni-corrected comparisons against baseline' : ''}${used.has('mixed') && w.length ? ', and the group × time interaction with mixed ANOVA' : ''}.`);
+    if (used.has('pearson') || used.has('spearman')) s.push(`Correlations were assessed with ${[used.has('pearson') ? "Pearson's" : '', used.has('spearman') ? "Spearman's" : ''].filter(Boolean).join(' or ')} coefficient.`);
+    const adv = [['linear', 'multiple linear regression'], ['logistic', 'binary logistic regression'], ['cox', 'Cox proportional hazards regression'], ['ancova', 'ANCOVA'],
+      ['roc', 'ROC curve analysis'], ['rocClosest', 'ROC curve analysis'], ['survival', 'Kaplan-Meier analysis with the log-rank test'], ['mcnemar', 'the McNemar test'], ['kappa', "Cohen's kappa"],
+      ['icc', 'the intraclass correlation coefficient with Bland-Altman analysis'], ['diagnostic', 'sensitivity, specificity and predictive values with exact 95% CI'], ['cronbach', "Cronbach's α"]]
+      .filter(([key]) => used.has(key)).map(x => x[1]).filter((x, i, a) => a.indexOf(x) === i);
+    if (adv.length) s.push(`Additional analyses included ${listJoin(adv)}${used.has('sel_backward') ? ' (backward elimination)' : used.has('sel_forward') ? ' (forward selection)' : ''}.`);
+    s.push(`A two-sided P ≤ ${o.alpha} was considered significant.`);
+    return s.join(' ');
+  }
+  function introConcise(cfg, gl) {
+    const c = cfg.consort;
+    if (!c || !c.enabled) return '';
+    const type = c.type || 'consort', ex = c.excluded.reduce((a, e) => a + (+e.n || 0), 0);
+    if (type === 'consort' || type === 'strobe') {
+      const inc = c.groups.map(g => +g.allocated || 0), an = c.groups.map(g => +g.analysed || 0);
+      const verb = type === 'consort' ? 'randomised' : 'included';
+      const same = inc.every((v, i) => v === an[i]);
+      return `Of ${c.assessed} ${type === 'consort' ? 'patients assessed for eligibility' : 'potentially eligible individuals'}, ${ex} ${ex === 1 ? 'was' : 'were'} excluded and ${S.sum(inc)} ${verb} (${gl.map((g, i) => `${g}: ${inc[i]}`).join(', ')})${same ? `; all were analysed` : `; ${S.sum(an)} were analysed (${gl.map((g, i) => `${g}: ${an[i]}`).join(', ')})`}.`;
+    }
+    return introText(cfg, gl, []);
   }
 
   function isCompact(r) {
@@ -22732,7 +22845,7 @@ const Analysis = (() => {
     return t;
   }
 
-  return { run, normalityTest, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { run, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();
 
 /* Prof MSE Easy Stat — canvas charts (bar ± error, line, box plot, CONSORT) */
@@ -23499,6 +23612,13 @@ const Report = (() => {
       children: [new TextRun({ text, bold: true, size: 30, font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
     });
   }
+  function subheading(text, brand) {
+    const { Paragraph, TextRun, HeadingLevel } = D();
+    return new Paragraph({
+      heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, keepNext: true,
+      children: [new TextRun({ text, bold: true, size: 26, font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
+    });
+  }
   function caption(text) {
     const { AlignmentType } = D();
     return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true });
@@ -23616,21 +23736,28 @@ const Report = (() => {
     const landscape = opts.orientation === 'landscape';
     PAGE_W = landscape ? LANDSCAPE_W : PORTRAIT_W;
     const children = [];
+    // thesis chapters number as "Table 4.1" / "Figure 4.1"; a journal paper uses sentence-case headings and one Results narrative
+    const pre = opts.numberPrefix || '';
     if (opts.title) children.push(para(opts.title, { bold: true, size: 32, align: AlignmentType.CENTER, after: 240, color: brand ? '7B2FBE' : undefined }));
+    if (model.abstract) {
+      children.push(heading('Results for the abstract', brand));
+      children.push(para(model.abstract));
+    }
     if (model.methods) {
-      children.push(heading('Statistical Analysis', brand));
+      children.push(heading(opts.paper ? 'Statistical analysis' : 'Statistical Analysis', brand));
       children.push(para(model.methods));
     }
     if (model.consort || model.sections.length) children.push(heading('Results', brand));
     let fig = 1, tab = 1;
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
-      children.push(image(model.consort.url, model.consort.w, model.consort.h, 600));
-      children.push(caption(`${figLabel(fig++, opts.captionStyle)} ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
-    }
+      children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600));
+      children.push(caption(`${figLabel(pre + fig++, opts.captionStyle)} ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
+    } else if (opts.paper && model.intro) children.push(para(model.intro));
+    if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => t.trim() && children.push(para(t.trim())));
     const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
     const placeFigures = list => {
-      const figs = list.filter(f => f.url).map(f => ({ ...f, label: `${figLabel(fig++, opts.captionStyle)} ${f.caption}` }));
+      const figs = list.filter(f => f.url).map(f => ({ ...f, label: `${figLabel(pre + fig++, opts.captionStyle)} ${f.caption}` }));
       if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
       else for (const f of figs) {
         children.push(image(f.url, f.w, f.h, w1));
@@ -23640,8 +23767,9 @@ const Report = (() => {
     const atEnd = arrangeFigures(model.sections, opts.figPlacement);
     for (const s of model.sections) {
       if (s.tableOn !== false) {
+        if (opts.sectionHeads) children.push(subheading(s.title, brand));
         if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment));
-        children.push(caption(`Table ${tab++}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`));
+        children.push(caption(`Table ${pre}${tab++}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`));
         children.push(table(s.head, s.rows, brand, opts.tableStyle));
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));
@@ -24367,7 +24495,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       groupCol, idCols, variables, tpOrder, tpLabels: Object.fromEntries(tpOrder.map(t => [t, tpLabel(t)])),
       options: defaultOptions(),
       study: { title: '', software: $('#software').value },
-      consort: null, tpInclude: {}, advanced: [], exportExclude: {}
+      consort: null, tpInclude: {}, advanced: [], exportExclude: {}, report: { ...DEFAULT_REPORT }
     };
     setGroups(cfg);
     return cfg;
@@ -24921,12 +25049,49 @@ if (typeof module !== 'undefined') module.exports = Examples;
       rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
+  /* ---------- report format: thesis, journal paper, or as configured ---------- */
+  const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true };
+  // the format adjusts a copy of the options; the options of steps 4–9 are never changed
+  const FORMAT_PRESETS = {
+    custom: {},
+    thesis: { figPlacement: 'after', paperStyle: false },
+    paper: { paperStyle: true, pWord: 'P', secondRow: 'none', commentPlace: 'none', figPlacement: 'end', figPerRow: 2, figWidth: 'medium', tableStyle: 'apa',
+      summary: false, commentStyle: 'concise', showStat: false, missingNote: false, chartTitle: false }
+  };
+  const report = () => (state.cfg.report = { ...DEFAULT_REPORT, ...(state.cfg.report || {}) });
+  function effOptions() {
+    const o = { ...state.cfg.options, ...FORMAT_PRESETS[report().format] };
+    if (report().format === 'thesis' && o.commentPlace === 'none') o.commentPlace = 'after';
+    return o;
+  }
+  function renderFormatBar() {
+    const r = report();
+    document.querySelectorAll('[data-format]').forEach(b => b.classList.toggle('on', b.dataset.format === r.format));
+    $('#fmtThesis').style.display = r.format === 'thesis' ? '' : 'none';
+    $('#fmtPaper').style.display = r.format === 'paper' ? '' : 'none';
+    $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
+  }
+  $('#fmtBar').addEventListener('click', e => {
+    const b = e.target.closest('[data-format]'); if (!b) return;
+    report().format = b.dataset.format; renderFormatBar(); runAnalysis();
+  });
+  $('#fmtBar').addEventListener('change', e => {
+    const r = report();
+    if (e.target.id === 'fmtChapter') r.chapter = e.target.value.trim();
+    else if (e.target.id === 'fmtHeads') r.sectionHeads = e.target.checked;
+    else if (e.target.id === 'fmtMaxFigs') r.maxFigs = +e.target.value;
+    else if (e.target.id === 'fmtAbstract') r.abstract = e.target.checked;
+    else return;
+    syncEdits(); state.result.narrativeEdited = false; renderReport();
+  });
+
   function runAnalysis() {
     busy(true);
+    renderFormatBar();
     setTimeout(() => {
       try {
         syncAssessed(ensureConsort());
-        const cfg = state.cfg;
+        const cfg = { ...state.cfg, options: effOptions() };
         const res = Analysis.run(state.data, cfg);
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => { f.key = f.caption; renderFigure(f, cfg.options); }); });
         const pal = chartPalette(cfg.options);
@@ -24962,41 +25127,94 @@ if (typeof module !== 'undefined') module.exports = Examples;
     document.querySelectorAll('[data-fcap]').forEach(t => { const [si, fi] = t.dataset.fcap.split(':').map(Number); r.sections[si].figures[fi].caption = t.value; });
     document.querySelectorAll('[data-ttl]').forEach(t => { r.sections[+t.dataset.ttl].title = t.value; });
     if ($('#edSummary')) r.summary = $('#edSummary').value;
+    if ($('#edNarrative') && $('#edNarrative').value !== r.narrative) { r.narrative = $('#edNarrative').value; r.narrativeEdited = true; }
+    if ($('#edAbstract') && $('#edAbstract').value !== r.abstract) { r.abstract = $('#edAbstract').value; r.abstractEdited = true; }
   }
+  // what goes into the Word file and how it is numbered — shared by the preview and the export
+  function exportPlan(r) {
+    const o = effOptions(), rep = report(), paper = rep.format === 'paper';
+    const pre = rep.format === 'thesis' && rep.chapter ? rep.chapter + '.' : '';
+    let figs = r.sections.flatMap(s => s.figures).filter(f => !isOut(exKey.figure(f)));
+    if (paper) {
+      // the paper keeps a few figures: repeated outcomes before single variables
+      const kindOf = f => r.sections.find(s => s.figures.includes(f)).kind;
+      // only figures of significant results; the limit is a maximum
+      const ranked = figs.filter(f => f.sig !== false).map((f, i) => ({ f, i, k: kindOf(f) === 'repeated' ? 0 : 1 })).sort((a, b) => a.k - b.k || a.i - b.i);
+      const keep = new Set(ranked.slice(0, rep.maxFigs).map(x => x.f));
+      figs = figs.filter(f => keep.has(f));
+    }
+    const kept = new Set(figs);
+    const filtered = r.sections.map(s => ({ ...s, figures: s.figures.filter(f => kept.has(f)) }));
+    const order = Report.arrangeFigures(filtered, o.figPlacement) || filtered.flatMap(s => s.figures);
+    const consortOn = !!r.consort && !isOut('consort');
+    const figNum = new Map(); let n = consortOn ? 2 : 1;
+    order.forEach(f => figNum.set(f, pre + n++));
+    const tabNum = new Map(); let t = 1;
+    r.sections.forEach(s => { if (!isOut(exKey.table(s))) tabNum.set(s, pre + t++); });
+    return { o, rep, paper, pre, kept, order, figNum, tabNum, consortNum: pre + 1, consortOn };
+  }
+  // the paper's Results narrative: significant findings per table, each citing its table and figure
+  function paperNarrative(r, plan) {
+    const out = [];
+    r.sections.forEach((s, i) => {
+      if (!plan.tabNum.has(s)) return;
+      const figs = s.figures.filter(f => plan.figNum.has(f)).map(f => `Figure ${plan.figNum.get(f)}`);
+      const ref = [`Table ${plan.tabNum.get(s)}`, ...figs].join('; ');
+      const what = s.title.replace(/ of the studied groups$/, '').replace(/^./, c => c.toLowerCase());
+      const b = briefOf(s);
+      if (i === 0 && s.kind === 'single' && !b.sig) out.push(`Baseline characteristics were comparable between the groups (${ref}).`);
+      else if (b.text) out.push(b.text.replace(/\.$/, ` (${ref}).`));
+      else out.push(`No significant differences were found in ${what} (${ref}).`);
+    });
+    return out.join(' ');
+  }
+  // one-sentence summary of a table: the analysis' own summary for main tables, else the key significant sentence
+  function briefOf(s) {
+    if (s.brief) return { text: s.brief, sig: !!s.briefSig };
+    const sent = Analysis.significantSentences(s.comment);
+    const key = sent.filter(x => /independent predictor|could significantly predict|survival was significantly|agreement|internal consistency|sensitivity/i.test(x));
+    return { text: (key.length ? key.slice(0, 1) : sent.slice(0, 2)).join(' '), sig: sent.length > 0 };
+  }
+  // abstract: summaries of the outcome tables with a significant result (baseline left out), at most three
+  const abstractResults = r => r.sections.slice(1).map(briefOf).filter(b => b.sig && b.text).slice(0, 3).map(b => b.text).join(' ')
+    || 'No statistically significant differences were found.';
+  const words = t => (t || '').split(/\s+/).filter(Boolean).length;
+
   function renderReport() {
-    const r = state.result;
-    let fig = 1, tab = 1, html = '';
-    const nIn = 1 + (r.consort ? 1 : 0) + r.sections.reduce((n, s) => n + (isOut(exKey.table(s)) ? 0 : 1) + s.figures.filter(f => !isOut(exKey.figure(f))).length, 0);
+    const r = state.result, plan = exportPlan(r), o = plan.o, lab = n => Report.figLabel(n, o.captionStyle);
+    if (plan.paper && !r.narrativeEdited) r.narrative = paperNarrative(r, plan);
+    if (plan.paper && plan.rep.abstract && !r.abstractEdited) r.abstract = abstractResults(r);
+    let html = '';
     html += `<div class="row exp-bar"><b>In the Word file:</b> <span class="legend-note">untick any section, table or figure to leave it out — numbering follows what is kept.</span><span class="spacer"></span>
       <button class="btn ghost small" data-exall="1" type="button">Include all</button><button class="btn ghost small" data-exall="0" type="button">Exclude all</button></div>`;
     const off = key => isOut(key) ? ' off' : '';
-    html += `<div class="report-sec${off('methods')}"><div class="row"><h3>Statistical Analysis</h3><span class="spacer"></span>${exBox('methods', 'Include')}</div><textarea id="edMethods">${esc(r.methods)}</textarea></div>`;
+    if (plan.paper && plan.rep.abstract) html += `<div class="report-sec"><h3>Results for the abstract</h3><textarea id="edAbstract">${esc(r.abstract)}</textarea><div class="legend-note">${words(r.abstract)} words</div></div>`;
+    html += `<div class="report-sec${off('methods')}"><div class="row"><h3>Statistical analysis</h3><span class="spacer"></span>${exBox('methods', 'Include')}</div><textarea id="edMethods">${esc(r.methods)}</textarea>${plan.paper ? `<div class="legend-note">${words(r.methods)} words</div>` : ''}</div>`;
     html += `<div class="report-sec"><h3>Results</h3>`;
-    if (r.consort) {
-      const out = isOut('consort');
-      html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${out ? 'Not exported:' : Report.figLabel(fig++, state.cfg.options.captionStyle)} ${esc(r.flowCaption)}</div></div>`;
-    }
+    if (r.consort) html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${plan.consortOn ? lab(plan.consortNum) : 'Not exported:'} ${esc(r.flowCaption)}</div></div>`;
+    if (plan.paper) html += `<label class="f" style="margin-top:12px">Results text (written from the significant results, citing tables and figures — edit freely)</label><textarea id="edNarrative" style="min-height:180px">${esc(r.narrative)}</textarea>
+      <div class="legend-note">${words(r.narrative) + words(r.intro)} words in Results · ${words(r.narrative) + words(r.intro) + words(r.methods)} words with the statistical analysis</div>`;
     html += `</div>`;
-    // figure numbers follow the Word layout: after each table, or all at the end (optionally grouped by type)
-    const o = state.cfg.options, lab = n => Report.figLabel(n, o.captionStyle);
-    const atEnd = Report.arrangeFigures(r.sections, o.figPlacement);
-    const num = new Map();
-    (atEnd || r.sections.flatMap(s => s.figures)).forEach(f => { if (!isOut(exKey.figure(f))) num.set(f, fig++); });
+    const atEnd = o.figPlacement === 'end' || o.figPlacement === 'endType';
     const figHtml = f => {
-      const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f), fOut = isOut(fk);
-      return `<figure class="${fOut ? 'off' : ''}"><img src="${f.url}" alt=""><figcaption>${fOut ? 'Not exported:' : lab(num.get(f))} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption"></figcaption>${exBox(fk, 'Figure')}</figure>`;
+      const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f);
+      const label = isOut(fk) ? 'Not exported:' : plan.kept.has(f) ? lab(plan.figNum.get(f)) : (f.sig === false ? 'Not in the paper (not significant):' : `Not in the paper (limit ${plan.rep.maxFigs}):`);
+      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption"></figcaption>${exBox(fk, 'Figure')}</figure>`;
     };
     r.sections.forEach((s, i) => {
-      const tk = exKey.table(s), tOut = isOut(tk);
-      const place = o.commentPlace || 'after';
-      const comment = `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
-      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${tab++}${o.tableCaption === 'period' ? '.' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
+      const tk = exKey.table(s), tOut = isOut(tk), place = o.commentPlace || 'after';
+      const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
+      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
         ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
         <div class="foot">${esc(s.footnote)}</div>
         ${place !== 'before' ? comment : ''}</div>
         ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
     });
-    if (atEnd && atEnd.length) html += `<div class="report-sec"><h3>Figures</h3><div class="figs">${atEnd.map(figHtml).join('')}</div></div>`;
+    if (atEnd) {
+      const all = Report.arrangeFigures(r.sections, o.figPlacement) || [];
+      const sorted = [...all.filter(f => plan.kept.has(f)).sort((a, b) => plan.order.indexOf(a) - plan.order.indexOf(b)), ...all.filter(f => !plan.kept.has(f))];
+      if (sorted.length) html += `<div class="report-sec"><h3>Figures</h3><div class="figs">${sorted.map(figHtml).join('')}</div></div>`;
+    }
     if (r.summary) html += `<div class="report-sec${off('summary')}"><div class="row"><h3>Summary of key findings</h3><span class="spacer"></span>${exBox('summary', 'Include')}</div><textarea id="edSummary">${esc(r.summary)}</textarea></div>`;
     $('#report').innerHTML = html;
   }
@@ -25005,7 +25223,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     if (e.target.dataset.fcap !== undefined) {
       syncEdits();
       const [si, fi] = e.target.dataset.fcap.split(':').map(Number), f = state.result.sections[si].figures[fi];
-      if (state.cfg.options.chartTitle) { renderFigure(f, state.cfg.options); e.target.closest('figure').querySelector('img').src = f.url; }
+      if (effOptions().chartTitle) { renderFigure(f, effOptions()); e.target.closest('figure').querySelector('img').src = f.url; }
       return;
     }
     const key = e.target.dataset.export; if (key === undefined) return;
@@ -25022,9 +25240,11 @@ if (typeof module !== 'undefined') module.exports = Examples;
   });
   // the report model limited to what the user chose to export
   function exportModel(r) {
+    const plan = exportPlan(r);
     return {
       ...r, methods: isOut('methods') ? '' : r.methods, consort: isOut('consort') ? null : r.consort, summary: isOut('summary') ? '' : r.summary,
-      sections: r.sections.map(s => ({ ...s, tableOn: !isOut(exKey.table(s)), figures: s.figures.filter(f => !isOut(exKey.figure(f))) }))
+      narrative: plan.paper ? r.narrative : '', abstract: plan.paper && plan.rep.abstract ? r.abstract : '',
+      sections: r.sections.map(s => ({ ...s, tableOn: !isOut(exKey.table(s)), figures: s.figures.filter(f => plan.kept.has(f)) }))
         .filter(s => s.tableOn || s.figures.length)
     };
   }
@@ -25037,12 +25257,12 @@ if (typeof module !== 'undefined') module.exports = Examples;
       syncEdits();
       const r = exportModel(state.result);
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
-      const o = state.cfg.options;
-      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+      const o = effOptions(), rp = report();
+      const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper', title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = (state.file || 'data').replace(/\.[^.]+$/, '') + ' - Statistical report.docx';
+      a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('Word report downloaded');
