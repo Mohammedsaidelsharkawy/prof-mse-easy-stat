@@ -6,7 +6,48 @@ const Charts = (() => {
     gray: ['#333333', '#777777', '#AAAAAA', '#555555', '#999999', '#CCCCCC']
   };
   const FONT = '"Segoe UI", Arial, sans-serif';
-  const W = 1500, H = 820;
+  // figure shapes (logical canvas size before the resolution multiplier)
+  const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300] };
+  const TEXT = { normal: 1, large: 1.25, xlarge: 1.5 };
+  const DEFAULT_STYLE = { text: 'normal', aspect: 'wide', barFill: 'gradient', grid: true, arrows: true, legend: 'bottom', res: 1, yAxis: 'auto' };
+  const palette = p => Array.isArray(p) && p.length ? p : PALETTES[p] || PALETTES.brand;
+
+  // canvas with logical size W×H drawn at `res` times the pixels, and a font helper scaled by text size
+  function setup(st) {
+    const [W, H] = ASPECTS[st.aspect] || ASPECTS.wide, ts = TEXT[st.text] || 1, res = +st.res || 1;
+    const c = document.createElement('canvas');
+    c.width = W * res; c.height = H * res;
+    const ctx = c.getContext('2d');
+    ctx.scale(res, res);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    return { c, ctx, W, H, ts, F: (weight, px) => `${weight} ${Math.round(px * ts)}px ${FONT}` };
+  }
+
+  // bar fill: gradient (default), solid, outline only, or hatched for black-and-white print
+  function hatch(ctx, color, idx) {
+    const t = document.createElement('canvas'); t.width = t.height = 24;
+    const g = t.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, 24, 24);
+    g.strokeStyle = color; g.lineWidth = 3.5;
+    const kind = idx % 4;
+    g.beginPath();
+    if (kind === 0) { g.moveTo(-6, 30); g.lineTo(30, -6); g.moveTo(-6, 6); g.lineTo(6, -6); g.moveTo(18, 30); g.lineTo(30, 18); }
+    else if (kind === 1) { g.moveTo(-6, -6); g.lineTo(30, 30); g.moveTo(18, -6); g.lineTo(30, 6); g.moveTo(-6, 18); g.lineTo(6, 30); }
+    else if (kind === 2) { g.moveTo(0, 6); g.lineTo(24, 6); g.moveTo(0, 18); g.lineTo(24, 18); }
+    else { g.moveTo(6, 0); g.lineTo(6, 24); g.moveTo(18, 0); g.lineTo(18, 24); g.moveTo(0, 12); g.lineTo(24, 12); }
+    g.stroke();
+    return ctx.createPattern(t, 'repeat');
+  }
+  function fillBar(ctx, st, color, idx, x, y0, w, h) {
+    const mode = st.barFill || 'gradient';
+    if (mode === 'gradient') {
+      const g = ctx.createLinearGradient(0, y0, 0, y0 + h);
+      g.addColorStop(0, shade(color, 0.25)); g.addColorStop(1, color);
+      ctx.fillStyle = g;
+    } else ctx.fillStyle = mode === 'solid' ? color : mode === 'outline' ? '#fff' : hatch(ctx, color, idx);
+    ctx.fillRect(x, y0, w, h);
+    if (mode === 'outline' || mode === 'hatched') { ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.setLineDash([]); ctx.strokeRect(x, y0, w, h); }
+  }
 
   function shade(hex, amt) {
     const n = parseInt(hex.slice(1), 16);
@@ -37,19 +78,18 @@ const Charts = (() => {
   // deterministic jitter so the same data always gives the same picture
   const jitter = i => ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1 - 0.5;
 
-  function draw(spec, paletteName = 'brand') {
-    if (spec.type === 'scatter') return scatter(spec, paletteName);
-    const pal = PALETTES[paletteName] || PALETTES.brand;
-    const c = document.createElement('canvas');
-    c.width = W; c.height = H;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  function draw(spec, paletteName = 'brand', style = {}) {
+    const st = { ...DEFAULT_STYLE, ...style };
+    if (spec.type === 'scatter') return scatter(spec, paletteName, st);
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
     const brackets = (spec.sig || []).filter(q => stars(q.p, spec.alpha));
     const catStars = (spec.sigCat || []).map(p => stars(p, spec.alpha));
 
     const perGroup = !!spec.perGroup && spec.series.length === 1;
     const legendItems = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: spec.type === 'box' && i === 2 }));
-    const L = 150, R = 40, T = 50, B = 120 + (legendItems.length ? 70 : 0);
+    const legendTop = legendItems.length && st.legend === 'top';
+    const L = 110 + 40 * ts, R = 40, T = 50 + (legendTop ? 70 * ts : 0), B = (120 + (legendItems.length && !legendTop ? 70 : 0)) * ts;
     const pw = W - L - R, ph = H - T - B;
 
     // y range
@@ -65,14 +105,16 @@ const Charts = (() => {
     }
     if (spec.percent) { lo = 0; hi = Math.max(10, Math.min(100, hi * 1.1)); }
     if (!isFinite(lo)) { lo = 0; hi = 1; }
-    if (spec.type !== 'line' && lo > 0) lo = 0;
-    if (spec.type === 'line') { const pad = (hi - lo) * 0.1 || 1; lo = Math.max(lo > 0 ? 0 : -Infinity, lo - pad); }
+    // y axis: auto = bars and box plots from zero, lines fitted; 'zero' / 'fit' apply to lines and box plots (bars always start at zero)
+    const fit = spec.type !== 'bar' && !spec.percent && (st.yAxis === 'fit' || (st.yAxis !== 'zero' && spec.type === 'line'));
+    if (!fit && lo > 0) lo = 0;
+    if (fit) { const pad = (hi - lo) * 0.1 || 1; lo = Math.max(lo > 0 && spec.type === 'line' && st.yAxis !== 'fit' ? 0 : -Infinity, lo - pad); }
     let sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02));
     if (spec.percent && sc.max > 100) sc.max = 100;
     let y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
     // room above the data for stacked significance brackets / stars
-    const dataHi = hi, BR0 = spec.labels ? 70 : 34, BRSTEP = 50;
-    const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 : 0;
+    const dataHi = hi, BR0 = (spec.labels ? 70 : 34) * ts, BRSTEP = 50 * ts;
+    const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 * ts : 0;
     for (let top = hi, tries = 0; need && y(dataHi) - need < T && tries < 12; tries++) {
       top += (top - sc.min) * 0.12;
       sc = niceScale(lo, top);
@@ -80,31 +122,34 @@ const Charts = (() => {
     }
 
     // grid + y axis
-    ctx.font = `600 26px ${FONT}`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.font = F(600, 26); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) {
       if (spec.percent && v > 100 + 1e-9) break;
       const yy = y(v);
-      ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
-      ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(L + pw, yy); ctx.stroke();
+      ctx.strokeStyle = st.grid ? '#E6E1EC' : '#333'; ctx.lineWidth = st.grid ? 1.5 : 3; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(st.grid ? L : L - 9, yy); ctx.lineTo(st.grid ? L + pw : L, yy); ctx.stroke();
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sc.step) + (spec.percent ? '%' : ''), L - 14, yy);
     }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(L, T - 20); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw + 20, T + ph); ctx.stroke();
-    // axis arrows
-    ctx.fillStyle = '#333';
-    ctx.beginPath(); ctx.moveTo(L, T - 32); ctx.lineTo(L - 8, T - 16); ctx.lineTo(L + 8, T - 16); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(L + pw + 32, T + ph); ctx.lineTo(L + pw + 16, T + ph - 8); ctx.lineTo(L + pw + 16, T + ph + 8); ctx.fill();
+    const ext = st.arrows ? 20 : 0;
+    ctx.beginPath(); ctx.moveTo(L, T - ext); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw + ext, T + ph); ctx.stroke();
+    if (st.arrows) {
+      ctx.fillStyle = '#333';
+      ctx.beginPath(); ctx.moveTo(L, T - 32); ctx.lineTo(L - 8, T - 16); ctx.lineTo(L + 8, T - 16); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(L + pw + 32, T + ph); ctx.lineTo(L + pw + 16, T + ph - 8); ctx.lineTo(L + pw + 16, T + ph + 8); ctx.fill();
+    }
 
     // y label
     ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2);
-    ctx.textAlign = 'center'; ctx.font = `700 28px ${FONT}`; ctx.fillStyle = '#333';
+    ctx.textAlign = 'center'; ctx.font = F(700, 28); ctx.fillStyle = '#333';
     ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
 
     const nc = spec.categories.length, ns = spec.series.length;
     const cw = pw / nc;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = `700 26px ${FONT}`; ctx.fillStyle = '#333';
-    spec.categories.forEach((cat, i) => wrapText(ctx, cat, L + cw * (i + 0.5), T + ph + 16, cw - 10, 30));
-    if (spec.xLabel) { ctx.font = `700 26px ${FONT}`; ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 70); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = F(700, 26); ctx.fillStyle = '#333';
+    const catLines = Math.max(1, ...spec.categories.map(cat => measureLines(ctx, cat, cw - 10)));
+    spec.categories.forEach((cat, i) => wrapText(ctx, cat, L + cw * (i + 0.5), T + ph + 16, cw - 10, 30 * ts));
+    if (spec.xLabel) { ctx.font = F(700, 26); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + (catLines * 30 + 24) * ts); }
 
     const errBar = (x, a, b, w) => {
       ctx.strokeStyle = '#333'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
@@ -118,14 +163,12 @@ const Charts = (() => {
       spec.series.forEach((s, si) => s.values.forEach((v, ci) => {
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
-        const g = ctx.createLinearGradient(0, y(v), 0, y(sc.min));
-        g.addColorStop(0, shade(color, 0.25)); g.addColorStop(1, color);
-        ctx.fillStyle = g; ctx.fillRect(x0, y(v), w, y(Math.max(sc.min, 0)) - y(v));
+        fillBar(ctx, st, color, perGroup ? ci : si, x0, y(v), w, y(Math.max(sc.min, 0)) - y(v));
         const cx = x0 + w / 2;
         if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4));
         else if (s.lo && s.hi) errBar(cx, s.lo[ci], s.hi[ci], Math.min(14, w / 4));
         if (spec.labels) {
-          ctx.fillStyle = '#222'; ctx.font = `700 24px ${FONT}`; ctx.textBaseline = 'bottom';
+          ctx.fillStyle = '#222'; ctx.font = F(700, 24); ctx.textBaseline = 'bottom';
           const dec = spec.labelDec ?? 1, top = s.err && isFinite(s.err[ci]) ? v + s.err[ci] : s.hi ? s.hi[ci] : v;
           ctx.fillText((Math.round(v * 10 ** dec) / 10 ** dec) + (spec.percent ? '%' : ''), cx, y(top) - 6);
         }
@@ -172,7 +215,7 @@ const Charts = (() => {
 
     // significance: brackets between groups, or stars above timepoints
     ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = `700 30px ${FONT}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = F(700, 30);
     [...brackets].sort((a, b) => (a.j - a.i) - (b.j - b.i)).forEach((q, n) => {
       const x1 = L + cw * (q.i + 0.5), x2 = L + cw * (q.j + 0.5), yy = y(dataHi) - BR0 - BRSTEP * n;
       ctx.beginPath(); ctx.moveTo(x1, yy + 14); ctx.lineTo(x1, yy); ctx.lineTo(x2, yy); ctx.lineTo(x2, yy + 14); ctx.stroke();
@@ -182,16 +225,17 @@ const Charts = (() => {
 
     // legend
     if (legendItems.length) {
-      ctx.font = `600 26px ${FONT}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-      const widths = legendItems.map(it => 60 + ctx.measureText(it.name).width + 40);
+      ctx.font = F(600, 26); ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      const widths = legendItems.map(it => 60 + ctx.measureText(it.name).width + 40 * ts);
       let x = (W - widths.reduce((a, b) => a + b, 0)) / 2;
-      const yy = H - 45;
+      const yy = legendTop ? 40 * ts : H - 45 * ts, sw = 28 * ts;
       legendItems.forEach((it, i) => {
         if (spec.type === 'line' || spec.type === 'box') {
           ctx.strokeStyle = it.color; ctx.lineWidth = 5; ctx.setLineDash(i === 2 ? [12, 7] : []);
           ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + 46, yy); ctx.stroke(); ctx.setLineDash([]);
-        } else { ctx.fillStyle = it.color; ctx.fillRect(x + 8, yy - 14, 30, 28); }
-        ctx.fillStyle = '#333'; ctx.fillText(it.name, x + 58, yy);
+        } else if (st.barFill === 'gradient') { ctx.fillStyle = it.color; ctx.fillRect(x + 8, yy - sw / 2, sw + 2, sw); }
+        else fillBar(ctx, st, it.color, i, x + 8, yy - sw / 2, sw + 2, sw);
+        ctx.fillStyle = '#333'; ctx.textBaseline = 'middle'; ctx.fillText(it.name, x + 58, yy);
         x += widths[i];
       });
     }
@@ -199,34 +243,32 @@ const Charts = (() => {
   }
 
   /* ---------- scatter plot with least-squares line ---------- */
-  function scatter(spec, paletteName) {
-    const pal = PALETTES[paletteName] || PALETTES.brand;
-    const c = document.createElement('canvas');
-    c.width = W; c.height = H;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-    const L = 150, R = 50, T = 60, B = 130, pw = W - L - R, ph = H - T - B;
+  function scatter(spec, paletteName, st) {
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const L = 110 + 40 * ts, R = 50, T = 60, B = 130 * ts, pw = W - L - R, ph = H - T - B;
     const { x: xs, y: ys } = spec;
     const pad = (a, b) => (b - a) * 0.05 || 1;
     const xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
     const sx = niceScale(xmin - pad(xmin, xmax), xmax + pad(xmin, xmax)), sy = niceScale(ymin - pad(ymin, ymax), ymax + pad(ymin, ymax));
     const X = v => L + (v - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - sy.min) / (sy.max - sy.min) * ph;
 
-    ctx.font = `600 26px ${FONT}`; ctx.lineWidth = 1.5;
+    ctx.font = F(600, 26); ctx.lineWidth = 1.5;
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const gridLine = (x1, y1, x2, y2) => { if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); } };
     for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) {
-      ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke();
+      gridLine(L, Y(v), L + pw, Y(v));
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sy.step), L - 14, Y(v));
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for (let v = sx.min; v <= sx.max + 1e-9; v += sx.step) {
-      ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke();
+      gridLine(X(v), T, X(v), T + ph);
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sx.step), X(v), T + ph + 12);
     }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
-    ctx.font = `700 28px ${FONT}`; ctx.fillStyle = '#333';
-    ctx.fillText(spec.xLabel || '', L + pw / 2, T + ph + 60);
+    ctx.font = F(700, 28); ctx.fillStyle = '#333';
+    ctx.fillText(spec.xLabel || '', L + pw / 2, T + ph + 60 * ts);
     ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle';
     ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
 
@@ -244,10 +286,10 @@ const Charts = (() => {
       ctx.restore();
     }
     if (spec.note) {
-      ctx.font = `700 28px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.font = F(700, 28); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
       // put the label in the corner the points leave empty
       const tw = ctx.measureText(spec.note).width, nx = slope < 0 ? L + pw - tw - 44 : L + 20;
-      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(nx, T + 10, tw + 24, 44);
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(nx, T + 10, tw + 24, 44 * ts);
       ctx.fillStyle = '#222'; ctx.fillText(spec.note, nx + 12, T + 18);
     }
     return c;
@@ -280,7 +322,7 @@ const Charts = (() => {
 
   /* ---------- CONSORT 2010 flow diagram ---------- */
   function consort(c, groupLabels, palName = 'brand') {
-    const pal = PALETTES[palName] || PALETTES.brand;
+    const pal = palette(palName);
     const k = groupLabels.length;
     const cv = document.createElement('canvas');
     const CW = 1200;
@@ -371,5 +413,5 @@ const Charts = (() => {
     return cv;
   }
 
-  return { draw, consort, PALETTES };
+  return { draw, consort, PALETTES, DEFAULT_STYLE };
 })();

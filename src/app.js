@@ -11,15 +11,24 @@
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: true,
     commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false,
-    figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false
+    figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
+    chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
+    gridlines: true, axisArrows: true, nLabels: false,
+    customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
     branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
-    figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true]
+    figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
+    chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
+    gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true]
   };
+  const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
+  // chart palette and drawing style from the options
+  const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
+  const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -158,7 +167,7 @@
     repeated.forEach(r => r.cols.forEach(c => { if (!tpOrder.includes(c.tp)) tpOrder.push(c.tp); }));
     const cfg = {
       groupCol, idCols, variables, tpOrder, tpLabels: Object.fromEntries(tpOrder.map(t => [t, tpLabel(t)])),
-      options: { ...DEFAULT_OPTIONS },
+      options: defaultOptions(),
       study: { title: '', software: $('#software').value },
       consort: null
     };
@@ -244,7 +253,12 @@
       : '<tbody><tr><td>No repeated measures detected.</td></tr></tbody>';
     const o = cfg.options;
     for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
+    $('#customColors').innerHTML = o.customColors.map((col, i) => `<input type="color" data-ccol="${i}" value="${esc(col)}" title="Colour ${i + 1}">`).join('');
+    $('#customBox').style.display = o.palette === 'custom' ? '' : 'none';
   }
+
+  $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; });
+  $('#customReset').onclick = () => { readUiIntoCfg(); state.cfg.options.customColors = defaultOptions().customColors; renderTimepoints(); };
 
   /* ---------- step 4: CONSORT ---------- */
   function ensureConsort() {
@@ -287,7 +301,7 @@
   }
   function drawConsortPreview() {
     const c = state.cfg.consort, gl = activeGroups().map(g => state.cfg.groupLabels[g]);
-    const cv = Charts.consort(c, gl, state.cfg.options.palette);
+    const cv = Charts.consort(c, gl, chartPalette(state.cfg.options));
     const tgt = $('#consortCanvas');
     tgt.width = cv.width; tgt.height = cv.height; tgt.getContext('2d').drawImage(cv, 0, 0);
   }
@@ -327,6 +341,7 @@
         const el = $('#' + id);
         o[k] = box ? el.checked : typeof DEFAULT_OPTIONS[k] === 'number' ? +el.value : el.value;
       }
+      document.querySelectorAll('[data-ccol]').forEach(el => { o.customColors[+el.dataset.ccol] = el.value; });
     }
     if ($('#p4').classList.contains('active')) readConsort();
   }
@@ -346,8 +361,8 @@
         ensureConsort();
         const cfg = state.cfg;
         const res = Analysis.run(state.data, cfg);
-        const pal = cfg.options.palette;
-        res.sections.forEach(s => s.figures.forEach(f => { const c = Charts.draw(f.spec, pal); f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height; }));
+        const pal = chartPalette(cfg.options), sty = chartStyle(cfg.options);
+        res.sections.forEach(s => s.figures.forEach(f => { const c = Charts.draw(f.spec, pal, sty); f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height; }));
         const gl = res.groups;
         if (cfg.consort.enabled) {
           const cv = Charts.consort(cfg.consort, gl, pal);
@@ -419,7 +434,7 @@
     const h = state.data.headers;
     const ok = saved.variables.every(v => v.cols.every(c => h.includes(c.col))) && h.includes(saved.groupCol);
     if (!ok) { toast('Saved setup does not match this file’s columns — using auto-detection'); return; }
-    saved.options = { ...DEFAULT_OPTIONS, ...saved.options }; // setups saved by older versions lack the newer options
+    saved.options = { ...defaultOptions(), ...saved.options }; // setups saved by older versions lack the newer options
     state.cfg = saved;
     $('#studyTitle').value = saved.study.title || ''; $('#software').value = saved.study.software;
     // keep any new group values found in this file

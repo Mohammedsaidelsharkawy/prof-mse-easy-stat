@@ -81,6 +81,7 @@ table.t td{padding:6px 10px;border-top:1px solid var(--line);vertical-align:midd
 table.t tr:hover td{background:var(--hover)}
 table.t td input[type=text]{min-width:150px}
 table.t td select{min-width:120px}
+input[type=color]{width:42px;height:34px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--field);cursor:pointer}
 .mono{font-family:Consolas,monospace;font-size:12.5px;color:var(--muted)}
 .chip{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
 .chip.ok{background:var(--ok-bg);color:var(--ok)}.chip.warn{background:var(--warn-bg);color:var(--warn)}.chip.info{background:var(--lav);color:var(--accent)}
@@ -200,7 +201,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Decimal places</label><select id="optDec"><option>1</option><option selected>2</option><option>3</option></select></div>
         <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
         <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
-        <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option></select></div>
+        <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option><option value="custom">Custom colours…</option></select></div>
       </div>
       <h3>Tests</h3>
       <div class="grid g2">
@@ -230,8 +231,23 @@ footer b{color:var(--purple)}
         <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option></select></div>
         <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
       </div>
+      <div id="customBox" style="display:none;margin-top:12px">
+        <label class="f">Custom colours (group 1, 2, 3 …)</label>
+        <div class="row"><span id="customColors" class="row" style="gap:6px"></span><button class="btn ghost small" id="customReset" type="button">Reset</button></div>
+      </div>
+      <div class="grid g4" style="margin-top:12px">
+        <div><label class="f">Chart text size</label><select id="optChartText"><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
+        <div><label class="f">Chart shape</label><select id="optAspect"><option value="wide" selected>Wide</option><option value="standard">Standard (4:3)</option><option value="square">Square</option></select></div>
+        <div><label class="f">Bar fill</label><select id="optBarFill"><option value="gradient" selected>Gradient</option><option value="solid">Solid</option><option value="outline">Outline only</option><option value="hatched">Hatched (black &amp; white print)</option></select></div>
+        <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
+        <div><label class="f">Legend position</label><select id="optLegend"><option value="bottom" selected>Bottom</option><option value="top">Top</option></select></div>
+        <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
+      </div>
       <div class="grid g2" style="margin-top:12px">
         <div>
+          <label class="check"><input type="checkbox" id="optGrid" checked><span><b>Gridlines</b> behind the data</span></label>
+          <label class="check"><input type="checkbox" id="optArrows" checked><span><b>Axis arrows</b> at the ends of the axes</span></label>
+          <label class="check"><input type="checkbox" id="optNLabels"><span><b>Group sizes</b> on the charts — “A group (n=30)”</span></label>
           <label class="check"><input type="checkbox" id="optValueLabels"><span><b>Value labels</b> on bar charts of means / medians</span></label>
           <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
@@ -21027,6 +21043,8 @@ const Analysis = (() => {
       : opts.errorBar === 'ci' ? jStat.studentt.inv(0.975, dd.n - 1) * dd.sd / Math.sqrt(dd.n) : dd.sd;
     const errNote = { sem: ' (mean ± SEM)', ci: ' (mean ± 95% CI)' }[opts.errorBar] || '';
     const valueLabels = opts.valueLabels ? { labels: true, labelDec: d } : {};
+    // optional group sizes on chart axes / legends: "A group (n=30)"
+    const withN = (names, ns) => opts.nLabels ? names.map((g, i) => `${g} (n=${ns[i]})`) : names;
     const groups = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false);
     const gl = groups.map(g => cfg.groupLabels[g] || g);
     const k = groups.length;
@@ -21138,9 +21156,9 @@ const Analysis = (() => {
             caption: `${v.label} of the studied groups${meanChart && param ? errNote : ''}`,
             spec: meanChart
               ? { type: opts.chartStyle === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks, ...(opts.chartStyle === 'line' ? {} : valueLabels),
-                  series: gl.map((g, i) => ({ name: g, values: results.map(r => param ? r.desc[i].mean : r.desc[i].median),
+                  series: withN(gl, gN).map((g, i) => ({ name: g, values: results.map(r => param ? r.desc[i].mean : r.desc[i].median),
                     err: results.map(r => param ? errOf(r.desc[i]) : null), lo: param ? null : results.map(r => r.desc[i].q1), hi: param ? null : results.map(r => r.desc[i].q3) })) }
-              : { type: 'box', categories: tps, yLabel: v.label, points: opts.points, ...marks, series: gl.map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
+              : { type: 'box', categories: tps, yLabel: v.label, points: opts.points, ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
             };
           })()],
           meta: { param, results, within, tps }
@@ -21243,18 +21261,18 @@ const Analysis = (() => {
             return {
               caption: `${r.v.label} of the studied groups${bar ? errNote : ''}`,
               spec: bar
-                ? { type: 'bar', perGroup: true, categories: gl, yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(errOf) }] }
-                : { type: 'box', perGroup: true, categories: gl, yLabel: r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
+                ? { type: 'bar', perGroup: true, categories: withN(gl, r.num.desc.map(x => x.n)), yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(errOf) }] }
+                : { type: 'box', perGroup: true, categories: withN(gl, r.num.desc.map(x => x.n)), yLabel: r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
             };
           }
           const c = r.cat;
           if (isCompact(r)) return {
             caption: `${r.v.label} of the studied groups`,
-            spec: { type: 'bar', perGroup: true, percent: true, labels: true, categories: gl, yLabel: '% of the studied patients', ...brackets(c), series: [{ name: r.levels[0], values: c.pct[0] }] }
+            spec: { type: 'bar', perGroup: true, percent: true, labels: true, categories: withN(gl, c.ns), yLabel: '% of the studied patients', ...brackets(c), series: [{ name: r.levels[0], values: c.pct[0] }] }
           };
           return {
             caption: `${r.v.label} of the studied groups`,
-            spec: { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
+            spec: { type: 'bar', percent: true, labels: true, categories: withN(gl, c.ns), yLabel: '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
         }
         sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res } });
@@ -21402,7 +21420,48 @@ const Charts = (() => {
     gray: ['#333333', '#777777', '#AAAAAA', '#555555', '#999999', '#CCCCCC']
   };
   const FONT = '"Segoe UI", Arial, sans-serif';
-  const W = 1500, H = 820;
+  // figure shapes (logical canvas size before the resolution multiplier)
+  const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300] };
+  const TEXT = { normal: 1, large: 1.25, xlarge: 1.5 };
+  const DEFAULT_STYLE = { text: 'normal', aspect: 'wide', barFill: 'gradient', grid: true, arrows: true, legend: 'bottom', res: 1, yAxis: 'auto' };
+  const palette = p => Array.isArray(p) && p.length ? p : PALETTES[p] || PALETTES.brand;
+
+  // canvas with logical size W×H drawn at `res` times the pixels, and a font helper scaled by text size
+  function setup(st) {
+    const [W, H] = ASPECTS[st.aspect] || ASPECTS.wide, ts = TEXT[st.text] || 1, res = +st.res || 1;
+    const c = document.createElement('canvas');
+    c.width = W * res; c.height = H * res;
+    const ctx = c.getContext('2d');
+    ctx.scale(res, res);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    return { c, ctx, W, H, ts, F: (weight, px) => `${weight} ${Math.round(px * ts)}px ${FONT}` };
+  }
+
+  // bar fill: gradient (default), solid, outline only, or hatched for black-and-white print
+  function hatch(ctx, color, idx) {
+    const t = document.createElement('canvas'); t.width = t.height = 24;
+    const g = t.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, 24, 24);
+    g.strokeStyle = color; g.lineWidth = 3.5;
+    const kind = idx % 4;
+    g.beginPath();
+    if (kind === 0) { g.moveTo(-6, 30); g.lineTo(30, -6); g.moveTo(-6, 6); g.lineTo(6, -6); g.moveTo(18, 30); g.lineTo(30, 18); }
+    else if (kind === 1) { g.moveTo(-6, -6); g.lineTo(30, 30); g.moveTo(18, -6); g.lineTo(30, 6); g.moveTo(-6, 18); g.lineTo(6, 30); }
+    else if (kind === 2) { g.moveTo(0, 6); g.lineTo(24, 6); g.moveTo(0, 18); g.lineTo(24, 18); }
+    else { g.moveTo(6, 0); g.lineTo(6, 24); g.moveTo(18, 0); g.lineTo(18, 24); g.moveTo(0, 12); g.lineTo(24, 12); }
+    g.stroke();
+    return ctx.createPattern(t, 'repeat');
+  }
+  function fillBar(ctx, st, color, idx, x, y0, w, h) {
+    const mode = st.barFill || 'gradient';
+    if (mode === 'gradient') {
+      const g = ctx.createLinearGradient(0, y0, 0, y0 + h);
+      g.addColorStop(0, shade(color, 0.25)); g.addColorStop(1, color);
+      ctx.fillStyle = g;
+    } else ctx.fillStyle = mode === 'solid' ? color : mode === 'outline' ? '#fff' : hatch(ctx, color, idx);
+    ctx.fillRect(x, y0, w, h);
+    if (mode === 'outline' || mode === 'hatched') { ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.setLineDash([]); ctx.strokeRect(x, y0, w, h); }
+  }
 
   function shade(hex, amt) {
     const n = parseInt(hex.slice(1), 16);
@@ -21433,19 +21492,18 @@ const Charts = (() => {
   // deterministic jitter so the same data always gives the same picture
   const jitter = i => ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1 - 0.5;
 
-  function draw(spec, paletteName = 'brand') {
-    if (spec.type === 'scatter') return scatter(spec, paletteName);
-    const pal = PALETTES[paletteName] || PALETTES.brand;
-    const c = document.createElement('canvas');
-    c.width = W; c.height = H;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  function draw(spec, paletteName = 'brand', style = {}) {
+    const st = { ...DEFAULT_STYLE, ...style };
+    if (spec.type === 'scatter') return scatter(spec, paletteName, st);
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
     const brackets = (spec.sig || []).filter(q => stars(q.p, spec.alpha));
     const catStars = (spec.sigCat || []).map(p => stars(p, spec.alpha));
 
     const perGroup = !!spec.perGroup && spec.series.length === 1;
     const legendItems = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: spec.type === 'box' && i === 2 }));
-    const L = 150, R = 40, T = 50, B = 120 + (legendItems.length ? 70 : 0);
+    const legendTop = legendItems.length && st.legend === 'top';
+    const L = 110 + 40 * ts, R = 40, T = 50 + (legendTop ? 70 * ts : 0), B = (120 + (legendItems.length && !legendTop ? 70 : 0)) * ts;
     const pw = W - L - R, ph = H - T - B;
 
     // y range
@@ -21461,14 +21519,16 @@ const Charts = (() => {
     }
     if (spec.percent) { lo = 0; hi = Math.max(10, Math.min(100, hi * 1.1)); }
     if (!isFinite(lo)) { lo = 0; hi = 1; }
-    if (spec.type !== 'line' && lo > 0) lo = 0;
-    if (spec.type === 'line') { const pad = (hi - lo) * 0.1 || 1; lo = Math.max(lo > 0 ? 0 : -Infinity, lo - pad); }
+    // y axis: auto = bars and box plots from zero, lines fitted; 'zero' / 'fit' apply to lines and box plots (bars always start at zero)
+    const fit = spec.type !== 'bar' && !spec.percent && (st.yAxis === 'fit' || (st.yAxis !== 'zero' && spec.type === 'line'));
+    if (!fit && lo > 0) lo = 0;
+    if (fit) { const pad = (hi - lo) * 0.1 || 1; lo = Math.max(lo > 0 && spec.type === 'line' && st.yAxis !== 'fit' ? 0 : -Infinity, lo - pad); }
     let sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02));
     if (spec.percent && sc.max > 100) sc.max = 100;
     let y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
     // room above the data for stacked significance brackets / stars
-    const dataHi = hi, BR0 = spec.labels ? 70 : 34, BRSTEP = 50;
-    const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 : 0;
+    const dataHi = hi, BR0 = (spec.labels ? 70 : 34) * ts, BRSTEP = 50 * ts;
+    const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 * ts : 0;
     for (let top = hi, tries = 0; need && y(dataHi) - need < T && tries < 12; tries++) {
       top += (top - sc.min) * 0.12;
       sc = niceScale(lo, top);
@@ -21476,31 +21536,34 @@ const Charts = (() => {
     }
 
     // grid + y axis
-    ctx.font = `600 26px ${FONT}`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.font = F(600, 26); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) {
       if (spec.percent && v > 100 + 1e-9) break;
       const yy = y(v);
-      ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
-      ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(L + pw, yy); ctx.stroke();
+      ctx.strokeStyle = st.grid ? '#E6E1EC' : '#333'; ctx.lineWidth = st.grid ? 1.5 : 3; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(st.grid ? L : L - 9, yy); ctx.lineTo(st.grid ? L + pw : L, yy); ctx.stroke();
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sc.step) + (spec.percent ? '%' : ''), L - 14, yy);
     }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(L, T - 20); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw + 20, T + ph); ctx.stroke();
-    // axis arrows
-    ctx.fillStyle = '#333';
-    ctx.beginPath(); ctx.moveTo(L, T - 32); ctx.lineTo(L - 8, T - 16); ctx.lineTo(L + 8, T - 16); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(L + pw + 32, T + ph); ctx.lineTo(L + pw + 16, T + ph - 8); ctx.lineTo(L + pw + 16, T + ph + 8); ctx.fill();
+    const ext = st.arrows ? 20 : 0;
+    ctx.beginPath(); ctx.moveTo(L, T - ext); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw + ext, T + ph); ctx.stroke();
+    if (st.arrows) {
+      ctx.fillStyle = '#333';
+      ctx.beginPath(); ctx.moveTo(L, T - 32); ctx.lineTo(L - 8, T - 16); ctx.lineTo(L + 8, T - 16); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(L + pw + 32, T + ph); ctx.lineTo(L + pw + 16, T + ph - 8); ctx.lineTo(L + pw + 16, T + ph + 8); ctx.fill();
+    }
 
     // y label
     ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2);
-    ctx.textAlign = 'center'; ctx.font = `700 28px ${FONT}`; ctx.fillStyle = '#333';
+    ctx.textAlign = 'center'; ctx.font = F(700, 28); ctx.fillStyle = '#333';
     ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
 
     const nc = spec.categories.length, ns = spec.series.length;
     const cw = pw / nc;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = `700 26px ${FONT}`; ctx.fillStyle = '#333';
-    spec.categories.forEach((cat, i) => wrapText(ctx, cat, L + cw * (i + 0.5), T + ph + 16, cw - 10, 30));
-    if (spec.xLabel) { ctx.font = `700 26px ${FONT}`; ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 70); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = F(700, 26); ctx.fillStyle = '#333';
+    const catLines = Math.max(1, ...spec.categories.map(cat => measureLines(ctx, cat, cw - 10)));
+    spec.categories.forEach((cat, i) => wrapText(ctx, cat, L + cw * (i + 0.5), T + ph + 16, cw - 10, 30 * ts));
+    if (spec.xLabel) { ctx.font = F(700, 26); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + (catLines * 30 + 24) * ts); }
 
     const errBar = (x, a, b, w) => {
       ctx.strokeStyle = '#333'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
@@ -21514,14 +21577,12 @@ const Charts = (() => {
       spec.series.forEach((s, si) => s.values.forEach((v, ci) => {
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
-        const g = ctx.createLinearGradient(0, y(v), 0, y(sc.min));
-        g.addColorStop(0, shade(color, 0.25)); g.addColorStop(1, color);
-        ctx.fillStyle = g; ctx.fillRect(x0, y(v), w, y(Math.max(sc.min, 0)) - y(v));
+        fillBar(ctx, st, color, perGroup ? ci : si, x0, y(v), w, y(Math.max(sc.min, 0)) - y(v));
         const cx = x0 + w / 2;
         if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4));
         else if (s.lo && s.hi) errBar(cx, s.lo[ci], s.hi[ci], Math.min(14, w / 4));
         if (spec.labels) {
-          ctx.fillStyle = '#222'; ctx.font = `700 24px ${FONT}`; ctx.textBaseline = 'bottom';
+          ctx.fillStyle = '#222'; ctx.font = F(700, 24); ctx.textBaseline = 'bottom';
           const dec = spec.labelDec ?? 1, top = s.err && isFinite(s.err[ci]) ? v + s.err[ci] : s.hi ? s.hi[ci] : v;
           ctx.fillText((Math.round(v * 10 ** dec) / 10 ** dec) + (spec.percent ? '%' : ''), cx, y(top) - 6);
         }
@@ -21568,7 +21629,7 @@ const Charts = (() => {
 
     // significance: brackets between groups, or stars above timepoints
     ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = `700 30px ${FONT}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = F(700, 30);
     [...brackets].sort((a, b) => (a.j - a.i) - (b.j - b.i)).forEach((q, n) => {
       const x1 = L + cw * (q.i + 0.5), x2 = L + cw * (q.j + 0.5), yy = y(dataHi) - BR0 - BRSTEP * n;
       ctx.beginPath(); ctx.moveTo(x1, yy + 14); ctx.lineTo(x1, yy); ctx.lineTo(x2, yy); ctx.lineTo(x2, yy + 14); ctx.stroke();
@@ -21578,16 +21639,17 @@ const Charts = (() => {
 
     // legend
     if (legendItems.length) {
-      ctx.font = `600 26px ${FONT}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-      const widths = legendItems.map(it => 60 + ctx.measureText(it.name).width + 40);
+      ctx.font = F(600, 26); ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      const widths = legendItems.map(it => 60 + ctx.measureText(it.name).width + 40 * ts);
       let x = (W - widths.reduce((a, b) => a + b, 0)) / 2;
-      const yy = H - 45;
+      const yy = legendTop ? 40 * ts : H - 45 * ts, sw = 28 * ts;
       legendItems.forEach((it, i) => {
         if (spec.type === 'line' || spec.type === 'box') {
           ctx.strokeStyle = it.color; ctx.lineWidth = 5; ctx.setLineDash(i === 2 ? [12, 7] : []);
           ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + 46, yy); ctx.stroke(); ctx.setLineDash([]);
-        } else { ctx.fillStyle = it.color; ctx.fillRect(x + 8, yy - 14, 30, 28); }
-        ctx.fillStyle = '#333'; ctx.fillText(it.name, x + 58, yy);
+        } else if (st.barFill === 'gradient') { ctx.fillStyle = it.color; ctx.fillRect(x + 8, yy - sw / 2, sw + 2, sw); }
+        else fillBar(ctx, st, it.color, i, x + 8, yy - sw / 2, sw + 2, sw);
+        ctx.fillStyle = '#333'; ctx.textBaseline = 'middle'; ctx.fillText(it.name, x + 58, yy);
         x += widths[i];
       });
     }
@@ -21595,34 +21657,32 @@ const Charts = (() => {
   }
 
   /* ---------- scatter plot with least-squares line ---------- */
-  function scatter(spec, paletteName) {
-    const pal = PALETTES[paletteName] || PALETTES.brand;
-    const c = document.createElement('canvas');
-    c.width = W; c.height = H;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-    const L = 150, R = 50, T = 60, B = 130, pw = W - L - R, ph = H - T - B;
+  function scatter(spec, paletteName, st) {
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const L = 110 + 40 * ts, R = 50, T = 60, B = 130 * ts, pw = W - L - R, ph = H - T - B;
     const { x: xs, y: ys } = spec;
     const pad = (a, b) => (b - a) * 0.05 || 1;
     const xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
     const sx = niceScale(xmin - pad(xmin, xmax), xmax + pad(xmin, xmax)), sy = niceScale(ymin - pad(ymin, ymax), ymax + pad(ymin, ymax));
     const X = v => L + (v - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - sy.min) / (sy.max - sy.min) * ph;
 
-    ctx.font = `600 26px ${FONT}`; ctx.lineWidth = 1.5;
+    ctx.font = F(600, 26); ctx.lineWidth = 1.5;
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const gridLine = (x1, y1, x2, y2) => { if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); } };
     for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) {
-      ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke();
+      gridLine(L, Y(v), L + pw, Y(v));
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sy.step), L - 14, Y(v));
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for (let v = sx.min; v <= sx.max + 1e-9; v += sx.step) {
-      ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke();
+      gridLine(X(v), T, X(v), T + ph);
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sx.step), X(v), T + ph + 12);
     }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
-    ctx.font = `700 28px ${FONT}`; ctx.fillStyle = '#333';
-    ctx.fillText(spec.xLabel || '', L + pw / 2, T + ph + 60);
+    ctx.font = F(700, 28); ctx.fillStyle = '#333';
+    ctx.fillText(spec.xLabel || '', L + pw / 2, T + ph + 60 * ts);
     ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle';
     ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
 
@@ -21640,10 +21700,10 @@ const Charts = (() => {
       ctx.restore();
     }
     if (spec.note) {
-      ctx.font = `700 28px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.font = F(700, 28); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
       // put the label in the corner the points leave empty
       const tw = ctx.measureText(spec.note).width, nx = slope < 0 ? L + pw - tw - 44 : L + 20;
-      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(nx, T + 10, tw + 24, 44);
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(nx, T + 10, tw + 24, 44 * ts);
       ctx.fillStyle = '#222'; ctx.fillText(spec.note, nx + 12, T + 18);
     }
     return c;
@@ -21676,7 +21736,7 @@ const Charts = (() => {
 
   /* ---------- CONSORT 2010 flow diagram ---------- */
   function consort(c, groupLabels, palName = 'brand') {
-    const pal = PALETTES[palName] || PALETTES.brand;
+    const pal = palette(palName);
     const k = groupLabels.length;
     const cv = document.createElement('canvas');
     const CW = 1200;
@@ -21767,7 +21827,7 @@ const Charts = (() => {
     return cv;
   }
 
-  return { draw, consort, PALETTES };
+  return { draw, consort, PALETTES, DEFAULT_STYLE };
 })();
 
 /* Prof MSE Easy Stat — Word (.docx) export using docx.js */
@@ -21970,15 +22030,24 @@ const Report = (() => {
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: true,
     commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false,
-    figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false
+    figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
+    chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
+    gridlines: true, axisArrows: true, nLabels: false,
+    customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
     branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
-    figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true]
+    figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
+    chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
+    gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true]
   };
+  const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
+  // chart palette and drawing style from the options
+  const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
+  const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -22117,7 +22186,7 @@ const Report = (() => {
     repeated.forEach(r => r.cols.forEach(c => { if (!tpOrder.includes(c.tp)) tpOrder.push(c.tp); }));
     const cfg = {
       groupCol, idCols, variables, tpOrder, tpLabels: Object.fromEntries(tpOrder.map(t => [t, tpLabel(t)])),
-      options: { ...DEFAULT_OPTIONS },
+      options: defaultOptions(),
       study: { title: '', software: $('#software').value },
       consort: null
     };
@@ -22203,7 +22272,12 @@ const Report = (() => {
       : '<tbody><tr><td>No repeated measures detected.</td></tr></tbody>';
     const o = cfg.options;
     for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
+    $('#customColors').innerHTML = o.customColors.map((col, i) => `<input type="color" data-ccol="${i}" value="${esc(col)}" title="Colour ${i + 1}">`).join('');
+    $('#customBox').style.display = o.palette === 'custom' ? '' : 'none';
   }
+
+  $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; });
+  $('#customReset').onclick = () => { readUiIntoCfg(); state.cfg.options.customColors = defaultOptions().customColors; renderTimepoints(); };
 
   /* ---------- step 4: CONSORT ---------- */
   function ensureConsort() {
@@ -22246,7 +22320,7 @@ const Report = (() => {
   }
   function drawConsortPreview() {
     const c = state.cfg.consort, gl = activeGroups().map(g => state.cfg.groupLabels[g]);
-    const cv = Charts.consort(c, gl, state.cfg.options.palette);
+    const cv = Charts.consort(c, gl, chartPalette(state.cfg.options));
     const tgt = $('#consortCanvas');
     tgt.width = cv.width; tgt.height = cv.height; tgt.getContext('2d').drawImage(cv, 0, 0);
   }
@@ -22286,6 +22360,7 @@ const Report = (() => {
         const el = $('#' + id);
         o[k] = box ? el.checked : typeof DEFAULT_OPTIONS[k] === 'number' ? +el.value : el.value;
       }
+      document.querySelectorAll('[data-ccol]').forEach(el => { o.customColors[+el.dataset.ccol] = el.value; });
     }
     if ($('#p4').classList.contains('active')) readConsort();
   }
@@ -22305,8 +22380,8 @@ const Report = (() => {
         ensureConsort();
         const cfg = state.cfg;
         const res = Analysis.run(state.data, cfg);
-        const pal = cfg.options.palette;
-        res.sections.forEach(s => s.figures.forEach(f => { const c = Charts.draw(f.spec, pal); f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height; }));
+        const pal = chartPalette(cfg.options), sty = chartStyle(cfg.options);
+        res.sections.forEach(s => s.figures.forEach(f => { const c = Charts.draw(f.spec, pal, sty); f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height; }));
         const gl = res.groups;
         if (cfg.consort.enabled) {
           const cv = Charts.consort(cfg.consort, gl, pal);
@@ -22378,7 +22453,7 @@ const Report = (() => {
     const h = state.data.headers;
     const ok = saved.variables.every(v => v.cols.every(c => h.includes(c.col))) && h.includes(saved.groupCol);
     if (!ok) { toast('Saved setup does not match this file’s columns — using auto-detection'); return; }
-    saved.options = { ...DEFAULT_OPTIONS, ...saved.options }; // setups saved by older versions lack the newer options
+    saved.options = { ...defaultOptions(), ...saved.options }; // setups saved by older versions lack the newer options
     state.cfg = saved;
     $('#studyTitle').value = saved.study.title || ''; $('#software').value = saved.study.software;
     // keep any new group values found in this file
