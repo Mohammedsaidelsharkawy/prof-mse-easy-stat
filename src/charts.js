@@ -126,7 +126,8 @@ const Charts = (() => {
         else if (s.lo && s.hi) errBar(cx, s.lo[ci], s.hi[ci], Math.min(14, w / 4));
         if (spec.labels) {
           ctx.fillStyle = '#222'; ctx.font = `700 24px ${FONT}`; ctx.textBaseline = 'bottom';
-          ctx.fillText((Math.round(v * 10) / 10) + (spec.percent ? '%' : ''), cx, y(v) - 6);
+          const dec = spec.labelDec ?? 1, top = s.err && isFinite(s.err[ci]) ? v + s.err[ci] : s.hi ? s.hi[ci] : v;
+          ctx.fillText((Math.round(v * 10 ** dec) / 10 ** dec) + (spec.percent ? '%' : ''), cx, y(top) - 6);
         }
       }));
     } else if (spec.type === 'line') {

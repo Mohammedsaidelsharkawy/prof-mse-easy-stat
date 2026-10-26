@@ -10,13 +10,15 @@
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: true,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false,
+    figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false
   };
   // option key → [element id, checkbox?]
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true]
+    branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true]
   };
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
@@ -384,7 +386,7 @@
       if ($('#edIntro')) r.intro = $('#edIntro').value;
       document.querySelectorAll('[data-comment]').forEach(t => r.sections[+t.dataset.comment].comment = t.value);
       const o = state.cfg.options;
-      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle });
+      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '') + ' - Statistical report.docx';

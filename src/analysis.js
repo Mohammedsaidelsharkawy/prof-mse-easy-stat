@@ -270,6 +270,11 @@ const Analysis = (() => {
     const detailed = opts.commentStyle === 'detailed';
     const wording = s => opts.notSig ? s.replace(/insignificant(ly)?/g, 'not significant$1') : s;
     const used = new Set();
+    // error bars of mean charts: SD (default), SEM or 95% CI of the mean
+    const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
+      : opts.errorBar === 'ci' ? jStat.studentt.inv(0.975, dd.n - 1) * dd.sd / Math.sqrt(dd.n) : dd.sd;
+    const errNote = { sem: ' (mean ± SEM)', ci: ' (mean ± 95% CI)' }[opts.errorBar] || '';
+    const valueLabels = opts.valueLabels ? { labels: true, labelDec: d } : {};
     const groups = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false);
     const gl = groups.map(g => cfg.groupLabels[g] || g);
     const k = groups.length;
@@ -374,14 +379,18 @@ const Analysis = (() => {
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
           footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost }, [withinNote, v.note].filter(Boolean).join(', ')),
           comment: wording(comment),
-          figures: [{
-            caption: `${v.label} of the studied groups`,
-            spec: param && opts.chartStyle !== 'box' || opts.chartStyle === 'bar' || opts.chartStyle === 'line'
-              ? { type: opts.chartStyle === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks,
+          figures: [(() => {
+            const meanChart = param && opts.chartStyle !== 'box' || opts.chartStyle === 'bar' || opts.chartStyle === 'line';
+            return {
+            sig: sigAny,
+            caption: `${v.label} of the studied groups${meanChart && param ? errNote : ''}`,
+            spec: meanChart
+              ? { type: opts.chartStyle === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks, ...(opts.chartStyle === 'line' ? {} : valueLabels),
                   series: gl.map((g, i) => ({ name: g, values: results.map(r => param ? r.desc[i].mean : r.desc[i].median),
-                    err: results.map(r => param ? r.desc[i].sd : null), lo: param ? null : results.map(r => r.desc[i].q1), hi: param ? null : results.map(r => r.desc[i].q3) })) }
+                    err: results.map(r => param ? errOf(r.desc[i]) : null), lo: param ? null : results.map(r => r.desc[i].q1), hi: param ? null : results.map(r => r.desc[i].q3) })) }
               : { type: 'box', categories: tps, yLabel: v.label, points: opts.points, ...marks, series: gl.map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
-          }],
+            };
+          })()],
           meta: { param, results, within, tps }
         });
       } else {
@@ -475,12 +484,14 @@ const Analysis = (() => {
           if (k === 2) return { sig: [{ i: 0, j: 1, p: x.p }], alpha };
           return x.pairs ? { sig: x.pairs.filter(q => q.p <= alpha).map(q => ({ i: q.i, j: q.j, p: q.p })), alpha } : {};
         };
-        const figures = res.map(r => {
+        const figures = res.map(r => ({ sig: (r.num || r.cat).p <= alpha, ...figureFor(r) }));
+        function figureFor(r) {
           if (r.num) {
+            const bar = r.num.param && opts.chartStyle !== 'box';
             return {
-              caption: `${r.v.label} of the studied groups`,
-              spec: r.num.param && opts.chartStyle !== 'box'
-                ? { type: 'bar', perGroup: true, categories: gl, yLabel: r.v.label, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(x => x.sd) }] }
+              caption: `${r.v.label} of the studied groups${bar ? errNote : ''}`,
+              spec: bar
+                ? { type: 'bar', perGroup: true, categories: gl, yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(errOf) }] }
                 : { type: 'box', perGroup: true, categories: gl, yLabel: r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
             };
           }
@@ -493,7 +504,7 @@ const Analysis = (() => {
             caption: `${r.v.label} of the studied groups`,
             spec: { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
-        });
+        }
         sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res } });
       }
     }
@@ -507,6 +518,10 @@ const Analysis = (() => {
         sections.push(sec);
       }
     }
+
+    // which figures go in the report: all, only those of significant results, or none
+    if (opts.figures === 'none') sections.forEach(s => { s.figures = []; });
+    else if (opts.figures === 'sig') sections.forEach(s => { s.figures = s.figures.filter(f => f.sig !== false); });
 
     return { sections, used, groups: gl, gN, k, methods: methodsText(used, k, cfg), intro: introText(cfg, gl, gN) };
   }

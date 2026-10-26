@@ -218,13 +218,21 @@ footer b{color:var(--purple)}
         <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option></select></div>
         <div><label class="check" style="margin-top:24px"><input type="checkbox" id="optNotSig"><span>Write “not significantly” instead of “insignificantly”</span></label></div>
       </div>
-      <h3>Word report & figures</h3>
+      <h3>Word report</h3>
       <div class="grid g4">
         <div><label class="f">Table style</label><select id="optTable"><option value="grid" selected>Grid (all borders, shaded header)</option><option value="apa">Three-line academic (APA)</option></select></div>
         <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
       </div>
+      <h3>Figures</h3>
+      <div class="grid g4">
+        <div><label class="f">Figures to include</label><select id="optFigures"><option value="all" selected>All results</option><option value="sig">Significant results only</option><option value="none">None (tables only)</option></select></div>
+        <div><label class="f">Error bars (mean charts)</label><select id="optErrorBar"><option value="sd" selected>Standard deviation (SD)</option><option value="sem">Standard error (SEM)</option><option value="ci">95% confidence interval</option></select></div>
+        <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option></select></div>
+        <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
+      </div>
       <div class="grid g2" style="margin-top:12px">
         <div>
+          <label class="check"><input type="checkbox" id="optValueLabels"><span><b>Value labels</b> on bar charts of means / medians</span></label>
           <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
         </div>
@@ -21014,6 +21022,11 @@ const Analysis = (() => {
     const detailed = opts.commentStyle === 'detailed';
     const wording = s => opts.notSig ? s.replace(/insignificant(ly)?/g, 'not significant$1') : s;
     const used = new Set();
+    // error bars of mean charts: SD (default), SEM or 95% CI of the mean
+    const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
+      : opts.errorBar === 'ci' ? jStat.studentt.inv(0.975, dd.n - 1) * dd.sd / Math.sqrt(dd.n) : dd.sd;
+    const errNote = { sem: ' (mean ± SEM)', ci: ' (mean ± 95% CI)' }[opts.errorBar] || '';
+    const valueLabels = opts.valueLabels ? { labels: true, labelDec: d } : {};
     const groups = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false);
     const gl = groups.map(g => cfg.groupLabels[g] || g);
     const k = groups.length;
@@ -21118,14 +21131,18 @@ const Analysis = (() => {
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
           footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost }, [withinNote, v.note].filter(Boolean).join(', ')),
           comment: wording(comment),
-          figures: [{
-            caption: `${v.label} of the studied groups`,
-            spec: param && opts.chartStyle !== 'box' || opts.chartStyle === 'bar' || opts.chartStyle === 'line'
-              ? { type: opts.chartStyle === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks,
+          figures: [(() => {
+            const meanChart = param && opts.chartStyle !== 'box' || opts.chartStyle === 'bar' || opts.chartStyle === 'line';
+            return {
+            sig: sigAny,
+            caption: `${v.label} of the studied groups${meanChart && param ? errNote : ''}`,
+            spec: meanChart
+              ? { type: opts.chartStyle === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks, ...(opts.chartStyle === 'line' ? {} : valueLabels),
                   series: gl.map((g, i) => ({ name: g, values: results.map(r => param ? r.desc[i].mean : r.desc[i].median),
-                    err: results.map(r => param ? r.desc[i].sd : null), lo: param ? null : results.map(r => r.desc[i].q1), hi: param ? null : results.map(r => r.desc[i].q3) })) }
+                    err: results.map(r => param ? errOf(r.desc[i]) : null), lo: param ? null : results.map(r => r.desc[i].q1), hi: param ? null : results.map(r => r.desc[i].q3) })) }
               : { type: 'box', categories: tps, yLabel: v.label, points: opts.points, ...marks, series: gl.map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
-          }],
+            };
+          })()],
           meta: { param, results, within, tps }
         });
       } else {
@@ -21219,12 +21236,14 @@ const Analysis = (() => {
           if (k === 2) return { sig: [{ i: 0, j: 1, p: x.p }], alpha };
           return x.pairs ? { sig: x.pairs.filter(q => q.p <= alpha).map(q => ({ i: q.i, j: q.j, p: q.p })), alpha } : {};
         };
-        const figures = res.map(r => {
+        const figures = res.map(r => ({ sig: (r.num || r.cat).p <= alpha, ...figureFor(r) }));
+        function figureFor(r) {
           if (r.num) {
+            const bar = r.num.param && opts.chartStyle !== 'box';
             return {
-              caption: `${r.v.label} of the studied groups`,
-              spec: r.num.param && opts.chartStyle !== 'box'
-                ? { type: 'bar', perGroup: true, categories: gl, yLabel: r.v.label, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(x => x.sd) }] }
+              caption: `${r.v.label} of the studied groups${bar ? errNote : ''}`,
+              spec: bar
+                ? { type: 'bar', perGroup: true, categories: gl, yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(errOf) }] }
                 : { type: 'box', perGroup: true, categories: gl, yLabel: r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
             };
           }
@@ -21237,7 +21256,7 @@ const Analysis = (() => {
             caption: `${r.v.label} of the studied groups`,
             spec: { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
-        });
+        }
         sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res } });
       }
     }
@@ -21251,6 +21270,10 @@ const Analysis = (() => {
         sections.push(sec);
       }
     }
+
+    // which figures go in the report: all, only those of significant results, or none
+    if (opts.figures === 'none') sections.forEach(s => { s.figures = []; });
+    else if (opts.figures === 'sig') sections.forEach(s => { s.figures = s.figures.filter(f => f.sig !== false); });
 
     return { sections, used, groups: gl, gN, k, methods: methodsText(used, k, cfg), intro: introText(cfg, gl, gN) };
   }
@@ -21499,7 +21522,8 @@ const Charts = (() => {
         else if (s.lo && s.hi) errBar(cx, s.lo[ci], s.hi[ci], Math.min(14, w / 4));
         if (spec.labels) {
           ctx.fillStyle = '#222'; ctx.font = `700 24px ${FONT}`; ctx.textBaseline = 'bottom';
-          ctx.fillText((Math.round(v * 10) / 10) + (spec.percent ? '%' : ''), cx, y(v) - 6);
+          const dec = spec.labelDec ?? 1, top = s.err && isFinite(s.err[ci]) ? v + s.err[ci] : s.hi ? s.hi[ci] : v;
+          ctx.fillText((Math.round(v * 10 ** dec) / 10 ** dec) + (spec.percent ? '%' : ''), cx, y(top) - 6);
         }
       }));
     } else if (spec.type === 'line') {
@@ -21850,6 +21874,25 @@ const Report = (() => {
     return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: widths, rows: trs, borders: tableBorders });
   }
 
+  // figure width in the Word file (px at 96 dpi): one per row, or each of two side by side
+  const FIG_W = { small: [380, 200], medium: [470, 250], full: [560, 295] };
+
+  // two figures per row: a borderless table, each cell holding the image and its caption
+  function figureGrid(figs, w) {
+    const { Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle } = D();
+    const none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+    const borders = { top: none, bottom: none, left: none, right: none };
+    const half = Math.floor(PAGE_W / 2), rows = [];
+    for (let i = 0; i < figs.length; i += 2) {
+      rows.push(new TableRow({ cantSplit: true, children: [figs[i], figs[i + 1]].map(f => new TableCell({
+        width: { size: half, type: WidthType.DXA }, borders,
+        children: f ? [image(f.url, f.w, f.h, w), para(f.label, { bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160 })] : [new Paragraph('')]
+      })) }));
+    }
+    return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: [half, PAGE_W - half], rows,
+      borders: { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none } });
+  }
+
   async function build(model, opts) {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
@@ -21870,10 +21913,12 @@ const Report = (() => {
       children.push(table(s.head, s.rows, brand, opts.tableStyle));
       children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
       if (s.comment) children.push(para(s.comment));
-      for (const f of s.figures) {
-        if (!f.url) continue;
-        children.push(image(f.url, f.w, f.h, 560));
-        children.push(caption(`Figure ${fig++}: ${f.caption}`));
+      const figs = s.figures.filter(f => f.url).map(f => ({ ...f, label: `Figure ${fig++}: ${f.caption}` }));
+      const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
+      if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
+      else for (const f of figs) {
+        children.push(image(f.url, f.w, f.h, w1));
+        children.push(caption(f.label));
       }
     }
 
@@ -21924,13 +21969,15 @@ const Report = (() => {
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: true,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false,
+    figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false
   };
   // option key → [element id, checkbox?]
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true]
+    branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true]
   };
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
@@ -22298,7 +22345,7 @@ const Report = (() => {
       if ($('#edIntro')) r.intro = $('#edIntro').value;
       document.querySelectorAll('[data-comment]').forEach(t => r.sections[+t.dataset.comment].comment = t.value);
       const o = state.cfg.options;
-      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle });
+      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '') + ' - Statistical report.docx';

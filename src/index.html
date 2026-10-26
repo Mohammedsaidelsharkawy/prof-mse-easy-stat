@@ -218,13 +218,21 @@ footer b{color:var(--purple)}
         <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option></select></div>
         <div><label class="check" style="margin-top:24px"><input type="checkbox" id="optNotSig"><span>Write “not significantly” instead of “insignificantly”</span></label></div>
       </div>
-      <h3>Word report & figures</h3>
+      <h3>Word report</h3>
       <div class="grid g4">
         <div><label class="f">Table style</label><select id="optTable"><option value="grid" selected>Grid (all borders, shaded header)</option><option value="apa">Three-line academic (APA)</option></select></div>
         <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
       </div>
+      <h3>Figures</h3>
+      <div class="grid g4">
+        <div><label class="f">Figures to include</label><select id="optFigures"><option value="all" selected>All results</option><option value="sig">Significant results only</option><option value="none">None (tables only)</option></select></div>
+        <div><label class="f">Error bars (mean charts)</label><select id="optErrorBar"><option value="sd" selected>Standard deviation (SD)</option><option value="sem">Standard error (SEM)</option><option value="ci">95% confidence interval</option></select></div>
+        <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option></select></div>
+        <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
+      </div>
       <div class="grid g2" style="margin-top:12px">
         <div>
+          <label class="check"><input type="checkbox" id="optValueLabels"><span><b>Value labels</b> on bar charts of means / medians</span></label>
           <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
         </div>

@@ -102,6 +102,25 @@ const Report = (() => {
     return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: widths, rows: trs, borders: tableBorders });
   }
 
+  // figure width in the Word file (px at 96 dpi): one per row, or each of two side by side
+  const FIG_W = { small: [380, 200], medium: [470, 250], full: [560, 295] };
+
+  // two figures per row: a borderless table, each cell holding the image and its caption
+  function figureGrid(figs, w) {
+    const { Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle } = D();
+    const none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+    const borders = { top: none, bottom: none, left: none, right: none };
+    const half = Math.floor(PAGE_W / 2), rows = [];
+    for (let i = 0; i < figs.length; i += 2) {
+      rows.push(new TableRow({ cantSplit: true, children: [figs[i], figs[i + 1]].map(f => new TableCell({
+        width: { size: half, type: WidthType.DXA }, borders,
+        children: f ? [image(f.url, f.w, f.h, w), para(f.label, { bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160 })] : [new Paragraph('')]
+      })) }));
+    }
+    return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: [half, PAGE_W - half], rows,
+      borders: { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none } });
+  }
+
   async function build(model, opts) {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
@@ -122,10 +141,12 @@ const Report = (() => {
       children.push(table(s.head, s.rows, brand, opts.tableStyle));
       children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
       if (s.comment) children.push(para(s.comment));
-      for (const f of s.figures) {
-        if (!f.url) continue;
-        children.push(image(f.url, f.w, f.h, 560));
-        children.push(caption(`Figure ${fig++}: ${f.caption}`));
+      const figs = s.figures.filter(f => f.url).map(f => ({ ...f, label: `Figure ${fig++}: ${f.caption}` }));
+      const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
+      if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
+      else for (const f of figs) {
+        children.push(image(f.url, f.w, f.h, w1));
+        children.push(caption(f.label));
       }
     }
 

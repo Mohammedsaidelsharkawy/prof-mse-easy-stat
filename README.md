@@ -28,7 +28,7 @@ The original engine's output (1,808 test values) was checked against R 4.6.1. Th
 
 - Comment style: concise, or detailed (quotes group values and every P value); optional "not significantly" wording
 - Word tables: grid or three-line academic (APA) style; choice of body font
-- Figures: significance brackets and stars; optional individual data points on box plots
+- Figures: all, significant results only, or none; error bars as SD, SEM or 95% CI; size and one or two per row in Word; value labels on bars; significance brackets and stars; optional individual data points on box plots
 - Light and dark theme for the app
 
 ## Development
