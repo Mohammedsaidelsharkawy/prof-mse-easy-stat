@@ -400,6 +400,196 @@ const Stats = (() => {
     return { chi, df: k - 1, p: isFinite(chi) ? 1 - jStat.chisquare.cdf(chi, k - 1) : NaN, O, E };
   }
 
+  /* ---------- Normality: Kolmogorov–Smirnov with Lilliefors correction ---------- */
+  // p from the Dallal–Wilkinson approximation; reported as 0.2 (SPSS ".200*") when the approximation exceeds 0.1
+  function lilliefors(data) {
+    const x = sorted(data), n = x.length;
+    if (n < 5) return null;
+    const m = mean(x), s = sd(x);
+    if (!(s > 0)) return null;
+    let D = 0;
+    x.forEach((v, i) => { const F = jStat.normal.cdf((v - m) / s, 0, 1); D = Math.max(D, (i + 1) / n - F, F - i / n); });
+    let Dn = D, nn = n;
+    if (n > 100) { Dn = D * (n / 100) ** 0.49; nn = 100; }
+    let p = Math.exp(-7.01256 * Dn * Dn * (nn + 2.78019) + 2.99587 * Dn * Math.sqrt(nn + 2.78019) - 0.122119 + 0.974598 / Math.sqrt(nn) + 1.67997 / nn);
+    if (p > 0.1) p = 0.2;
+    return { D, p };
+  }
+
+  /* ---------- Odds ratio (Woolf log CI) ---------- */
+  function oddsRatio(table, row, i, j) {
+    const a = table[row][i], b = sum(table.map(r => r[i])) - a, c = table[row][j], d = sum(table.map(r => r[j])) - c;
+    if (!a || !b || !c || !d) return null;
+    const or = (a * d) / (b * c), se = Math.sqrt(1 / a + 1 / b + 1 / c + 1 / d);
+    return { or, lo: Math.exp(Math.log(or) - 1.959964 * se), hi: Math.exp(Math.log(or) + 1.959964 * se) };
+  }
+
+  /* ---------- Paired categorical: McNemar (2×2) and Bowker (k×k) ---------- */
+  // t: square table, rows = first measurement, cols = second
+  function mcnemar(t) {
+    const k = t.length;
+    if (k === 2) {
+      const b = t[0][1], c = t[1][0], n = b + c;
+      if (!n) return { p: 1, test: 'McNemar', b, c };
+      if (n < 25) {
+        // exact binomial, two-sided
+        let p = 0;
+        const lo = Math.min(b, c);
+        for (let x = 0; x <= lo; x++) p += Math.exp(lfact(n) - lfact(x) - lfact(n - x) - n * Math.LN2);
+        return { p: Math.min(1, 2 * p), test: 'McNemar (exact)', b, c };
+      }
+      const chi = (Math.abs(b - c) - 1) ** 2 / n;
+      return { chi, df: 1, p: 1 - jStat.chisquare.cdf(chi, 1), test: 'McNemar', b, c };
+    }
+    // df = k(k − 1)/2 as in SPSS; empty cell pairs add nothing to the statistic
+    let chi = 0;
+    for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
+      const s = t[i][j] + t[j][i];
+      if (s > 0) chi += (t[i][j] - t[j][i]) ** 2 / s;
+    }
+    const df = k * (k - 1) / 2;
+    return { chi, df, p: 1 - jStat.chisquare.cdf(chi, df), test: 'McNemar-Bowker' };
+  }
+
+  /* ---------- Agreement ---------- */
+  // Cohen's kappa with asymptotic SEs (Fleiss, Cohen & Everitt 1969); square table of counts
+  function cohenKappa(t) {
+    const k = t.length, n = sum(t.flat()), p = t.map(r => r.map(v => v / n));
+    const pr = p.map(r => sum(r)), pc = p[0].map((_, j) => sum(p.map(r => r[j])));
+    const po = sum(p.map((r, i) => r[i])), pe = sum(pr.map((v, i) => v * pc[i]));
+    const kappa = (po - pe) / (1 - pe);
+    let A = 0, B = 0;
+    for (let i = 0; i < k; i++) {
+      A += p[i][i] * (1 - (pr[i] + pc[i]) * (1 - kappa)) ** 2;
+      for (let j = 0; j < k; j++) if (i !== j) B += p[i][j] * (pc[i] + pr[j]) ** 2;
+    }
+    const se = Math.sqrt((A + (1 - kappa) ** 2 * B - (kappa - pe * (1 - kappa)) ** 2) / (n * (1 - pe) ** 2));
+    const se0 = Math.sqrt((pe + pe * pe - sum(pr.map((v, i) => v * pc[i] * (v + pc[i])))) / (n * (1 - pe) ** 2));
+    const z = kappa / se0;
+    return { kappa, se, lo: kappa - 1.959964 * se, hi: kappa + 1.959964 * se, z, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), po, pe, n };
+  }
+  // ICC for n subjects × k raters (complete rows): two-way random, absolute agreement (ICC2 / ICC2k, McGraw & Wong CIs)
+  function icc(Y) {
+    const n = Y.length, k = Y[0].length, gm = mean(Y.flat());
+    const rm = Y.map(mean), cm = Array.from({ length: k }, (_, j) => mean(Y.map(r => r[j])));
+    const ssR = k * sum(rm.map(m => (m - gm) ** 2)), ssC = n * sum(cm.map(m => (m - gm) ** 2));
+    const ssE = sum(Y.flat().map(v => (v - gm) ** 2)) - ssR - ssC;
+    const msR = ssR / (n - 1), msC = ssC / (k - 1), msE = ssE / ((n - 1) * (k - 1));
+    const single = (msR - msE) / (msR + (k - 1) * msE + k * (msC - msE) / n);
+    const average = (msR - msE) / (msR + (msC - msE) / n);
+    const F = msR / msE, df1 = n - 1, df2 = (n - 1) * (k - 1);
+    // McGraw & Wong (1996) confidence limits for ICC(A,1)
+    const a = k * single / (n * (1 - single)), b = 1 + k * single * (n - 1) / (n * (1 - single));
+    const v = (a * msC + b * msE) ** 2 / ((a * msC) ** 2 / (k - 1) + (b * msE) ** 2 / ((n - 1) * (k - 1)));
+    const Fu = jStat.centralF.inv(0.975, n - 1, v), Fl = jStat.centralF.inv(0.975, v, n - 1);
+    const lo = n * (msR - Fu * msE) / (Fu * (k * msC + (k * n - k - n) * msE) + n * msR);
+    const hi = n * (Fl * msR - msE) / (k * msC + (k * n - k - n) * msE + n * Fl * msR);
+    return { single, average, lo, hi, loAvg: lo * k / (1 + lo * (k - 1)), hiAvg: hi * k / (1 + hi * (k - 1)), F, df1, df2, p: 1 - jStat.centralF.cdf(F, df1, df2), n, k };
+  }
+  // Bland–Altman: bias (a − b) with 95% CI and limits of agreement
+  function blandAltman(a, b) {
+    const d = a.map((v, i) => v - b[i]), n = d.length, bias = mean(d), s = sd(d), tc = jStat.studentt.inv(0.975, n - 1);
+    return { n, bias, sd: s, lo: bias - 1.959964 * s, hi: bias + 1.959964 * s, biasLo: bias - tc * s / Math.sqrt(n), biasHi: bias + tc * s / Math.sqrt(n),
+      means: a.map((v, i) => (v + b[i]) / 2), diffs: d, p: pairedT(a, b).p };
+  }
+  // Cronbach's alpha with Feldt CI, corrected item–total correlations and alpha if item deleted; Y: subjects × items
+  function cronbach(Y) {
+    const n = Y.length, k = Y[0].length;
+    const alphaOf = cols => {
+      const vi = sum(cols.map(j => variance(Y.map(r => r[j])))), tot = variance(Y.map(r => sum(cols.map(j => r[j])))), m = cols.length;
+      return m / (m - 1) * (1 - vi / tot);
+    };
+    const all = Array.from({ length: k }, (_, j) => j), alpha = alphaOf(all);
+    const df1 = n - 1, df2 = (n - 1) * (k - 1);
+    const items = all.map(j => {
+      const rest = all.filter(x => x !== j);
+      return { mean: mean(Y.map(r => r[j])), sd: sd(Y.map(r => r[j])), rit: pearson(Y.map(r => r[j]), Y.map(r => sum(rest.map(x => r[x])))).r, alphaDeleted: k > 2 ? alphaOf(rest) : NaN };
+    });
+    return { alpha, lo: 1 - (1 - alpha) * jStat.centralF.inv(0.975, df1, df2), hi: 1 - (1 - alpha) * jStat.centralF.inv(0.025, df1, df2), n, k, items };
+  }
+
+  /* ---------- Diagnostic accuracy from a 2×2 table ---------- */
+  // Clopper–Pearson exact CIs for proportions; log-method CIs for likelihood ratios
+  function clopperPearson(x, n) {
+    if (!n) return [NaN, NaN];
+    return [x === 0 ? 0 : jStat.beta.inv(0.025, x, n - x + 1), x === n ? 1 : jStat.beta.inv(0.975, x + 1, n - x)];
+  }
+  function diagnostic2x2(tp, fp, fn, tn) {
+    const prop = (x, n) => { const [lo, hi] = clopperPearson(x, n); return { v: x / n, lo, hi }; };
+    const sens = prop(tp, tp + fn), spec = prop(tn, tn + fp);
+    const lr = (num, den, a, n1, b, n2) => {
+      const v = num / den, se = Math.sqrt((1 - a / n1) / a + (1 - b / n2) / b);
+      return { v, lo: Math.exp(Math.log(v) - 1.959964 * se), hi: Math.exp(Math.log(v) + 1.959964 * se) };
+    };
+    return {
+      tp, fp, fn, tn, n: tp + fp + fn + tn, sens, spec, ppv: prop(tp, tp + fp), npv: prop(tn, tn + fn), accuracy: prop(tp + tn, tp + fp + fn + tn), prevalence: prop(tp + fn, tp + fp + fn + tn),
+      lrPos: tp && fp ? lr(sens.v, 1 - spec.v, tp, tp + fn, fp, fp + tn) : { v: NaN, lo: NaN, hi: NaN },
+      lrNeg: fn && tn ? lr(1 - sens.v, spec.v, fn, tp + fn, tn, fp + tn) : { v: NaN, lo: NaN, hi: NaN }
+    };
+  }
+
+  /* ---------- Cox proportional hazards (Efron ties, Newton–Raphson) ---------- */
+  function coxRegression(X0, time, event) {
+    const n = time.length, p = X0[0].length;
+    const mu = Array.from({ length: p }, (_, j) => mean(X0.map(r => r[j])));
+    const X = X0.map(r => r.map((v, j) => v - mu[j])); // centring keeps exp() stable without changing β
+    const ord = time.map((_, i) => i).sort((a, b) => time[b] - time[a]); // descending time: risk sets grow
+    const fit = beta => {
+      let ll = 0;
+      const g = new Array(p).fill(0), H = Array.from({ length: p }, () => new Array(p).fill(0));
+      const S1 = new Array(p).fill(0), S2 = Array.from({ length: p }, () => new Array(p).fill(0));
+      let S0 = 0;
+      for (let a = 0; a < n;) {
+        const t = time[ord[a]], tied = [];
+        while (a < n && time[ord[a]] === t) tied.push(ord[a++]);
+        for (const i of tied) {
+          const w = Math.exp(sum(X[i].map((v, j) => v * beta[j])));
+          S0 += w;
+          for (let j = 0; j < p; j++) { S1[j] += w * X[i][j]; for (let l = 0; l < p; l++) S2[j][l] += w * X[i][j] * X[i][l]; }
+        }
+        const D = tied.filter(i => event[i]), d = D.length;
+        if (!d) continue;
+        let T0 = 0;
+        const T1 = new Array(p).fill(0), T2 = Array.from({ length: p }, () => new Array(p).fill(0));
+        for (const i of D) {
+          const w = Math.exp(sum(X[i].map((v, j) => v * beta[j])));
+          ll += sum(X[i].map((v, j) => v * beta[j]));
+          T0 += w;
+          for (let j = 0; j < p; j++) { g[j] += X[i][j]; T1[j] += w * X[i][j]; for (let l = 0; l < p; l++) T2[j][l] += w * X[i][j] * X[i][l]; }
+        }
+        for (let r = 0; r < d; r++) {
+          const f = r / d, s0 = S0 - f * T0, s1 = S1.map((v, j) => v - f * T1[j]);
+          ll -= Math.log(s0);
+          for (let j = 0; j < p; j++) {
+            g[j] -= s1[j] / s0;
+            for (let l = 0; l < p; l++) H[j][l] -= (S2[j][l] - f * T2[j][l]) / s0 - s1[j] * s1[l] / (s0 * s0);
+          }
+        }
+      }
+      return { ll, g, H };
+    };
+    let beta = new Array(p).fill(0), cur = fit(beta), ll0 = cur.ll, converged = false;
+    for (let it = 0; it < 60; it++) {
+      const inv = invert(cur.H.map(r => r.map(v => -v)));
+      if (!inv) return null;
+      let step = inv.map(r => sum(r.map((v, j) => v * cur.g[j])));
+      // step halving keeps the likelihood increasing
+      let next, nb, tries = 0;
+      do { nb = beta.map((b, j) => b + step[j]); next = fit(nb); step = step.map(s => s / 2); } while (next.ll < cur.ll - 1e-10 && ++tries < 20);
+      const delta = Math.max(...nb.map((b, j) => Math.abs(b - beta[j])));
+      beta = nb; cur = next;
+      if (delta < 1e-9) { converged = true; break; }
+    }
+    const cov = invert(cur.H.map(r => r.map(v => -v)));
+    if (!cov) return null;
+    const terms = beta.map((B, j) => {
+      const se = Math.sqrt(cov[j][j]), z = B / se;
+      return { B, se, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), hr: Math.exp(B), lo: Math.exp(B - 1.959964 * se), hi: Math.exp(B + 1.959964 * se) };
+    });
+    const chi = 2 * (cur.ll - ll0);
+    return { terms, n, events: event.filter(Boolean).length, ll: cur.ll, chi, df: p, pModel: 1 - jStat.chisquare.cdf(chi, p), converged, unstable: !converged || terms.some(t => Math.abs(t.B) > 15) };
+  }
+
   /* ---------- Regression ---------- */
   // Gauss–Jordan inverse of a symmetric positive-definite matrix; null when singular
   function invert(A) {
@@ -569,6 +759,7 @@ const Stats = (() => {
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
     pairedT, wilcoxonSigned, pearson, spearman, bonferroni,
     invert, linearRegression, logisticRegression, roc,
-    welchAnova, gamesHowell, dunn, chiSquarePairwise, mixedAnova, kaplanMeier, logRank, ancova
+    welchAnova, gamesHowell, dunn, chiSquarePairwise, mixedAnova, kaplanMeier, logRank, ancova,
+    lilliefors, oddsRatio, mcnemar, cohenKappa, icc, blandAltman, cronbach, clopperPearson, diagnostic2x2, coxRegression
   };
 })();

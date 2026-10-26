@@ -182,7 +182,9 @@ footer b{color:var(--purple)}
       <h2>Report details</h2>
       <div class="grid g2">
         <div><label class="f">Study title (optional, printed at top of report)</label><input type="text" id="studyTitle" placeholder="e.g. PRF versus Ozone for chronic shoulder pain"></div>
-        <div><label class="f">Software statement (first sentence of Statistical Analysis)</label><input type="text" id="software" value="Statistical analysis was done by Prof MSE Easy Stat v1.0."></div>
+        <div><label class="f">Software statement (first sentence of Statistical Analysis)</label>
+          <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was done by Prof MSE Easy Stat v1.0."></div>
+          <div class="legend-note">Pick a template, then check the version. Name the software actually used for the analysis you report.</div></div>
       </div>
     </div>
     <div class="nav"><span></span><button class="btn primary" id="to2" disabled>Next: Variables →</button></div>
@@ -201,7 +203,7 @@ footer b{color:var(--purple)}
       <h2>Variables</h2>
       <p class="hint">Detected automatically — check and adjust. Repeated measures (same name, different timepoints) are analysed as one outcome with one table. Single variables sharing the same <b>Table</b> name appear together in one table.</p>
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
-      <p class="legend-note"><b>Distribution</b>: Auto uses Shapiro-Wilk in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk).</p>
+      <p class="legend-note"><b>Distribution</b>: Auto uses the normality test chosen in step 3 (Shapiro-Wilk by default) in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk / odds ratio).</p>
     </div>
     <div class="nav"><button class="btn ghost" data-go="1">← Back</button><button class="btn primary" data-go="3">Next: Timepoints & options →</button></div>
   </section>
@@ -222,6 +224,10 @@ footer b{color:var(--purple)}
         <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option><option value="custom">Custom colours…</option></select></div>
       </div>
       <h3>Tests</h3>
+      <div class="grid g4" style="margin-bottom:8px">
+        <div><label class="f">Normality test</label><select id="optNormality"><option value="sw" selected>Shapiro-Wilk</option><option value="ks">Kolmogorov-Smirnov (Lilliefors)</option></select></div>
+        <div><label class="f">Effect of binary variables</label><select id="optCatEffect"><option value="rr" selected>Relative risk (RR)</option><option value="or">Odds ratio (OR)</option></select></div>
+      </div>
       <div class="grid g2">
         <div>
           <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
@@ -298,26 +304,27 @@ footer b{color:var(--purple)}
         <button class="btn ghost small" data-advadd="roc" type="button">+ ROC curve</button>
         <button class="btn ghost small" data-advadd="ancova" type="button">+ ANCOVA</button>
         <button class="btn ghost small" data-advadd="survival" type="button">+ Kaplan-Meier survival</button>
+        <button class="btn ghost small" data-advadd="cox" type="button">+ Cox regression</button>
+        <button class="btn ghost small" data-advadd="mcnemar" type="button">+ McNemar (paired categorical)</button>
+        <button class="btn ghost small" data-advadd="kappa" type="button">+ Cohen's kappa</button>
+        <button class="btn ghost small" data-advadd="agreement" type="button">+ ICC / Bland-Altman</button>
+        <button class="btn ghost small" data-advadd="diagnostic" type="button">+ Diagnostic accuracy (2×2)</button>
+        <button class="btn ghost small" data-advadd="cronbach" type="button">+ Cronbach's alpha</button>
       </div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="2">← Back</button><button class="btn primary" data-go="4">Next: CONSORT →</button></div>
+    <div class="nav"><button class="btn ghost" data-go="2">← Back</button><button class="btn primary" data-go="4">Next: Flowchart →</button></div>
   </section>
 
   <!-- STEP 4 -->
   <section class="panel" id="p4">
     <div class="card">
-      <div class="row"><h2>4 · CONSORT flowchart</h2><span class="spacer"></span><label class="check"><input type="checkbox" id="cEnabled" checked><span>Include in report</span></label></div>
-      <p class="hint">Numbers randomized and analysed are pre-filled from your data. The chart updates as you type.</p>
+      <div class="row"><h2>4 · Flowchart</h2><span class="spacer"></span><label class="check"><input type="checkbox" id="cEnabled" checked><span>Include in report</span></label></div>
+      <div class="grid g3" style="margin:6px 0 4px"><div><label class="f">Flowchart type</label><select id="cType">
+        <option value="consort">CONSORT 2010 — randomized trial</option><option value="strobe">STROBE — observational study</option>
+        <option value="stard">STARD 2015 — diagnostic accuracy</option><option value="simple">Simple flowchart — custom steps</option></select></div></div>
+      <p class="hint" id="cHint"></p>
       <div class="grid g2">
-        <div>
-          <h3>Enrollment</h3>
-          <div class="grid g2"><div><label class="f">Assessed for eligibility</label><input type="number" id="cAssessed" min="0"></div></div>
-          <h3>Excluded (reasons)</h3>
-          <div id="cExcluded"></div>
-          <button class="btn ghost small" id="cAddEx">+ Add reason</button>
-          <h3>Per group</h3>
-          <div id="cGroups" class="grid"></div>
-        </div>
+        <div id="cForm"></div>
         <div><canvas id="consortCanvas" class="consort-prev"></canvas></div>
       </div>
     </div>

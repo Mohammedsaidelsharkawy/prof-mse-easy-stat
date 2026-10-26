@@ -6,17 +6,17 @@ An offline web app that turns an Excel mastersheet into a formatted Word statist
 
 1. Download `Prof_MSE_Easy_Stat.html` and open it in a modern browser (Chrome, Edge, Firefox). No installation or internet connection is needed.
 2. Follow the 5-step wizard:
-   1. **Upload** the Excel file and enter the study title.
+   1. **Upload** the Excel file (or open an example) and enter the study title. The software statement, the first sentence of the Statistical Analysis section, can be picked from templates (Prof MSE Easy Stat, SPSS, R, Stata, GraphPad Prism, SAS, MedCalc, JASP, jamovi, Python, Minitab, Epi Info, Excel).
    2. **Variables**: confirm the auto-detected group variable, outcomes and baseline characteristics.
    3. **Options**: set timepoints and analysis options.
-   4. **CONSORT**: enter the enrolment numbers. The flowchart previews live.
+   4. **Flowchart**: choose CONSORT 2010 (randomized trials), STROBE (observational studies), STARD 2015 (diagnostic accuracy) or a simple custom flowchart, and enter the numbers. "Assessed for eligibility" is calculated as excluded + the groups (STARD: excluded + received the index test). The flowchart previews live.
    5. **Report**: preview the report, then download the Word document.
 
 `Sample report.docx` is example output generated from simulated data.
 
 ## Example datasets
 
-Step 1 offers five simulated studies. **Open example** loads one, with suggested analyses already set up, and **⬇ Excel file** downloads it so you can see the expected sheet layout. The same files are in `examples/`:
+Step 1 offers nine simulated studies. **Open example** loads one, with suggested analyses already set up, and **⬇ Excel file** downloads it so you can see the expected sheet layout. The same files are in `examples/`:
 
 | File | Study | Shows |
 |---|---|---|
@@ -24,21 +24,28 @@ Step 1 offers five simulated studies. **Open example** loads one, with suggested
 | `postop-analgesia-3arm.xlsx` | Three-group RCT, 75 patients | ANOVA / Kruskal-Wallis with post hoc, within-group change, group × time interaction, categorical post hoc, logistic regression |
 | `sepsis-biomarkers.xlsx` | Diagnostic study, 90 patients | skewed lab markers, ROC curves, logistic regression |
 | `oncology-survival.xlsx` | Two-arm survival study, 90 patients | Kaplan-Meier curves, log-rank test |
-| `dose-response-4arm.xlsx` | Four-group pilot, 48 patients | small non-normal samples, Dunn's post hoc |
+| `dose-response-4arm.xlsx` | Four-group pilot, 48 patients | small non-normal samples, Dunn's post hoc, simple flowchart |
+| `vitd-diabetes-cross-sectional.xlsx` | Cross-sectional, 100 patients | correlation, linear regression, Cronbach's alpha, STROBE |
+| `preeclampsia-case-control.xlsx` | Case-control, 110 women | odds ratios, logistic regression, ROC, STROBE |
+| `covid-icu-cohort.xlsx` | Cohort, 135 patients | Kaplan-Meier, Cox regression, McNemar, STROBE |
+| `lung-ultrasound-stard.xlsx` | Diagnostic accuracy, 120 patients | sensitivity / specificity, ROC, Cohen's kappa, ICC and Bland-Altman, STARD |
+
+Each example also sets up its flowchart (type, exclusion reasons and losses).
 
 Regenerate them with `node tools/make_examples.js` after editing `src/examples.js`.
 
 ## Statistics
 
-- Normality: Shapiro–Wilk
+- Normality: Shapiro–Wilk, or Kolmogorov–Smirnov with Lilliefors correction
 - Between groups: independent t-test, Mann–Whitney U, one-way ANOVA (Tukey), Kruskal–Wallis, Chi-square, Fisher's exact
 - Optional: Welch's ANOVA with Games-Howell post hoc for unequal variances, Dunn's post hoc after Kruskal–Wallis, pairwise Chi-square / Fisher post hoc (Bonferroni) for categorical variables, group × time interaction by mixed (split-plot) ANOVA
 - Within subjects: paired t-test and Wilcoxon signed-rank (two timepoints); repeated-measures ANOVA (Greenhouse–Geisser) and Friedman test (three or more), with Bonferroni-adjusted post hoc comparisons against the first timepoint
 - Correlation (optional): Pearson or Spearman between numeric variables, with scatter plots of significant pairs
 - Effect sizes and 95% confidence intervals
-- Advanced (optional): multiple linear regression (B, β, 95% CI, R²), binary logistic regression (univariable and multivariable OR, Nagelkerke R²), ROC curves (AUC with DeLong 95% CI, Youden cut-off, sensitivity, specificity, PPV, NPV), ANCOVA (adjusted means and Bonferroni pairwise comparisons), Kaplan-Meier survival with the log-rank test
+- Advanced (optional): multiple linear regression (B, β, 95% CI, R²), binary logistic regression (univariable and multivariable OR, Nagelkerke R²), ROC curves (AUC with DeLong 95% CI, Youden cut-off, sensitivity, specificity, PPV, NPV), ANCOVA (adjusted means and Bonferroni pairwise comparisons), Kaplan-Meier survival with the log-rank test, Cox regression (hazard ratios), McNemar / McNemar-Bowker for paired categorical data, Cohen's kappa, ICC with Bland-Altman analysis, diagnostic accuracy from a 2×2 table (sensitivity, specificity, PPV, NPV, likelihood ratios, exact CIs), Cronbach's alpha
+- Binary variables: relative risk or odds ratio
 
-The original engine's output (1,808 test values) was checked against R 4.6.1. The paired, Wilcoxon signed-rank and correlation tests were checked against SciPy 1.18 on 300 random datasets. Linear and logistic regression were checked against statsmodels 0.15, and ROC results against scikit-learn 1.9, on 200 random datasets. Welch's ANOVA, Games-Howell, mixed ANOVA and ANCOVA were checked against pingouin 0.7, Dunn's test against scikit-posthocs, pairwise Chi-square against SciPy, and Kaplan-Meier / log-rank against lifelines 0.30, on 120 random datasets. Median survival follows SPSS: the first time survival falls to 50% or below.
+The original engine's output (1,808 test values) was checked against R 4.6.1. The paired, Wilcoxon signed-rank and correlation tests were checked against SciPy 1.18 on 300 random datasets. Linear and logistic regression were checked against statsmodels 0.15, and ROC results against scikit-learn 1.9, on 200 random datasets. Welch's ANOVA, Games-Howell, mixed ANOVA and ANCOVA were checked against pingouin 0.7, Dunn's test against scikit-posthocs, pairwise Chi-square against SciPy, and Kaplan-Meier / log-rank against lifelines 0.30, on 120 random datasets. Median survival follows SPSS: the first time survival falls to 50% or below. Lilliefors, McNemar(-Bowker), Cohen's kappa, odds ratios and Clopper-Pearson CIs were checked against statsmodels, ICC and Cronbach's alpha against pingouin, and Cox regression (Efron ties) against lifelines, on 150 random datasets.
 
 ## Report options
 

@@ -138,7 +138,7 @@ const Report = (() => {
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
       children.push(image(model.consort.url, model.consort.w, model.consort.h, 600));
-      children.push(caption(`Figure ${fig++}: CONSORT flowchart of the enrolled patients`));
+      children.push(caption(`Figure ${fig++}: ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
     }
     for (const s of model.sections) {
       if (s.tableOn !== false) {

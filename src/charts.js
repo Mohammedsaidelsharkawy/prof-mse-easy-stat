@@ -129,6 +129,7 @@ const Charts = (() => {
     if (spec.type === 'scatter') return scatter(spec, paletteName, st);
     if (spec.type === 'roc') return rocChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
+    if (spec.type === 'ba') return baChart(spec, paletteName, st);
     const pal = palette(paletteName);
     const { c, ctx, W, H, ts, F } = setup(st);
     const brackets = (spec.sig || []).filter(q => stars(q.p, spec.alpha));
@@ -273,6 +274,44 @@ const Charts = (() => {
     catStars.forEach((s, ci) => { if (s) ctx.fillText(s, L + cw * (ci + 0.5), y(dataHi) - 24); });
 
     drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2 })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
+    return c;
+  }
+
+  /* ---------- Bland–Altman plot: differences against means, with bias and 95% limits of agreement ---------- */
+  function baChart(spec, paletteName, st) {
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const L = 110 + 40 * ts, R = 230 * ts, T = 50, B = 120 * ts, pw = W - L - R, ph = H - T - B;
+    const xs = spec.x, ys = spec.y;
+    const pad = (a, b) => (b - a) * 0.08 || 1;
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), yLo = Math.min(spec.lo, ...ys), yHi = Math.max(spec.hi, ...ys);
+    const sx = niceScale(x0 - pad(x0, x1), x1 + pad(x0, x1)), sy = niceScale(yLo - pad(yLo, yHi), yHi + pad(yLo, yHi));
+    const X = v => L + (v - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - sy.min) / (sy.max - sy.min) * ph;
+    ctx.font = F(600, 26); ctx.lineWidth = 1.5;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) {
+      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); }
+      ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sy.step), L - 14, Y(v));
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let v = sx.min; v <= sx.max + 1e-9; v += sx.step) {
+      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); }
+      ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sx.step), X(v), T + ph + 12);
+    }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+    ctx.font = F(700, 28); ctx.fillStyle = '#333';
+    ctx.fillText(spec.xLabel || '', L + pw / 2, T + ph + 60 * ts);
+    ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
+    ctx.fillStyle = pal[0]; ctx.globalAlpha = 0.6;
+    xs.forEach((v, i) => { ctx.beginPath(); ctx.arc(X(v), Y(ys[i]), 9, 0, Math.PI * 2); ctx.fill(); });
+    ctx.globalAlpha = 1;
+    const dec = spec.dec ?? 2, r = v => (Math.round(v * 10 ** dec) / 10 ** dec).toString();
+    [[spec.hi, '+1.96 SD', [16, 10]], [spec.bias, 'Mean', []], [spec.lo, '−1.96 SD', [16, 10]]].forEach(([v, name, dash]) => {
+      ctx.strokeStyle = name === 'Mean' ? pal[1] : '#C0392B'; ctx.lineWidth = 4; ctx.setLineDash(dash);
+      ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = F(700, 24); ctx.fillStyle = '#222'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillText(name, L + pw + 14, Y(v) - 2); ctx.textBaseline = 'top'; ctx.font = F(600, 24); ctx.fillText(r(v), L + pw + 14, Y(v) + 2);
+    });
     return c;
   }
 
@@ -431,9 +470,12 @@ const Charts = (() => {
   }
 
   /* ---------- CONSORT 2010 flow diagram ---------- */
+  // Flow diagrams: CONSORT 2010 (default), STROBE and STARD 2015 share this layout; 'simple' is a chain of steps
   function consort(c, groupLabels, palName = 'brand') {
-    const pal = palette(palName);
-    const k = groupLabels.length;
+    if (c.type === 'simple') return simpleFlow(c, groupLabels, palName);
+    const pal = palette(palName), type = c.type || 'consort';
+    const branches = type === 'stard' ? stardBranches(c) : null;
+    const k = branches ? branches.length : groupLabels.length;
     const cv = document.createElement('canvas');
     const CW = 1200;
     const ctx = cv.getContext('2d');
@@ -444,12 +486,23 @@ const Charts = (() => {
     const ex = c.excluded.filter(e => +e.n > 0);
     const exTotal = ex.reduce((s, e) => s + +e.n, 0);
     const topW = 440, exW = 500;
-    const assessed = [{ t: `Assessed for eligibility (n=${c.assessed})`, b: true, w: topW }];
+    const strobe = type === 'strobe';
+    const topText = type === 'stard' ? 'Potentially eligible participants' : strobe ? 'Potentially eligible individuals' : 'Assessed for eligibility';
+    const assessed = [{ t: `${topText} (n=${c.assessed})`, b: true, w: topW }];
     const excluded = [{ t: `Excluded (n=${exTotal})`, b: true, w: exW }, ...ex.map(e => ({ t: `• ${e.text} (n=${e.n})`, w: exW }))];
-    const randomized = [{ t: `Randomized (n=${c.groups.reduce((s, g) => s + (+g.allocated || 0), 0)})`, b: true, w: topW }];
-    const alloc = c.groups.map((g, i) => [{ t: `${groupLabels[i]} (n=${g.allocated})`, b: true, w: colW }, { t: g.description || `Received allocated intervention (n=${g.allocated})`, w: colW }]);
-    const follow = c.groups.map(g => [{ t: `Lost to follow-up (n=${+g.lost || 0})`, b: true, w: colW }, ...(g.lostReason && +g.lost ? [{ t: g.lostReason, w: colW }] : [{ t: 'No drop out', w: colW }])]);
-    const anal = c.groups.map(g => [{ t: `Analysed (n=${g.analysed})`, b: true, w: colW }, { t: `Excluded from analysis (n=${+g.excludedAnalysis || 0})${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
+    const midN = branches ? +c.stard.tested || 0 : c.groups.reduce((s, g) => s + (+g.allocated || 0), 0);
+    const randomized = [{ t: `${type === 'stard' ? 'Received index test' : strobe ? 'Included in the study' : 'Randomized'} (n=${midN})`, b: true, w: topW }];
+    let alloc, follow, anal;
+    if (branches) {
+      alloc = branches.map(b => [{ t: `Index test ${b.name.toLowerCase()} (n=${+b.n || 0})`, b: true, w: colW }]);
+      follow = branches.map(b => [{ t: `No reference standard (n=${+b.noRef || 0})`, b: true, w: colW }, { t: `Reference standard (n=${(+b.present || 0) + (+b.absent || 0) + (+b.inconclusive || 0)})`, w: colW }]);
+      anal = branches.map(b => [{ t: 'Final diagnosis', b: true, w: colW }, { t: `Target condition present (n=${+b.present || 0})\nTarget condition absent (n=${+b.absent || 0})${+b.inconclusive ? `\nInconclusive (n=${b.inconclusive})` : ''}`, w: colW }]);
+    } else {
+      alloc = c.groups.map((g, i) => [{ t: `${groupLabels[i]} (n=${g.allocated})`, b: true, w: colW }, { t: g.description || (strobe ? `Included (n=${g.allocated})` : `Received allocated intervention (n=${g.allocated})`), w: colW }]);
+      follow = c.groups.map(g => [{ t: `${strobe ? 'Lost to follow-up / missing data' : 'Lost to follow-up'} (n=${+g.lost || 0})`, b: true, w: colW }, ...(g.lostReason && +g.lost ? [{ t: g.lostReason, w: colW }] : [{ t: strobe ? 'None' : 'No drop out', w: colW }])]);
+      anal = c.groups.map(g => [{ t: `Analysed (n=${g.analysed})`, b: true, w: colW }, { t: `Excluded from analysis (n=${+g.excludedAnalysis || 0})${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
+    }
+    const PILLS = { consort: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], strobe: ['Identification', 'Inclusion', 'Follow-Up', 'Analysis'], stard: ['Enrollment', 'Index test', 'Reference', 'Diagnosis'] }[type];
 
     const hA = boxH(assessed), hE = boxH(excluded), hR = boxH(randomized);
     const hAl = Math.max(MIN_ROW, ...alloc.map(boxH)), hF = Math.max(MIN_ROW, ...follow.map(boxH)), hAn = Math.max(MIN_ROW, ...anal.map(boxH));
@@ -491,10 +544,10 @@ const Charts = (() => {
       ctx.fillText(label, 0, 0); ctx.restore();
     };
 
-    pill('Enrollment', yA, yR + hR);
-    pill('Allocation', yAl, yAl + hAl);
-    pill('Follow-Up', yF, yF + hF);
-    pill('Analysis', yAn, yAn + hAn);
+    pill(PILLS[0], yA, yR + hR);
+    pill(PILLS[1], yAl, yAl + hAl);
+    pill(PILLS[2], yF, yF + hF);
+    pill(PILLS[3], yAn, yAn + hAn);
 
     box(midX - topW / 2, yA, topW, hA, assessed);
     if (exTotal) {
@@ -519,6 +572,62 @@ const Charts = (() => {
       box(x, yF, colW, hF, follow[i]);
       arrow(cx, yF + hF, cx, yAn);
       box(x, yAn, colW, hAn, anal[i]);
+    }
+    return cv;
+  }
+
+  // STARD columns: positive and negative always, inconclusive only when used
+  const stardBranches = c => c.stard.branches.filter((b, i) => i < 2 || +b.n > 0);
+
+  /* ---------- simple flowchart: a chain of steps with optional exclusions, optionally split into the groups ---------- */
+  function simpleFlow(c, groupLabels, palName) {
+    const pal = palette(palName);
+    const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+    const CW = 1200, fs = 27, lh = 35, boxW = 520, exW = 420, gap = 56;
+    const boxH = (text, w, bold) => { ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; return text.split('\n').reduce((h, par) => h + measureLines(ctx, par, w - 28) * lh, 0) + 26; };
+    const steps = c.steps.filter(s => String(s.text).trim());
+    const midX = CW / 2 - (steps.some(s => +s.exN > 0) ? 160 : 0);
+    let y = 30;
+    const layout = steps.map(s => {
+      const text = `${s.text} (n=${+s.n || 0})`, h = boxH(text, boxW, true);
+      const ex = +s.exN > 0 ? { text: `${s.exText || 'Excluded'} (n=${s.exN})`, h: 0 } : null;
+      if (ex) ex.h = boxH(ex.text, exW, false);
+      const box = { text, y, h, ex };
+      y += h + gap + (ex ? ex.h + 24 : 0);
+      return box;
+    });
+    const k = groupLabels.length, split = c.splitGroups && k > 1 && c.groups;
+    const pad = 18, colW = split ? Math.min(360, (CW - pad * (k + 1)) / k) : 0;
+    const gH = split ? Math.max(...groupLabels.map((g, i) => boxH(`${g}\n(n=${c.groups[i].analysed})`, colW, true))) : 0;
+    const busY = y - gap / 2;
+    cv.width = CW; cv.height = (split ? y + gH + 30 : y - gap + 30);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    const box = (x, yy, w, h, text, bold, align = 'center') => {
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5; ctx.fillRect(x, yy, w, h); ctx.strokeRect(x, yy, w, h);
+      ctx.fillStyle = '#111'; ctx.textBaseline = 'top'; ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; ctx.textAlign = align;
+      let ty = yy + 13;
+      text.split('\n').forEach(par => { ty += wrapText(ctx, par, align === 'center' ? x + w / 2 : x + 14, ty, w - 28, lh) * lh; });
+    };
+    const arrow = (x1, y1, x2, y2) => {
+      ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      const a = Math.atan2(y2 - y1, x2 - x1);
+      ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - 16 * Math.cos(a - 0.4), y2 - 16 * Math.sin(a - 0.4)); ctx.lineTo(x2 - 16 * Math.cos(a + 0.4), y2 - 16 * Math.sin(a + 0.4)); ctx.fill();
+    };
+    layout.forEach((b, i) => {
+      box(midX - boxW / 2, b.y, boxW, b.h, b.text, true);
+      if (b.ex) {
+        const ey = b.y + b.h + (gap + 24) / 2, ex0 = midX + 60;
+        box(ex0, ey, exW, b.ex.h, b.ex.text, false, 'left');
+        arrow(midX, ey + b.ex.h / 2, ex0, ey + b.ex.h / 2);
+      }
+      if (i < layout.length - 1) arrow(midX, b.y + b.h, midX, layout[i + 1].y);
+    });
+    if (split) {
+      const last = layout[layout.length - 1], cx = i => pad + colW / 2 + i * ((CW - 2 * pad - colW) / (k - 1));
+      ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(midX, last.y + last.h); ctx.lineTo(midX, busY); ctx.moveTo(cx(0), busY); ctx.lineTo(cx(k - 1), busY); ctx.stroke();
+      groupLabels.forEach((g, i) => { arrow(cx(i), busY, cx(i), y); box(cx(i) - colW / 2, y, colW, gH, `${g}\n(n=${c.groups[i].analysed})`, true); });
     }
     return cv;
   }

@@ -19,6 +19,7 @@ const Examples = (() => {
   const LIST = [
     {
       id: 'knee-oa-rct', name: 'Two-group RCT — knee osteoarthritis',
+      flow: { type: 'consort', excluded: [{ text: 'Not meeting inclusion criteria', n: 14 }, { text: 'Declined to participate', n: 6 }], groups: [{ lost: 2, lostReason: 'Moved away (n=1), withdrew consent (n=1)' }, { lost: 1, lostReason: 'Withdrew consent' }] },
       description: 'PRP versus hyaluronic acid injection, 60 patients. Baseline data, WOMAC and VAS at 4 timepoints, complications, satisfaction.',
       title: 'Platelet-rich plasma versus hyaluronic acid injection for knee osteoarthritis: a randomized controlled trial',
       levels: { Satisfaction: ['Poor', 'Fair', 'Good', 'Excellent'], KL_grade: ['II', 'III'] },
@@ -38,6 +39,7 @@ const Examples = (() => {
     },
     {
       id: 'postop-analgesia-3arm', name: 'Three-group RCT — postoperative analgesia',
+      flow: { type: 'consort', excluded: [{ text: 'Not meeting inclusion criteria', n: 11 }, { text: 'Declined to participate', n: 4 }, { text: 'Surgery cancelled', n: 2 }] },
       description: 'Control, dexmedetomidine and ketamine, 75 patients. Pain scores at 5 timepoints, blood pressure over time, rescue analgesia, morphine use.',
       title: 'Dexmedetomidine versus ketamine as adjuvants for postoperative analgesia after abdominal surgery',
       options: { within: true, chiPost: true },
@@ -60,6 +62,7 @@ const Examples = (() => {
     },
     {
       id: 'sepsis-biomarkers', name: 'Diagnostic study — biomarkers of sepsis',
+      flow: { type: 'strobe', excluded: [{ text: 'Age < 18 years', n: 7 }, { text: 'Immunosuppression', n: 9 }, { text: 'Antibiotics > 24 h before admission', n: 12 }], groups: [{ description: 'Sepsis (Sepsis-3 criteria)' }, { description: 'ICU patients without infection' }] },
       description: 'Sepsis versus non-sepsis ICU patients, 90 patients. Skewed lab markers (CRP, procalcitonin, lactate), SOFA score, ICU stay, mortality. Good for ROC and logistic regression.',
       title: 'Diagnostic and prognostic value of procalcitonin and C-reactive protein in critically ill patients with sepsis',
       advanced: [
@@ -81,6 +84,7 @@ const Examples = (() => {
     },
     {
       id: 'oncology-survival', name: 'Survival study — two chemotherapy regimens',
+      flow: { type: 'consort', excluded: [{ text: 'Not meeting inclusion criteria', n: 18 }, { text: 'Declined to participate', n: 7 }], groups: [{ excludedAnalysis: 1, excludedReason: 'Never received treatment' }, { excludedAnalysis: 2, excludedReason: 'Never received treatment' }] },
       description: 'Regimen A versus regimen B, 90 patients. Stage, ECOG, tumour size over time, response, follow-up time and death. Good for Kaplan-Meier survival.',
       title: 'Overall survival with regimen A versus regimen B in advanced solid tumours',
       levels: { Stage: ['II', 'III', 'IV'], ECOG: ['0', '1', '2'], Response: ['CR', 'PR', 'SD', 'PD'] },
@@ -101,6 +105,7 @@ const Examples = (() => {
     },
     {
       id: 'dose-response-4arm', name: 'Four-group study — small, non-normal data',
+      flow: { type: 'simple', steps: [{ text: 'Patients screened', n: 61, exText: 'Excluded: not eligible', exN: 13 }, { text: 'Randomized into four groups', n: 48, exText: '', exN: 0 }], splitGroups: true },
       description: 'Control and three doses, 48 patients (12 per group). Skewed inflammatory markers before and after treatment, adverse events. Shows non-parametric tests and post hoc options.',
       title: 'Dose-dependent anti-inflammatory effect of drug X: a four-arm pilot study',
       options: { dunn: true, within: true },
@@ -111,6 +116,115 @@ const Examples = (() => {
           out.push({ ID: out.length + 1, Group: g, Age_years: Math.round(R.n(50, 9)), Sex: R.pick(['Male', 'Female']),
             IL6_pre: r1(il0), IL6_post: r1(il0 * Math.exp(R.n(-0.18 * gi, 0.35))), CRP_pre: r1(crp0), CRP_post: r1(crp0 * Math.exp(R.n(-0.15 * gi, 0.4))),
             Symptom_score_pre: sym0, Symptom_score_post: clamp(sym0 - R.int(0, 2 + gi * 2), 0, 12), Adverse_events: R.yes([0.05, 0.15, 0.3, 0.55][gi]) });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'vitd-diabetes-cross-sectional', name: 'Cross-sectional study — vitamin D and diabetes',
+      description: 'Type 2 diabetics by vitamin D status (deficient / insufficient / sufficient), 100 patients. HbA1c, insulin resistance, a 6-item distress questionnaire. Good for correlation, linear regression and Cronbach’s alpha (STROBE).',
+      title: 'Association between vitamin D status and glycaemic control in adults with type 2 diabetes: a cross-sectional study',
+      options: { correlation: true, chiPost: true },
+      levels: { Vitamin_D_status: ['Deficient', 'Insufficient', 'Sufficient'], Physical_activity: ['Low', 'Moderate', 'High'] },
+      flow: { type: 'strobe', excluded: [{ text: 'Type 1 or secondary diabetes', n: 12 }, { text: 'Taking vitamin D supplements', n: 18 }, { text: 'Incomplete records', n: 9 }],
+        groups: [{ description: '25(OH)D < 20 ng/mL' }, { description: '25(OH)D 20-29 ng/mL' }, { description: '25(OH)D ≥ 30 ng/mL' }] },
+      advanced: [
+        { type: 'linear', outcome: 'HbA1c_percent', predictors: ['Vitamin_D_ng_mL', 'Age_years', 'BMI_kg_m2', 'Diabetes_duration_years'], univariable: true },
+        { type: 'cronbach', predictors: ['Distress_Q1', 'Distress_Q2', 'Distress_Q3', 'Distress_Q4', 'Distress_Q5', 'Distress_Q6'] }
+      ],
+      rows() {
+        const R = rng(606), out = [];
+        [['Deficient', 40, 14], ['Insufficient', 35, 24], ['Sufficient', 25, 36]].forEach(([g, n, vd]) => { for (let i = 0; i < n; i++) {
+          const vitd = r1(clamp(R.n(vd, 4), 4, 60)), bmi = r1(R.n(31 - vd / 12, 4)), dur = Math.max(1, Math.round(R.n(8, 4)));
+          const a1c = r1(clamp(R.n(9.6 - 0.06 * vitd + 0.05 * (bmi - 30) + 0.06 * dur, 0.9), 5.5, 14)), distress = R.n(0, 1);
+          const item = () => clamp(Math.round(3 + 0.9 * distress + 0.15 * (a1c - 8) + R.n(0, 0.8)), 1, 5);
+          out.push({ ID: out.length + 1, Vitamin_D_status: g, Age_years: Math.round(R.n(56, 9)), Sex: R.pick(['Female', 'Male'], [55, 45]), BMI_kg_m2: bmi,
+            Diabetes_duration_years: dur, Vitamin_D_ng_mL: vitd, HbA1c_percent: a1c, FBG_mg_dL: Math.round(R.n(80 + 12 * a1c, 25)),
+            HOMA_IR: Math.round(Math.exp(R.n(1.2 + 0.03 * (bmi - 30) - 0.01 * vitd, 0.35)) * 100) / 100,
+            Neuropathy: R.yes(clamp(0.15 + 0.04 * (a1c - 7), 0.05, 0.7)), Physical_activity: R.pick(['Low', 'Moderate', 'High'], vd < 20 ? [55, 35, 10] : vd < 30 ? [40, 40, 20] : [25, 45, 30]),
+            Distress_Q1: item(), Distress_Q2: item(), Distress_Q3: item(), Distress_Q4: item(), Distress_Q5: item(), Distress_Q6: item() });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'preeclampsia-case-control', name: 'Case-control study — risk factors for preeclampsia',
+      description: 'Women with preeclampsia (cases) versus normotensive pregnancies (controls), 110 women. Maternal risk factors, sFlt-1/PlGF ratio, neonatal outcomes. Good for odds ratios, logistic regression and ROC (STROBE).',
+      title: 'Maternal risk factors and the sFlt-1/PlGF ratio in preeclampsia: a case-control study',
+      options: { catEffect: 'or' },
+      levels: { Parity: ['Nulliparous', 'Multiparous'] },
+      flow: { type: 'strobe', excluded: [{ text: 'Multiple pregnancy', n: 6 }, { text: 'Pre-existing renal disease', n: 4 }, { text: 'Declined to participate', n: 8 }],
+        groups: [{ description: 'Cases: preeclampsia (ACOG criteria)' }, { description: 'Controls: normotensive, matched for gestational age' }] },
+      advanced: [
+        { type: 'logistic', outcome: 'Group', positive: 'Preeclampsia', predictors: ['Maternal_age_years', 'BMI_kg_m2', 'Parity', 'Previous_preeclampsia', 'Chronic_hypertension'], univariable: true },
+        { type: 'roc', outcome: 'Group', positive: 'Preeclampsia', predictors: ['sFlt1_PlGF_ratio', 'Uric_acid_mg_dL'] }
+      ],
+      rows() {
+        const R = rng(707), out = [];
+        [['Preeclampsia', 50], ['Normotensive', 60]].forEach(([g, n], gi) => { for (let i = 0; i < n; i++) {
+          const ga = r1(clamp(R.n(gi ? 38.4 : 35.2, gi ? 1.3 : 2.4), 28, 41.5));
+          out.push({ ID: out.length + 1, Group: g, Maternal_age_years: Math.round(R.n(gi ? 28 : 31, 5)), BMI_kg_m2: r1(R.n(gi ? 26.5 : 30, 4)),
+            Parity: R.pick(['Nulliparous', 'Multiparous'], gi ? [40, 60] : [62, 38]), Previous_preeclampsia: R.yes(gi ? 0.04 : 0.22), Chronic_hypertension: R.yes(gi ? 0.03 : 0.16),
+            Systolic_BP_mmHg: Math.round(R.n(gi ? 116 : 158, gi ? 9 : 12)), sFlt1_PlGF_ratio: r1(Math.exp(R.n(gi ? 2.3 : 4.3, 0.75))),
+            Uric_acid_mg_dL: r1(R.n(gi ? 4.4 : 6.1, 1)), Platelets_10e9_L: Math.round(R.n(gi ? 245 : 198, 50)), Gestational_age_weeks: ga,
+            Birth_weight_g: Math.round(R.n(3300 - (39 - ga) * 210 - (gi ? 0 : 250), 330)), NICU_admission: R.yes(gi ? 0.07 : 0.34) });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'covid-icu-cohort', name: 'Cohort study — dexamethasone in ICU COVID-19',
+      description: 'Dexamethasone versus standard care (exposure), 135 ICU patients. SpO2 on days 0/3/7, oxygen support on admission and day 7, 28-day follow-up and death. Good for Kaplan-Meier, Cox regression and McNemar (STROBE).',
+      title: 'Dexamethasone and 28-day mortality in critically ill patients with COVID-19: a retrospective cohort study',
+      options: { within: true },
+      flow: { type: 'strobe', excluded: [{ text: 'Died within 24 h of admission', n: 9 }, { text: 'Transferred from another ICU', n: 14 }, { text: 'Steroids for another indication', n: 6 }],
+        groups: [{ description: 'Exposed: dexamethasone 6 mg daily', lost: 3, lostReason: 'Transferred out before day 28' }, { description: 'Not exposed: standard care', lost: 2, lostReason: 'Transferred out before day 28' }] },
+      advanced: [
+        { type: 'survival', outcome: 'Follow_up_days', event: 'Death', positive: 'Yes', at: '28' },
+        { type: 'cox', outcome: 'Follow_up_days', event: 'Death', positive: 'Yes', predictors: ['Group', 'Age_years', 'SOFA_admission', 'Diabetes'], univariable: true },
+        { type: 'mcnemar', outcome: 'Oxygen_support_admission', second: 'Oxygen_support_day7', positive: 'High-flow' }
+      ],
+      rows() {
+        const R = rng(808), out = [];
+        [['Dexamethasone', 70], ['Standard care', 65]].forEach(([g, n], gi) => { for (let i = 0; i < n; i++) {
+          const age = Math.round(R.n(62, 12)), sofa = clamp(Math.round(R.n(6, 2.5)), 1, 16), spo = R.n(86, 4);
+          const hz = 0.022 * Math.exp(0.03 * (age - 62) + 0.17 * (sofa - 6)) * (gi ? 1 : 0.62);
+          const tDeath = -Math.log(R.u()) / hz, t = Math.min(28, tDeath), died = tDeath <= 28;
+          const o2 = v => v < 88 ? 'High-flow' : 'Conventional';
+          out.push({ ID: out.length + 1, Group: g, Age_years: age, Sex: R.pick(['Male', 'Female'], [62, 38]), Diabetes: R.yes(0.35), Hypertension: R.yes(0.45),
+            SOFA_admission: sofa, CRP_mg_L: r1(Math.exp(R.n(4.6, 0.5))), D_dimer_ng_mL: Math.round(Math.exp(R.n(7, 0.7))),
+            SpO2_day0: r1(spo), SpO2_day3: R.miss(r1(clamp(spo + (gi ? 1.5 : 4) + R.n(0, 3), 70, 100)), 0.05), SpO2_day7: R.miss(r1(clamp(spo + (gi ? 3 : 7.5) + R.n(0, 3), 70, 100)), 0.12),
+            Oxygen_support_admission: o2(spo + R.n(0, 1)), Oxygen_support_day7: o2(spo + (gi ? 2.5 : 6) + R.n(0, 3)),
+            Mechanical_ventilation: R.yes(gi ? 0.38 : 0.24), Follow_up_days: Math.max(1, Math.round(t)), Death: died ? 'Yes' : 'No' });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'lung-ultrasound-stard', name: 'Diagnostic accuracy study — lung ultrasound for pneumonia',
+      description: 'Lung ultrasound against chest CT (reference standard), 120 patients. Two readers’ scores and results. Good for sensitivity / specificity, ROC, kappa and ICC with Bland-Altman (STARD).',
+      title: 'Diagnostic accuracy of lung ultrasound compared with chest CT for community-acquired pneumonia',
+      // STARD numbers follow the data; a few patients without CT are added as "no reference standard"
+      flow: rows => {
+        const pos = r => r.LUS_result === 'Positive', dis = r => r.Group === 'Pneumonia';
+        const br = (name, f, noRef) => { const rs = rows.filter(f); return { name, n: rs.length + noRef, noRef, present: rs.filter(dis).length, absent: rs.filter(r => !dis(r)).length, inconclusive: 0 }; };
+        return { type: 'stard', excluded: [{ text: 'Unable to undergo CT', n: 7 }, { text: 'Declined to participate', n: 5 }],
+          stard: { tested: rows.length + 3, branches: [br('Positive', pos, 1), br('Negative', r => !pos(r), 2), { name: 'Inconclusive', n: 0, noRef: 0, present: 0, absent: 0, inconclusive: 0 }] } };
+      },
+      advanced: [
+        { type: 'diagnostic', outcome: 'Group', positive: 'Pneumonia', event: 'LUS_result', eventPositive: 'Positive' },
+        { type: 'roc', outcome: 'Group', positive: 'Pneumonia', predictors: ['LUS_score_A', 'CRP_mg_L'] },
+        { type: 'kappa', outcome: 'Reader_A_result', second: 'Reader_B_result' },
+        { type: 'agreement', outcome: 'LUS_score_A', second: 'LUS_score_B' }
+      ],
+      rows() {
+        const R = rng(909), out = [];
+        [['Pneumonia', 55], ['No pneumonia', 65]].forEach(([g, n], gi) => { for (let i = 0; i < n; i++) {
+          const truth = clamp(R.n(gi ? 7 : 17, 4.5), 0, 36), a = clamp(Math.round(truth + R.n(0, 1.6)), 0, 36), b = clamp(Math.round(truth + 0.6 + R.n(0, 1.8)), 0, 36);
+          const res = v => v >= 12 ? 'Positive' : 'Negative';
+          out.push({ ID: out.length + 1, Group: g, Age_years: Math.round(R.n(58, 16)), Sex: R.pick(['Male', 'Female']), Fever: R.yes(gi ? 0.35 : 0.72),
+            CRP_mg_L: r1(Math.exp(R.n(gi ? 2.8 : 4.1, 0.8))), WBC_10e9_L: r1(R.n(gi ? 9 : 13.5, 3.5)),
+            LUS_score_A: a, LUS_score_B: b, Reader_A_result: res(a), Reader_B_result: res(b), LUS_result: res(a) });
         } });
         return out;
       }

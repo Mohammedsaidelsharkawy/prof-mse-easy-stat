@@ -3,6 +3,9 @@ const Analysis = (() => {
   const S = Stats;
   const POSITIVE = /^(yes|y|true|positive|present|1|done|completed|pos)$/i;
   const NONNORMAL_SHARE = 0.25;
+  // normality test for the current run: Shapiro–Wilk (default) or Kolmogorov–Smirnov with Lilliefors correction
+  const normalityTest = name => name === 'ks' ? S.lilliefors : S.shapiroWilk;
+  let normality = S.shapiroWilk;
   const NUMW =['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 
   /* ---------- formatting ---------- */
@@ -22,10 +25,12 @@ const Analysis = (() => {
     if (a.length <= 1) return a.join('');
     return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
   }
-  const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
+  // names like "HbA1c", "sFlt1" or "CRP" keep their case at the start of a sentence and inside it
+  const keepCase = s => /^\S*?([A-Z].*[A-Z]|\d)/.test(s.split(/\s/)[0].slice(1)) || /^[A-Z]{2,}/.test(s) || /^.[A-Z]/.test(s);
+  const cap = s => s && !keepCase(s) ? s[0].toUpperCase() + s.slice(1) : s;
   // label without a trailing unit, for use inside sentences: "Age (years)" → "Age"
   const plain = s => s.replace(/\s*\([^)]*\)\s*$/, '');
-  const lowerFirst = s => (s && !/^[A-Z]{2,}/.test(s)) ? s[0].toLowerCase() + s.slice(1) : s;
+  const lowerFirst = s => (s && !keepCase(s)) ? s[0].toLowerCase() + s.slice(1) : s;
   const nWord = n => NUMW[n] || String(n);
   const amongTxt = k => k === 2 ? 'between the two groups' : `among the ${nWord(k)} groups`;
 
@@ -48,7 +53,7 @@ const Analysis = (() => {
   function analyzeNumeric(groupVals, dist, used, opts) {
     const k = groupVals.length;
     const desc = groupVals.map(S.describe);
-    const sw = groupVals.map(g => S.shapiroWilk(g));
+    const sw = groupVals.map(g => normality(g));
     const normal = sw.every(r => !r || r.p > 0.05);
     let param = dist === 'param' ? true : dist === 'nonparam' ? false : normal;
     if (groupVals.some(g => g.length < 2)) return { desc, sw, normal, param, p: NaN, pairs: [], test: '—' };
@@ -112,7 +117,9 @@ const Analysis = (() => {
     used.add('cat');
     const binary = levels.length === 2;
     const rrRow = binary ? 0 : -1;
-    const rr = binary ? pairs(k).map(([i, j]) => ({ i, j, ...(S.relativeRisk(table, rrRow, i, j) || { rr: null }) })) : [];
+    // effect of the first level: relative risk (default) or odds ratio, stored under the same keys
+    const effect = (i, j) => { if (opts.catEffect !== 'or') return S.relativeRisk(table, rrRow, i, j); const o = S.oddsRatio(table, rrRow, i, j); return o && { rr: o.or, lo: o.lo, hi: o.hi }; };
+    const rr = binary ? pairs(k).map(([i, j]) => ({ i, j, ...(effect(i, j) || { rr: null }) })) : [];
     // optional Bonferroni-adjusted pairwise comparisons once the overall test is significant (3+ groups)
     let catPairs = null;
     if (opts.chiPost && k > 2 && p <= opts.alpha) { catPairs = S.chiSquarePairwise(table, opts.fisher); used.add('chiPost'); }
@@ -148,7 +155,7 @@ const Analysis = (() => {
     for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
       const x = [], y = [];
       items[i].vals.forEach((v, r) => { if (isFinite(v) && isFinite(items[j].vals[r])) { x.push(v); y.push(items[j].vals[r]); } });
-      const normal = [x, y].every(a => { const sw = S.shapiroWilk(a); return !sw || sw.p > 0.05; });
+      const normal = [x, y].every(a => { const sw = normality(a); return !sw || sw.p > 0.05; });
       const res = normal ? S.pearson(x, y) : S.spearman(x, y);
       pairsOut.push({ i, j, ...res, method: normal ? 'pearson' : 'spearman', sig: res.p <= alpha });
     }
@@ -313,6 +320,8 @@ const Analysis = (() => {
     const nums = vals.map(toNum).filter(isFinite);
     return vals.length && nums.length / vals.length >= 0.9 && new Set(nums).size > 2 ? 'numeric' : 'categorical';
   }
+  // every filled cell is a number (Likert items count, even with few distinct values)
+  const isNumberColumn = (rows, col) => { const v = rows.map(r => r[col]).filter(x => toCat(x) !== null); return v.length > 0 && v.every(x => isFinite(toNum(x))); };
   function levelsOf(cfg, rows, col) {
     if (col === cfg.groupCol) return cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false);
     const present = [...new Set(rows.map(r => toCat(r[col])).filter(x => x !== null))];
@@ -497,7 +506,8 @@ const Analysis = (() => {
       return row;
     });
     const med = m => isFinite(m.median) ? fmt(m.median, d) : 'not reached';
-    const sent = [`The median time to ${lowerFirst(plain(evLabel))} was ${listJoin(km.map((m, g) => `${med(m)}${isFinite(m.median) ? u : ''} in ${gl[g]}`))}.`,
+    const sent = [km.every(m => !isFinite(m.median)) ? `The median time to ${lowerFirst(plain(evLabel))} was not reached in any group.`
+      : `The median time to ${lowerFirst(plain(evLabel))} was ${listJoin(km.map((m, g) => `${med(m)}${isFinite(m.median) ? u : ''} in ${gl[g]}`))}.`,
       `Survival was ${lr.p <= alpha ? 'significantly' : 'insignificantly'} different ${amongTxt(k)} (log-rank P value ${pTxt(lr.p)}).`];
     if (at !== null) sent.push(`At ${fmt(at, d)}${u}, the estimated survival was ${listJoin(km.map((m, g) => `${fmt(100 * survAt(m), 1)}% in ${gl[g]}`))}.`);
     const f = [`Event: ${evLabel} = ${a.positive}; other patients are censored at their last follow-up`, `Log-rank χ²(${lr.df}) = ${fmt(lr.chi, 2)}`];
@@ -510,10 +520,177 @@ const Analysis = (() => {
     };
   }
 
+  // Cox proportional hazards regression: hazard ratios for time to event
+  function coxSection(a, cfg, rows, alpha, d, used) {
+    const timeLabel = columnLabel(cfg, a.outcome), evLabel = columnLabel(cfg, a.event);
+    const preds = (a.predictors || []).filter(c => c !== a.outcome && c !== a.event).map(c => encode(cfg, rows, c)).filter(e => e.terms.length);
+    if (!preds.length) return null;
+    const ok = r => isFinite(toNum(r[a.outcome])) && toNum(r[a.outcome]) >= 0 && toCat(r[a.event]) !== null;
+    const fitOn = list => {
+      const rs = rows.filter(r => ok(r) && list.every(e => e.ok(r)));
+      const ev = rs.map(r => toCat(r[a.event]) === a.positive);
+      if (ev.filter(Boolean).length < 2) return null;
+      return S.coxRegression(rs.map(r => list.flatMap(e => e.terms.map(t => t.get(r)))), rs.map(r => toNum(r[a.outcome])), ev);
+    };
+    const multi = fitOn(preds), uni = a.univariable ? preds.map(e => fitOn([e])) : null;
+    if (!multi && !uni) return null;
+    used.add('cox');
+    const est = t => `${fmt(t.hr, 2)} (${fmt(t.lo, 2)}-${fmt(t.hi, 2)})`;
+    const head = [''];
+    if (uni) head.push('Univariable HR (95% CI)', 'P value');
+    if (multi) head.push(`${uni ? 'Multivariable ' : ''}HR (95% CI)`, 'P value');
+    const terms = [];
+    preds.forEach((e, pi) => e.terms.forEach((t, k) => terms.push({ label: t.label, u: uni && uni[pi] ? uni[pi].terms[k] : null, m: multi ? multi.terms[terms.length] : null })));
+    const trows = terms.map(({ label, u, m }) => {
+      const row = [{ t: [label], b: true }];
+      if (uni) row.push({ t: [u ? est(u) : '—'] }, { t: [u ? fmtP(u.p, alpha) : '—'] });
+      if (multi) row.push({ t: [est(m)] }, { t: [fmtP(m.p, alpha)] });
+      return row;
+    });
+    const sig = terms.filter(x => (x.m || x.u) && (x.m || x.u).p <= alpha);
+    const f = [];
+    if (sig.length) f.push(`*: Significant as P value ≤ ${alpha}`);
+    f.push('HR: Hazard ratio', 'CI: Confidence interval', `Event: ${evLabel} = ${a.positive}`);
+    if (multi) f.push(`Model: n=${multi.n} (${multi.events} events), likelihood ratio χ²(${multi.df}) = ${fmt(multi.chi, 2)}, P ${pTxt(multi.pModel)}`);
+    if (multi && multi.unstable) f.push('Warning: the model did not converge or has extreme estimates, so they are unreliable');
+    const refs = preds.filter(e => e.ref).map(e => `${e.label}: reference = ${e.ref}`);
+    if (refs.length) f.push(refs.join(', '));
+    const what = lowerFirst(plain(evLabel));
+    const phr = x => `${lowerFirst(x.label)} (HR = ${fmt(x.t.hr, 2)}, 95% CI ${fmt(x.t.lo, 2)}-${fmt(x.t.hi, 2)}, P value ${pTxt(x.t.p)})`;
+    const sm = terms.filter(x => x.m && x.m.p <= alpha).map(x => ({ label: x.label, t: x.m }));
+    const sent = [];
+    if (multi) sent.push(sm.length ? `In ${preds.length > 1 ? 'multivariable ' : ''}Cox regression, ${listJoin(sm.map(phr))} ${sm.length > 1 ? 'were independent predictors' : 'was a significant predictor'} of ${what}.`
+      : `None of the studied variables was a significant ${preds.length > 1 ? 'independent ' : ''}predictor of ${what} in Cox regression.`);
+    else sent.push('The multivariable model could not be estimated: too few events or collinear predictors.');
+    return { kind: 'cox', title: `Cox regression analysis for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { multi, uni } };
+  }
+
+  // McNemar / McNemar–Bowker: change of a categorical variable between two measurements, in each group and overall
+  function mcnemarSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G;
+    if (!a.second) return null;
+    const l1 = columnLabel(cfg, a.outcome), l2 = columnLabel(cfg, a.second);
+    const rs = rows.filter(r => toCat(r[a.outcome]) !== null && toCat(r[a.second]) !== null);
+    const lv = [...new Set([...levelsOf(cfg, rs, a.outcome), ...levelsOf(cfg, rs, a.second)])];
+    if (lv.length < 2) return null;
+    const pos = lv.includes(a.positive) ? a.positive : lv[0];
+    const sets = [...gl.map((g, i) => ({ name: g, rs: rs.filter(r => toCat(r[cfg.groupCol]) === groups[i]) })), { name: 'All patients', rs }];
+    used.add('mcnemar');
+    const res = sets.map(x => {
+      const t = lv.map(u => lv.map(v => x.rs.filter(r => toCat(r[a.outcome]) === u && toCat(r[a.second]) === v).length));
+      return { ...x, n: x.rs.length, p1: x.rs.filter(r => toCat(r[a.outcome]) === pos).length, p2: x.rs.filter(r => toCat(r[a.second]) === pos).length, test: x.rs.length ? S.mcnemar(t) : null };
+    });
+    const pct = (k, n) => `${k} (${fmt(n ? 100 * k / n : 0, 1)}%)`;
+    const head = ['', 'n', `${plain(l1)}: ${pos}`, `${plain(l2)}: ${pos}`, 'P value'];
+    const trows = res.map(x => [{ t: [x.name], b: true }, { t: [String(x.n)] }, { t: [pct(x.p1, x.n)] }, { t: [pct(x.p2, x.n)] }, { t: [x.test ? fmtP(x.test.p, alpha) : '—'] }]);
+    const tests = [...new Set(res.filter(x => x.test).map(x => x.test.test))];
+    const sent = res.filter(x => x.test).map(x => `In ${x.name === 'All patients' ? 'all patients' : x.name}, the proportion with ${lowerFirst(plain(l1))} ${pos} (${fmt(x.n ? 100 * x.p1 / x.n : 0, 1)}%) ${x.test.p <= alpha ? 'changed significantly' : 'did not change significantly'} at ${lowerFirst(plain(l2))} (${fmt(x.n ? 100 * x.p2 / x.n : 0, 1)}%, P value ${pTxt(x.test.p)}).`);
+    const f = [];
+    if (res.some(x => x.test && x.test.p <= alpha)) f.push(`*: Significant as P value ≤ ${alpha}`);
+    f.push(`Data are presented as frequency (%), P values by ${listJoin(tests)} test${tests.length > 1 ? 's' : ''}`);
+    if (lv.length > 2) f.push(`categories: ${lv.join(', ')}`);
+    return { kind: 'mcnemar', title: `${plain(l1)} versus ${lowerFirst(plain(l2))} in the studied groups (paired comparison)`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { res } };
+  }
+
+  // Cohen's kappa between two raters / methods (categorical), with the cross-table
+  function kappaSection(a, cfg, rows, alpha, d, used) {
+    if (!a.second) return null;
+    const l1 = columnLabel(cfg, a.outcome), l2 = columnLabel(cfg, a.second);
+    const rs = rows.filter(r => toCat(r[a.outcome]) !== null && toCat(r[a.second]) !== null);
+    const lv = [...new Set([...levelsOf(cfg, rs, a.outcome), ...levelsOf(cfg, rs, a.second)])];
+    if (lv.length < 2 || rs.length < 2) return null;
+    const t = lv.map(u => lv.map(v => rs.filter(r => toCat(r[a.outcome]) === u && toCat(r[a.second]) === v).length));
+    const k = S.cohenKappa(t);
+    used.add('kappa');
+    const grade = v => v < 0 ? 'poor' : v <= 0.2 ? 'slight' : v <= 0.4 ? 'fair' : v <= 0.6 ? 'moderate' : v <= 0.8 ? 'substantial' : 'almost perfect';
+    const head = [`${plain(l1)} \\ ${plain(l2)}`, ...lv, 'Total'];
+    const trows = lv.map((u, i) => [{ t: [u], b: true }, ...t[i].map(c => ({ t: [String(c)] })), { t: [String(S.sum(t[i]))] }]);
+    trows.push([{ t: ['Total'], b: true }, ...lv.map((_, j) => ({ t: [String(S.sum(t.map(r => r[j])))] })), { t: [String(rs.length)] }]);
+    trows.push([{ t: ['Agreement'], b: true }, { t: [`${fmt(100 * k.po, 1)}%, κ = ${fmt(k.kappa, 3)} (95% CI ${fmt(k.lo, 3)} to ${fmt(k.hi, 3)}), P ${pTxt(k.p)}`], span: lv.length + 1 }]);
+    const f = [`κ: Cohen's kappa`, 'CI: Confidence interval', 'Interpretation (Landis & Koch): ≤0.20 slight, 0.21-0.40 fair, 0.41-0.60 moderate, 0.61-0.80 substantial, >0.80 almost perfect'];
+    const sent = [`The agreement between ${lowerFirst(plain(l1))} and ${lowerFirst(plain(l2))} was ${grade(k.kappa)} (observed agreement ${fmt(100 * k.po, 1)}%, κ = ${fmt(k.kappa, 3)}, 95% CI ${fmt(k.lo, 3)} to ${fmt(k.hi, 3)}, P value ${pTxt(k.p)}).`];
+    return { kind: 'kappa', title: `Agreement between ${lowerFirst(plain(l1))} and ${lowerFirst(plain(l2))}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { k } };
+  }
+
+  // ICC and Bland–Altman agreement between two numeric methods / raters
+  function agreementSection(a, cfg, rows, alpha, d, used) {
+    if (!a.second) return null;
+    const l1 = columnLabel(cfg, a.outcome), l2 = columnLabel(cfg, a.second);
+    const rs = rows.filter(r => isFinite(toNum(r[a.outcome])) && isFinite(toNum(r[a.second])));
+    if (rs.length < 3) return null;
+    const x = rs.map(r => toNum(r[a.outcome])), y = rs.map(r => toNum(r[a.second]));
+    const ic = S.icc(x.map((v, i) => [v, y[i]])), ba = S.blandAltman(x, y), dx = S.describe(x), dy = S.describe(y);
+    used.add('icc');
+    const ci = (lo, hi, dd = d) => `${fmt(lo, dd)} to ${fmt(hi, dd)}`;
+    const head = ['', 'Value', '95% CI', 'P value'];
+    const trows = [
+      [{ t: [`${plain(l1)} (mean ± SD)`], b: true }, { t: [`${fmt(dx.mean, d)} ± ${fmt(dx.sd, d)}`] }, { t: ['—'] }, { t: ['—'] }],
+      [{ t: [`${plain(l2)} (mean ± SD)`], b: true }, { t: [`${fmt(dy.mean, d)} ± ${fmt(dy.sd, d)}`] }, { t: ['—'] }, { t: ['—'] }],
+      [{ t: ['Mean difference (bias)'], b: true }, { t: [fmt(ba.bias, d)] }, { t: [ci(ba.biasLo, ba.biasHi)] }, { t: [fmtP(ba.p, alpha)] }],
+      [{ t: ['95% limits of agreement'], b: true }, { t: [ci(ba.lo, ba.hi)] }, { t: ['—'] }, { t: ['—'] }],
+      [{ t: ['ICC, single measures'], b: true }, { t: [fmt(ic.single, 3)] }, { t: [ci(ic.lo, ic.hi, 3)] }, { t: [fmtP(ic.p, alpha)] }],
+      [{ t: ['ICC, average measures'], b: true }, { t: [fmt(ic.average, 3)] }, { t: [ci(ic.loAvg, ic.hiAvg, 3)] }, { t: [fmtP(ic.p, alpha)] }]
+    ];
+    const grade = v => v < 0.5 ? 'poor' : v < 0.75 ? 'moderate' : v < 0.9 ? 'good' : 'excellent';
+    const f = [`*: Significant as P value ≤ ${alpha}`, `n = ${rs.length}`, `Bias = ${plain(l1)} − ${plain(l2)} (P by paired t-test)`, 'ICC: Intraclass correlation coefficient (two-way random effects, absolute agreement)', 'Interpretation (Koo & Li): <0.5 poor, 0.5-0.75 moderate, 0.75-0.9 good, >0.9 excellent'];
+    const sent = [`The agreement between ${lowerFirst(plain(l1))} and ${lowerFirst(plain(l2))} was ${grade(ic.single)} (ICC = ${fmt(ic.single, 3)}, 95% CI ${ci(ic.lo, ic.hi, 3)}).`,
+      `The mean difference was ${fmt(ba.bias, d)} (95% CI ${ci(ba.biasLo, ba.biasHi)}${ba.p <= alpha ? ', significantly different from zero' : ''}), with 95% limits of agreement from ${ci(ba.lo, ba.hi)}.`];
+    return {
+      kind: 'agreement', title: `Agreement between ${lowerFirst(plain(l1))} and ${lowerFirst(plain(l2))}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
+      figures: [{ sig: true, caption: `Bland-Altman plot of ${lowerFirst(plain(l1))} versus ${lowerFirst(plain(l2))}`,
+        spec: { type: 'ba', x: ba.means, y: ba.diffs, bias: ba.bias, lo: ba.lo, hi: ba.hi, xLabel: `Mean of ${plain(l1)} and ${plain(l2)}`, yLabel: `Difference (${plain(l1)} − ${plain(l2)})`, dec: d } }],
+      meta: { ic, ba }
+    };
+  }
+
+  // diagnostic accuracy of a categorical index test against a reference standard (2×2)
+  function diagnosticSection(a, cfg, rows, alpha, d, used) {
+    if (!a.event || !a.eventPositive) return null;
+    const refLabel = columnLabel(cfg, a.outcome), idxLabel = columnLabel(cfg, a.event);
+    const rs = rows.filter(r => toCat(r[a.outcome]) !== null && toCat(r[a.event]) !== null);
+    const isRef = r => toCat(r[a.outcome]) === a.positive, isPos = r => toCat(r[a.event]) === a.eventPositive;
+    const tp = rs.filter(r => isRef(r) && isPos(r)).length, fn = rs.filter(r => isRef(r) && !isPos(r)).length;
+    const fp = rs.filter(r => !isRef(r) && isPos(r)).length, tn = rs.filter(r => !isRef(r) && !isPos(r)).length;
+    if (!(tp + fn) || !(fp + tn)) return null;
+    const x = S.diagnostic2x2(tp, fp, fn, tn);
+    used.add('diagnostic');
+    const pc = q => `${fmt(100 * q.v, 1)}%`, pci = q => `${fmt(100 * q.lo, 1)}-${fmt(100 * q.hi, 1)}%`, r2 = q => fmt(q.v, 2), r2ci = q => `${fmt(q.lo, 2)}-${fmt(q.hi, 2)}`;
+    const head = ['', 'Value', '95% CI'];
+    const trows = [['Sensitivity', x.sens, 1], ['Specificity', x.spec, 1], ['Positive predictive value', x.ppv, 1], ['Negative predictive value', x.npv, 1],
+      ['Positive likelihood ratio', x.lrPos, 0], ['Negative likelihood ratio', x.lrNeg, 0], ['Accuracy', x.accuracy, 1], ['Prevalence', x.prevalence, 1]]
+      .map(([n, q, isP]) => [{ t: [n], b: true }, { t: [isP ? pc(q) : r2(q)] }, { t: [isP ? pci(q) : r2ci(q)] }]);
+    const refName = a.outcome === cfg.groupCol ? (cfg.groupLabels[a.positive] || a.positive) : `${lowerFirst(plain(refLabel))} (${a.positive})`;
+    const f = [`Index test: ${idxLabel} = ${a.eventPositive}`, `Reference standard: ${refLabel} = ${a.positive}`, `TP = ${tp}, FP = ${fp}, FN = ${fn}, TN = ${tn}`,
+      'CIs for proportions are exact (Clopper-Pearson), for likelihood ratios by the log method'];
+    const sent = [`For the detection of ${refName}, ${lowerFirst(plain(idxLabel))} (${a.eventPositive}) had a sensitivity of ${pc(x.sens)} (95% CI ${pci(x.sens)}) and a specificity of ${pc(x.spec)} (95% CI ${pci(x.spec)}), with a positive predictive value of ${pc(x.ppv)}, a negative predictive value of ${pc(x.npv)} and an overall accuracy of ${pc(x.accuracy)}.`];
+    if (isFinite(x.lrPos.v)) sent.push(`The positive and negative likelihood ratios were ${r2(x.lrPos)} and ${r2(x.lrNeg)} respectively.`);
+    return { kind: 'diagnostic', title: `Diagnostic accuracy of ${lowerFirst(plain(idxLabel))} for ${refName}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { x } };
+  }
+
+  // Cronbach's alpha for a set of numeric items (questionnaire reliability)
+  function cronbachSection(a, cfg, rows, alpha, d, used) {
+    const cols = (a.predictors || []).filter(c => isNumberColumn(rows, c));
+    if (cols.length < 2) return null;
+    const rs = rows.filter(r => cols.every(c => isFinite(toNum(r[c]))));
+    if (rs.length < 3) return null;
+    const res = S.cronbach(rs.map(r => cols.map(c => toNum(r[c]))));
+    used.add('cronbach');
+    const grade = v => v >= 0.9 ? 'excellent' : v >= 0.8 ? 'good' : v >= 0.7 ? 'acceptable' : v >= 0.6 ? 'questionable' : v >= 0.5 ? 'poor' : 'unacceptable';
+    const head = ['Item', 'Mean ± SD', 'Corrected item-total correlation', "Cronbach's α if item deleted"];
+    const trows = cols.map((c, i) => [{ t: [columnLabel(cfg, c)], b: true }, { t: [`${fmt(res.items[i].mean, d)} ± ${fmt(res.items[i].sd, d)}`] }, { t: [fmt(res.items[i].rit, 3)] }, { t: [fmt(res.items[i].alphaDeleted, 3)] }]);
+    trows.push([{ t: ['Overall'], b: true }, { t: [`α = ${fmt(res.alpha, 3)} (95% CI ${fmt(res.lo, 3)} to ${fmt(res.hi, 3)})`], span: 3 }]);
+    const weak = cols.filter((_, i) => res.items[i].alphaDeleted > res.alpha).map(c => lowerFirst(plain(columnLabel(cfg, c))));
+    const sent = [`The internal consistency of the ${res.k} items was ${grade(res.alpha)} (Cronbach's α = ${fmt(res.alpha, 3)}, 95% CI ${fmt(res.lo, 3)} to ${fmt(res.hi, 3)}, n = ${res.n}).`];
+    if (weak.length) sent.push(`Removing ${listJoin(weak)} would increase α.`);
+    const f = [`n = ${res.n} patients with complete answers`, 'CI by the Feldt method', 'Interpretation: ≥0.9 excellent, 0.8-0.9 good, 0.7-0.8 acceptable, 0.6-0.7 questionable, 0.5-0.6 poor'];
+    return { kind: 'cronbach', title: `Reliability (internal consistency) of the ${res.k} items`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { res } };
+  }
+
   /* ---------- main ---------- */
   function run(data, cfg) {
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
     const detailed = opts.commentStyle === 'detailed';
+    normality = normalityTest(opts.normality);
     const wording = s => opts.notSig ? s.replace(/insignificant(ly)?/g, 'not significant$1') : s;
     const used = new Set();
     // error bars of mean charts: SD (default), SEM or 95% CI of the mean
@@ -549,8 +726,9 @@ const Analysis = (() => {
 
     const effectLines = res => res.pairs.map((q, idx) =>
       `${numbered ? 'M' + (idx + 1) + '=' : ''}${fmt(q.diff, d)} (${fmt(q.lo, d)}:${fmt(q.hi, d)})`);
-    const rrLines = c => c.rr.map((q, idx) => q.rr === null ? `${numbered ? 'RR' + (idx + 1) + ': ' : ''}—` :
-      `${numbered ? 'RR' + (idx + 1) + ': ' : ''}${fmt(q.rr, 2)} (${fmt(q.lo, 2)}-${fmt(q.hi, 2)})`);
+    const EF = opts.catEffect === 'or' ? 'OR' : 'RR', efName = EF === 'OR' ? 'Odds ratio' : 'Relative risk';
+    const rrLines = c => c.rr.map((q, idx) => q.rr === null ? `${numbered ? EF + (idx + 1) + ': ' : ''}—` :
+      `${numbered ? EF + (idx + 1) + ': ' : ''}${fmt(q.rr, 2)} (${fmt(q.lo, 2)}-${fmt(q.hi, 2)})`);
     const postHocLines = res => res.pairs.map((q, idx) => `P${idx + 1}=${fmtP(q.p, alpha)}`);
 
     function footnote(flags, note) {
@@ -565,11 +743,11 @@ const Analysis = (() => {
         if (flags.param && flags.nonparam) f.push('MD: Mean or median difference');
         else if (flags.param) f.push('MD: Mean difference');
         else if (flags.nonparam) f.push('MD: Median difference');
-        if (flags.rr) f.push('RR: Relative risk');
+        if (flags.rr) f.push(`${EF}: ${efName}`);
         f.push('CI: Confidence interval');
         if (numbered) {
           if (flags.param || flags.nonparam) f.push(pr.map((_, i) => `M${i + 1}: between ${pairNames[i]}`).join(', '));
-          if (flags.rr) f.push(pr.map((_, i) => `RR${i + 1}: Relative risk between ${pairNames[i]}`).join(', '));
+          if (flags.rr) f.push(pr.map((_, i) => `${EF}${i + 1}: ${efName} between ${pairNames[i]}`).join(', '));
         }
       }
       if (flags.posthoc && numbered) f.push(pr.map((_, i) => `P${i + 1}: P value between ${pairNames[i]}`).join(', '));
@@ -590,7 +768,7 @@ const Analysis = (() => {
         else if (v.dist === 'nonparam') param = false;
         else {
           // non-parametric when more than a quarter of group × timepoint cells fail Shapiro-Wilk
-          const cells = per.flat().map(g => S.shapiroWilk(g));
+          const cells = per.flat().map(g => normality(g));
           param = cells.filter(r => r && r.p <= 0.05).length <= cells.length * NONNORMAL_SHARE;
         }
         const results = per.map(gv => analyzeNumeric(gv, param ? 'param' : 'nonparam', used, opts));
@@ -672,7 +850,7 @@ const Analysis = (() => {
         const hasNum = res.some(r => r.num), hasCat = res.some(r => r.cat);
         const hasRR = opts.effect && res.some(r => r.cat && r.cat.binary);
         const twoCol = res.some(r => r.num || (r.cat && !isCompact(r)));
-        const effHead = hasNum && hasRR ? 'MD/RR (95% CI)' : hasRR ? 'RR (95% CI)' : 'MD (95% CI)';
+        const effHead = hasNum && hasRR ? `MD/${EF} (95% CI)` : hasRR ? `${EF} (95% CI)` : 'MD (95% CI)';
         const head = [{ t: '', span: twoCol ? 2 : 1 }, ...groupHeads, 'P value'];
         if (showPost) head.push('Post hoc');
         if (opts.effect) head.push(effHead);
@@ -786,11 +964,17 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (!a.outcome || a.include === false) continue;
-      if (a.type === 'survival' ? !(a.event && a.positive) : a.type === 'ancova' ? false : !(a.predictors || []).length || (a.type !== 'linear' && !a.positive)) continue;
+      if (a.include === false || (!a.outcome && a.type !== 'cronbach')) continue;
+      const needs = {
+        linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
+        ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
+        mcnemar: () => a.second, kappa: () => a.second, agreement: () => a.second, diagnostic: () => a.positive && a.event && a.eventPositive, cronbach: () => true
+      };
+      if (!needs[a.type] || !needs[a.type]()) continue;
       const G = { gl, groups };
-      const sec = a.type === 'roc' ? rocSection(a, cfg, rows, alpha, d, used) : a.type === 'ancova' ? ancovaSection(a, cfg, rows, alpha, d, used, G)
-        : a.type === 'survival' ? survivalSection(a, cfg, rows, alpha, d, used, G) : regressionSection(a, cfg, rows, alpha, d, used);
+      const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
+        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, linear: regressionSection, logistic: regressionSection }[a.type];
+      const sec = make(a, cfg, rows, alpha, d, used, G);
       if (sec) { sec.comment = wording(sec.comment); sections.push(sec); }
     }
 
@@ -798,7 +982,7 @@ const Analysis = (() => {
     if (opts.figures === 'none') sections.forEach(s => { s.figures = []; });
     else if (opts.figures === 'sig') sections.forEach(s => { s.figures = s.figures.filter(f => f.sig !== false); });
 
-    return { sections, used, groups: gl, gN, k, methods: methodsText(used, k, cfg), intro: introText(cfg, gl, gN) };
+    return { sections, used, groups: gl, gN, k, methods: methodsText(used, k, cfg), intro: introText(cfg, gl, gN), flowCaption: flowCaption(cfg) };
   }
 
   // Correlation table across all analysed patients: single numeric variables and each repeated outcome at its last timepoint
@@ -852,7 +1036,7 @@ const Analysis = (() => {
   function methodsText(used, k, cfg) {
     const o = cfg.options, s = [];
     s.push(cfg.study.software.trim().replace(/\.?$/, '.'));
-    if (used.has('param') || used.has('nonparam')) s.push('Shapiro-Wilk test and histograms were used to evaluate the normality of the distribution of data.');
+    if (used.has('param') || used.has('nonparam')) s.push(`${o.normality === 'ks' ? 'Kolmogorov-Smirnov test (with Lilliefors correction)' : 'Shapiro-Wilk test'} and histograms were used to evaluate the normality of the distribution of data.`);
     if (used.has('param')) {
       let t;
       if (k === 2) t = used.has('welch') && used.has('ttest') ? "unpaired Student's t-test (or Welch's t-test when Levene's test indicated unequal variances)"
@@ -871,7 +1055,7 @@ const Analysis = (() => {
       const e = [];
       if (used.has('param')) e.push(k === 2 ? 'mean differences' : 'mean differences (Tukey-adjusted)');
       if (used.has('nonparam')) e.push('Hodges-Lehmann median differences');
-      if (used.has('cat')) e.push('relative risks (RR)');
+      if (used.has('cat')) e.push(o.catEffect === 'or' ? 'odds ratios (OR)' : 'relative risks (RR)');
       if (e.length) s.push(`Effect estimates were reported as ${listJoin(e)} with 95% confidence intervals (CI).`);
     }
     const within = [];
@@ -893,6 +1077,12 @@ const Analysis = (() => {
     if (used.has('mixed')) s.push('The group × time interaction was assessed by mixed (split-plot) ANOVA with Greenhouse-Geisser correction.');
     if (used.has('ancova')) s.push('Analysis of covariance (ANCOVA) was used to compare groups after adjustment for covariates, reporting adjusted (estimated marginal) means with 95% CI and Bonferroni-adjusted pairwise comparisons.');
     if (used.has('survival')) s.push('Survival was estimated by the Kaplan-Meier method and compared between groups using the log-rank test.');
+    if (used.has('cox')) s.push('Cox proportional hazards regression was used to identify predictors of time to event, reporting hazard ratios (HR) with 95% CI.');
+    if (used.has('mcnemar')) s.push('Changes in qualitative variables between two measurements were assessed using the McNemar test (exact binomial when discordant pairs were fewer than 25) or the McNemar-Bowker test for more than two categories.');
+    if (used.has('kappa')) s.push("Agreement between qualitative ratings was assessed using Cohen's kappa (κ) coefficient.");
+    if (used.has('icc')) s.push('Agreement between quantitative measurements was assessed using the intraclass correlation coefficient (ICC; two-way random effects, absolute agreement) and Bland-Altman analysis with 95% limits of agreement.');
+    if (used.has('diagnostic')) s.push('Diagnostic accuracy was expressed as sensitivity, specificity, positive and negative predictive values, likelihood ratios and accuracy, with exact (Clopper-Pearson) 95% CI.');
+    if (used.has('cronbach')) s.push("Internal consistency was assessed using Cronbach's alpha (α) coefficient.");
     if (used.has('linear')) s.push('Multiple linear regression was used to identify predictors of quantitative outcomes, reporting unstandardized (B) and standardized (β) coefficients with 95% CI.');
     if (used.has('logistic')) s.push('Binary logistic regression was used to identify predictors of binary outcomes, reporting odds ratios (OR) with 95% CI; model fit was assessed by the omnibus chi-square test and Nagelkerke R².');
     if (used.has('roc')) s.push('Receiver operating characteristic (ROC) curve analysis was used to assess diagnostic performance; the area under the curve (AUC) was reported with its 95% CI (DeLong method), and the optimal cut-off was chosen by the Youden index.');
@@ -900,13 +1090,46 @@ const Analysis = (() => {
     return s.join(' ');
   }
 
+  // caption of the flow diagram figure
+  const FLOW_CAPTIONS = { consort: 'CONSORT flowchart of the enrolled patients', strobe: 'STROBE flow diagram of the study participants',
+    stard: 'STARD flow diagram of the study participants', simple: 'Flowchart of the study participants' };
+  const flowCaption = cfg => FLOW_CAPTIONS[(cfg.consort && cfg.consort.type) || 'consort'];
+
   function introText(cfg, gl, gN) {
     const c = cfg.consort, k = gl.length;
     if (!c || !c.enabled) return '';
-    const ex = c.excluded.filter(e => +e.n > 0);
-    const exTotal = ex.reduce((s, e) => s + +e.n, 0);
+    const type = c.type || 'consort';
+    const ex = c.excluded.filter(e => +e.n > 0), exTotal = ex.reduce((s, e) => s + +e.n, 0);
+    const exTxt = exTotal ? `; ${exTotal} were excluded (${ex.map(e => `${lowerFirst(e.text.trim())}: ${e.n}`).join('; ')})` : '';
+    if (type === 'simple') {
+      const steps = c.steps.filter(st => String(st.text).trim());
+      if (!steps.length) return '';
+      const parts = steps.map(st => `${lowerFirst(st.text.trim())} (n=${+st.n || 0})${+st.exN > 0 ? `, with ${st.exN} ${st.exText ? lowerFirst(st.exText.trim()) : 'excluded'}` : ''}`);
+      let t = `The flow of the study participants was as follows: ${parts.join('; then ')}.`;
+      if (c.splitGroups && k > 1) t += ` Finally, ${c.groups.map((g, i) => `${g.analysed} patients in ${gl[i]}`).join(', ')} were analyzed.`;
+      return t;
+    }
+    if (type === 'stard') {
+      const b = c.stard.branches, n = x => +x || 0;
+      const present = b.reduce((s, x) => s + n(x.present), 0), absent = b.reduce((s, x) => s + n(x.absent), 0), noRef = b.reduce((s, x) => s + n(x.noRef), 0);
+      let t = `In this study, ${c.assessed} participants were potentially eligible${exTxt}. ${c.stard.tested} participants received the index test, which was positive in ${n(b[0].n)}, negative in ${n(b[1].n)}`;
+      t += n(b[2].n) ? ` and inconclusive in ${n(b[2].n)}.` : '.';
+      if (noRef) t += ` ${noRef} participant${noRef > 1 ? 's' : ''} did not receive the reference standard.`;
+      return t + ` According to the reference standard, the target condition was present in ${present} and absent in ${absent} participants.`;
+    }
+    if (type === 'strobe') {
+      const inc = c.groups.map(g => +g.allocated);
+      let t = `In this study, ${c.assessed} individuals were potentially eligible${exTxt}. ${exTotal ? 'The remaining' : 'All'} ${S.sum(inc)} participants were included: ${listJoin(gl.map((g, i) => `${inc[i]} in ${g}`))}.`;
+      const lost = c.groups.map((g, i) => ({ g: gl[i], n: +g.lost || 0, why: g.lostReason, ex: +g.excludedAnalysis || 0, exWhy: g.excludedReason }));
+      if (lost.every(l => !l.n && !l.ex)) return t + ' All included participants were analyzed.';
+      lost.forEach(l => {
+        if (l.n) t += ` In ${l.g}, ${l.n} participant${l.n > 1 ? 's were' : ' was'} lost to follow-up or had missing data${l.why ? ` (${l.why.trim()})` : ''}.`;
+        if (l.ex) t += ` In ${l.g}, ${l.ex} participant${l.ex > 1 ? 's were' : ' was'} excluded from analysis${l.exWhy ? ` (${l.exWhy.trim()})` : ''}.`;
+      });
+      return t + ` Finally, ${c.groups.map((g, i) => `${g.analysed} participants in ${gl[i]}`).join(', ')} were analyzed.`;
+    }
     let t = `In this study, ${c.assessed} patients were assessed for eligibility`;
-    if (exTotal) t += `; ${exTotal} patients were excluded (${ex.map(e => `${e.text.trim().toLowerCase()}: ${e.n}`).join('; ')})`;
+    if (exTotal) t += `; ${exTotal} patients were excluded (${ex.map(e => `${lowerFirst(e.text.trim())}: ${e.n}`).join('; ')})`;
     const alloc = c.groups.map(g => +g.allocated);
     const equal = alloc.every(a => a === alloc[0]);
     t += `. ${exTotal ? 'The remaining' : 'All'} ${S.sum(alloc)} patients were randomly allocated into ${nWord(k)} ${equal ? `equal groups (${alloc[0]} patients in each)` : `groups (${gl.map((g, i) => `${g}: ${alloc[i]}`).join(', ')})`}.`;
@@ -922,5 +1145,5 @@ const Analysis = (() => {
     return t;
   }
 
-  return { run, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf };
+  return { run, normalityTest, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();

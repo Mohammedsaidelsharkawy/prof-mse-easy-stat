@@ -2,7 +2,7 @@
 (() => {
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const STEPS = [['Upload', 'Excel file'], ['Variables', 'Groups & roles'], ['Timepoints', 'Options'], ['CONSORT', 'Flowchart'], ['Report', 'Preview & Word']];
+  const STEPS = [['Upload', 'Excel file'], ['Variables', 'Groups & roles'], ['Timepoints', 'Options'], ['Flowchart', 'CONSORT / STROBE …'], ['Report', 'Preview & Word']];
   const TP_RE = /^(baseline|base|bl|pre|post|preop|postop|before|after|final|end|(t|v|visit|day|d|week|wk|w|month|mo|m|h|hr|y|yr|session)\d+(\.\d+)?|\d+(\.\d+)?(h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks|m|mo|mon|month|months|y|yr|yrs|year|years|min|mins))$/i;
   const UNIT_RE = /^(\d+(\.\d+)?-\d+(\.\d+)?|years?|yrs|months?|days?|weeks?|hours?|deg|degrees?|kg|g|cm|mm|m2|kg\/m2|mmhg|bpm|percent|pct|%|min|mins|sec|ml|mg|mg\/dl|mmol\/l|iu|u\/l|ng|pg|ug|mcg|µg|mmol|umol|µmol|meq|x?10e\d+)$/i;
   // a unit followed by one of these reads as "per": mg_L → mg/L, kg_m2 → kg/m2
@@ -17,7 +17,7 @@
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
-    welch: false, dunn: false, chiPost: false, mixed: false,
+    welch: false, dunn: false, chiPost: false, mixed: false, normality: 'sw', catEffect: 'rr',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -29,7 +29,7 @@
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
     legendSize: ['optLegendSize'], legendTitle: ['optLegendTitle'], legendFrame: ['optLegendFrame', true],
-    welch: ['optWelch', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
+    normality: ['optNormality'], catEffect: ['optCatEffect'], welch: ['optWelch', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -104,6 +104,31 @@
   }
   $('#sheetSel').onchange = e => selectSheet(e.target.value);
 
+  /* ---------- software statement presets (first sentence of Statistical Analysis) ---------- */
+  const SOFTWARE = [
+    ['Prof MSE Easy Stat', 'Statistical analysis was done by Prof MSE Easy Stat v1.0.'],
+    ['IBM SPSS Statistics', 'Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA).'],
+    ['R', 'Statistical analysis was performed using R software, version 4.4 (R Foundation for Statistical Computing, Vienna, Austria).'],
+    ['Stata', 'Statistical analysis was performed using Stata, version 18 (StataCorp LLC, College Station, TX, USA).'],
+    ['GraphPad Prism', 'Statistical analysis was performed using GraphPad Prism, version 10 (GraphPad Software, Boston, MA, USA).'],
+    ['SAS', 'Statistical analysis was performed using SAS, version 9.4 (SAS Institute Inc., Cary, NC, USA).'],
+    ['MedCalc', 'Statistical analysis was performed using MedCalc Statistical Software, version 22 (MedCalc Software Ltd, Ostend, Belgium).'],
+    ['JASP', 'Statistical analysis was performed using JASP, version 0.18 (JASP Team, University of Amsterdam, Amsterdam, the Netherlands).'],
+    ['jamovi', 'Statistical analysis was performed using jamovi, version 2.5 (The jamovi project, Sydney, Australia).'],
+    ['Python', 'Statistical analysis was performed using Python, version 3.12 (Python Software Foundation, Wilmington, DE, USA), with the SciPy and statsmodels libraries.'],
+    ['Minitab', 'Statistical analysis was performed using Minitab, version 21 (Minitab LLC, State College, PA, USA).'],
+    ['Epi Info', 'Statistical analysis was performed using Epi Info, version 7.2 (Centers for Disease Control and Prevention, Atlanta, GA, USA).'],
+    ['Microsoft Excel', 'Statistical analysis was performed using Microsoft Excel 365 (Microsoft Corp., Redmond, WA, USA).'],
+    ['Excel + SPSS', 'Data were collected and coded in Microsoft Excel (Microsoft Corp., Redmond, WA, USA) and analyzed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA).']
+  ];
+  $('#softwarePreset').innerHTML = '<option value="">— choose a template —</option>' + SOFTWARE.map(([n], i) => `<option value="${i}">${esc(n)}</option>`).join('');
+  $('#softwarePreset').onchange = e => {
+    if (e.target.value === '') return;
+    $('#software').value = SOFTWARE[+e.target.value][1];
+    if (state.cfg) state.cfg.study.software = $('#software').value;
+    toast('Software statement set — edit the version number if needed');
+  };
+
   /* ---------- example datasets ---------- */
   const exampleBook = ex => { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ex.rows()), 'Data'); return wb; };
   $('#examples').innerHTML = Examples.LIST.map(ex => `<div class="excard"><h4>${esc(ex.name)}</h4><p>${esc(ex.description)}</p>
@@ -123,6 +148,21 @@
     for (const [col, lv] of Object.entries(ex.levels || {})) {
       const v = state.cfg.variables.find(x => x.kind === 'single' && x.cols[0].col === col);
       if (v) v.levels = [...lv];
+    }
+    // the example's flowchart: type, exclusions, losses (added on top of the analysed patients in the sheet)
+    if (ex.flow) {
+      const f = typeof ex.flow === 'function' ? ex.flow(state.data.rows) : ex.flow, c = ensureConsort();
+      c.type = f.type || 'consort';
+      if (f.excluded) c.excluded = f.excluded.map(e => ({ ...e }));
+      (f.groups || []).forEach((g, i) => {
+        const cg = c.groups[i]; if (!cg) return;
+        Object.assign(cg, g);
+        cg.allocated = cg.analysed + (+cg.lost || 0) + (+cg.excludedAnalysis || 0);
+      });
+      if (f.stard) c.stard = JSON.parse(JSON.stringify(f.stard));
+      if (f.steps) c.steps = f.steps.map(x => ({ ...x }));
+      if (f.splitGroups !== undefined) c.splitGroups = f.splitGroups;
+      syncAssessed(c);
     }
     state.cfg.advanced = (ex.advanced || []).filter(a => [a.outcome, a.event, ...(a.predictors || [])].filter(Boolean).every(c => state.data.headers.includes(c)))
       .map(a => ({ positive: '', predictors: [], univariable: false, include: true, ...a }));
@@ -248,9 +288,9 @@
       let total = 0, fail = 0;
       v.cols.forEach(c => byGroup.forEach(rs => {
         const x = rs.map(r => Analysis.toNum(r[c.col])).filter(isFinite);
-        const sw = Stats.shapiroWilk(x); total++; if (sw && sw.p <= 0.05) fail++;
+        const sw = Analysis.normalityTest(cfg.options.normality)(x); total++; if (sw && sw.p <= 0.05) fail++;
       }));
-      const tip = `title="${fail} of ${total} group/timepoint cells failed Shapiro-Wilk (p ≤ 0.05)"`;
+      const tip = `title="${fail} of ${total} group/timepoint cells failed ${cfg.options.normality === 'ks' ? 'Kolmogorov-Smirnov' : 'Shapiro-Wilk'} (p ≤ 0.05)"`;
       const nonNormal = v.kind === 'repeated' ? fail > total * Analysis.NONNORMAL_SHARE : fail > 0;
       if (nonNormal) return `<span class="chip warn" ${tip}>non-normal (${fail}/${total})</span>`;
       return fail ? `<span class="chip ok" ${tip}>normal (${fail}/${total} failed)</span>` : '<span class="chip ok">normal</span>';
@@ -309,7 +349,9 @@
   });
 
   /* ---------- advanced analyses (regression, ROC) ---------- */
-  const ADV_TYPES = { linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival' };
+  const ADV_TYPES = { linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
+    cox: 'Cox regression (hazard ratios)', mcnemar: 'McNemar test (paired categorical)', kappa: "Cohen's kappa (agreement, categorical)",
+    agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)" };
   const analysedRows = () => { const g = activeGroups(); return state.data.rows.filter(r => g.includes(Analysis.toCat(r[state.cfg.groupCol]))); };
   function advColumns() {
     const cfg = state.cfg, rows = analysedRows();
@@ -324,7 +366,7 @@
     const isCat = c => c.kind === 'categorical' && Analysis.levelsOf(cfg, rows, c.col).length >= 2;
     const select = (key, label, list, value) => `<div><label class="f">${label}</label><select data-af="${key}"><option value="">— choose —</option>${
       list.map(c => `<option value="${esc(c.col)}" ${c.col === value ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>`;
-    const levelSelect = (label, col, value) => `<div><label class="f">${label}</label><select data-af="positive">${
+    const levelSelect = (label, col, value, key = 'positive') => `<div><label class="f">${label}</label><select data-af="${key}">${
       (col ? Analysis.levelsOf(cfg, rows, col) : []).map(l => `<option ${l === value ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
     $('#advList').innerHTML = cfg.advanced.length ? cfg.advanced.map((a, ai) => {
       const t = a.type, num = cols.filter(c => c.kind === 'numeric');
@@ -336,13 +378,22 @@
       if (t === 'survival') fields = select('outcome', 'Follow-up time', num, a.outcome) + select('event', 'Event column', cols.filter(isCat), a.event)
         + levelSelect('Event value (others are censored)', a.event, a.positive)
         + `<div><label class="f">Survival at time (optional)</label><input type="text" data-af="at" value="${esc(a.at || '')}" placeholder="e.g. 12"></div>`;
-      const uni = t === 'linear' || t === 'logistic' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
+      const cat = cols.filter(isCat);
+      if (t === 'cox') { fields = select('outcome', 'Follow-up time', num, a.outcome) + select('event', 'Event column', cat, a.event) + levelSelect('Event value (others are censored)', a.event, a.positive); predLabel = 'Predictors (covariates, e.g. group, age, stage)'; preds = cols.filter(c => c.col !== a.event); }
+      if (t === 'mcnemar') fields = select('outcome', 'First measurement (e.g. before)', cat, a.outcome) + select('second', 'Second measurement (e.g. after)', cat.filter(c => c.col !== a.outcome), a.second) + levelSelect('Category to report', a.outcome, a.positive);
+      if (t === 'kappa') fields = select('outcome', 'Rater / method A', cat, a.outcome) + select('second', 'Rater / method B', cat.filter(c => c.col !== a.outcome), a.second);
+      if (t === 'agreement') fields = select('outcome', 'Method / rater A', num, a.outcome) + select('second', 'Method / rater B', num.filter(c => c.col !== a.outcome), a.second);
+      if (t === 'diagnostic') fields = select('outcome', 'Reference standard (true diagnosis)', cat, a.outcome) + levelSelect('Condition present when', a.outcome, a.positive)
+        + select('event', 'Index test (categorical result)', cat.filter(c => c.col !== a.outcome), a.event) + levelSelect('Test positive when', a.event, a.eventPositive, 'eventPositive');
+      if (t === 'cronbach') { fields = '<p class="legend-note" style="margin:0">Tick the questionnaire items (numeric scores). Patients with any missing item are left out.</p>'; predLabel = 'Items'; preds = cols.filter(c => Analysis.isNumberColumn(rows, c.col)); }
+      const withPreds = ['linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach'].includes(t);
+      const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
       return `<div class="gcard" data-adv="${ai}">
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
           <label class="check" style="margin:0"><input type="checkbox" data-af="include" ${a.include !== false ? 'checked' : ''}><span>Include</span></label>
           <button class="btn ghost small" data-advdel="${ai}" type="button">✕ Remove</button></div>
         <div class="grid g3" style="margin-top:8px">${fields}${uni}</div>
-        ${t === 'survival' ? '<p class="legend-note" style="margin:6px 0 0">Curves are drawn for each study group; patients without the event are censored at their follow-up time.</p>' : `
+        ${t === 'survival' ? '<p class="legend-note" style="margin:6px 0 0">Curves are drawn for each study group; patients without the event are censored at their follow-up time.</p>' : t === 'mcnemar' ? '<p class="legend-note" style="margin:6px 0 0">Tested in each study group and in all patients together.</p>' : !withPreds ? '' : `
         <label class="f" style="margin-top:8px">${predLabel}</label>
         <div class="predlist">${preds.filter(c => c.col !== a.outcome).map(c => `<label><input type="checkbox" data-apred="${esc(c.col)}" ${(a.predictors || []).includes(c.col) ? 'checked' : ''}>${esc(c.label)} <span class="legend-note">${c.kind === 'numeric' ? 'num' : 'cat'}</span></label>`).join('')}</div>`}
       </div>`;
@@ -358,7 +409,7 @@
   $('#advAdd').addEventListener('click', e => {
     const b = e.target.closest('[data-advadd]'); if (!b) return;
     readUiIntoCfg();
-    state.cfg.advanced.push({ type: b.dataset.advadd, outcome: '', positive: '', predictors: [], univariable: b.dataset.advadd === 'logistic', include: true });
+    state.cfg.advanced.push({ type: b.dataset.advadd, outcome: '', positive: '', predictors: [], univariable: ['logistic', 'cox'].includes(b.dataset.advadd), include: true });
     renderAdvanced();
   });
   $('#advList').addEventListener('click', e => {
@@ -367,57 +418,114 @@
   });
   $('#advList').addEventListener('change', e => {
     const f = e.target.dataset.af;
-    if (f !== 'outcome' && f !== 'event') return;
+    if (f !== 'outcome' && f !== 'event' && f !== 'second') return;
     readUiIntoCfg();
     const a = state.cfg.advanced[+e.target.closest('[data-adv]').dataset.adv];
     a.predictors = (a.predictors || []).filter(c => c !== a.outcome);
     // the positive value belongs to the outcome (logistic, ROC) or to the event column (survival)
-    if (a.type === 'survival') { if (f === 'event') a.positive = defaultPositive(a.event); }
-    else a.positive = a.type === 'logistic' || a.type === 'roc' ? defaultPositive(a.outcome) : '';
+    if (a.type === 'survival' || a.type === 'cox') { if (f === 'event') a.positive = defaultPositive(a.event); }
+    else if (a.type === 'diagnostic') { if (f === 'event') a.eventPositive = defaultPositive(a.event); else a.positive = defaultPositive(a.outcome); }
+    else a.positive = ['logistic', 'roc', 'mcnemar'].includes(a.type) ? defaultPositive(a.outcome) : '';
     renderAdvanced();
   });
 
   $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; });
   $('#customReset').onclick = () => { readUiIntoCfg(); state.cfg.options.customColors = defaultOptions().customColors; renderTimepoints(); };
 
-  /* ---------- step 4: CONSORT ---------- */
+  /* ---------- step 4: flowchart (CONSORT, STROBE, STARD or simple) ---------- */
+  const FLOW_HINTS = {
+    consort: 'CONSORT 2010 — for randomized controlled trials. Numbers randomized and analysed are pre-filled from your data.',
+    strobe: 'STROBE — for observational studies (cohort, case-control, cross-sectional). Numbers included and analysed are pre-filled from your data.',
+    stard: 'STARD 2015 — for diagnostic accuracy studies: index test results and the reference standard (final diagnosis).',
+    simple: 'A simple flowchart: a chain of steps, each with an optional exclusion box, optionally split into the study groups at the end.'
+  };
   function ensureConsort() {
     const cfg = state.cfg, groups = activeGroups();
-    if (cfg.consort && cfg.consort.groups.length === groups.length) return cfg.consort;
     const ns = groups.map(groupN), total = ns.reduce((a, b) => a + b, 0);
-    cfg.consort = {
-      enabled: true, assessed: total,
-      excluded: [{ text: 'Not meeting inclusion criteria', n: 0 }, { text: 'Declined to participate', n: 0 }],
-      groups: groups.map((g, i) => ({ allocated: ns[i], description: '', lost: 0, lostReason: '', excludedAnalysis: 0, excludedReason: '', analysed: ns[i] }))
-    };
-    return cfg.consort;
+    if (!cfg.consort || cfg.consort.groups.length !== groups.length) {
+      const prev = cfg.consort;
+      cfg.consort = {
+        enabled: prev ? prev.enabled : true, type: prev ? prev.type : 'consort', assessed: total,
+        excluded: [{ text: 'Not meeting inclusion criteria', n: 0 }, { text: 'Declined to participate', n: 0 }],
+        groups: groups.map((g, i) => ({ allocated: ns[i], description: '', lost: 0, lostReason: '', excludedAnalysis: 0, excludedReason: '', analysed: ns[i] }))
+      };
+    }
+    const c = cfg.consort, branch = name => ({ name, n: 0, noRef: 0, present: 0, absent: 0, inconclusive: 0 });
+    c.type = c.type || 'consort';
+    c.stard = c.stard || { tested: total, branches: [branch('Positive'), branch('Negative'), branch('Inconclusive')] };
+    c.steps = c.steps || [{ text: 'Assessed for eligibility', n: total, exText: 'Excluded', exN: 0 }, { text: 'Included in the study', n: total, exText: '', exN: 0 }];
+    if (c.splitGroups === undefined) c.splitGroups = true;
+    return c;
   }
+  const num = (attrs, v) => `<input type="number" min="0" ${attrs} value="${+v || 0}">`;
+  // assessed / potentially eligible = all excluded + all groups (CONSORT, STROBE) or + those who received the index test (STARD)
+  function syncAssessed(c) {
+    if (c.type === 'simple') return;
+    const ex = c.excluded.reduce((s, e) => s + (+e.n || 0), 0);
+    c.assessed = ex + (c.type === 'stard' ? +c.stard.tested || 0 : c.groups.reduce((s, g) => s + (+g.allocated || 0), 0));
+    const el = document.querySelector('#cForm [data-calc="assessed"]'); if (el) el.value = c.assessed;
+  }
+  const calcBox = (label, v, note) => `<div><label class="f">${label}</label><input type="number" data-calc="assessed" value="${v}" readonly title="${note}" style="background:var(--lav)"><div class="legend-note">${note}</div></div>`;
   function renderConsortForm() {
-    const c = ensureConsort(), gl = activeGroups().map(g => state.cfg.groupLabels[g]);
+    const c = ensureConsort(), gl = activeGroups().map(g => state.cfg.groupLabels[g]), t = c.type;
+    syncAssessed(c);
     $('#cEnabled').checked = c.enabled;
-    $('#cAssessed').value = c.assessed;
-    $('#cExcluded').innerHTML = c.excluded.map((e, i) => `<div class="row" style="margin-bottom:6px"><input type="text" data-ex="${i}" data-f="text" value="${esc(e.text)}" style="flex:3"><input type="number" min="0" data-ex="${i}" data-f="n" value="${e.n}" style="flex:1;max-width:100px"><button class="btn ghost small" data-exdel="${i}">✕</button></div>`).join('');
-    $('#cGroups').innerHTML = c.groups.map((g, i) => `<div class="gcard"><h4>${esc(gl[i])}</h4>
-      <div class="grid g2">
-        <div><label class="f">Allocated (n)</label><input type="number" min="0" data-cg="${i}" data-f="allocated" value="${g.allocated}"></div>
-        <div><label class="f">Analysed (n)</label><input type="number" min="0" data-cg="${i}" data-f="analysed" value="${g.analysed}"></div>
-        <div><label class="f">Lost to follow-up (n)</label><input type="number" min="0" data-cg="${i}" data-f="lost" value="${g.lost}"></div>
-        <div><label class="f">Reason lost</label><input type="text" data-cg="${i}" data-f="lostReason" value="${esc(g.lostReason)}"></div>
-        <div><label class="f">Excluded from analysis (n)</label><input type="number" min="0" data-cg="${i}" data-f="excludedAnalysis" value="${g.excludedAnalysis}"></div>
-        <div><label class="f">Reason excluded</label><input type="text" data-cg="${i}" data-f="excludedReason" value="${esc(g.excludedReason)}"></div>
-      </div>
-      <label class="f" style="margin-top:8px">Intervention description (optional)</label><textarea data-cg="${i}" data-f="description" style="min-height:60px">${esc(g.description)}</textarea></div>`).join('');
+    $('#cType').value = t;
+    $('#cHint').textContent = FLOW_HINTS[t];
+    const excluded = `<h3>Excluded (reasons)</h3>${c.excluded.map((e, i) => `<div class="row" style="margin-bottom:6px"><input type="text" data-ex="${i}" data-f="text" value="${esc(e.text)}" style="flex:3">${num(`data-ex="${i}" data-f="n" style="flex:1;max-width:100px"`, e.n)}<button class="btn ghost small" data-exdel="${i}" type="button">✕</button></div>`).join('')}
+      <button class="btn ghost small" data-cact="addEx" type="button">+ Add reason</button>`;
+    let html = '';
+    if (t === 'consort' || t === 'strobe') {
+      const S = t === 'strobe';
+      html = `<h3>${S ? 'Identification' : 'Enrollment'}</h3><div class="grid g2">${calcBox(S ? 'Potentially eligible individuals' : 'Assessed for eligibility', c.assessed, `= excluded + total ${S ? 'included' : 'allocated'} in the groups`)}</div>
+        ${excluded}<h3>Per group</h3><div class="grid">${c.groups.map((g, i) => `<div class="gcard"><h4>${esc(gl[i])}</h4>
+        <div class="grid g2">
+          <div><label class="f">${S ? 'Included' : 'Allocated'} (n)</label>${num(`data-cg="${i}" data-f="allocated"`, g.allocated)}</div>
+          <div><label class="f">Analysed (n)</label>${num(`data-cg="${i}" data-f="analysed"`, g.analysed)}</div>
+          <div><label class="f">${S ? 'Lost to follow-up / missing data' : 'Lost to follow-up'} (n)</label>${num(`data-cg="${i}" data-f="lost"`, g.lost)}</div>
+          <div><label class="f">Reason</label><input type="text" data-cg="${i}" data-f="lostReason" value="${esc(g.lostReason)}"></div>
+          <div><label class="f">Excluded from analysis (n)</label>${num(`data-cg="${i}" data-f="excludedAnalysis"`, g.excludedAnalysis)}</div>
+          <div><label class="f">Reason excluded</label><input type="text" data-cg="${i}" data-f="excludedReason" value="${esc(g.excludedReason)}"></div>
+        </div>
+        <label class="f" style="margin-top:8px">${S ? 'Group description (optional, e.g. "Exposed", "Cases")' : 'Intervention description (optional)'}</label><textarea data-cg="${i}" data-f="description" style="min-height:60px">${esc(g.description)}</textarea></div>`).join('')}</div>`;
+    } else if (t === 'stard') {
+      html = `<h3>Enrollment</h3><div class="grid g2">${calcBox('Potentially eligible participants', c.assessed, '= excluded + received the index test')}
+          <div><label class="f">Received the index test</label>${num('data-sd="tested"', c.stard.tested)}</div></div>
+        ${excluded}<h3>Index test results</h3><div class="grid">${c.stard.branches.map((b, i) => `<div class="gcard"><h4>Index test ${b.name.toLowerCase()}${i === 2 ? ' (shown only when n > 0)' : ''}</h4>
+        <div class="grid g3">
+          <div><label class="f">Participants (n)</label>${num(`data-sb="${i}" data-f="n"`, b.n)}</div>
+          <div><label class="f">No reference standard (n)</label>${num(`data-sb="${i}" data-f="noRef"`, b.noRef)}</div>
+          <div></div>
+          <div><label class="f">Target condition present (n)</label>${num(`data-sb="${i}" data-f="present"`, b.present)}</div>
+          <div><label class="f">Target condition absent (n)</label>${num(`data-sb="${i}" data-f="absent"`, b.absent)}</div>
+          <div><label class="f">Inconclusive (n)</label>${num(`data-sb="${i}" data-f="inconclusive"`, b.inconclusive)}</div>
+        </div></div>`).join('')}</div>`;
+    } else {
+      html = `<h3>Steps (top to bottom)</h3>${c.steps.map((st, i) => `<div class="gcard" style="margin-bottom:8px"><div class="row"><b>Step ${i + 1}</b><span class="spacer"></span><button class="btn ghost small" data-stdel="${i}" type="button">✕</button></div>
+          <div class="grid g2" style="margin-top:6px">
+            <div><label class="f">Text</label><input type="text" data-st="${i}" data-f="text" value="${esc(st.text)}"></div>
+            <div><label class="f">n</label>${num(`data-st="${i}" data-f="n"`, st.n)}</div>
+            <div><label class="f">Exclusion box text (optional)</label><input type="text" data-st="${i}" data-f="exText" value="${esc(st.exText)}" placeholder="e.g. Excluded: refused consent"></div>
+            <div><label class="f">Excluded (n)</label>${num(`data-st="${i}" data-f="exN"`, st.exN)}</div>
+          </div></div>`).join('')}
+        <button class="btn ghost small" data-cact="addStep" type="button">+ Add step</button>
+        <h3>Groups</h3><label class="check"><input type="checkbox" data-c="splitGroups" ${c.splitGroups ? 'checked' : ''}><span>Split into the study groups at the end</span></label>
+        <div class="grid g3">${c.groups.map((g, i) => `<div><label class="f">${esc(gl[i])} — analysed (n)</label>${num(`data-cg="${i}" data-f="analysed"`, g.analysed)}</div>`).join('')}</div>`;
+    }
+    $('#cForm').innerHTML = html;
     drawConsortPreview();
   }
   function readConsort() {
-    const c = state.cfg && state.cfg.consort; if (!c || !$('#cAssessed').value && $('#cAssessed').value !== '0') return;
+    const c = state.cfg && state.cfg.consort; if (!c || !$('#cForm').innerHTML) return;
     c.enabled = $('#cEnabled').checked;
-    c.assessed = +$('#cAssessed').value || 0;
-    document.querySelectorAll('[data-ex]').forEach(el => { c.excluded[+el.dataset.ex][el.dataset.f] = el.dataset.f === 'n' ? (+el.value || 0) : el.value; });
-    document.querySelectorAll('[data-cg]').forEach(el => {
-      const g = c.groups[+el.dataset.cg]; if (!g) return;
-      g[el.dataset.f] = el.type === 'number' ? (+el.value || 0) : el.value;
-    });
+    const val = el => el.type === 'checkbox' ? el.checked : el.type === 'number' ? (+el.value || 0) : el.value;
+    document.querySelectorAll('#cForm [data-c]').forEach(el => { c[el.dataset.c] = val(el); });
+    document.querySelectorAll('#cForm [data-ex]').forEach(el => { c.excluded[+el.dataset.ex][el.dataset.f] = val(el); });
+    document.querySelectorAll('#cForm [data-cg]').forEach(el => { const g = c.groups[+el.dataset.cg]; if (g) g[el.dataset.f] = val(el); });
+    document.querySelectorAll('#cForm [data-sd]').forEach(el => { c.stard[el.dataset.sd] = val(el); });
+    document.querySelectorAll('#cForm [data-sb]').forEach(el => { c.stard.branches[+el.dataset.sb][el.dataset.f] = val(el); });
+    document.querySelectorAll('#cForm [data-st]').forEach(el => { c.steps[+el.dataset.st][el.dataset.f] = val(el); });
+    syncAssessed(c);
   }
   function drawConsortPreview() {
     const c = state.cfg.consort, gl = activeGroups().map(g => state.cfg.groupLabels[g]);
@@ -426,17 +534,27 @@
     tgt.width = cv.width; tgt.height = cv.height; tgt.getContext('2d').drawImage(cv, 0, 0);
   }
   $('#p4').addEventListener('input', e => {
+    if (e.target.id === 'cType') return;
     readConsort();
-    const el = e.target;
-    if (el.dataset.cg !== undefined && ['allocated', 'lost', 'excludedAnalysis'].includes(el.dataset.f)) {
-      const g = state.cfg.consort.groups[+el.dataset.cg];
+    const el = e.target, c = state.cfg.consort;
+    // analysed = allocated − lost − excluded, kept in step as the user types (CONSORT / STROBE)
+    if (el.dataset.cg !== undefined && ['allocated', 'lost', 'excludedAnalysis'].includes(el.dataset.f) && c.type !== 'simple') {
+      const g = c.groups[+el.dataset.cg];
       g.analysed = Math.max(0, g.allocated - g.lost - g.excludedAnalysis);
-      const a = document.querySelector(`[data-cg="${el.dataset.cg}"][data-f="analysed"]`); if (a) a.value = g.analysed;
+      const a = document.querySelector(`#cForm [data-cg="${el.dataset.cg}"][data-f="analysed"]`); if (a) a.value = g.analysed;
     }
     drawConsortPreview();
   });
-  $('#cAddEx').onclick = () => { readConsort(); state.cfg.consort.excluded.push({ text: 'Other reasons', n: 0 }); renderConsortForm(); };
-  $('#cExcluded').addEventListener('click', e => { const b = e.target.closest('[data-exdel]'); if (!b) return; readConsort(); state.cfg.consort.excluded.splice(+b.dataset.exdel, 1); renderConsortForm(); });
+  $('#cType').addEventListener('change', e => { readConsort(); state.cfg.consort.type = e.target.value; renderConsortForm(); });
+  $('#cForm').addEventListener('click', e => {
+    const c = state.cfg.consort, b = e.target.closest('[data-cact],[data-exdel],[data-stdel]'); if (!b) return;
+    readConsort();
+    if (b.dataset.cact === 'addEx') c.excluded.push({ text: 'Other reasons', n: 0 });
+    else if (b.dataset.cact === 'addStep') c.steps.push({ text: 'Next step', n: 0, exText: '', exN: 0 });
+    else if (b.dataset.exdel !== undefined) c.excluded.splice(+b.dataset.exdel, 1);
+    else if (b.dataset.stdel !== undefined) c.steps.splice(+b.dataset.stdel, 1);
+    renderConsortForm();
+  });
 
   /* ---------- read UI into cfg ---------- */
   function readUiIntoCfg() {
@@ -483,7 +601,7 @@
     busy(true);
     setTimeout(() => {
       try {
-        ensureConsort();
+        syncAssessed(ensureConsort());
         const cfg = state.cfg;
         const res = Analysis.run(state.data, cfg);
         const pal = chartPalette(cfg.options), sty = chartStyle(cfg.options);
@@ -522,7 +640,7 @@
     html += `<div class="report-sec"><h3>Results</h3>`;
     if (r.consort) {
       const out = isOut('consort');
-      html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include CONSORT text and flowchart')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${out ? 'Not exported' : `Figure ${fig++}`}: CONSORT flowchart of the enrolled patients</div></div>`;
+      html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${out ? 'Not exported' : `Figure ${fig++}`}: ${esc(r.flowCaption)}</div></div>`;
     }
     html += `</div>`;
     r.sections.forEach((s, i) => {
