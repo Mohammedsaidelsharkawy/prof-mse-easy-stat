@@ -177,7 +177,7 @@
     }
     state.cfg.advanced = (ex.advanced || []).filter(a => [a.outcome, a.event, ...(a.predictors || [])].filter(Boolean).every(c => state.data.headers.includes(c)))
       .map(a => ({ positive: '', predictors: [], univariable: false, include: true, ...a }));
-    toast(`Example loaded: ${ex.name}${state.cfg.advanced.length ? ' — with suggested advanced analyses in step 3' : ''}`);
+    toast(`Example loaded: ${ex.name}${state.cfg.advanced.length ? ' — with suggested advanced analyses in step 8' : ''}`);
   });
 
   function selectSheet(name) {

@@ -22,9 +22,9 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0}
-body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5}
+body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;background:radial-gradient(1200px 420px at 50% -120px,var(--lav),transparent 70%) no-repeat,var(--bg);color:var(--ink);font-size:15px;line-height:1.5;min-height:100vh}
 header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;box-shadow:0 2px 12px rgba(28,22,72,.25)}
-.top-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:10px 20px}
+.top-in{max-width:1920px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:10px clamp(12px,2vw,28px)}
 .logo{width:54px;height:54px;border-radius:12px;background:#fff;padding:3px;object-fit:contain}
 .brand h1{margin:0;font-size:22px;letter-spacing:.3px}
 .brand h1 span{color:#C9A2EC}
@@ -33,18 +33,26 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 .pulse{height:4px;background:linear-gradient(90deg,var(--purple),#C9A2EC,var(--purple));background-size:200% 100%;animation:pulse 6s linear infinite}
 @keyframes pulse{to{background-position:-200% 0}}
 
-main{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
-.stepper{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
-.step{flex:1;min-width:112px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);cursor:pointer;user-select:none;transition:.15s}
-.step .num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:var(--lav2);color:var(--accent);flex:none}
-.step .lbl{font-weight:600;font-size:14px}
-.step .sub{font-size:12px;color:var(--muted)}
-.step.active{border-color:var(--purple);box-shadow:0 0 0 3px rgba(123,47,190,.15)}
-.step.active .num{background:var(--purple);color:#fff}
+main{max-width:1920px;margin:0 auto;padding:16px clamp(12px,2vw,28px) 60px}
+/* step bar: one row of steps joined by a progress line, kept in view under the header */
+.stepper{display:flex;margin-bottom:18px;padding:10px 8px 8px;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 4px 18px rgba(28,22,72,.06);position:sticky;top:78px;z-index:15}
+.step{flex:1 1 0;min-width:0;position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:4px 4px 6px;border-radius:12px;cursor:pointer;user-select:none;text-align:center;transition:background .15s}
+.step:hover{background:var(--lav)}
+.step::before{content:'';position:absolute;top:19px;left:calc(-50% + 20px);right:calc(50% + 20px);height:3px;border-radius:2px;background:var(--line);transition:background .2s}
+.step:first-child::before{display:none}
+.step.done::before,.step.active::before{background:linear-gradient(90deg,var(--navy),var(--purple))}
+.step .num{position:relative;z-index:1;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13.5px;background:var(--lav2);color:var(--accent);box-shadow:0 0 0 4px var(--card);transition:.2s}
+.step .lbl{font-weight:600;font-size:13px;line-height:1.2;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step .sub{font-size:11px;line-height:1.2;color:var(--muted);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step.active .num{background:var(--purple);color:#fff;box-shadow:0 0 0 4px var(--card),0 0 0 7px rgba(123,47,190,.28)}
+.step.active .lbl{color:var(--accent)}
 .step.done .num{background:var(--navy);color:#fff}
+:root[data-theme="dark"] .step.done .num{background:#5E4A9A}
 .step.disabled{opacity:.45;pointer-events:none}
+@media (max-width:1150px){.step .sub{display:none}}
+@media (max-width:700px){.step .lbl{display:none}.step.active .lbl{display:block}.stepper{top:70px}}
 
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;margin-bottom:18px;box-shadow:0 1px 3px rgba(28,22,72,.04)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:16px;box-shadow:0 1px 3px rgba(28,22,72,.04),0 8px 24px rgba(28,22,72,.04)}
 .card h2{margin:0 0 4px;font-size:19px;color:var(--title)}
 .card h3{margin:18px 0 8px;font-size:15.5px;color:var(--title)}
 .card .hint{color:var(--muted);font-size:13.5px;margin:0 0 14px}
