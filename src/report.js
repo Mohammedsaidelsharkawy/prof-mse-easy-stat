@@ -49,7 +49,9 @@ const Report = (() => {
     headCells.forEach((h, i) => {
       for (let s = 0; s < (h.span || 1); s++) {
         const name = h.t || '';
-        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : /P value/.test(name) ? 0.7 : 1.15);
+        // very wide tables (e.g. ROC) need roomier label and P value columns
+        const wide = nCols > 7;
+        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : /P value/.test(name) ? (wide ? 0.95 : 0.7) : 1.15);
       }
     });
     const tot = weights.reduce((a, b) => a + b, 0);
@@ -127,9 +129,11 @@ const Report = (() => {
     BODY_FONT = opts.font || DEFAULT_FONT;
     const children = [];
     if (opts.title) children.push(para(opts.title, { bold: true, size: 32, align: AlignmentType.CENTER, after: 240, color: brand ? '7B2FBE' : undefined }));
-    children.push(heading('Statistical Analysis', brand));
-    children.push(para(model.methods));
-    children.push(heading('Results', brand));
+    if (model.methods) {
+      children.push(heading('Statistical Analysis', brand));
+      children.push(para(model.methods));
+    }
+    if (model.consort || model.sections.length) children.push(heading('Results', brand));
     let fig = 1, tab = 1;
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
@@ -137,10 +141,12 @@ const Report = (() => {
       children.push(caption(`Figure ${fig++}: CONSORT flowchart of the enrolled patients`));
     }
     for (const s of model.sections) {
-      children.push(caption(`Table ${tab++}: ${s.title}`));
-      children.push(table(s.head, s.rows, brand, opts.tableStyle));
-      children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
-      if (s.comment) children.push(para(s.comment));
+      if (s.tableOn !== false) {
+        children.push(caption(`Table ${tab++}: ${s.title}`));
+        children.push(table(s.head, s.rows, brand, opts.tableStyle));
+        children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
+        if (s.comment) children.push(para(s.comment));
+      }
       const figs = s.figures.filter(f => f.url).map(f => ({ ...f, label: `Figure ${fig++}: ${f.caption}` }));
       const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
       if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));

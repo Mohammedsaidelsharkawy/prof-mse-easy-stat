@@ -81,6 +81,16 @@ table.t td{padding:6px 10px;border-top:1px solid var(--line);vertical-align:midd
 table.t tr:hover td{background:var(--hover)}
 table.t td input[type=text]{min-width:150px}
 table.t td select{min-width:120px}
+.tpchks{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px;font-family:inherit;font-size:12.5px;color:var(--ink)}
+.tpchks label{display:flex;align-items:center;gap:3px;white-space:nowrap}
+.tpchks input{accent-color:var(--purple)}
+.predlist{display:flex;flex-wrap:wrap;gap:4px 16px;max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--field)}
+.predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
+.predlist input{accent-color:var(--purple)}
+.off{opacity:.38}
+.check.exp{margin:0;font-size:13px;color:var(--muted);white-space:nowrap}
+.figs figure .check.exp{justify-content:center;margin-top:4px}
+.exp-bar{background:var(--lav);border-radius:10px;padding:8px 12px;margin-bottom:14px}
 input[type=color]{width:42px;height:34px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--field);cursor:pointer}
 .mono{font-family:Consolas,monospace;font-size:12.5px;color:var(--muted)}
 .chip{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
@@ -240,13 +250,16 @@ footer b{color:var(--purple)}
         <div><label class="f">Chart shape</label><select id="optAspect"><option value="wide" selected>Wide</option><option value="standard">Standard (4:3)</option><option value="square">Square</option></select></div>
         <div><label class="f">Bar fill</label><select id="optBarFill"><option value="gradient" selected>Gradient</option><option value="solid">Solid</option><option value="outline">Outline only</option><option value="hatched">Hatched (black &amp; white print)</option></select></div>
         <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
-        <div><label class="f">Legend position</label><select id="optLegend"><option value="bottom" selected>Bottom</option><option value="top">Top</option></select></div>
+        <div><label class="f">Legend position</label><select id="optLegend"><option value="bottom" selected>Bottom</option><option value="top">Top</option><option value="right">Right</option><option value="inside">Inside the plot</option><option value="none">Hidden</option></select></div>
+        <div><label class="f">Legend text size</label><select id="optLegendSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option></select></div>
+        <div><label class="f">Legend title (optional)</label><input type="text" id="optLegendTitle" placeholder="e.g. Groups"></div>
         <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
       </div>
       <div class="grid g2" style="margin-top:12px">
         <div>
           <label class="check"><input type="checkbox" id="optGrid" checked><span><b>Gridlines</b> behind the data</span></label>
           <label class="check"><input type="checkbox" id="optArrows" checked><span><b>Axis arrows</b> at the ends of the axes</span></label>
+          <label class="check"><input type="checkbox" id="optLegendFrame"><span><b>Frame</b> around the legend</span></label>
           <label class="check"><input type="checkbox" id="optNLabels"><span><b>Group sizes</b> on the charts — “A group (n=30)”</span></label>
           <label class="check"><input type="checkbox" id="optValueLabels"><span><b>Value labels</b> on bar charts of means / medians</span></label>
           <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
@@ -255,6 +268,16 @@ footer b{color:var(--purple)}
         <div>
           <label class="check"><input type="checkbox" id="optBrand" checked><span><b>Prof MSE branding</b> in the Word header</span></label>
         </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Advanced analyses</h2>
+      <p class="hint">Optional. Each analysis adds its own table (and ROC figure) after the main results. Categorical predictors are compared with their first level (group order / levels order from step 2). Patients with missing values are left out of that analysis.</p>
+      <div id="advList" class="grid"></div>
+      <div class="row" id="advAdd" style="margin-top:12px">
+        <button class="btn ghost small" data-advadd="linear" type="button">+ Linear regression</button>
+        <button class="btn ghost small" data-advadd="logistic" type="button">+ Logistic regression</button>
+        <button class="btn ghost small" data-advadd="roc" type="button">+ ROC curve</button>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="2">← Back</button><button class="btn primary" data-go="4">Next: CONSORT →</button></div>

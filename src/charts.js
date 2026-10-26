@@ -9,7 +9,9 @@ const Charts = (() => {
   // figure shapes (logical canvas size before the resolution multiplier)
   const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300] };
   const TEXT = { normal: 1, large: 1.25, xlarge: 1.5 };
-  const DEFAULT_STYLE = { text: 'normal', aspect: 'wide', barFill: 'gradient', grid: true, arrows: true, legend: 'bottom', res: 1, yAxis: 'auto' };
+  const DEFAULT_STYLE = { text: 'normal', aspect: 'wide', barFill: 'gradient', grid: true, arrows: true, legend: 'bottom', res: 1, yAxis: 'auto',
+    legendSize: 'normal', legendTitle: '', legendFrame: false };
+  const LEGEND_SIZE = { small: 0.85, normal: 1, large: 1.2 };
   const palette = p => Array.isArray(p) && p.length ? p : PALETTES[p] || PALETTES.brand;
 
   // canvas with logical size W×H drawn at `res` times the pixels, and a font helper scaled by text size
@@ -78,9 +80,54 @@ const Charts = (() => {
   // deterministic jitter so the same data always gives the same picture
   const jitter = i => ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1 - 0.5;
 
+  /* ---------- legend: bottom / top (one row), right / inside (a column), or none ---------- */
+  function legendMetrics(ctx, items, st, ts) {
+    const ls = ts * (LEGEND_SIZE[st.legendSize] || 1), q = ls / ts;
+    const font = `600 ${Math.round(26 * ls)}px ${FONT}`, tfont = `700 ${Math.round(26 * ls)}px ${FONT}`;
+    ctx.font = font;
+    const names = items.map(it => ctx.measureText(it.name).width);
+    ctx.font = tfont;
+    const tw = st.legendTitle ? ctx.measureText(st.legendTitle).width : 0;
+    const pos = items.length ? st.legend || 'bottom' : 'none', vertical = pos === 'right' || pos === 'inside', rowH = 40 * ls;
+    return { pos, vertical, ls, q, font, tfont, names, tw, rowH,
+      w: vertical ? Math.max(tw, 58 * q + Math.max(...names)) + 16 : 0, h: (items.length + (st.legendTitle ? 1 : 0)) * rowH + 16 };
+  }
+  function drawLegend(ctx, items, kind, st, m, g) {
+    if (m.pos === 'none') return;
+    const sw = 28 * m.ls;
+    const swatch = (it, i, x, yy) => {
+      if (kind === 'line') {
+        ctx.strokeStyle = it.color; ctx.lineWidth = 5; ctx.setLineDash(it.dash ? [12, 7] : []);
+        ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + 46 * m.q, yy); ctx.stroke(); ctx.setLineDash([]);
+      } else if (st.barFill === 'gradient') { ctx.fillStyle = it.color; ctx.fillRect(x + 8 * m.q, yy - sw / 2, sw + 2, sw); }
+      else fillBar(ctx, st, it.color, i, x + 8 * m.q, yy - sw / 2, sw + 2, sw);
+    };
+    const frame = (x, y, w, h) => { ctx.strokeStyle = '#999'; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.strokeRect(x, y, w, h); };
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    if (!m.vertical) {
+      const widths = items.map((_, i) => 60 * m.q + m.names[i] + 40 * g.ts), titleW = m.tw ? m.tw + 30 * m.q : 0;
+      const total = titleW + widths.reduce((a, b) => a + b, 0);
+      let x = (g.W - total) / 2;
+      const yy = m.pos === 'top' ? 40 * g.ts : g.H - 45 * g.ts;
+      if (st.legendFrame) frame(x - 16, yy - m.rowH / 2 - 4, total - 40 * g.ts + 32, m.rowH + 8);
+      if (m.tw) { ctx.font = m.tfont; ctx.fillStyle = '#333'; ctx.fillText(st.legendTitle, x, yy); x += titleW; }
+      ctx.font = m.font;
+      items.forEach((it, i) => { swatch(it, i, x, yy); ctx.fillStyle = '#333'; ctx.textBaseline = 'middle'; ctx.fillText(it.name, x + 58 * m.q, yy); x += widths[i]; });
+      return;
+    }
+    const x0 = m.pos === 'right' ? g.L + g.pw + 40 : g.L + g.pw - m.w - 20, y0 = g.T + 12;
+    if (m.pos === 'inside') { ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fillRect(x0 - 12, y0, m.w + 12, m.h); }
+    if (st.legendFrame) frame(x0 - 12, y0, m.w + 12, m.h);
+    let yy = y0 + 8 + m.rowH / 2;
+    if (m.tw) { ctx.font = m.tfont; ctx.fillStyle = '#333'; ctx.fillText(st.legendTitle, x0, yy); yy += m.rowH; }
+    ctx.font = m.font;
+    items.forEach((it, i) => { swatch(it, i, x0, yy); ctx.fillStyle = '#333'; ctx.fillText(it.name, x0 + 58 * m.q, yy); yy += m.rowH; });
+  }
+
   function draw(spec, paletteName = 'brand', style = {}) {
     const st = { ...DEFAULT_STYLE, ...style };
     if (spec.type === 'scatter') return scatter(spec, paletteName, st);
+    if (spec.type === 'roc') return rocChart(spec, paletteName, st);
     const pal = palette(paletteName);
     const { c, ctx, W, H, ts, F } = setup(st);
     const brackets = (spec.sig || []).filter(q => stars(q.p, spec.alpha));
@@ -88,8 +135,9 @@ const Charts = (() => {
 
     const perGroup = !!spec.perGroup && spec.series.length === 1;
     const legendItems = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: spec.type === 'box' && i === 2 }));
-    const legendTop = legendItems.length && st.legend === 'top';
-    const L = 110 + 40 * ts, R = 40, T = 50 + (legendTop ? 70 * ts : 0), B = (120 + (legendItems.length && !legendTop ? 70 : 0)) * ts;
+    const lm = legendMetrics(ctx, legendItems, st, ts);
+    const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0);
+    const T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
     const pw = W - L - R, ph = H - T - B;
 
     // y range
@@ -223,22 +271,41 @@ const Charts = (() => {
     });
     catStars.forEach((s, ci) => { if (s) ctx.fillText(s, L + cw * (ci + 0.5), y(dataHi) - 24); });
 
-    // legend
-    if (legendItems.length) {
-      ctx.font = F(600, 26); ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-      const widths = legendItems.map(it => 60 + ctx.measureText(it.name).width + 40 * ts);
-      let x = (W - widths.reduce((a, b) => a + b, 0)) / 2;
-      const yy = legendTop ? 40 * ts : H - 45 * ts, sw = 28 * ts;
-      legendItems.forEach((it, i) => {
-        if (spec.type === 'line' || spec.type === 'box') {
-          ctx.strokeStyle = it.color; ctx.lineWidth = 5; ctx.setLineDash(i === 2 ? [12, 7] : []);
-          ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + 46, yy); ctx.stroke(); ctx.setLineDash([]);
-        } else if (st.barFill === 'gradient') { ctx.fillStyle = it.color; ctx.fillRect(x + 8, yy - sw / 2, sw + 2, sw); }
-        else fillBar(ctx, st, it.color, i, x + 8, yy - sw / 2, sw + 2, sw);
-        ctx.fillStyle = '#333'; ctx.textBaseline = 'middle'; ctx.fillText(it.name, x + 58, yy);
-        x += widths[i];
-      });
+    drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2 })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
+    return c;
+  }
+
+  /* ---------- ROC curves ---------- */
+  function rocChart(spec, paletteName, st) {
+    st = { ...st, legendTitle: '' }; // the legend lists test variables, not groups
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup({ ...st, aspect: st.aspect === 'wide' ? 'standard' : st.aspect });
+    const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: i === 2 }));
+    const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'bottom' || st.legend === 'top' || st.legend === 'none' || st.legend === 'right' ? st.legend : 'inside' }, ts);
+    const L = 110 + 40 * ts, R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    const pw = W - L - R, ph = H - T - B;
+    const X = v => L + v * pw, Y = v => T + ph - v * ph;
+    ctx.font = F(600, 26); ctx.lineWidth = 1.5;
+    for (let v = 0; v <= 1.0001; v += 0.2) {
+      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); }
+      ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(v.toFixed(1), L - 14, Y(v));
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(v.toFixed(1), X(v), T + ph + 12);
     }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2.5; ctx.setLineDash([12, 10]);
+    ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(1), Y(1)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = F(700, 28); ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('1 - Specificity', L + pw / 2, T + ph + 60 * ts);
+    ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText('Sensitivity', 0, 0); ctx.restore();
+    spec.series.forEach((s, i) => {
+      ctx.strokeStyle = items[i].color; ctx.lineWidth = 5; ctx.setLineDash(items[i].dash ? [16, 10] : []);
+      const pts = [...s.points].sort((a, b) => a.fpr - b.fpr || a.tpr - b.tpr);
+      ctx.beginPath(); pts.forEach((q, k) => k ? ctx.lineTo(X(q.fpr), Y(q.tpr)) : ctx.moveTo(X(q.fpr), Y(q.tpr))); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    // the inside legend sits bottom-right, where ROC curves leave space
+    if (lm.pos === 'inside') drawLegend(ctx, items, 'line', st, lm, { W, H, L, T: T + ph - lm.h - 24, pw, ph, ts });
+    else drawLegend(ctx, items, 'line', st, lm, { W, H, L, T, pw, ph, ts });
     return c;
   }
 

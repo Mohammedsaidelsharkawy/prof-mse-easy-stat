@@ -13,7 +13,7 @@
     commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
-    gridlines: true, axisArrows: true, nLabels: false,
+    gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -23,12 +23,14 @@
     branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
-    gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true]
+    gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
+    legendSize: ['optLegendSize'], legendTitle: ['optLegendTitle'], legendFrame: ['optLegendFrame', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
-  const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows });
+  const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
+    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -169,7 +171,7 @@
       groupCol, idCols, variables, tpOrder, tpLabels: Object.fromEntries(tpOrder.map(t => [t, tpLabel(t)])),
       options: defaultOptions(),
       study: { title: '', software: $('#software').value },
-      consort: null
+      consort: null, tpInclude: {}, advanced: [], exportExclude: {}
     };
     setGroups(cfg);
     return cfg;
@@ -220,10 +222,11 @@
       cfg.variables.map(v => `<tr data-vid="${v.id}">
         <td><input type="checkbox" data-k="include" ${v.include ? 'checked' : ''}></td>
         <td><input type="text" data-k="label" value="${esc(v.label)}"></td>
-        <td class="mono" title="${esc(v.cols.map(c => c.col).join('\n'))}">${v.kind === 'repeated' ? `<span class="chip info">repeated × ${v.cols.length}</span><br>${esc(v.cols[0].col)} …` : esc(v.cols[0].col)}</td>
-        <td>${v.kind === 'repeated' ? 'numeric' : `<select data-k="type"><option value="numeric" ${v.type === 'numeric' ? 'selected' : ''}>numeric</option><option value="categorical" ${v.type === 'categorical' ? 'selected' : ''}>categorical</option></select>`}</td>
+        <td class="mono" title="${esc(v.cols.map(c => c.col).join('\n'))}">${v.kind === 'repeated' ? `<span class="chip info">repeated × ${v.cols.length}</span><div class="tpchks">${v.cols.map((c, i) =>
+          `<label title="${esc(c.col)}"><input type="checkbox" data-vtp="${i}" ${c.include !== false ? 'checked' : ''}>${esc(cfg.tpLabels[c.tp] || c.tp)}</label>`).join('')}</div>` : esc(v.cols[0].col)}</td>
+        <td>${v.kind === 'repeated' ? `<select data-k="split" title="Analyse the timepoints together, or each as its own variable"><option value="">repeated measure</option><option value="1" ${v.split ? 'selected' : ''}>separate variables</option></select>` : `<select data-k="type"><option value="numeric" ${v.type === 'numeric' ? 'selected' : ''}>numeric</option><option value="categorical" ${v.type === 'categorical' ? 'selected' : ''}>categorical</option></select>`}</td>
         <td>${v.type === 'numeric' ? `<select data-k="dist"><option value="auto" ${v.dist === 'auto' ? 'selected' : ''}>Auto</option><option value="param" ${v.dist === 'param' ? 'selected' : ''}>Parametric</option><option value="nonparam" ${v.dist === 'nonparam' ? 'selected' : ''}>Non-parametric</option></select><div style="margin-top:4px">${swChip(v)}</div>` : swChip(v)}</td>
-        <td>${v.kind === 'repeated' ? '<span class="legend-note">own table</span>' : `<input type="text" data-k="table" value="${esc(v.table)}">`}</td>
+        <td>${v.kind === 'repeated' ? (v.split ? `<input type="text" data-k="splitTable" value="${esc(v.splitTable || 'Other outcomes')}">` : '<span class="legend-note">own table</span>') : `<input type="text" data-k="table" value="${esc(v.table)}">`}</td>
         <td>${v.type === 'categorical' ? `<input type="text" data-k="levels" value="${esc(v.levels.join(', '))}">` : '<span class="legend-note">—</span>'}</td>
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
       </tr>`).join('')}</tbody>`;
@@ -236,6 +239,7 @@
     [o[i], o[j]] = [o[j], o[i]]; state.cfg.consort = null; renderVariables();
   });
   $('#varsTbl').addEventListener('change', e => {
+    if (e.target.dataset.k === 'split') { readUiIntoCfg(); renderVariables(); return; }
     if (e.target.dataset.k === 'type') {
       readUiIntoCfg();
       const v = state.cfg.variables.find(x => x.id === e.target.closest('tr').dataset.vid);
@@ -248,14 +252,81 @@
   /* ---------- step 3: timepoints & options ---------- */
   function renderTimepoints() {
     const cfg = state.cfg;
-    $('#tpTbl').innerHTML = cfg.tpOrder.length ? `<thead><tr><th>Token in column names</th><th>Label in report</th></tr></thead><tbody>${
-      cfg.tpOrder.map(t => `<tr><td class="mono">${esc(t)}</td><td><input type="text" data-tp="${esc(t)}" value="${esc(cfg.tpLabels[t])}"></td></tr>`).join('')}</tbody>`
+    $('#tpTbl').innerHTML = cfg.tpOrder.length ? `<thead><tr><th>Use</th><th>Token in column names</th><th>Label in report</th><th>Order</th></tr></thead><tbody>${
+      cfg.tpOrder.map((t, i) => `<tr><td><input type="checkbox" data-tpinc="${esc(t)}" ${cfg.tpInclude[t] !== false ? 'checked' : ''}></td><td class="mono">${esc(t)}</td>
+        <td><input type="text" data-tp="${esc(t)}" value="${esc(cfg.tpLabels[t])}"></td>
+        <td><button class="btn ghost small" data-tpmove="${i},-1">↑</button> <button class="btn ghost small" data-tpmove="${i},1">↓</button></td></tr>`).join('')}</tbody>`
       : '<tbody><tr><td>No repeated measures detected.</td></tr></tbody>';
     const o = cfg.options;
     for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
     $('#customColors').innerHTML = o.customColors.map((col, i) => `<input type="color" data-ccol="${i}" value="${esc(col)}" title="Colour ${i + 1}">`).join('');
     $('#customBox').style.display = o.palette === 'custom' ? '' : 'none';
+    renderAdvanced();
   }
+  $('#tpTbl').addEventListener('click', e => {
+    const b = e.target.closest('[data-tpmove]'); if (!b) return;
+    readUiIntoCfg();
+    const [i, d] = b.dataset.tpmove.split(',').map(Number), o = state.cfg.tpOrder, j = i + d;
+    if (j < 0 || j >= o.length) return;
+    [o[i], o[j]] = [o[j], o[i]]; renderTimepoints();
+  });
+
+  /* ---------- advanced analyses (regression, ROC) ---------- */
+  const ADV_TYPES = { linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve' };
+  const analysedRows = () => { const g = activeGroups(); return state.data.rows.filter(r => g.includes(Analysis.toCat(r[state.cfg.groupCol]))); };
+  function advColumns() {
+    const cfg = state.cfg, rows = analysedRows();
+    return state.data.headers.filter(h => !cfg.idCols.includes(h)).map(h => ({ col: h, label: Analysis.columnLabel(cfg, h), kind: Analysis.columnKind(cfg, rows, h) }));
+  }
+  function defaultPositive(col) {
+    const lv = Analysis.levelsOf(state.cfg, analysedRows(), col);
+    return lv.find(l => Analysis.POSITIVE.test(l)) || lv[lv.length - 1] || '';
+  }
+  function renderAdvanced() {
+    const cfg = state.cfg, cols = advColumns();
+    $('#advList').innerHTML = cfg.advanced.length ? cfg.advanced.map((a, ai) => {
+      const outs = cols.filter(c => a.type === 'linear' ? c.kind === 'numeric' : c.kind === 'categorical' && Analysis.levelsOf(cfg, analysedRows(), c.col).length >= 2);
+      const preds = cols.filter(c => c.col !== a.outcome && (a.type !== 'roc' || c.kind === 'numeric'));
+      const levels = a.outcome && a.type !== 'linear' ? Analysis.levelsOf(cfg, analysedRows(), a.outcome) : [];
+      return `<div class="gcard" data-adv="${ai}">
+        <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[a.type]}</h4><span class="spacer"></span>
+          <label class="check" style="margin:0"><input type="checkbox" data-af="include" ${a.include !== false ? 'checked' : ''}><span>Include</span></label>
+          <button class="btn ghost small" data-advdel="${ai}" type="button">✕ Remove</button></div>
+        <div class="grid g3" style="margin-top:8px">
+          <div><label class="f">${a.type === 'roc' ? 'Outcome (true state)' : 'Dependent variable (outcome)'}</label><select data-af="outcome"><option value="">— choose —</option>${outs.map(c => `<option value="${esc(c.col)}" ${c.col === a.outcome ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>
+          ${a.type !== 'linear' ? `<div><label class="f">Positive (event) value</label><select data-af="positive">${levels.map(l => `<option ${l === a.positive ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>` : '<div></div>'}
+          ${a.type !== 'roc' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '<div></div>'}
+        </div>
+        <label class="f" style="margin-top:8px">${a.type === 'roc' ? 'Test variables (numeric)' : 'Predictors (independent variables)'}</label>
+        <div class="predlist">${preds.map(c => `<label><input type="checkbox" data-apred="${esc(c.col)}" ${a.predictors.includes(c.col) ? 'checked' : ''}>${esc(c.label)} <span class="legend-note">${c.kind === 'numeric' ? 'num' : 'cat'}</span></label>`).join('')}</div>
+      </div>`;
+    }).join('') : '<p class="legend-note">No advanced analyses yet — add one below.</p>';
+  }
+  function readAdvanced() {
+    document.querySelectorAll('[data-adv]').forEach(card => {
+      const a = state.cfg.advanced[+card.dataset.adv]; if (!a) return;
+      card.querySelectorAll('[data-af]').forEach(el => { a[el.dataset.af] = el.type === 'checkbox' ? el.checked : el.value; });
+      a.predictors = [...card.querySelectorAll('[data-apred]')].filter(el => el.checked).map(el => el.dataset.apred);
+    });
+  }
+  $('#advAdd').addEventListener('click', e => {
+    const b = e.target.closest('[data-advadd]'); if (!b) return;
+    readUiIntoCfg();
+    state.cfg.advanced.push({ type: b.dataset.advadd, outcome: '', positive: '', predictors: [], univariable: b.dataset.advadd === 'logistic', include: true });
+    renderAdvanced();
+  });
+  $('#advList').addEventListener('click', e => {
+    const b = e.target.closest('[data-advdel]'); if (!b) return;
+    readUiIntoCfg(); state.cfg.advanced.splice(+b.dataset.advdel, 1); renderAdvanced();
+  });
+  $('#advList').addEventListener('change', e => {
+    if (e.target.dataset.af !== 'outcome') return;
+    readUiIntoCfg();
+    const a = state.cfg.advanced[+e.target.closest('[data-adv]').dataset.adv];
+    a.predictors = a.predictors.filter(c => c !== a.outcome);
+    a.positive = a.type === 'linear' ? '' : defaultPositive(a.outcome);
+    renderAdvanced();
+  });
 
   $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; });
   $('#customReset').onclick = () => { readUiIntoCfg(); state.cfg.options.customColors = defaultOptions().customColors; renderTimepoints(); };
@@ -331,10 +402,14 @@
         if (k === 'include') v.include = el.checked;
         else if (k === 'levels') v.levels = el.value.split(',').map(s => s.trim()).filter(Boolean);
         else if (k === 'table') v.table = el.value.trim() || 'Other outcomes';
+        else if (k === 'split') v.split = !!el.value;
+        else if (k === 'splitTable') v.splitTable = el.value.trim() || 'Other outcomes';
         else v[k] = el.value;
       });
+      tr.querySelectorAll('[data-vtp]').forEach(el => { v.cols[+el.dataset.vtp].include = el.checked; });
     });
     document.querySelectorAll('[data-tp]').forEach(el => cfg.tpLabels[el.dataset.tp] = el.value.trim() || el.dataset.tp);
+    document.querySelectorAll('[data-tpinc]').forEach(el => { cfg.tpInclude[el.dataset.tpinc] = el.checked; });
     if ($('#p3').classList.contains('active')) {
       const o = cfg.options;
       for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) {
@@ -342,6 +417,7 @@
         o[k] = box ? el.checked : typeof DEFAULT_OPTIONS[k] === 'number' ? +el.value : el.value;
       }
       document.querySelectorAll('[data-ccol]').forEach(el => { o.customColors[+el.dataset.ccol] = el.value; });
+      readAdvanced();
     }
     if ($('#p4').classList.contains('active')) readConsort();
   }
@@ -375,20 +451,61 @@
     }, 30);
   }
 
+  // export selection: keys of items left out of the Word file (kept across re-runs and in saved setups)
+  const exKey = { methods: () => 'methods', consort: () => 'consort', table: s => 't:' + s.title, figure: f => 'f:' + f.caption };
+  const isOut = key => !!state.cfg.exportExclude[key];
+  const exBox = (key, label) => `<label class="check exp"><input type="checkbox" data-export="${esc(key)}" ${isOut(key) ? '' : 'checked'}><span>${label}</span></label>`;
+  // pull the editable text back into the result before re-rendering or exporting
+  function syncEdits() {
+    const r = state.result; if (!r || !$('#edMethods')) return;
+    r.methods = $('#edMethods').value;
+    if ($('#edIntro')) r.intro = $('#edIntro').value;
+    document.querySelectorAll('[data-comment]').forEach(t => { r.sections[+t.dataset.comment].comment = t.value; });
+  }
   function renderReport() {
     const r = state.result;
     let fig = 1, tab = 1, html = '';
-    html += `<div class="report-sec"><h3>Statistical Analysis</h3><textarea id="edMethods">${esc(r.methods)}</textarea></div>`;
+    const nIn = 1 + (r.consort ? 1 : 0) + r.sections.reduce((n, s) => n + (isOut(exKey.table(s)) ? 0 : 1) + s.figures.filter(f => !isOut(exKey.figure(f))).length, 0);
+    html += `<div class="row exp-bar"><b>In the Word file:</b> <span class="legend-note">untick any section, table or figure to leave it out — numbering follows what is kept.</span><span class="spacer"></span>
+      <button class="btn ghost small" data-exall="1" type="button">Include all</button><button class="btn ghost small" data-exall="0" type="button">Exclude all</button></div>`;
+    const off = key => isOut(key) ? ' off' : '';
+    html += `<div class="report-sec${off('methods')}"><div class="row"><h3>Statistical Analysis</h3><span class="spacer"></span>${exBox('methods', 'Include')}</div><textarea id="edMethods">${esc(r.methods)}</textarea></div>`;
     html += `<div class="report-sec"><h3>Results</h3>`;
-    if (r.consort) html += `<textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">Figure ${fig++}: CONSORT flowchart of the enrolled patients</div>`;
+    if (r.consort) {
+      const out = isOut('consort');
+      html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include CONSORT text and flowchart')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${out ? 'Not exported' : `Figure ${fig++}`}: CONSORT flowchart of the enrolled patients</div></div>`;
+    }
     html += `</div>`;
     r.sections.forEach((s, i) => {
-      html += `<div class="report-sec"><div class="cap">Table ${tab++}: ${esc(s.title)}</div><div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
+      const tk = exKey.table(s), tOut = isOut(tk);
+      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported' : `Table ${tab++}`}: ${esc(s.title)}</div>${exBox(tk, 'Table')}</div><div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
         <div class="foot">${esc(s.footnote)}</div>
-        <label class="f">Comment (editable)</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>
-        <div class="figs">${s.figures.map(f => `<figure><img src="${f.url}" alt=""><figcaption>Figure ${fig++}: ${esc(f.caption)}</figcaption></figure>`).join('')}</div></div>`;
+        <label class="f">Comment (editable — exported with the table)</label><textarea data-comment="${i}">${esc(s.comment)}</textarea></div>
+        <div class="figs">${s.figures.map(f => { const fk = exKey.figure(f), fOut = isOut(fk);
+          return `<figure class="${fOut ? 'off' : ''}"><img src="${f.url}" alt=""><figcaption>${fOut ? 'Not exported' : `Figure ${fig++}`}: ${esc(f.caption)}</figcaption>${exBox(fk, 'Figure')}</figure>`; }).join('')}</div></div>`;
     });
     $('#report').innerHTML = html;
+  }
+  $('#report').addEventListener('change', e => {
+    const key = e.target.dataset.export; if (key === undefined) return;
+    syncEdits();
+    if (e.target.checked) delete state.cfg.exportExclude[key]; else state.cfg.exportExclude[key] = true;
+    const y = window.scrollY; renderReport(); window.scrollTo(0, y);
+  });
+  $('#report').addEventListener('click', e => {
+    const b = e.target.closest('[data-exall]'); if (!b) return;
+    syncEdits();
+    const r = state.result, keys = ['methods', ...(r.consort ? ['consort'] : []), ...r.sections.flatMap(s => [exKey.table(s), ...s.figures.map(exKey.figure)])];
+    keys.forEach(k => { if (b.dataset.exall === '1') delete state.cfg.exportExclude[k]; else state.cfg.exportExclude[k] = true; });
+    const y = window.scrollY; renderReport(); window.scrollTo(0, y);
+  });
+  // the report model limited to what the user chose to export
+  function exportModel(r) {
+    return {
+      ...r, methods: isOut('methods') ? '' : r.methods, consort: isOut('consort') ? null : r.consort,
+      sections: r.sections.map(s => ({ ...s, tableOn: !isOut(exKey.table(s)), figures: s.figures.filter(f => !isOut(exKey.figure(f))) }))
+        .filter(s => s.tableOn || s.figures.length)
+    };
   }
   $('#btnRerun').onclick = () => runAnalysis();
 
@@ -396,10 +513,9 @@
     if (!state.result) return;
     busy(true);
     try {
-      const r = state.result;
-      r.methods = $('#edMethods').value;
-      if ($('#edIntro')) r.intro = $('#edIntro').value;
-      document.querySelectorAll('[data-comment]').forEach(t => r.sections[+t.dataset.comment].comment = t.value);
+      syncEdits();
+      const r = exportModel(state.result);
+      if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = state.cfg.options;
       const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow });
       const a = document.createElement('a');
@@ -434,7 +550,8 @@
     const h = state.data.headers;
     const ok = saved.variables.every(v => v.cols.every(c => h.includes(c.col))) && h.includes(saved.groupCol);
     if (!ok) { toast('Saved setup does not match this file’s columns — using auto-detection'); return; }
-    saved.options = { ...defaultOptions(), ...saved.options }; // setups saved by older versions lack the newer options
+    saved.options = { ...defaultOptions(), ...saved.options };
+    saved.tpInclude = saved.tpInclude || {}; saved.advanced = saved.advanced || []; saved.exportExclude = saved.exportExclude || {}; // setups saved by older versions lack the newer options
     state.cfg = saved;
     $('#studyTitle').value = saved.study.title || ''; $('#software').value = saved.study.software;
     // keep any new group values found in this file

@@ -291,6 +291,123 @@ const Stats = (() => {
 
   const bonferroni = (p, m) => Math.min(1, p * m);
 
+  /* ---------- Regression ---------- */
+  // Gauss–Jordan inverse of a symmetric positive-definite matrix; null when singular
+  function invert(A) {
+    const n = A.length, M = A.map((r, i) => [...r, ...Array.from({ length: n }, (_, j) => +(i === j))]);
+    for (let c = 0; c < n; c++) {
+      let piv = c;
+      for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+      if (Math.abs(M[piv][c]) < 1e-12) return null;
+      [M[c], M[piv]] = [M[piv], M[c]];
+      const d = M[c][c];
+      for (let j = 0; j < 2 * n; j++) M[c][j] /= d;
+      for (let r = 0; r < n; r++) if (r !== c && M[r][c] !== 0) {
+        const f = M[r][c];
+        for (let j = 0; j < 2 * n; j++) M[r][j] -= f * M[c][j];
+      }
+    }
+    return M.map(r => r.slice(n));
+  }
+  // X'WX and X'Wz for design X (rows include the intercept column)
+  function crossprod(X, w, z) {
+    const p = X[0].length, A = Array.from({ length: p }, () => new Array(p).fill(0)), b = new Array(p).fill(0);
+    X.forEach((x, i) => {
+      const wi = w ? w[i] : 1;
+      for (let j = 0; j < p; j++) {
+        b[j] += wi * x[j] * z[i];
+        for (let k = 0; k < p; k++) A[j][k] += wi * x[j] * x[k];
+      }
+    });
+    return { A, b };
+  }
+
+  // Ordinary least squares. X without intercept (array of rows), y numbers
+  function linearRegression(X0, y) {
+    const n = y.length, X = X0.map(r => [1, ...r]), p = X[0].length;
+    const { A, b } = crossprod(X, null, y), inv = invert(A);
+    if (!inv || n <= p) return null;
+    const coef = inv.map(r => sum(r.map((v, j) => v * b[j])));
+    const fit = X.map(x => sum(x.map((v, j) => v * coef[j]))), my = mean(y);
+    const sse = sum(y.map((v, i) => (v - fit[i]) ** 2)), sst = sum(y.map(v => (v - my) ** 2));
+    const df = n - p, s2 = sse / df, tc = jStat.studentt.inv(0.975, df), sdy = sd(y);
+    const terms = coef.map((B, j) => {
+      const se = Math.sqrt(inv[j][j] * s2), t = B / se;
+      const sdx = j ? sd(X0.map(r => r[j - 1])) : NaN;
+      return { B, se, t, p: 2 * (1 - jStat.studentt.cdf(Math.abs(t), df)), lo: B - tc * se, hi: B + tc * se, beta: j ? B * sdx / sdy : NaN };
+    });
+    const r2 = sst > 0 ? 1 - sse / sst : NaN, k = p - 1;
+    const F = k ? ((sst - sse) / k) / s2 : NaN;
+    return { terms, n, df, r2, adjR2: 1 - (1 - r2) * (n - 1) / df, F, dfModel: k, pModel: k ? 1 - jStat.centralF.cdf(F, k, df) : NaN };
+  }
+
+  // Binary logistic regression by Newton–Raphson (IRLS); Wald tests and CIs as in SPSS
+  function logisticRegression(X0, y) {
+    const n = y.length, X = X0.map(r => [1, ...r]), p = X[0].length;
+    let beta = new Array(p).fill(0), inv = null, converged = false, iter = 0;
+    const ll = bt => sum(X.map((x, i) => { const e = sum(x.map((v, j) => v * bt[j])); return y[i] * e - Math.log1p(Math.exp(e)); }));
+    for (; iter < 50; iter++) {
+      const mu = X.map(x => 1 / (1 + Math.exp(-sum(x.map((v, j) => v * beta[j])))));
+      const w = mu.map(m => Math.max(m * (1 - m), 1e-10));
+      const { A } = crossprod(X, w, y);
+      inv = invert(A);
+      if (!inv) return null;
+      const g = new Array(p).fill(0);
+      X.forEach((x, i) => x.forEach((v, j) => { g[j] += v * (y[i] - mu[i]); }));
+      const step = inv.map(r => sum(r.map((v, j) => v * g[j])));
+      beta = beta.map((b, j) => b + step[j]);
+      if (Math.max(...step.map(Math.abs)) < 1e-10) { converged = true; break; }
+    }
+    // covariance at the final estimate
+    const mu = X.map(x => 1 / (1 + Math.exp(-sum(x.map((v, j) => v * beta[j])))));
+    inv = invert(crossprod(X, mu.map(m => Math.max(m * (1 - m), 1e-10)), y).A);
+    if (!inv) return null;
+    const terms = beta.map((B, j) => {
+      const se = Math.sqrt(inv[j][j]), z = B / se;
+      return { B, se, wald: z * z, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), or: Math.exp(B), lo: Math.exp(B - 1.959964 * se), hi: Math.exp(B + 1.959964 * se) };
+    });
+    const ny = sum(y), p0 = ny / n;
+    const LL = ll(beta), LL0 = ny * Math.log(p0) + (n - ny) * Math.log(1 - p0);
+    const chi = 2 * (LL - LL0), k = p - 1;
+    const cs = 1 - Math.exp(-chi / n), nag = cs / (1 - Math.exp(2 * LL0 / n));
+    const correct = mu.filter((m, i) => (m >= 0.5) === (y[i] === 1)).length;
+    // separation shows as huge coefficients that never settle
+    const unstable = !converged || terms.slice(1).some(t => Math.abs(t.B) > 15 || !isFinite(t.se));
+    return { terms, n, events: ny, m2LL: -2 * LL, chi, dfModel: k, pModel: k ? 1 - jStat.chisquare.cdf(chi, k) : NaN, coxSnell: cs, nagelkerke: nag, accuracy: correct / n, converged, unstable, iter };
+  }
+
+  /* ---------- ROC curve ---------- */
+  // values: test results; pos: booleans (true = condition present). Higher values are taken as positive;
+  // when the AUC is below 0.5 the direction is flipped (lower values positive) and reported.
+  function roc(values, pos) {
+    let higher = true;
+    const run = (vals) => {
+      const P = vals.filter((_, i) => pos[i]), N = vals.filter((_, i) => !pos[i]), n1 = P.length, n0 = N.length;
+      const psi = (a, b) => a > b ? 1 : a === b ? 0.5 : 0;
+      const V10 = P.map(a => mean(N.map(b => psi(a, b)))), V01 = N.map(b => mean(P.map(a => psi(a, b))));
+      const auc = mean(V10);
+      const se = Math.sqrt((n1 > 1 ? variance(V10) / n1 : 0) + (n0 > 1 ? variance(V01) / n0 : 0)); // DeLong
+      return { auc, se, n1, n0, P, N };
+    };
+    let r = run(values);
+    if (r.auc < 0.5) { higher = false; r = run(values.map(v => -v)); }
+    const { auc, se, n1, n0 } = r;
+    const p = mannWhitney(values.filter((_, i) => pos[i]), values.filter((_, i) => !pos[i])).p;
+    // curve and Youden-optimal cut-off at midpoints between observed values
+    const sgn = higher ? 1 : -1, u = [...new Set(values)].sort((a, b) => sgn * (b - a));
+    const cuts = [u[0] + sgn, ...u.slice(0, -1).map((v, i) => (v + u[i + 1]) / 2), u[u.length - 1] - sgn];
+    const points = cuts.map(c => {
+      const tp = values.filter((v, i) => pos[i] && sgn * (v - c) > 0).length, fp = values.filter((v, i) => !pos[i] && sgn * (v - c) > 0).length;
+      return { cut: c, sens: tp / n1, spec: 1 - fp / n0, tp, fp, fn: n1 - tp, tn: n0 - fp };
+    });
+    const best = points.slice(1, -1).reduce((b, q) => (q.sens + q.spec > b.sens + b.spec ? q : b), points[1] || points[0]);
+    return {
+      auc, se, lo: Math.max(0, auc - 1.959964 * se), hi: Math.min(1, auc + 1.959964 * se), p, n1, n0, higher,
+      points: points.map(q => ({ fpr: 1 - q.spec, tpr: q.sens })),
+      cutoff: { ...best, ppv: best.tp / (best.tp + best.fp), npv: best.tn / (best.tn + best.fn), accuracy: (best.tp + best.tn) / (n1 + n0) }
+    };
+  }
+
   function rmAnova(Y) {
     const n = Y.length, k = Y[0].length, all = Y.flat(), gm = mean(all);
     const cm = Array.from({ length: k }, (_, j) => mean(Y.map(r => r[j])));
@@ -318,6 +435,7 @@ const Stats = (() => {
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
-    pairedT, wilcoxonSigned, pearson, spearman, bonferroni
+    pairedT, wilcoxonSigned, pearson, spearman, bonferroni,
+    invert, linearRegression, logisticRegression, roc
   };
 })();

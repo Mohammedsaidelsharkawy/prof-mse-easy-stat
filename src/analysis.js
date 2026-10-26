@@ -264,6 +264,162 @@ const Analysis = (() => {
     return (ps[0] < 0.001 ? '' : '= ') + vals + ' respectively';
   }
 
+  /* ---------- repeated-measure controls ---------- */
+  // Applies the timepoint choices: per-outcome ticks, global include/order (cfg.tpOrder / cfg.tpInclude),
+  // and "separate variables" (each timepoint analysed as its own single variable)
+  function effectiveVariables(cfg) {
+    const out = [];
+    const order = tp => { const i = (cfg.tpOrder || []).indexOf(tp); return i < 0 ? 1e9 : i; };
+    for (const v of cfg.variables) {
+      if (!v.include || v.role === 'ignore') continue;
+      if (v.kind !== 'repeated') { out.push(v); continue; }
+      const cols = v.cols.filter(c => c.include !== false && (cfg.tpInclude || {})[c.tp] !== false)
+        .sort((a, b) => order(a.tp) - order(b.tp));
+      if (!cols.length) continue;
+      if (v.split || cols.length === 1) {
+        cols.forEach((c, i) => out.push({ ...v, id: v.id + '_' + i, kind: 'single', type: 'numeric', cols: [c], pos: v.pos + i * 1e-3,
+          label: `${plain(v.label)} at ${cfg.tpLabels[c.tp] || c.tp}${(v.label.match(/\s*\([^)]*\)\s*$/) || [''])[0]}`, table: v.splitTable || 'Other outcomes' }));
+      } else out.push({ ...v, cols });
+    }
+    return out;
+  }
+
+  /* ---------- advanced analyses: regression and ROC ---------- */
+  // label of any Excel column: the variable label, "<outcome> at <timepoint>", or the column name
+  function columnLabel(cfg, col) {
+    if (col === cfg.groupCol) return 'Group';
+    for (const v of cfg.variables) for (const c of v.cols) if (c.col === col)
+      return v.kind === 'repeated' ? `${plain(v.label)} at ${cfg.tpLabels[c.tp] || c.tp}` : v.label;
+    return col;
+  }
+  // numeric when ≥90% of values are numbers with more than two distinct values; otherwise categorical
+  function columnKind(cfg, rows, col) {
+    const v = cfg.variables.find(x => x.cols.some(c => c.col === col));
+    if (v && v.kind === 'single') return v.type;
+    const vals = rows.map(r => r[col]).filter(x => toCat(x) !== null);
+    const nums = vals.map(toNum).filter(isFinite);
+    return vals.length && nums.length / vals.length >= 0.9 && new Set(nums).size > 2 ? 'numeric' : 'categorical';
+  }
+  function levelsOf(cfg, rows, col) {
+    if (col === cfg.groupCol) return cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false);
+    const present = [...new Set(rows.map(r => toCat(r[col])).filter(x => x !== null))];
+    const v = cfg.variables.find(x => x.kind === 'single' && x.cols[0].col === col);
+    const lv = v && v.levels && v.levels.length ? v.levels.filter(l => present.includes(l)) : [];
+    present.sort((a, b) => isFinite(+a) && isFinite(+b) ? a - b : a.localeCompare(b)).forEach(l => { if (!lv.includes(l)) lv.push(l); });
+    return lv;
+  }
+  // design columns for one predictor: itself when numeric, dummies against the first level when categorical
+  function encode(cfg, rows, col) {
+    const label = columnLabel(cfg, col);
+    if (columnKind(cfg, rows, col) === 'numeric')
+      return { col, label, terms: [{ label, get: r => toNum(r[col]) }], ok: r => isFinite(toNum(r[col])) };
+    let lv = levelsOf(cfg, rows, col);
+    // yes/no style variables: "No" is the reference, so the estimate is the effect of "Yes"
+    if (lv.length === 2 && POSITIVE.test(lv[0]) && !POSITIVE.test(lv[1])) lv = [lv[1], lv[0]];
+    const ref = lv[0];
+    const name = l => col === cfg.groupCol ? (cfg.groupLabels[l] || l) : l;
+    return { col, label, ref: name(ref), terms: lv.slice(1).map(l => ({ label: `${label} (${name(l)} vs ${name(ref)})`, get: r => +(toCat(r[col]) === l) })),
+      ok: r => lv.includes(toCat(r[col])) };
+  }
+
+  function regressionSection(a, cfg, rows, alpha, d, used) {
+    const logistic = a.type === 'logistic';
+    const outLabel = columnLabel(cfg, a.outcome);
+    const preds = a.predictors.filter(c => c !== a.outcome).map(c => encode(cfg, rows, c)).filter(e => e.terms.length);
+    if (!preds.length) return null;
+    const yOf = logistic ? r => +(toCat(r[a.outcome]) === a.positive) : r => toNum(r[a.outcome]);
+    const yOk = logistic ? r => toCat(r[a.outcome]) !== null : r => isFinite(toNum(r[a.outcome]));
+    const fitOn = list => {
+      const rs = rows.filter(r => yOk(r) && list.every(e => e.ok(r)));
+      const X = rs.map(r => list.flatMap(e => e.terms.map(t => t.get(r)))), y = rs.map(yOf);
+      if (rs.length < list.reduce((s, e) => s + e.terms.length, 0) + 3) return null;
+      return logistic ? S.logisticRegression(X, y) : S.linearRegression(X, y);
+    };
+    const multi = fitOn(preds);
+    const uni = a.univariable || !multi ? preds.map(e => fitOn([e])) : null;
+    used.add(logistic ? 'logistic' : 'linear');
+    const est = t => logistic ? `${fmt(t.or, 2)} (${fmt(t.lo, 2)}-${fmt(t.hi, 2)})` : `${fmt(t.B, d)} (${fmt(t.lo, d)} to ${fmt(t.hi, d)})`;
+    const effName = logistic ? 'OR (95% CI)' : 'B (95% CI)';
+    const head = [''];
+    if (uni) head.push(`Univariable ${effName}`, 'P value');
+    if (multi) { head.push(`${uni ? 'Multivariable ' : ''}${effName}`); if (!logistic) head.push('β'); head.push('P value'); }
+    // one row per design term: univariable estimate from that predictor's own model, multivariable from the joint model
+    const terms = [];
+    preds.forEach((e, pi) => e.terms.forEach((t, k) => terms.push({ label: t.label, u: uni && uni[pi] ? uni[pi].terms[k + 1] : null, m: multi ? multi.terms[1 + terms.length] : null })));
+    const trows = terms.map(({ label, u, m }) => {
+      const row = [{ t: [label], b: true }];
+      if (uni) row.push({ t: [u ? est(u) : '—'] }, { t: [u ? fmtP(u.p, alpha) : '—'] });
+      if (multi) { row.push({ t: [est(m)] }); if (!logistic) row.push({ t: [fmt(m.beta, 2)] }); row.push({ t: [fmtP(m.p, alpha)] }); }
+      return row;
+    });
+    const sigM = terms.filter(x => x.m && x.m.p <= alpha).map(x => ({ label: x.label, t: x.m }));
+    const uSig = terms.filter(x => x.u && x.u.p <= alpha);
+    // footnote: model fit
+    const f = [];
+    if (sigM.length || uSig.length) f.push(`*: Significant as P value ≤ ${alpha}`);
+    if (logistic) f.push('OR: Odds ratio', 'CI: Confidence interval');
+    else f.push('B: Unstandardized coefficient', 'β: Standardized coefficient', 'CI: Confidence interval');
+    if (multi) {
+      if (logistic) f.push(`Model: n=${multi.n} (${multi.events} with ${outLabel} = ${a.positive}), χ²(${multi.dfModel}) = ${fmt(multi.chi, 2)}, P ${pTxt(multi.pModel)}, Nagelkerke R² = ${fmt(multi.nagelkerke, 3)}, correctly classified ${fmt(100 * multi.accuracy, 1)}%`);
+      else f.push(`Model: n=${multi.n}, R² = ${fmt(multi.r2, 3)}, adjusted R² = ${fmt(multi.adjR2, 3)}, F(${multi.dfModel}, ${multi.df}) = ${fmt(multi.F, 2)}, P ${pTxt(multi.pModel)}`);
+      if (logistic && multi.unstable) f.push('Warning: the model did not converge or shows separation, so its estimates are unreliable');
+    }
+    const refs = preds.filter(e => e.ref).map(e => `${e.label}: reference = ${e.ref}`);
+    if (refs.length) f.push(refs.join(', '));
+    // comment
+    const what = logistic ? `${lowerFirst(outLabel)} (${a.positive})` : lowerFirst(plain(outLabel));
+    const phr = x => logistic
+      ? `${lowerFirst(x.label)} (OR = ${fmt(x.t.or, 2)}, 95% CI ${fmt(x.t.lo, 2)}-${fmt(x.t.hi, 2)}, P value ${pTxt(x.t.p)})`
+      : `${lowerFirst(x.label)} (B = ${fmt(x.t.B, d)}, 95% CI ${fmt(x.t.lo, d)} to ${fmt(x.t.hi, d)}, P value ${pTxt(x.t.p)})`;
+    const sent = [];
+    if (multi) {
+      if (sigM.length) sent.push(`In ${preds.length > 1 ? 'multivariable ' : ''}${logistic ? 'logistic' : 'linear'} regression, ${listJoin(sigM.map(phr))} ${sigM.length > 1 ? 'were independent predictors' : 'was a significant predictor'} of ${what}.`);
+      else sent.push(`None of the studied variables was a significant ${preds.length > 1 ? 'independent ' : ''}predictor of ${what} in ${logistic ? 'logistic' : 'linear'} regression.`);
+      sent.push(logistic ? `The model was ${multi.pModel <= alpha ? 'statistically significant' : 'insignificant'} (P value ${pTxt(multi.pModel)}, Nagelkerke R² = ${fmt(multi.nagelkerke, 3)}).`
+        : `The model was ${multi.pModel <= alpha ? 'statistically significant' : 'insignificant'} (P value ${pTxt(multi.pModel)}) and explained ${fmt(100 * multi.r2, 1)}% of the variance of ${lowerFirst(plain(outLabel))} (R² = ${fmt(multi.r2, 3)}).`);
+    } else sent.push('The model could not be estimated: too few complete cases or perfectly collinear predictors.');
+    if (uni && multi && preds.length > 1) {
+      if (uSig.length) sent.unshift(`In univariable analysis, ${listJoin(uSig.map(x => lowerFirst(x.label)))} ${uSig.length > 1 ? 'were' : 'was'} significantly associated with ${what}.`);
+    }
+    return {
+      kind: 'regression', title: `${logistic ? 'Logistic' : 'Linear'} regression analysis for prediction of ${lowerFirst(outLabel)}${logistic ? ` (${a.positive})` : ''}`,
+      head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { multi, uni }
+    };
+  }
+
+  function rocSection(a, cfg, rows, alpha, d, used) {
+    const outLabel = columnLabel(cfg, a.outcome);
+    const tests = a.predictors.filter(c => c !== a.outcome && columnKind(cfg, rows, c) === 'numeric');
+    if (!tests.length) return null;
+    used.add('roc');
+    const res = tests.map(col => {
+      const rs = rows.filter(r => toCat(r[a.outcome]) !== null && isFinite(toNum(r[col])));
+      const pos = rs.map(r => toCat(r[a.outcome]) === a.positive);
+      if (pos.filter(Boolean).length < 2 || pos.filter(x => !x).length < 2) return { col, label: columnLabel(cfg, col), r: null };
+      return { col, label: columnLabel(cfg, col), r: S.roc(rs.map(r => toNum(r[col])), pos) };
+    });
+    const pct = v => `${fmt(100 * v, 1)}%`;
+    const head = ['', 'AUC (95% CI)', 'P value', 'Cut-off', 'Sensitivity', 'Specificity', 'PPV', 'NPV', 'Accuracy'];
+    const trows = res.map(({ label, r }) => r ? [{ t: [label], b: true }, { t: [`${fmt(r.auc, 3)} (${fmt(r.lo, 3)}-${fmt(r.hi, 3)})`] }, { t: [fmtP(r.p, alpha)] },
+      { t: [`${r.higher ? '>' : '≤'} ${fmt(r.cutoff.cut, d)}`] }, { t: [pct(r.cutoff.sens)] }, { t: [pct(r.cutoff.spec)] }, { t: [pct(r.cutoff.ppv)] }, { t: [pct(r.cutoff.npv)] }, { t: [pct(r.cutoff.accuracy)] }]
+      : [{ t: [label], b: true }, { t: ['—'], span: 8 }]);
+    const grade = auc => auc >= 0.9 ? 'excellent' : auc >= 0.8 ? 'good' : auc >= 0.7 ? 'fair' : auc >= 0.6 ? 'poor' : 'failed';
+    const what = `${lowerFirst(outLabel)} (${a.positive})`;
+    const sent = res.filter(x => x.r).map(({ label, r }) => r.p <= alpha
+      ? `${cap(plain(label))} ${r.higher ? '' : '(lower values) '}could significantly predict ${what} with ${grade(r.auc)} discrimination (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)}); at a cut-off of ${r.higher ? '>' : '≤'} ${fmt(r.cutoff.cut, d)}, sensitivity was ${pct(r.cutoff.sens)} and specificity was ${pct(r.cutoff.spec)}.`
+      : `${cap(plain(label))} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}, P value ${pTxt(r.p)}).`);
+    const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', 'Cut-off: Youden index'];
+    if (res.some(x => x.r && !x.r.higher)) f.push('≤: lower values predict the outcome');
+    const ok = res.filter(x => x.r);
+    const n1 = ok.length ? ok[0].r.n1 : 0, n0 = ok.length ? ok[0].r.n0 : 0;
+    return {
+      kind: 'roc', title: `Diagnostic performance for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
+      figures: ok.length ? [{ sig: ok.some(x => x.r.p <= alpha), caption: `ROC curve for prediction of ${what}`,
+        spec: { type: 'roc', series: ok.map(x => ({ name: `${plain(x.label)} (AUC = ${fmt(x.r.auc, 3)})`, points: x.r.points })), note: `n = ${n1} with, ${n0} without` } }] : [],
+      meta: { res }
+    };
+  }
+
   /* ---------- main ---------- */
   function run(data, cfg) {
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
@@ -287,7 +443,7 @@ const Analysis = (() => {
     const pairNames = pr.map(([i, j]) => `${gl[i]} and ${gl[j]}`);
     const numbered = k > 2;
     const sections = [];
-    const vars = cfg.variables.filter(v => v.include && v.role !== 'ignore');
+    const vars = effectiveVariables(cfg);
 
     // Group single variables into their named tables, in column order
     const blocks = [];
@@ -521,6 +677,12 @@ const Analysis = (() => {
       }
     }
 
+    for (const a of cfg.advanced || []) {
+      if (!a.outcome || !(a.predictors || []).length || (a.type !== 'linear' && !a.positive)) continue;
+      const sec = a.type === 'roc' ? rocSection(a, cfg, rows, alpha, d, used) : regressionSection(a, cfg, rows, alpha, d, used);
+      if (sec) { sec.comment = wording(sec.comment); sections.push(sec); }
+    }
+
     // which figures go in the report: all, only those of significant results, or none
     if (opts.figures === 'none') sections.forEach(s => { s.figures = []; });
     else if (opts.figures === 'sig') sections.forEach(s => { s.figures = s.figures.filter(f => f.sig !== false); });
@@ -615,6 +777,9 @@ const Analysis = (() => {
       if (used.has('spearman')) c.push(`Spearman's rank correlation coefficient (rs)${c.length ? ' otherwise' : ''}`);
       s.push(`Correlation between quantitative variables was assessed using ${c.join(' or ')}.`);
     }
+    if (used.has('linear')) s.push('Multiple linear regression was used to identify predictors of quantitative outcomes, reporting unstandardized (B) and standardized (β) coefficients with 95% CI.');
+    if (used.has('logistic')) s.push('Binary logistic regression was used to identify predictors of binary outcomes, reporting odds ratios (OR) with 95% CI; model fit was assessed by the omnibus chi-square test and Nagelkerke R².');
+    if (used.has('roc')) s.push('Receiver operating characteristic (ROC) curve analysis was used to assess diagnostic performance; the area under the curve (AUC) was reported with its 95% CI (DeLong method), and the optimal cut-off was chosen by the Youden index.');
     s.push(`A two tailed P value ≤ ${o.alpha} was considered statistically significant.`);
     return s.join(' ');
   }
@@ -641,5 +806,5 @@ const Analysis = (() => {
     return t;
   }
 
-  return { run, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE };
+  return { run, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf };
 })();

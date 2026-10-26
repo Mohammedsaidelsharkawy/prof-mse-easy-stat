@@ -21,8 +21,9 @@ An offline web app that turns an Excel mastersheet into a formatted Word statist
 - Within subjects: paired t-test and Wilcoxon signed-rank (two timepoints); repeated-measures ANOVA (Greenhouse–Geisser) and Friedman test (three or more), with Bonferroni-adjusted post hoc comparisons against the first timepoint
 - Correlation (optional): Pearson or Spearman between numeric variables, with scatter plots of significant pairs
 - Effect sizes and 95% confidence intervals
+- Advanced (optional): multiple linear regression (B, β, 95% CI, R²), binary logistic regression (univariable and multivariable OR, Nagelkerke R²), ROC curves (AUC with DeLong 95% CI, Youden cut-off, sensitivity, specificity, PPV, NPV)
 
-The original engine's output (1,808 test values) was checked against R 4.6.1. The paired, Wilcoxon signed-rank and correlation tests were checked against SciPy 1.18 on 300 random datasets.
+The original engine's output (1,808 test values) was checked against R 4.6.1. The paired, Wilcoxon signed-rank and correlation tests were checked against SciPy 1.18 on 300 random datasets. Linear and logistic regression were checked against statsmodels 0.15, and ROC results against scikit-learn 1.9, on 200 random datasets.
 
 ## Report options
 
@@ -30,6 +31,9 @@ The original engine's output (1,808 test values) was checked against R 4.6.1. Th
 - Word tables: grid or three-line academic (APA) style; choice of body font
 - Chart appearance: text size, shape (wide, 4:3, square), bar fill (gradient, solid, outline, hatched), gridlines, axis arrows, legend position, y axis from zero or fitted, group sizes on axes, high-resolution images, custom colours
 - Figures: all, significant results only, or none; error bars as SD, SEM or 95% CI; size and one or two per row in Word; value labels on bars; significance brackets and stars; optional individual data points on box plots
+- Legend: bottom, top, right, inside the plot or hidden; text size, title and frame
+- Repeated measures: choose the timepoints per outcome, include/exclude and reorder timepoints globally, or analyse an outcome's timepoints as separate variables
+- Export: tick which sections, tables and figures go into the Word file (numbering follows); the choice is saved with the setup
 - Light and dark theme for the app
 
 ## Development
