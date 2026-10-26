@@ -14,16 +14,31 @@ An offline web app that turns an Excel mastersheet into a formatted Word statist
 
 `Sample report.docx` is example output generated from simulated data.
 
+## Example datasets
+
+Step 1 offers five simulated studies. **Open example** loads one, with suggested analyses already set up, and **⬇ Excel file** downloads it so you can see the expected sheet layout. The same files are in `examples/`:
+
+| File | Study | Shows |
+|---|---|---|
+| `knee-oa-rct.xlsx` | Two-group RCT, 60 patients | t-test / Mann-Whitney, repeated measures, ANCOVA |
+| `postop-analgesia-3arm.xlsx` | Three-group RCT, 75 patients | ANOVA / Kruskal-Wallis with post hoc, within-group change, group × time interaction, categorical post hoc, logistic regression |
+| `sepsis-biomarkers.xlsx` | Diagnostic study, 90 patients | skewed lab markers, ROC curves, logistic regression |
+| `oncology-survival.xlsx` | Two-arm survival study, 90 patients | Kaplan-Meier curves, log-rank test |
+| `dose-response-4arm.xlsx` | Four-group pilot, 48 patients | small non-normal samples, Dunn's post hoc |
+
+Regenerate them with `node tools/make_examples.js` after editing `src/examples.js`.
+
 ## Statistics
 
 - Normality: Shapiro–Wilk
-- Between groups: independent t-test, Mann–Whitney U, one-way ANOVA, Kruskal–Wallis, Chi-square, Fisher's exact
+- Between groups: independent t-test, Mann–Whitney U, one-way ANOVA (Tukey), Kruskal–Wallis, Chi-square, Fisher's exact
+- Optional: Welch's ANOVA with Games-Howell post hoc for unequal variances, Dunn's post hoc after Kruskal–Wallis, pairwise Chi-square / Fisher post hoc (Bonferroni) for categorical variables, group × time interaction by mixed (split-plot) ANOVA
 - Within subjects: paired t-test and Wilcoxon signed-rank (two timepoints); repeated-measures ANOVA (Greenhouse–Geisser) and Friedman test (three or more), with Bonferroni-adjusted post hoc comparisons against the first timepoint
 - Correlation (optional): Pearson or Spearman between numeric variables, with scatter plots of significant pairs
 - Effect sizes and 95% confidence intervals
-- Advanced (optional): multiple linear regression (B, β, 95% CI, R²), binary logistic regression (univariable and multivariable OR, Nagelkerke R²), ROC curves (AUC with DeLong 95% CI, Youden cut-off, sensitivity, specificity, PPV, NPV)
+- Advanced (optional): multiple linear regression (B, β, 95% CI, R²), binary logistic regression (univariable and multivariable OR, Nagelkerke R²), ROC curves (AUC with DeLong 95% CI, Youden cut-off, sensitivity, specificity, PPV, NPV), ANCOVA (adjusted means and Bonferroni pairwise comparisons), Kaplan-Meier survival with the log-rank test
 
-The original engine's output (1,808 test values) was checked against R 4.6.1. The paired, Wilcoxon signed-rank and correlation tests were checked against SciPy 1.18 on 300 random datasets. Linear and logistic regression were checked against statsmodels 0.15, and ROC results against scikit-learn 1.9, on 200 random datasets.
+The original engine's output (1,808 test values) was checked against R 4.6.1. The paired, Wilcoxon signed-rank and correlation tests were checked against SciPy 1.18 on 300 random datasets. Linear and logistic regression were checked against statsmodels 0.15, and ROC results against scikit-learn 1.9, on 200 random datasets. Welch's ANOVA, Games-Howell, mixed ANOVA and ANCOVA were checked against pingouin 0.7, Dunn's test against scikit-posthocs, pairwise Chi-square against SciPy, and Kaplan-Meier / log-rank against lifelines 0.30, on 120 random datasets. Median survival follows SPSS: the first time survival falls to 50% or below.
 
 ## Report options
 
@@ -45,6 +60,7 @@ The original engine's output (1,808 test values) was checked against R 4.6.1. Th
 | `src/charts.js` | Canvas charts and CONSORT flowchart |
 | `src/report.js` | Word export (docx.js) |
 | `src/app.js`, `src/index.html` | Wizard UI |
+| `src/examples.js` | Built-in example datasets (seeded simulation) |
 | `src/lib/` | jStat, SheetJS, docx 8.5.0 |
 | `src/logo.png` | Branding |
 

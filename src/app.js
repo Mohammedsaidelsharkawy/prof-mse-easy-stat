@@ -4,7 +4,10 @@
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const STEPS = [['Upload', 'Excel file'], ['Variables', 'Groups & roles'], ['Timepoints', 'Options'], ['CONSORT', 'Flowchart'], ['Report', 'Preview & Word']];
   const TP_RE = /^(baseline|base|bl|pre|post|preop|postop|before|after|final|end|(t|v|visit|day|d|week|wk|w|month|mo|m|h|hr|y|yr|session)\d+(\.\d+)?|\d+(\.\d+)?(h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks|m|mo|mon|month|months|y|yr|yrs|year|years|min|mins))$/i;
-  const UNIT_RE = /^(\d+(\.\d+)?-\d+(\.\d+)?|years?|yrs|months?|days?|weeks?|hours?|deg|degrees?|kg|g|cm|mm|m2|kg\/m2|mmhg|bpm|percent|pct|%|min|mins|sec|ml|mg|mg\/dl|mmol\/l|iu|u\/l)$/i;
+  const UNIT_RE = /^(\d+(\.\d+)?-\d+(\.\d+)?|years?|yrs|months?|days?|weeks?|hours?|deg|degrees?|kg|g|cm|mm|m2|kg\/m2|mmhg|bpm|percent|pct|%|min|mins|sec|ml|mg|mg\/dl|mmol\/l|iu|u\/l|ng|pg|ug|mcg|µg|mmol|umol|µmol|meq|x?10e\d+)$/i;
+  // a unit followed by one of these reads as "per": mg_L → mg/L, kg_m2 → kg/m2
+  const PER_RE = /^(l|dl|ml|m2|kg|min|h|hr|day)$/i;
+  const fixCase = u => u.replace(/^(m|d)?l$/i, m => m.length === 1 ? 'L' : m[0].toLowerCase() + 'L');
   const ID_RE = /(^id$|_id$|^id_|study.?id|patient.?(id|no|code)|^code$|^serial|^no\.?$|^s\.?n\.?$|^name$)/i;
   const GROUP_RE = /^(group|groups|arm|treatment|allocation|intervention|study.?group)$/i;
 
@@ -14,6 +17,7 @@
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
+    welch: false, dunn: false, chiPost: false, mixed: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -24,7 +28,8 @@
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
-    legendSize: ['optLegendSize'], legendTitle: ['optLegendTitle'], legendFrame: ['optLegendFrame', true]
+    legendSize: ['optLegendSize'], legendTitle: ['optLegendTitle'], legendFrame: ['optLegendFrame', true],
+    welch: ['optWelch', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -40,7 +45,14 @@
   const tokens = name => String(name).trim().split(/[_\s.]+/).filter(Boolean);
   function labelFrom(toks) {
     const words = [], units = [];
-    toks.forEach(t => UNIT_RE.test(t) ? units.push(t) : words.push(t));
+    toks.forEach((t, i) => {
+      const prevUnit = i > 0 && units.length && (UNIT_RE.test(toks[i - 1]) || PER_RE.test(toks[i - 1]) && units.length);
+      if (prevUnit && PER_RE.test(t) && units[units.length - 1].split('/').length < 2) units[units.length - 1] += '/' + fixCase(t);
+      else if (UNIT_RE.test(t)) units.push(t);
+      else words.push(t);
+    });
+    // the first token is a name, never a unit ("PCT_ng_mL" → "PCT (ng/mL)")
+    if (!words.length && units.length) words.push(units.shift());
     let s = words.join(' ');
     if (units.length) s += ` (${units.join(', ')})`;
     return s || toks.join(' ');
@@ -91,6 +103,31 @@
     finally { busy(false); }
   }
   $('#sheetSel').onchange = e => selectSheet(e.target.value);
+
+  /* ---------- example datasets ---------- */
+  const exampleBook = ex => { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ex.rows()), 'Data'); return wb; };
+  $('#examples').innerHTML = Examples.LIST.map(ex => `<div class="excard"><h4>${esc(ex.name)}</h4><p>${esc(ex.description)}</p>
+    <div class="row"><button class="btn primary small" data-exopen="${ex.id}" type="button">Open example</button><button class="btn ghost small" data-exsave="${ex.id}" type="button">⬇ Excel file</button></div></div>`).join('');
+  $('#examples').addEventListener('click', e => {
+    const o = e.target.closest('[data-exopen]'), d = e.target.closest('[data-exsave]');
+    if (d) { const ex = Examples.get(d.dataset.exsave); XLSX.writeFile(exampleBook(ex), ex.id + '.xlsx'); return; }
+    if (!o) return;
+    const ex = Examples.get(o.dataset.exopen);
+    state.wb = exampleBook(ex); state.file = ex.id + '.xlsx'; state.pendingCfg = null;
+    $('#fileName').textContent = state.file + ' (example)';
+    $('#sheetSel').innerHTML = '<option>Data</option>'; $('#sheetBox').style.display = '';
+    $('#studyTitle').value = ex.title;
+    selectSheet('Data');
+    // the example's suggested options and advanced analyses
+    Object.assign(state.cfg.options, ex.options || {});
+    for (const [col, lv] of Object.entries(ex.levels || {})) {
+      const v = state.cfg.variables.find(x => x.kind === 'single' && x.cols[0].col === col);
+      if (v) v.levels = [...lv];
+    }
+    state.cfg.advanced = (ex.advanced || []).filter(a => [a.outcome, a.event, ...(a.predictors || [])].filter(Boolean).every(c => state.data.headers.includes(c)))
+      .map(a => ({ positive: '', predictors: [], univariable: false, include: true, ...a }));
+    toast(`Example loaded: ${ex.name}${state.cfg.advanced.length ? ' — with suggested advanced analyses in step 3' : ''}`);
+  });
 
   function selectSheet(name) {
     const ws = state.wb.Sheets[name];
@@ -272,7 +309,7 @@
   });
 
   /* ---------- advanced analyses (regression, ROC) ---------- */
-  const ADV_TYPES = { linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve' };
+  const ADV_TYPES = { linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival' };
   const analysedRows = () => { const g = activeGroups(); return state.data.rows.filter(r => g.includes(Analysis.toCat(r[state.cfg.groupCol]))); };
   function advColumns() {
     const cfg = state.cfg, rows = analysedRows();
@@ -280,25 +317,34 @@
   }
   function defaultPositive(col) {
     const lv = Analysis.levelsOf(state.cfg, analysedRows(), col);
-    return lv.find(l => Analysis.POSITIVE.test(l)) || lv[lv.length - 1] || '';
+    return lv.find(l => Analysis.POSITIVE.test(l) || /^(dead|death|died|event|relapse|recurrence)$/i.test(l)) || lv[lv.length - 1] || '';
   }
   function renderAdvanced() {
-    const cfg = state.cfg, cols = advColumns();
+    const cfg = state.cfg, cols = advColumns(), rows = analysedRows();
+    const isCat = c => c.kind === 'categorical' && Analysis.levelsOf(cfg, rows, c.col).length >= 2;
+    const select = (key, label, list, value) => `<div><label class="f">${label}</label><select data-af="${key}"><option value="">— choose —</option>${
+      list.map(c => `<option value="${esc(c.col)}" ${c.col === value ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>`;
+    const levelSelect = (label, col, value) => `<div><label class="f">${label}</label><select data-af="positive">${
+      (col ? Analysis.levelsOf(cfg, rows, col) : []).map(l => `<option ${l === value ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
     $('#advList').innerHTML = cfg.advanced.length ? cfg.advanced.map((a, ai) => {
-      const outs = cols.filter(c => a.type === 'linear' ? c.kind === 'numeric' : c.kind === 'categorical' && Analysis.levelsOf(cfg, analysedRows(), c.col).length >= 2);
-      const preds = cols.filter(c => c.col !== a.outcome && (a.type !== 'roc' || c.kind === 'numeric'));
-      const levels = a.outcome && a.type !== 'linear' ? Analysis.levelsOf(cfg, analysedRows(), a.outcome) : [];
+      const t = a.type, num = cols.filter(c => c.kind === 'numeric');
+      let fields = '', predLabel = '', preds = [];
+      if (t === 'linear') { fields = select('outcome', 'Dependent variable (outcome)', num, a.outcome) + '<div></div>'; predLabel = 'Predictors (independent variables)'; preds = cols; }
+      if (t === 'logistic') { fields = select('outcome', 'Dependent variable (outcome)', cols.filter(isCat), a.outcome) + levelSelect('Positive (event) value', a.outcome, a.positive); predLabel = 'Predictors (independent variables)'; preds = cols; }
+      if (t === 'roc') { fields = select('outcome', 'Outcome (true state)', cols.filter(isCat), a.outcome) + levelSelect('Positive (event) value', a.outcome, a.positive); predLabel = 'Test variables (numeric)'; preds = num; }
+      if (t === 'ancova') { fields = select('outcome', 'Outcome compared between the study groups', num, a.outcome) + '<div></div>'; predLabel = 'Covariates to adjust for (e.g. the baseline value, age)'; preds = cols.filter(c => c.col !== cfg.groupCol); }
+      if (t === 'survival') fields = select('outcome', 'Follow-up time', num, a.outcome) + select('event', 'Event column', cols.filter(isCat), a.event)
+        + levelSelect('Event value (others are censored)', a.event, a.positive)
+        + `<div><label class="f">Survival at time (optional)</label><input type="text" data-af="at" value="${esc(a.at || '')}" placeholder="e.g. 12"></div>`;
+      const uni = t === 'linear' || t === 'logistic' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
       return `<div class="gcard" data-adv="${ai}">
-        <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[a.type]}</h4><span class="spacer"></span>
+        <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
           <label class="check" style="margin:0"><input type="checkbox" data-af="include" ${a.include !== false ? 'checked' : ''}><span>Include</span></label>
           <button class="btn ghost small" data-advdel="${ai}" type="button">✕ Remove</button></div>
-        <div class="grid g3" style="margin-top:8px">
-          <div><label class="f">${a.type === 'roc' ? 'Outcome (true state)' : 'Dependent variable (outcome)'}</label><select data-af="outcome"><option value="">— choose —</option>${outs.map(c => `<option value="${esc(c.col)}" ${c.col === a.outcome ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>
-          ${a.type !== 'linear' ? `<div><label class="f">Positive (event) value</label><select data-af="positive">${levels.map(l => `<option ${l === a.positive ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>` : '<div></div>'}
-          ${a.type !== 'roc' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '<div></div>'}
-        </div>
-        <label class="f" style="margin-top:8px">${a.type === 'roc' ? 'Test variables (numeric)' : 'Predictors (independent variables)'}</label>
-        <div class="predlist">${preds.map(c => `<label><input type="checkbox" data-apred="${esc(c.col)}" ${a.predictors.includes(c.col) ? 'checked' : ''}>${esc(c.label)} <span class="legend-note">${c.kind === 'numeric' ? 'num' : 'cat'}</span></label>`).join('')}</div>
+        <div class="grid g3" style="margin-top:8px">${fields}${uni}</div>
+        ${t === 'survival' ? '<p class="legend-note" style="margin:6px 0 0">Curves are drawn for each study group; patients without the event are censored at their follow-up time.</p>' : `
+        <label class="f" style="margin-top:8px">${predLabel}</label>
+        <div class="predlist">${preds.filter(c => c.col !== a.outcome).map(c => `<label><input type="checkbox" data-apred="${esc(c.col)}" ${(a.predictors || []).includes(c.col) ? 'checked' : ''}>${esc(c.label)} <span class="legend-note">${c.kind === 'numeric' ? 'num' : 'cat'}</span></label>`).join('')}</div>`}
       </div>`;
     }).join('') : '<p class="legend-note">No advanced analyses yet — add one below.</p>';
   }
@@ -320,11 +366,14 @@
     readUiIntoCfg(); state.cfg.advanced.splice(+b.dataset.advdel, 1); renderAdvanced();
   });
   $('#advList').addEventListener('change', e => {
-    if (e.target.dataset.af !== 'outcome') return;
+    const f = e.target.dataset.af;
+    if (f !== 'outcome' && f !== 'event') return;
     readUiIntoCfg();
     const a = state.cfg.advanced[+e.target.closest('[data-adv]').dataset.adv];
-    a.predictors = a.predictors.filter(c => c !== a.outcome);
-    a.positive = a.type === 'linear' ? '' : defaultPositive(a.outcome);
+    a.predictors = (a.predictors || []).filter(c => c !== a.outcome);
+    // the positive value belongs to the outcome (logistic, ROC) or to the event column (survival)
+    if (a.type === 'survival') { if (f === 'event') a.positive = defaultPositive(a.event); }
+    else a.positive = a.type === 'logistic' || a.type === 'roc' ? defaultPositive(a.outcome) : '';
     renderAdvanced();
   });
 

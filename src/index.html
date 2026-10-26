@@ -118,6 +118,9 @@ table.rt.apa tbody tr:last-child td,table.rt.apa td.last{border-bottom:2px solid
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);z-index:50;font-weight:600;opacity:0;transition:.25s;pointer-events:none}
 .toast.show{opacity:1}
 .gcard{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--soft)}
+.excard{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--soft);display:flex;flex-direction:column;gap:6px}
+.excard h4{margin:0;color:var(--accent)}
+.excard p{margin:0;font-size:13.5px;color:var(--muted);flex:1}
 .gcard h4{margin:0 0 8px;color:var(--accent)}
 footer{text-align:center;color:var(--muted);font-size:12.5px;padding:20px}
 footer b{color:var(--purple)}
@@ -171,6 +174,11 @@ footer b{color:var(--purple)}
       </div>
     </div>
     <div class="card">
+      <h2>Or try an example dataset</h2>
+      <p class="hint">Simulated studies that show the expected sheet layout and the analyses. Open one to explore the app, or download it as Excel to see how to arrange your own data.</p>
+      <div id="examples" class="grid g2"></div>
+    </div>
+    <div class="card">
       <h2>Report details</h2>
       <div class="grid g2">
         <div><label class="f">Study title (optional, printed at top of report)</label><input type="text" id="studyTitle" placeholder="e.g. PRF versus Ozone for chronic shoulder pain"></div>
@@ -222,6 +230,16 @@ footer b{color:var(--purple)}
         <div>
           <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
           <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots of significant pairs</span></label>
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:6px">
+        <div>
+          <label class="check"><input type="checkbox" id="optWelch"><span><b>Welch's ANOVA + Games-Howell</b> post hoc when variances are unequal (Levene P &lt; 0.05), 3+ groups</span></label>
+          <label class="check"><input type="checkbox" id="optDunn"><span><b>Dunn's test</b> (Bonferroni) as the post hoc after Kruskal-Wallis, instead of pairwise Mann-Whitney</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optChiPost"><span><b>Pairwise post hoc for categorical variables</b> — Chi-square / Fisher between each two groups (Bonferroni), 3+ groups</span></label>
+          <label class="check"><input type="checkbox" id="optMixed"><span><b>Group × time interaction</b> — mixed (split-plot) ANOVA with Greenhouse-Geisser, parametric repeated outcomes</span></label>
         </div>
       </div>
       <h3>Comments</h3>
@@ -278,6 +296,8 @@ footer b{color:var(--purple)}
         <button class="btn ghost small" data-advadd="linear" type="button">+ Linear regression</button>
         <button class="btn ghost small" data-advadd="logistic" type="button">+ Logistic regression</button>
         <button class="btn ghost small" data-advadd="roc" type="button">+ ROC curve</button>
+        <button class="btn ghost small" data-advadd="ancova" type="button">+ ANCOVA</button>
+        <button class="btn ghost small" data-advadd="survival" type="button">+ Kaplan-Meier survival</button>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="2">← Back</button><button class="btn primary" data-go="4">Next: CONSORT →</button></div>

@@ -61,6 +61,12 @@ const Analysis = (() => {
         p = t.p; test = eq ? 't-test' : 'Welch t-test';
         used.add(eq ? 'ttest' : 'welch');
         pw = [{ i: 0, j: 1, p: t.p, diff: t.diff, lo: t.lo, hi: t.hi }];
+      } else if (opts.welch && S.levene(groupVals) < 0.05) {
+        // unequal variances: Welch's ANOVA with Games–Howell post hoc
+        const w = S.welchAnova(groupVals);
+        p = w.p; test = 'Welch ANOVA';
+        used.add('welchAnova');
+        pw = S.gamesHowell(groupVals);
       } else {
         const a = S.anova(groupVals);
         p = a.p; test = 'ANOVA';
@@ -79,7 +85,9 @@ const Analysis = (() => {
         const kw = S.kruskalWallis(groupVals);
         p = kw.p; test = 'Kruskal-Wallis';
         used.add('kw');
-        pw = pr.map(([i, j]) => ({ i, j, p: S.mannWhitney(groupVals[i], groupVals[j]).p, ...S.hodgesLehmann(groupVals[i], groupVals[j]) }));
+        const dn = opts.dunn ? S.dunn(groupVals) : null;
+        if (dn) used.add('dunn');
+        pw = pr.map(([i, j], q) => ({ i, j, p: dn ? dn[q].p : S.mannWhitney(groupVals[i], groupVals[j]).p, ...S.hodgesLehmann(groupVals[i], groupVals[j]) }));
       }
       used.add('nonparam');
     }
@@ -105,7 +113,10 @@ const Analysis = (() => {
     const binary = levels.length === 2;
     const rrRow = binary ? 0 : -1;
     const rr = binary ? pairs(k).map(([i, j]) => ({ i, j, ...(S.relativeRisk(table, rrRow, i, j) || { rr: null }) })) : [];
-    return { table, pct, ns, p, test, rr, binary };
+    // optional Bonferroni-adjusted pairwise comparisons once the overall test is significant (3+ groups)
+    let catPairs = null;
+    if (opts.chiPost && k > 2 && p <= opts.alpha) { catPairs = S.chiSquarePairwise(table, opts.fisher); used.add('chiPost'); }
+    return { table, pct, ns, p, test, rr, binary, pairs: catPairs };
   }
 
   /* ---------- within-group repeated measures ---------- */
@@ -255,6 +266,8 @@ const Analysis = (() => {
     });
     return sentences.join(' ');
   }
+  // "A and B" for one pair, "(A and B) and (A and C)" for several
+  const pairList = (qs, gl) => qs.length === 1 ? `${gl[qs[0].i]} and ${gl[qs[0].j]}` : listJoin(qs.map(q => `(${gl[q.i]} and ${gl[q.j]})`));
   const tpGroup = list => list.length === 1 ? list[0] : `(${listJoin(list)})`;
   // "P value = 0.01" / "= 0.01 and 0.02 respectively" / "< 0.001 in each"
   function pList(ps) {
@@ -322,6 +335,9 @@ const Analysis = (() => {
       ok: r => lv.includes(toCat(r[col])) };
   }
 
+  // "Sepsis group" when the outcome is the study group itself, otherwise "<outcome> (<positive value>)"
+  const eventName = (cfg, a) => a.outcome === cfg.groupCol ? (cfg.groupLabels[a.positive] || a.positive) : `${lowerFirst(columnLabel(cfg, a.outcome))} (${a.positive})`;
+
   function regressionSection(a, cfg, rows, alpha, d, used) {
     const logistic = a.type === 'logistic';
     const outLabel = columnLabel(cfg, a.outcome);
@@ -367,7 +383,7 @@ const Analysis = (() => {
     const refs = preds.filter(e => e.ref).map(e => `${e.label}: reference = ${e.ref}`);
     if (refs.length) f.push(refs.join(', '));
     // comment
-    const what = logistic ? `${lowerFirst(outLabel)} (${a.positive})` : lowerFirst(plain(outLabel));
+    const what = logistic ? eventName(cfg, a) : lowerFirst(plain(outLabel));
     const phr = x => logistic
       ? `${lowerFirst(x.label)} (OR = ${fmt(x.t.or, 2)}, 95% CI ${fmt(x.t.lo, 2)}-${fmt(x.t.hi, 2)}, P value ${pTxt(x.t.p)})`
       : `${lowerFirst(x.label)} (B = ${fmt(x.t.B, d)}, 95% CI ${fmt(x.t.lo, d)} to ${fmt(x.t.hi, d)}, P value ${pTxt(x.t.p)})`;
@@ -382,7 +398,7 @@ const Analysis = (() => {
       if (uSig.length) sent.unshift(`In univariable analysis, ${listJoin(uSig.map(x => lowerFirst(x.label)))} ${uSig.length > 1 ? 'were' : 'was'} significantly associated with ${what}.`);
     }
     return {
-      kind: 'regression', title: `${logistic ? 'Logistic' : 'Linear'} regression analysis for prediction of ${lowerFirst(outLabel)}${logistic ? ` (${a.positive})` : ''}`,
+      kind: 'regression', title: `${logistic ? 'Logistic' : 'Linear'} regression analysis for prediction of ${logistic ? eventName(cfg, a) : lowerFirst(outLabel)}`,
       head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { multi, uni }
     };
   }
@@ -404,7 +420,7 @@ const Analysis = (() => {
       { t: [`${r.higher ? '>' : '≤'} ${fmt(r.cutoff.cut, d)}`] }, { t: [pct(r.cutoff.sens)] }, { t: [pct(r.cutoff.spec)] }, { t: [pct(r.cutoff.ppv)] }, { t: [pct(r.cutoff.npv)] }, { t: [pct(r.cutoff.accuracy)] }]
       : [{ t: [label], b: true }, { t: ['—'], span: 8 }]);
     const grade = auc => auc >= 0.9 ? 'excellent' : auc >= 0.8 ? 'good' : auc >= 0.7 ? 'fair' : auc >= 0.6 ? 'poor' : 'failed';
-    const what = `${lowerFirst(outLabel)} (${a.positive})`;
+    const what = eventName(cfg, a);
     const sent = res.filter(x => x.r).map(({ label, r }) => r.p <= alpha
       ? `${cap(plain(label))} ${r.higher ? '' : '(lower values) '}could significantly predict ${what} with ${grade(r.auc)} discrimination (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)}); at a cut-off of ${r.higher ? '>' : '≤'} ${fmt(r.cutoff.cut, d)}, sensitivity was ${pct(r.cutoff.sens)} and specificity was ${pct(r.cutoff.spec)}.`
       : `${cap(plain(label))} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}, P value ${pTxt(r.p)}).`);
@@ -417,6 +433,80 @@ const Analysis = (() => {
       figures: ok.length ? [{ sig: ok.some(x => x.r.p <= alpha), caption: `ROC curve for prediction of ${what}`,
         spec: { type: 'roc', series: ok.map(x => ({ name: `${plain(x.label)} (AUC = ${fmt(x.r.auc, 3)})`, points: x.r.points })), note: `n = ${n1} with, ${n0} without` } }] : [],
       meta: { res }
+    };
+  }
+
+  // ANCOVA: outcome compared between the study groups, adjusted for covariates
+  function ancovaSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G, k = gl.length;
+    const outLabel = columnLabel(cfg, a.outcome);
+    const covs = a.predictors.filter(c => c !== a.outcome && c !== cfg.groupCol).map(c => encode(cfg, rows, c)).filter(e => e.terms.length);
+    const rs = rows.filter(r => isFinite(toNum(r[a.outcome])) && covs.every(e => e.ok(r)));
+    const gi = rs.map(r => groups.indexOf(toCat(r[cfg.groupCol])));
+    const y = rs.map(r => toNum(r[a.outcome])), X = rs.map(r => covs.flatMap(e => e.terms.map(t => t.get(r))));
+    const byG = gl.map((_, g) => y.filter((_, i) => gi[i] === g));
+    if (byG.some(v => v.length < 2)) return null;
+    const res = S.ancova(y, gi, X, k);
+    if (!res) return null;
+    used.add('ancova');
+    const tc = jStat.studentt.inv(0.975, res.df2), unadj = S.anova(byG).p;
+    const desc = byG.map(S.describe);
+    const head = ['', ...gl.map((g, i) => `${g} (n=${byG[i].length})`), 'P value'];
+    const trows = [
+      [{ t: ['Mean ± SD (unadjusted)'], b: true }, ...desc.map(x => ({ t: [`${fmt(x.mean, d)} ± ${fmt(x.sd, d)}`] })), { t: [fmtP(unadj, alpha)] }],
+      [{ t: ['Adjusted mean (95% CI)'], b: true }, ...res.adj.map(x => ({ t: [`${fmt(x.mean, d)} (${fmt(x.mean - tc * x.se, d)} to ${fmt(x.mean + tc * x.se, d)})`] })), { t: [fmtP(res.p, alpha)] }]
+    ];
+    const pairLine = q => `${gl[q.i]} vs ${gl[q.j]}: ${fmt(q.diff, d)} (${fmt(q.lo, d)} to ${fmt(q.hi, d)})${k > 2 ? `, P=${fmtP(q.p, alpha)}` : ''}`;
+    if (k === 2) trows.push([{ t: ['Adjusted difference (95% CI)'], b: true }, { t: [pairLine(res.pairs[0])], span: k }, { t: [''] }]);
+    else if (res.p <= alpha) trows.push([{ t: ['Adjusted difference (95% CI)'], b: true }, { t: res.pairs.map(pairLine), span: k + 1, small: true }]);
+    const covLabels = covs.map(e => lowerFirst(plain(e.label)));
+    const covEff = covs.flatMap(e => e.terms).map((t, i) => `${t.label}: B = ${fmt(res.covTerms[i].B, d)}, P ${res.covTerms[i].p < 0.001 ? '<' : '='} ${fmtP(res.covTerms[i].p, alpha).replace(/^</, '')}`);
+    const f = [];
+    if (res.p <= alpha || unadj <= alpha) f.push(`*: Significant as P value ≤ ${alpha}`);
+    f.push(`Adjusted for ${covLabels.length ? listJoin(covLabels) : 'no covariates'} (covariates held at their mean values)`, `ANCOVA: F(${res.df1}, ${res.df2}) = ${fmt(res.F, 2)}, partial η² = ${fmt(res.partialEta2, 3)}`);
+    if (k > 2) f.push('Pairwise comparisons of adjusted means are Bonferroni-adjusted');
+    if (covEff.length) f.push(covEff.join(', '));
+    const lab = plain(outLabel), sig = res.p <= alpha;
+    const sent = [`After adjustment for ${covLabels.length ? listJoin(covLabels) : 'the covariates'}, ${lowerFirst(lab)} was ${sig ? 'significantly' : 'insignificantly'} different ${amongTxt(k)} (P value ${pTxt(res.p)}).`];
+    if (sig) {
+      const sp = res.pairs.filter(q => q.p <= alpha);
+      if (k === 2) sent.push(`The adjusted mean was ${res.pairs[0].diff < 0 ? 'lower' : 'higher'} in ${gl[0]} than ${gl[1]} by ${fmt(Math.abs(res.pairs[0].diff), d)} (95% CI ${fmt(res.pairs[0].lo, d)} to ${fmt(res.pairs[0].hi, d)}).`);
+      else if (sp.length) sent.push(`Adjusted means differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).`);
+    }
+    return { kind: 'ancova', title: `${outLabel} of the studied groups adjusted for covariates (ANCOVA)`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { res } };
+  }
+
+  // Kaplan–Meier survival by study group with the log-rank test
+  function survivalSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G, k = gl.length;
+    const timeLabel = columnLabel(cfg, a.outcome), evLabel = columnLabel(cfg, a.event);
+    const rs = rows.filter(r => isFinite(toNum(r[a.outcome])) && toNum(r[a.outcome]) >= 0 && toCat(r[a.event]) !== null);
+    const T = gl.map((_, g) => rs.filter(r => toCat(r[cfg.groupCol]) === groups[g]));
+    if (T.some(x => !x.length)) return null;
+    const times = T.map(x => x.map(r => toNum(r[a.outcome]))), ev = T.map(x => x.map(r => toCat(r[a.event]) === a.positive));
+    const km = times.map((t, g) => S.kaplanMeier(t, ev[g])), lr = S.logRank(times, ev);
+    used.add('survival');
+    const at = a.at !== undefined && String(a.at).trim() !== '' && isFinite(+a.at) ? +a.at : null;
+    const survAt = m => { let sv = 1; for (const q of m.steps) if (q.t <= at) sv = q.s; return sv; };
+    const unit = ((timeLabel.match(/\(([^)]*)\)\s*$/) || [])[1] || '').trim(), u = unit ? ' ' + unit : '';
+    const head = ['', 'n', 'Events (%)', `Median survival${unit ? ` (${unit})` : ''}`, ...(at !== null ? [`Survival at ${fmt(at, d)}${u}`] : []), 'Log-rank P'];
+    const trows = km.map((m, g) => {
+      const row = [{ t: [gl[g]], b: true }, { t: [String(m.n)] }, { t: [`${m.events} (${fmt(100 * m.events / m.n, 1)}%)`] }, { t: [isFinite(m.median) ? fmt(m.median, d) : 'Not reached'] }];
+      if (at !== null) row.push({ t: [`${fmt(100 * survAt(m), 1)}%`] });
+      if (g === 0) row.push({ t: [fmtP(lr.p, alpha)], rs: k });
+      return row;
+    });
+    const med = m => isFinite(m.median) ? fmt(m.median, d) : 'not reached';
+    const sent = [`The median time to ${lowerFirst(plain(evLabel))} was ${listJoin(km.map((m, g) => `${med(m)}${isFinite(m.median) ? u : ''} in ${gl[g]}`))}.`,
+      `Survival was ${lr.p <= alpha ? 'significantly' : 'insignificantly'} different ${amongTxt(k)} (log-rank P value ${pTxt(lr.p)}).`];
+    if (at !== null) sent.push(`At ${fmt(at, d)}${u}, the estimated survival was ${listJoin(km.map((m, g) => `${fmt(100 * survAt(m), 1)}% in ${gl[g]}`))}.`);
+    const f = [`Event: ${evLabel} = ${a.positive}; other patients are censored at their last follow-up`, `Log-rank χ²(${lr.df}) = ${fmt(lr.chi, 2)}`];
+    if (lr.p <= alpha) f.unshift(`*: Significant as P value ≤ ${alpha}`);
+    return {
+      kind: 'survival', title: `Kaplan-Meier survival analysis (${evLabel}) of the studied groups`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
+      figures: [{ sig: lr.p <= alpha, caption: `Kaplan-Meier curves of ${lowerFirst(evLabel)}-free survival in the studied groups`,
+        spec: { type: 'km', xLabel: timeLabel, series: km.map((m, g) => ({ name: gl[g], steps: m.steps, censored: m.censored })), note: `Log-rank P ${pTxt(lr.p)}` } }],
+      meta: { km, lr }
     };
   }
 
@@ -529,9 +619,22 @@ const Analysis = (() => {
           withinNote = `P (within group): change over time within each group by ${tps.length === 2 ? (param ? 'paired t-test' : 'Wilcoxon signed-rank test') : (param ? 'repeated-measures ANOVA' : 'Friedman test')}`;
           if (hasPost) withinNote += `, P (… vs ${tps[0]}): Bonferroni-adjusted ${param ? 'paired t-test' : 'Wilcoxon signed-rank test'} versus ${tps[0]}`;
         }
+        // group × time interaction by mixed (split-plot) ANOVA — parametric outcomes only
+        let mixed = null;
+        if (opts.mixed && param && v.cols.length >= 2) {
+          const mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
+          if (mats.every(Y => Y.length >= 2)) {
+            mixed = S.mixedAnova(mats); used.add('mixed');
+            trows.push([{ t: ['Group × time interaction'], b: true }, { t: [fmtP(mixed.interaction.p, alpha)], span: k }, { t: [''], span: head.length - 1 - k }]);
+            withinNote = [withinNote, 'Group × time interaction: mixed ANOVA (Greenhouse-Geisser)'].filter(Boolean).join(', ');
+          }
+        }
         let comment = repeatedComment(plain(v.label), tps, results, gl, alpha, detailed);
         if (within) comment += ' ' + withinComment(plain(v.label), tps, within, results, gl, alpha, param);
-        const sigAny = anySig || (within && within.some(w => w.p <= alpha));
+        if (mixed) comment += mixed.interaction.p <= alpha
+          ? ` There was a significant group × time interaction (P value ${pTxt(mixed.interaction.p)}), indicating that the change in ${lowerFirst(plain(v.label))} over time differed between the groups.`
+          : ` The group × time interaction was insignificant (P value ${pTxt(mixed.interaction.p)}), indicating a similar pattern of change over time in the groups.`;
+        const sigAny = anySig || (within && within.some(w => w.p <= alpha)) || (mixed && mixed.interaction.p <= alpha);
         const marks = opts.sigMarks ? { sigCat: results.map(r => r.p), alpha } : {};
         sections.push({
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
@@ -565,7 +668,7 @@ const Analysis = (() => {
           return { v, cat: analyzeCategorical(gv, levels, used, opts), levels, gv };
         });
         const anySig = res.some(r => (r.num || r.cat).p <= alpha);
-        const showPost = numbered && res.some(r => r.num && r.num.p <= alpha);
+        const showPost = numbered && res.some(r => r.num ? r.num.p <= alpha : !!r.cat.pairs);
         const hasNum = res.some(r => r.num), hasCat = res.some(r => r.cat);
         const hasRR = opts.effect && res.some(r => r.cat && r.cat.binary);
         const twoCol = res.some(r => r.num || (r.cat && !isCompact(r)));
@@ -576,7 +679,7 @@ const Analysis = (() => {
         const trows = [];
         const tail = (r, span) => {
           const cells = [{ t: [fmtP((r.num || r.cat).p, alpha)], rs: span }];
-          if (showPost) cells.push({ t: r.num && r.num.p <= alpha ? postHocLines(r.num) : ['---'], rs: span, small: true });
+          if (showPost) cells.push({ t: r.num && r.num.p <= alpha ? postHocLines(r.num) : r.cat && r.cat.pairs ? postHocLines(r.cat) : ['---'], rs: span, small: true });
           if (opts.effect) cells.push({ t: r.num ? effectLines(r.num) : (r.cat.binary ? rrLines(r.cat) : ['---']), rs: span, small: true });
           return cells;
         };
@@ -632,6 +735,11 @@ const Analysis = (() => {
                 sent.push(`${cap(lab)} was significantly higher in ${gl[best]} than ${gl[lo]} (${fmt(c.pct[0][best], 1)}% vs ${fmt(c.pct[0][lo], 1)}%, P value ${pTxt(c.p)}).`);
               } else sent.push(`${cap(lab)} was significantly different ${amongTxt(k)} (P value ${pTxt(c.p)}), being highest in ${gl[best]} (${fmt(c.pct[0][best], 1)}%).`);
             } else sent.push(`The distribution of ${lowerFirst(lab)} was significantly different ${amongTxt(k)} (P value ${pTxt(c.p)}).`);
+            if (c.pairs) {
+              const sp = c.pairs.filter(q => q.p <= alpha);
+              sent.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).`
+                : 'Pairwise comparisons were insignificant after Bonferroni correction.');
+            }
           }
         }
         const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: opts.effect, rr: hasRR, posthoc: showPost };
@@ -678,8 +786,11 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (!a.outcome || !(a.predictors || []).length || (a.type !== 'linear' && !a.positive)) continue;
-      const sec = a.type === 'roc' ? rocSection(a, cfg, rows, alpha, d, used) : regressionSection(a, cfg, rows, alpha, d, used);
+      if (!a.outcome || a.include === false) continue;
+      if (a.type === 'survival' ? !(a.event && a.positive) : a.type === 'ancova' ? false : !(a.predictors || []).length || (a.type !== 'linear' && !a.positive)) continue;
+      const G = { gl, groups };
+      const sec = a.type === 'roc' ? rocSection(a, cfg, rows, alpha, d, used) : a.type === 'ancova' ? ancovaSection(a, cfg, rows, alpha, d, used, G)
+        : a.type === 'survival' ? survivalSection(a, cfg, rows, alpha, d, used, G) : regressionSection(a, cfg, rows, alpha, d, used);
       if (sec) { sec.comment = wording(sec.comment); sections.push(sec); }
     }
 
@@ -746,14 +857,16 @@ const Analysis = (() => {
       let t;
       if (k === 2) t = used.has('welch') && used.has('ttest') ? "unpaired Student's t-test (or Welch's t-test when Levene's test indicated unequal variances)"
         : used.has('welch') ? "Welch's t-test" : "unpaired Student's t-test";
-      else t = 'ANOVA (F) test with post hoc test (Tukey)';
+      else t = used.has('welchAnova') && !used.has('anova') ? "Welch's ANOVA with Games-Howell post hoc test"
+        : 'ANOVA (F) test with post hoc test (Tukey)' + (used.has('welchAnova') ? " (or Welch's ANOVA with Games-Howell post hoc test when Levene's test indicated unequal variances)" : '');
       s.push(`Quantitative parametric data were presented as mean and standard deviation (SD) and were analyzed by ${t}.`);
     }
     if (used.has('nonparam')) {
-      const t = k === 2 ? 'Mann-Whitney test' : 'Kruskal-Wallis test with Mann-Whitney test to compare each two groups';
+      const t = k === 2 ? 'Mann-Whitney test' : used.has('dunn') ? "Kruskal-Wallis test with Dunn's post hoc test (Bonferroni-adjusted)" : 'Kruskal-Wallis test with Mann-Whitney test to compare each two groups';
       s.push(`Quantitative non-parametric data were presented as median and interquartile range (IQR) and were analyzed by ${t}.`);
     }
     if (used.has('cat')) s.push(`Qualitative variables were presented as frequency and percentage (%) and were analyzed utilizing the Chi-square test${used.has('fisher') ? " or Fisher's exact test when appropriate" : ''}.`);
+    if (used.has('chiPost')) s.push('When significant, qualitative variables were compared between each two groups with Bonferroni correction.');
     if (o.effect) {
       const e = [];
       if (used.has('param')) e.push(k === 2 ? 'mean differences' : 'mean differences (Tukey-adjusted)');
@@ -777,6 +890,9 @@ const Analysis = (() => {
       if (used.has('spearman')) c.push(`Spearman's rank correlation coefficient (rs)${c.length ? ' otherwise' : ''}`);
       s.push(`Correlation between quantitative variables was assessed using ${c.join(' or ')}.`);
     }
+    if (used.has('mixed')) s.push('The group × time interaction was assessed by mixed (split-plot) ANOVA with Greenhouse-Geisser correction.');
+    if (used.has('ancova')) s.push('Analysis of covariance (ANCOVA) was used to compare groups after adjustment for covariates, reporting adjusted (estimated marginal) means with 95% CI and Bonferroni-adjusted pairwise comparisons.');
+    if (used.has('survival')) s.push('Survival was estimated by the Kaplan-Meier method and compared between groups using the log-rank test.');
     if (used.has('linear')) s.push('Multiple linear regression was used to identify predictors of quantitative outcomes, reporting unstandardized (B) and standardized (β) coefficients with 95% CI.');
     if (used.has('logistic')) s.push('Binary logistic regression was used to identify predictors of binary outcomes, reporting odds ratios (OR) with 95% CI; model fit was assessed by the omnibus chi-square test and Nagelkerke R².');
     if (used.has('roc')) s.push('Receiver operating characteristic (ROC) curve analysis was used to assess diagnostic performance; the area under the curve (AUC) was reported with its 95% CI (DeLong method), and the optimal cut-off was chosen by the Youden index.');

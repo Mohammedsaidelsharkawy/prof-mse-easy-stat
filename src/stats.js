@@ -291,6 +291,115 @@ const Stats = (() => {
 
   const bonferroni = (p, m) => Math.min(1, p * m);
 
+  /* ---------- Unequal variances, extra post hoc tests ---------- */
+  // Welch's one-way ANOVA
+  function welchAnova(groups) {
+    const k = groups.length, n = groups.map(g => g.length), m = groups.map(mean), w = groups.map((g, i) => n[i] / variance(g));
+    const W = sum(w), mw = sum(w.map((wi, i) => wi * m[i])) / W;
+    const lam = sum(w.map((wi, i) => (1 - wi / W) ** 2 / (n[i] - 1)));
+    const F = (sum(w.map((wi, i) => wi * (m[i] - mw) ** 2)) / (k - 1)) / (1 + 2 * (k - 2) / (k * k - 1) * lam);
+    const df1 = k - 1, df2 = (k * k - 1) / (3 * lam);
+    return { F, df1, df2, p: 1 - jStat.centralF.cdf(F, df1, df2) };
+  }
+  // Games–Howell pairwise comparisons (Welch SE and df, studentized range)
+  function gamesHowell(groups) {
+    const k = groups.length, out = [];
+    for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
+      const a = groups[i], b = groups[j], va = variance(a) / a.length, vb = variance(b) / b.length;
+      const d = mean(a) - mean(b), se = Math.sqrt(va + vb);
+      const df = (va + vb) ** 2 / (va * va / (a.length - 1) + vb * vb / (b.length - 1));
+      const q = Math.abs(d) / se * Math.SQRT2, qc = jStat.tukey.inv(0.95, k, df) / Math.SQRT2;
+      out.push({ i, j, diff: d, lo: d - qc * se, hi: d + qc * se, p: Math.min(1, Math.max(0, 1 - jStat.tukey.cdf(q, k, df))) });
+    }
+    return out;
+  }
+  // Dunn's test after Kruskal–Wallis, tie-corrected, Bonferroni-adjusted
+  function dunn(groups) {
+    const all = groups.flat(), N = all.length, k = groups.length, { ranks, ties } = rank(all);
+    const R = [];
+    let off = 0;
+    for (const g of groups) { R.push(mean(ranks.slice(off, off + g.length))); off += g.length; }
+    const s2 = N * (N + 1) / 12 - sum(ties.map(t => t ** 3 - t)) / (12 * (N - 1)), m = k * (k - 1) / 2, out = [];
+    for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
+      const z = (R[i] - R[j]) / Math.sqrt(s2 * (1 / groups[i].length + 1 / groups[j].length));
+      out.push({ i, j, z, p: bonferroni(2 * jStat.normal.cdf(-Math.abs(z), 0, 1), m) });
+    }
+    return out;
+  }
+  // pairwise Chi-square (or Fisher for 2×2 with small expected counts) between groups; table rows = categories, cols = groups
+  function chiSquarePairwise(table, useFisher) {
+    const k = table[0].length, m = k * (k - 1) / 2, out = [];
+    for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
+      const sub = table.map(r => [r[i], r[j]]).filter(r => r[0] + r[1] > 0);
+      if (sub.length < 2) { out.push({ i, j, p: 1 }); continue; }
+      const cs = chiSquare(sub);
+      const p = useFisher && sub.length === 2 && cs.minE < 5 ? fisher2x2(sub).p : cs.p;
+      out.push({ i, j, p: bonferroni(p, m) });
+    }
+    return out;
+  }
+
+  /* ---------- Mixed (split-plot) ANOVA: groups × time ---------- */
+  // groupsY: one array per group of subjects, each an array of T values (complete cases)
+  function mixedAnova(groupsY) {
+    const k = groupsY.length, T = groupsY[0][0].length, all = groupsY.flat(), N = all.length, vals = all.flat(), gm = mean(vals);
+    const gMean = groupsY.map(Y => mean(Y.flat())), tMean = Array.from({ length: T }, (_, t) => mean(all.map(r => r[t])));
+    const cell = groupsY.map(Y => Array.from({ length: T }, (_, t) => mean(Y.map(r => r[t]))));
+    const ssTot = sum(vals.map(v => (v - gm) ** 2));
+    const ssBetween = T * sum(groupsY.map((Y, g) => Y.length * (gMean[g] - gm) ** 2));
+    const ssSubj = T * sum(groupsY.map((Y, g) => sum(Y.map(r => (mean(r) - gMean[g]) ** 2))));
+    const ssTime = N * sum(tMean.map(m => (m - gm) ** 2));
+    const ssCells = sum(groupsY.map((Y, g) => Y.length * sum(cell[g].map(m => (m - gm) ** 2))));
+    const ssInter = ssCells - ssBetween - ssTime, ssErr = ssTot - ssBetween - ssSubj - ssTime - ssInter;
+    const dfB = k - 1, dfS = N - k, dfT = T - 1, dfI = (k - 1) * (T - 1), dfE = (N - k) * (T - 1);
+    // Greenhouse–Geisser epsilon from the pooled within-group covariance matrix (as SPSS)
+    const S = Array.from({ length: T }, () => new Array(T).fill(0));
+    groupsY.forEach((Y, g) => Y.forEach(r => { for (let a = 0; a < T; a++) for (let b = 0; b < T; b++) S[a][b] += (r[a] - cell[g][a]) * (r[b] - cell[g][b]) / dfS; }));
+    const sm = mean(S.flat()), rmS = S.map(r => mean(r));
+    let tr = 0, sq = 0;
+    for (let a = 0; a < T; a++) for (let b = 0; b < T; b++) { const v = S[a][b] - rmS[a] - rmS[b] + sm; if (a === b) tr += v; sq += v * v; }
+    const eps = T > 2 && sq > 0 ? Math.min(1, Math.max(1 / (T - 1), tr * tr / ((T - 1) * sq))) : 1;
+    const msE = ssErr / dfE;
+    const term = (ss, df1, msD, df2, e = 1) => { const F = (ss / df1) / msD; return { F, df1, df2, p: msD > 0 ? 1 - jStat.centralF.cdf(F, e * df1, e * df2) : NaN, pUnc: msD > 0 ? 1 - jStat.centralF.cdf(F, df1, df2) : NaN }; };
+    return { group: term(ssBetween, dfB, ssSubj / dfS, dfS), time: term(ssTime, dfT, msE, dfE, eps), interaction: term(ssInter, dfI, msE, dfE, eps), eps, n: N };
+  }
+
+  /* ---------- Kaplan–Meier and log-rank ---------- */
+  // times: follow-up; events: true = event, false = censored
+  function kaplanMeier(times, events) {
+    const idx = times.map((t, i) => i).sort((a, b) => times[a] - times[b]);
+    let atRisk = times.length, S = 1;
+    const steps = [{ t: 0, s: 1 }], censored = [];
+    for (let i = 0; i < idx.length;) {
+      const t = times[idx[i]];
+      let d = 0, c = 0;
+      while (i < idx.length && times[idx[i]] === t) { events[idx[i]] ? d++ : c++; i++; }
+      if (d) { S *= 1 - d / atRisk; steps.push({ t, s: S, atRisk, d }); }
+      if (c) censored.push({ t, s: S });
+      atRisk -= d + c;
+    }
+    const med = steps.find(q => q.s <= 0.5 + 1e-12);
+    return { steps, censored, median: med ? med.t : NaN, n: times.length, events: events.filter(Boolean).length };
+  }
+  // k-group log-rank test (chi-square, df = k − 1)
+  function logRank(groupTimes, groupEvents) {
+    const k = groupTimes.length, T = [...new Set(groupTimes.flat())].sort((a, b) => a - b);
+    const O = new Array(k).fill(0), E = new Array(k).fill(0), V = Array.from({ length: k }, () => new Array(k).fill(0));
+    for (const t of T) {
+      const n = groupTimes.map(ts => ts.filter(x => x >= t).length), d = groupTimes.map((ts, g) => ts.filter((x, i) => x === t && groupEvents[g][i]).length);
+      const Nt = sum(n), Dt = sum(d);
+      if (!Dt || Nt < 2) continue;
+      for (let g = 0; g < k; g++) {
+        O[g] += d[g]; E[g] += Dt * n[g] / Nt;
+        for (let h = 0; h < k; h++) V[g][h] += Dt * (n[g] / Nt) * ((g === h ? 1 : 0) - n[h] / Nt) * (Nt - Dt) / (Nt - 1);
+      }
+    }
+    // chi-square from the first k − 1 groups
+    const Vr = V.slice(0, k - 1).map(r => r.slice(0, k - 1)), inv = invert(Vr), u = O.slice(0, k - 1).map((o, g) => o - E[g]);
+    const chi = inv ? sum(u.map((ui, a) => ui * sum(inv[a].map((v, b) => v * u[b])))) : NaN;
+    return { chi, df: k - 1, p: isFinite(chi) ? 1 - jStat.chisquare.cdf(chi, k - 1) : NaN, O, E };
+  }
+
   /* ---------- Regression ---------- */
   // Gauss–Jordan inverse of a symmetric positive-definite matrix; null when singular
   function invert(A) {
@@ -338,7 +447,30 @@ const Stats = (() => {
     });
     const r2 = sst > 0 ? 1 - sse / sst : NaN, k = p - 1;
     const F = k ? ((sst - sse) / k) / s2 : NaN;
-    return { terms, n, df, r2, adjR2: 1 - (1 - r2) * (n - 1) / df, F, dfModel: k, pModel: k ? 1 - jStat.centralF.cdf(F, k, df) : NaN };
+    return { terms, n, df, r2, adjR2: 1 - (1 - r2) * (n - 1) / df, F, dfModel: k, pModel: k ? 1 - jStat.centralF.cdf(F, k, df) : NaN,
+      coef, sse, cov: inv.map(r => r.map(v => v * s2)) };
+  }
+
+  // ANCOVA: group effect on y adjusted for covariates (rows of covariate values); g = group index 0…k−1
+  function ancova(y, g, covs, k) {
+    const dummies = g.map(gi => Array.from({ length: k - 1 }, (_, j) => +(gi === j + 1)));
+    const full = linearRegression(g.map((_, i) => [...dummies[i], ...covs[i]]), y);
+    const reduced = linearRegression(covs, y);
+    if (!full || !reduced) return null;
+    const dfG = k - 1, ssG = reduced.sse - full.sse;
+    const F = (ssG / dfG) / (full.sse / full.df), p = 1 - jStat.centralF.cdf(F, dfG, full.df);
+    const nc = covs[0] ? covs[0].length : 0, cm = Array.from({ length: nc }, (_, j) => mean(covs.map(r => r[j])));
+    const x0 = gi => [1, ...Array.from({ length: k - 1 }, (_, j) => +(gi === j + 1)), ...cm];
+    const quad = (a, b) => sum(a.map((ai, r) => ai * sum(b.map((bj, c) => bj * full.cov[r][c]))));
+    const dot = x => sum(x.map((v, j) => v * full.coef[j]));
+    const adj = Array.from({ length: k }, (_, gi) => { const x = x0(gi); return { mean: dot(x), se: Math.sqrt(quad(x, x)) }; });
+    const tc = jStat.studentt.inv(0.975, full.df), m = k * (k - 1) / 2, pairs = [];
+    for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
+      const c = x0(i).map((v, r) => v - x0(j)[r]), diff = dot(c), se = Math.sqrt(quad(c, c)), t = diff / se;
+      pairs.push({ i, j, diff, lo: diff - tc * se, hi: diff + tc * se, p: bonferroni(2 * (1 - jStat.studentt.cdf(Math.abs(t), full.df)), m) });
+    }
+    const covTerms = full.terms.slice(k).map(t => ({ B: t.B, p: t.p }));
+    return { F, df1: dfG, df2: full.df, p, partialEta2: ssG / (ssG + full.sse), adj, pairs, covTerms, n: y.length, r2: full.r2 };
   }
 
   // Binary logistic regression by Newton–Raphson (IRLS); Wald tests and CIs as in SPSS
@@ -436,6 +568,7 @@ const Stats = (() => {
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
     pairedT, wilcoxonSigned, pearson, spearman, bonferroni,
-    invert, linearRegression, logisticRegression, roc
+    invert, linearRegression, logisticRegression, roc,
+    welchAnova, gamesHowell, dunn, chiSquarePairwise, mixedAnova, kaplanMeier, logRank, ancova
   };
 })();
