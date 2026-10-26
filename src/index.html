@@ -96,6 +96,22 @@ table.t td select{min-width:120px}
 .predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
+.grid-bar{margin:14px 0 8px;gap:12px}
+table.grid td.miss{background:rgba(192,57,43,.09)}
+table.grid td.rn,table.grid th.rn{color:var(--muted);font-size:12px;white-space:nowrap;position:sticky;left:0;background:var(--card);z-index:2}
+table.grid th.rn{z-index:3;background:var(--lav)}
+table.grid th.sortable{cursor:pointer}
+table.grid th.sortable:hover{color:var(--purple)}
+table.grid td[contenteditable]{outline:none;cursor:text}
+table.grid td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
+table.grid tr.gsum td{background:var(--soft);font-size:11.5px;color:var(--muted);white-space:nowrap}
+table.grid .miss-n{color:var(--bad);font-weight:600}
+.gh{display:flex;flex-direction:column;gap:3px}
+.gh input{min-width:110px!important;padding:3px 6px;font-size:12.5px}
+.gh-btns,.gr-btns{display:inline-flex;gap:2px}
+.gr-btns{margin-left:6px}
+.gh-btns button,.gr-btns button{border:0;background:var(--lav);color:var(--accent);border-radius:5px;font-size:11px;padding:2px 6px;cursor:pointer}
+.gh-btns button:hover,.gr-btns button:hover{background:var(--lav2)}
 .adv-opts{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .fig-prev{margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;position:sticky;top:90px}
 .fig-prev canvas{width:100%;display:block}
@@ -185,8 +201,31 @@ footer b{color:var(--purple)}
           <div><label class="f">Sheet</label><select id="sheetSel"></select></div>
           <div><label class="f">Rows / columns</label><div id="dims" class="mono"></div></div>
         </div>
-        <h3>Preview</h3>
-        <div class="tbl-wrap" style="max-height:300px"><table class="t" id="preview"></table></div>
+        <div id="gridWrap">
+          <div class="row grid-bar">
+            <h3 style="margin:0">Data</h3>
+            <input type="search" id="gridSearch" placeholder="Search…" style="max-width:220px">
+            <label class="f" style="margin:0">Rows per page</label>
+            <select id="gridPer" style="width:auto"><option>10</option><option>25</option><option>50</option><option>100</option><option value="all">All</option></select>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridOnlyMissing"><span>Only rows with missing values</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridHl" checked><span>Highlight missing</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridSummary"><span>Column summary</span></label>
+            <span class="spacer"></span>
+            <button class="btn ghost small" id="gridEdit" type="button">✎ Edit sheet</button>
+          </div>
+          <div class="row grid-bar" id="gridEditBar" style="display:none">
+            <span class="legend-note">Click a cell to change it · rename a column in its heading · ◀ ▶ move · ⇅ sort · ✕ delete · ↑ ↓ move rows</span>
+            <span class="spacer"></span>
+            <button class="btn ghost small" id="gridAddRow" type="button">+ Row</button>
+            <button class="btn ghost small" id="gridAddCol" type="button">+ Column</button>
+            <button class="btn ghost small" id="gridUndo" type="button">↶ Undo</button>
+            <button class="btn ghost small" id="gridRedetect" type="button" title="Detect variables again from the edited sheet">⟳ Re-detect variables</button>
+            <button class="btn ghost small" id="gridSave" type="button">⬇ Edited Excel</button>
+          </div>
+          <div class="tbl-wrap" style="max-height:480px"><table class="t grid" id="preview"></table></div>
+          <div class="row" style="margin-top:6px"><span id="gridInfo" class="legend-note"></span><span class="spacer"></span>
+            <button class="btn ghost small" id="gridPrev" type="button">‹ Previous</button><button class="btn ghost small" id="gridNext" type="button">Next ›</button></div>
+        </div>
       </div>
     </div>
     <div class="card">

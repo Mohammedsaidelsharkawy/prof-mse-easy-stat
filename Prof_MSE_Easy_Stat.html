@@ -96,6 +96,22 @@ table.t td select{min-width:120px}
 .predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
+.grid-bar{margin:14px 0 8px;gap:12px}
+table.grid td.miss{background:rgba(192,57,43,.09)}
+table.grid td.rn,table.grid th.rn{color:var(--muted);font-size:12px;white-space:nowrap;position:sticky;left:0;background:var(--card);z-index:2}
+table.grid th.rn{z-index:3;background:var(--lav)}
+table.grid th.sortable{cursor:pointer}
+table.grid th.sortable:hover{color:var(--purple)}
+table.grid td[contenteditable]{outline:none;cursor:text}
+table.grid td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
+table.grid tr.gsum td{background:var(--soft);font-size:11.5px;color:var(--muted);white-space:nowrap}
+table.grid .miss-n{color:var(--bad);font-weight:600}
+.gh{display:flex;flex-direction:column;gap:3px}
+.gh input{min-width:110px!important;padding:3px 6px;font-size:12.5px}
+.gh-btns,.gr-btns{display:inline-flex;gap:2px}
+.gr-btns{margin-left:6px}
+.gh-btns button,.gr-btns button{border:0;background:var(--lav);color:var(--accent);border-radius:5px;font-size:11px;padding:2px 6px;cursor:pointer}
+.gh-btns button:hover,.gr-btns button:hover{background:var(--lav2)}
 .adv-opts{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .fig-prev{margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;position:sticky;top:90px}
 .fig-prev canvas{width:100%;display:block}
@@ -185,8 +201,31 @@ footer b{color:var(--purple)}
           <div><label class="f">Sheet</label><select id="sheetSel"></select></div>
           <div><label class="f">Rows / columns</label><div id="dims" class="mono"></div></div>
         </div>
-        <h3>Preview</h3>
-        <div class="tbl-wrap" style="max-height:300px"><table class="t" id="preview"></table></div>
+        <div id="gridWrap">
+          <div class="row grid-bar">
+            <h3 style="margin:0">Data</h3>
+            <input type="search" id="gridSearch" placeholder="Search…" style="max-width:220px">
+            <label class="f" style="margin:0">Rows per page</label>
+            <select id="gridPer" style="width:auto"><option>10</option><option>25</option><option>50</option><option>100</option><option value="all">All</option></select>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridOnlyMissing"><span>Only rows with missing values</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridHl" checked><span>Highlight missing</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridSummary"><span>Column summary</span></label>
+            <span class="spacer"></span>
+            <button class="btn ghost small" id="gridEdit" type="button">✎ Edit sheet</button>
+          </div>
+          <div class="row grid-bar" id="gridEditBar" style="display:none">
+            <span class="legend-note">Click a cell to change it · rename a column in its heading · ◀ ▶ move · ⇅ sort · ✕ delete · ↑ ↓ move rows</span>
+            <span class="spacer"></span>
+            <button class="btn ghost small" id="gridAddRow" type="button">+ Row</button>
+            <button class="btn ghost small" id="gridAddCol" type="button">+ Column</button>
+            <button class="btn ghost small" id="gridUndo" type="button">↶ Undo</button>
+            <button class="btn ghost small" id="gridRedetect" type="button" title="Detect variables again from the edited sheet">⟳ Re-detect variables</button>
+            <button class="btn ghost small" id="gridSave" type="button">⬇ Edited Excel</button>
+          </div>
+          <div class="tbl-wrap" style="max-height:480px"><table class="t grid" id="preview"></table></div>
+          <div class="row" style="margin-top:6px"><span id="gridInfo" class="legend-note"></span><span class="spacer"></span>
+            <button class="btn ghost small" id="gridPrev" type="button">‹ Previous</button><button class="btn ghost small" id="gridNext" type="button">Next ›</button></div>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -24081,8 +24120,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
       .map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? null])));
     state.sheet = name;
     state.data = { headers, rows };
-    $('#dims').textContent = `${rows.length} rows × ${headers.length} columns`;
-    $('#preview').innerHTML = `<thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.slice(0, 8).map(r => `<tr>${headers.map(h => `<td>${esc(r[h])}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    state.undo = []; state.grid.page = 0; state.grid.sort = null;
+    renderGrid();
     const prevCfg = state.pendingCfg;
     state.cfg = detect(state.data);
     if (prevCfg) applySavedCfg(prevCfg);
@@ -24091,6 +24130,189 @@ if (typeof module !== 'undefined') module.exports = Examples;
     toast(`Loaded ${rows.length} patients · ${state.cfg.variables.length} variables detected`);
   }
   $('#to2').onclick = () => go(2);
+
+  /* ---------- data grid: preview options, editing and rearranging the sheet ---------- */
+  state.grid = { page: 0, per: 10, q: '', onlyMissing: false, hlMissing: true, summary: false, edit: false, sort: null };
+  const isMissing = v => v === null || v === undefined || String(v).trim() === '';
+  const parseCell = t => { t = t.replace(/\u00a0/g, ' ').trim(); if (t === '') return null; const n = Number(t.replace(',', '.')); return isFinite(n) && /^[-+]?[\d.,]+(e[-+]?\d+)?$/i.test(t) ? n : t; };
+  function renderGrid() {
+    const g = state.grid, { headers, rows } = state.data;
+    $('#dims').textContent = `${rows.length} rows × ${headers.length} columns`;
+    const q = g.q.trim().toLowerCase();
+    const idx = rows.map((_, i) => i).filter(i => (!q || headers.some(h => String(rows[i][h] ?? '').toLowerCase().includes(q))) && (!g.onlyMissing || headers.some(h => isMissing(rows[i][h]))));
+    const per = g.per === 'all' ? Math.max(1, idx.length) : +g.per, pages = Math.max(1, Math.ceil(idx.length / per));
+    g.page = Math.min(g.page, pages - 1);
+    const shown = idx.slice(g.page * per, g.page * per + per), cfg = state.cfg;
+    const role = h => !cfg ? '' : h === cfg.groupCol ? '<span class="chip info">group</span>' : cfg.idCols.includes(h) ? '<span class="chip">ID</span>' : '';
+    const sortMark = h => g.sort && g.sort.col === h ? (g.sort.dir > 0 ? ' ▲' : ' ▼') : '';
+    const head = headers.map((h, ci) => g.edit
+      ? `<th><div class="gh"><input type="text" data-hname="${esc(h)}" value="${esc(h)}" title="Rename column">
+          <span class="gh-btns"><button data-hmove="${ci},-1" title="Move left" type="button">◀</button><button data-hmove="${ci},1" title="Move right" type="button">▶</button><button data-hsort="${esc(h)}" title="Sort rows" type="button">⇅</button><button data-hdel="${esc(h)}" title="Delete column" type="button">✕</button></span></div>${role(h)}</th>`
+      : `<th data-hsort="${esc(h)}" class="sortable" title="Click to sort the rows (Undo in edit mode restores the order)">${esc(h)}${sortMark(h)} ${role(h)}</th>`).join('');
+    let summary = '';
+    if (g.summary) summary = `<tr class="gsum"><td>Summary</td>${headers.map(h => {
+      const info = columnInfo(rows, h), miss = rows.length - info.n, nums = rows.map(r => Analysis.toNum(r[h])).filter(isFinite);
+      const desc = info.numeric && nums.length ? `num · ${Analysis.fmt(Math.min(...nums), 2)}–${Analysis.fmt(Math.max(...nums), 2)}` : `text · ${info.distinct.length} values`;
+      return `<td>${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
+    const body = shown.map(i => `<tr><td class="rn">${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
+      headers.map(h => `<td class="${g.hlMissing && isMissing(rows[i][h]) ? 'miss' : ''}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`).join('')}</tr>`).join('');
+    $('#preview').innerHTML = `<thead><tr><th class="rn">#</th>${head}</tr></thead><tbody>${summary}${body || `<tr><td colspan="${headers.length + 1}" class="legend-note">No rows match.</td></tr>`}</tbody>`;
+    $('#gridInfo').textContent = idx.length ? `Rows ${g.page * per + 1}–${Math.min(idx.length, g.page * per + per)} of ${idx.length}${idx.length < rows.length ? ` (filtered from ${rows.length})` : ''}` : '0 rows';
+    $('#gridPrev').disabled = g.page === 0; $('#gridNext').disabled = g.page >= pages - 1;
+    $('#gridEditBar').style.display = g.edit ? '' : 'none';
+    $('#gridUndo').disabled = !state.undo.length;
+    $('#gridEdit').classList.toggle('primary', g.edit); $('#gridEdit').classList.toggle('ghost', !g.edit);
+    $('#gridEdit').textContent = g.edit ? '✓ Done editing' : '✎ Edit sheet';
+  }
+  // every change to the sheet goes through here: snapshot for undo, apply, keep the setup in step, redraw
+  function editSheet(fn) {
+    state.undo.push(JSON.stringify({ data: state.data, cfg: state.cfg }));
+    if (state.undo.length > 30) state.undo.shift();
+    fn();
+    renderGrid(); renderStepper();
+  }
+  function refreshGroups() {
+    const cfg = state.cfg; if (!cfg) return;
+    const cur = []; state.data.rows.forEach(r => { const g = Analysis.toCat(r[cfg.groupCol]); if (g !== null && !cur.includes(g)) cur.push(g); });
+    const before = cfg.groupOrder.join('|');
+    cur.forEach(g => { if (!cfg.groupOrder.includes(g)) { cfg.groupOrder.push(g); cfg.groupLabels[g] = /group/i.test(g) ? g : `${g} group`; cfg.groupInclude[g] = true; } });
+    cfg.groupOrder = cfg.groupOrder.filter(g => cur.includes(g));
+    if (cfg.groupOrder.join('|') !== before) cfg.consort = null;
+  }
+  const replaceCol = (cfg, from, to) => {
+    if (cfg.groupCol === from) cfg.groupCol = to;
+    cfg.idCols = cfg.idCols.map(c => c === from ? to : c);
+    cfg.variables.forEach(v => v.cols.forEach(c => { if (c.col === from) c.col = to; }));
+    cfg.advanced.forEach(a => { ['outcome', 'second', 'event'].forEach(k => { if (a[k] === from) a[k] = to; }); a.predictors = (a.predictors || []).map(c => c === from ? to : c); });
+  };
+  function renameColumn(from, to) {
+    const { headers, rows } = state.data;
+    to = to.trim();
+    if (!to || to === from) return renderGrid();
+    if (headers.includes(to)) { toast(`A column named “${to}” already exists`); return renderGrid(); }
+    editSheet(() => {
+      headers[headers.indexOf(from)] = to;
+      state.data.rows = rows.map(r => { const o = {}; headers.forEach(h => { o[h] = h === to ? r[from] : r[h]; }); return o; });
+      if (state.cfg) replaceCol(state.cfg, from, to);
+    });
+  }
+  function deleteColumn(col) {
+    const cfg = state.cfg;
+    if (cfg && col === cfg.groupCol) { toast('This is the group column — choose another group column in step 2 first'); return; }
+    if (!confirm(`Delete column “${col}” from the sheet?`)) return;
+    editSheet(() => {
+      state.data.headers = state.data.headers.filter(h => h !== col);
+      state.data.rows.forEach(r => delete r[col]);
+      if (!cfg) return;
+      cfg.idCols = cfg.idCols.filter(c => c !== col);
+      const out = [];
+      cfg.variables.forEach(v => {
+        if (v.kind === 'single') { if (v.cols[0].col !== col) out.push(v); return; }
+        v.cols = v.cols.filter(c => c.col !== col);
+        // a repeated measure left with one column becomes a single variable
+        if (v.cols.length >= 2) out.push(v);
+        else if (v.cols.length === 1) out.push(singleVariable(state.data.rows, v.cols[0].col, 0, 'Other outcomes'));
+      });
+      cfg.variables = out;
+      cfg.advanced.forEach(a => { ['outcome', 'second', 'event'].forEach(k => { if (a[k] === col) a[k] = ''; }); a.predictors = (a.predictors || []).filter(c => c !== col); });
+      syncPositions();
+    });
+  }
+  // variable order (and so table order) follows the column order of the sheet
+  function syncPositions() {
+    const cfg = state.cfg; if (!cfg) return;
+    const h = state.data.headers;
+    cfg.variables.forEach(v => { v.pos = Math.min(...v.cols.map(c => h.indexOf(c.col))); });
+    cfg.variables.sort((a, b) => a.pos - b.pos);
+  }
+  function moveColumn(i, d) {
+    const h = state.data.headers, j = i + d;
+    if (j < 0 || j >= h.length) return;
+    editSheet(() => { [h[i], h[j]] = [h[j], h[i]]; syncPositions(); });
+  }
+  function sortRows(col) {
+    const g = state.grid, dir = g.sort && g.sort.col === col ? -g.sort.dir : 1;
+    editSheet(() => {
+      g.sort = { col, dir };
+      const key = v => { const n = Analysis.toNum(v); return isFinite(n) ? n : v === null || v === undefined || v === '' ? null : String(v); };
+      state.data.rows.sort((a, b) => {
+        const x = key(a[col]), y = key(b[col]);
+        if (x === null) return y === null ? 0 : 1;
+        if (y === null) return -1;
+        return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true })) * dir;
+      });
+    });
+  }
+  $('#gridWrap').addEventListener('click', e => {
+    const b = e.target.closest('button,[data-hsort]'); if (!b || !state.data) return;
+    const g = state.grid, d = b.dataset;
+    if (b.id === 'gridPrev') { g.page--; renderGrid(); }
+    else if (b.id === 'gridNext') { g.page++; renderGrid(); }
+    else if (b.id === 'gridEdit') { g.edit = !g.edit; renderGrid(); }
+    else if (b.id === 'gridUndo') {
+      const snap = state.undo.pop(); if (!snap) return;
+      const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg; renderGrid(); renderStepper(); toast('Undone');
+    }
+    else if (b.id === 'gridAddRow') { editSheet(() => { state.data.rows.push(Object.fromEntries(state.data.headers.map(h => [h, null]))); }); g.page = 1e9; renderGrid(); }
+    else if (b.id === 'gridAddCol') {
+      let n = 1; while (state.data.headers.includes(`New_column_${n}`)) n++;
+      const name = `New_column_${n}`;
+      editSheet(() => {
+        state.data.headers.push(name); state.data.rows.forEach(r => { r[name] = null; });
+        // added as an unticked variable; tick it in step 2 once it has values
+        if (state.cfg) state.cfg.variables.push({ ...singleVariable(state.data.rows, name, state.data.headers.length - 1, 'Other outcomes'), include: false });
+      });
+    }
+    else if (b.id === 'gridRedetect') {
+      if (!confirm('Detect the group, ID, variables and repeated measures again from the edited sheet? Your variable setup in steps 2–8 will be replaced.')) return;
+      editSheet(() => { state.cfg = detect(state.data); });
+      toast(`Re-detected: ${state.cfg.variables.length} variables`);
+    }
+    else if (b.id === 'gridSave') {
+      const ws = XLSX.utils.json_to_sheet(state.data.rows, { header: state.data.headers }), wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, (state.sheet || 'Data').slice(0, 31));
+      XLSX.writeFile(wb, (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' (edited).xlsx');
+    }
+    else if (d.hmove) { const [i, k] = d.hmove.split(',').map(Number); moveColumn(i, k); }
+    else if (d.hdel) deleteColumn(d.hdel);
+    else if (d.hsort) sortRows(d.hsort);
+    else if (d.rmove) {
+      const [i, k] = d.rmove.split(',').map(Number), r = state.data.rows, j = i + k;
+      if (j >= 0 && j < r.length) editSheet(() => { [r[i], r[j]] = [r[j], r[i]]; g.sort = null; });
+    }
+    else if (d.rdel) { const i = +d.rdel; editSheet(() => { state.data.rows.splice(i, 1); refreshGroups(); }); }
+  });
+  // a cell is committed when it loses focus (Enter moves on, Esc cancels)
+  $('#gridWrap').addEventListener('focusout', e => {
+    const td = e.target.closest('[data-cell]'); if (!td) return;
+    const i = +td.dataset.cell, col = td.dataset.col, v = parseCell(td.textContent), old = state.data.rows[i][col];
+    if ((old ?? null) === v || String(old ?? '') === String(v ?? '')) return;
+    // update only this cell (a full redraw here would swallow a click on a button)
+    state.undo.push(JSON.stringify({ data: state.data, cfg: state.cfg }));
+    if (state.undo.length > 30) state.undo.shift();
+    state.data.rows[i][col] = v;
+    if (state.cfg && col === state.cfg.groupCol) refreshGroups();
+    td.textContent = v ?? '';
+    td.classList.toggle('miss', state.grid.hlMissing && isMissing(v));
+    $('#gridUndo').disabled = false;
+  });
+  $('#gridWrap').addEventListener('keydown', e => {
+    const td = e.target.closest('[data-cell]');
+    if (td && e.key === 'Enter') { e.preventDefault(); td.blur(); }
+    if (td && e.key === 'Escape') { td.textContent = state.data.rows[+td.dataset.cell][td.dataset.col] ?? ''; td.blur(); }
+    if (e.target.dataset.hname !== undefined && e.key === 'Enter') e.target.blur();
+  });
+  $('#gridWrap').addEventListener('change', e => {
+    const t = e.target, g = state.grid;
+    if (t.dataset.hname !== undefined) return renameColumn(t.dataset.hname, t.value);
+    if (t.id === 'gridPer') { g.per = t.value; g.page = 0; }
+    else if (t.id === 'gridOnlyMissing') { g.onlyMissing = t.checked; g.page = 0; }
+    else if (t.id === 'gridHl') g.hlMissing = t.checked;
+    else if (t.id === 'gridSummary') g.summary = t.checked;
+    else return;
+    renderGrid();
+  });
+  $('#gridSearch').addEventListener('input', e => { state.grid.q = e.target.value; state.grid.page = 0; renderGrid(); });
 
   /* ---------- auto-detection ---------- */
   function columnInfo(rows, col) {

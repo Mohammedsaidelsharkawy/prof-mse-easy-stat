@@ -7,6 +7,7 @@ An offline web app that turns an Excel mastersheet into a formatted Word statist
 1. Download `Prof_MSE_Easy_Stat.html` and open it in a modern browser (Chrome, Edge, Firefox). No installation or internet connection is needed.
 2. Follow the 10-step wizard:
    1. **Upload** the Excel file (or open an example) and enter the study title. The software statement, the first sentence of the Statistical Analysis section, can be picked from templates (Prof MSE Easy Stat, SPSS, R, Stata, GraphPad Prism, SAS, MedCalc, JASP, jamovi, Python, Minitab, Epi Info, Excel).
+      The data preview has rows per page with paging, search, a filter for rows with missing values, highlighted missing cells, a column summary (type, range, missing) and sorting by any column. **✎ Edit sheet** lets you change cells, rename, move or delete columns, add columns and rows, move or delete rows, undo, re-detect the variables, and download the edited sheet as Excel; the variable setup follows the edits.
    2. **Variables**: confirm the group variable, outcomes and baseline characteristics; create, edit or ungroup repeated measures.
    3. **Timepoints**: each repeated outcome has its own timepoints — tick which enter, rename them and set their order per outcome.
    4. **Tests**: significance level, normality test, effect estimates, post hoc and optional tests.
