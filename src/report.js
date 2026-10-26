@@ -123,6 +123,20 @@ const Report = (() => {
       borders: { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none } });
   }
 
+  // "Figure 1:" (default), "Figure 1." or "Fig. 1."
+  const figLabel = (n, style) => style === 'period' ? `Figure ${n}.` : style === 'fig' ? `Fig. ${n}.` : `Figure ${n}:`;
+  // figures placed after their table (null), or all together at the end, optionally grouped by chart type
+  const TYPE_ORDER = ['bar', 'line', 'box', 'dot', 'stacked', 'pie', 'scatter', 'roc', 'km', 'ba'];
+  function arrangeFigures(sections, placement) {
+    if (placement !== 'end' && placement !== 'endType') return null;
+    const all = sections.flatMap(s => s.figures);
+    if (placement === 'endType') {
+      const rank = f => { const i = TYPE_ORDER.indexOf(f.spec.type); return i < 0 ? TYPE_ORDER.length : i; };
+      return all.map((f, i) => ({ f, i })).sort((a, b) => rank(a.f) - rank(b.f) || a.i - b.i).map(x => x.f);
+    }
+    return all;
+  }
+
   async function build(model, opts) {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
@@ -138,8 +152,18 @@ const Report = (() => {
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
       children.push(image(model.consort.url, model.consort.w, model.consort.h, 600));
-      children.push(caption(`Figure ${fig++}: ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
+      children.push(caption(`${figLabel(fig++, opts.captionStyle)} ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
     }
+    const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
+    const placeFigures = list => {
+      const figs = list.filter(f => f.url).map(f => ({ ...f, label: `${figLabel(fig++, opts.captionStyle)} ${f.caption}` }));
+      if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
+      else for (const f of figs) {
+        children.push(image(f.url, f.w, f.h, w1));
+        children.push(caption(f.label));
+      }
+    };
+    const atEnd = arrangeFigures(model.sections, opts.figPlacement);
     for (const s of model.sections) {
       if (s.tableOn !== false) {
         children.push(caption(`Table ${tab++}: ${s.title}`));
@@ -147,13 +171,11 @@ const Report = (() => {
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment) children.push(para(s.comment));
       }
-      const figs = s.figures.filter(f => f.url).map(f => ({ ...f, label: `Figure ${fig++}: ${f.caption}` }));
-      const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
-      if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
-      else for (const f of figs) {
-        children.push(image(f.url, f.w, f.h, w1));
-        children.push(caption(f.label));
-      }
+      if (!atEnd) placeFigures(s.figures);
+    }
+    if (atEnd && atEnd.some(f => f.url)) {
+      children.push(heading('Figures', brand));
+      placeFigures(atEnd);
     }
 
     const headerKids = [];
@@ -188,5 +210,5 @@ const Report = (() => {
     return Packer.toBlob(doc);
   }
 
-  return { build };
+  return { build, figLabel, arrangeFigures };
 })();

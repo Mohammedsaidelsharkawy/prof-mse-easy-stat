@@ -293,8 +293,9 @@ const Analysis = (() => {
     for (const v of cfg.variables) {
       if (!v.include || v.role === 'ignore') continue;
       if (v.kind !== 'repeated') { out.push(v); continue; }
-      const cols = v.cols.filter(c => c.include !== false && (cfg.tpInclude || {})[c.tp] !== false)
-        .sort((a, b) => order(a.tp) - order(b.tp));
+      // a measure built in the repeated-measure editor keeps its own column order
+      const cols = v.cols.filter(c => c.include !== false && (cfg.tpInclude || {})[c.tp] !== false);
+      if (!v.ownOrder) cols.sort((a, b) => order(a.tp) - order(b.tp));
       if (!cols.length) continue;
       if (v.split || cols.length === 1) {
         cols.forEach((c, i) => out.push({ ...v, id: v.id + '_' + i, kind: 'single', type: 'numeric', cols: [c], pos: v.pos + i * 1e-3,
@@ -698,7 +699,14 @@ const Analysis = (() => {
       : opts.errorBar === 'ci' ? jStat.studentt.inv(0.975, dd.n - 1) * dd.sd / Math.sqrt(dd.n) : dd.sd;
     const errNote = { sem: ' (mean ± SEM)', ci: ' (mean ± 95% CI)' }[opts.errorBar] || '';
     const valueLabels = opts.valueLabels ? { labels: true, labelDec: d } : {};
-    // optional group sizes on chart axes / legends: "A group (n=30)"
+    // nice equal-width bins for histograms (same rule as chart axes)
+  function niceScale(min, max, ticks) {
+    if (min === max) max = min + 1;
+    const raw = (max - min) / ticks, mag = 10 ** Math.floor(Math.log10(raw));
+    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(x => x >= raw);
+    return { min: Math.floor(min / step) * step, max: Math.max(Math.ceil(max / step) * step, Math.floor(min / step) * step + step), step };
+  }
+  // optional group sizes on chart axes / legends: "A group (n=30)"
     const withN = (names, ns) => opts.nLabels ? names.map((g, i) => `${g} (n=${ns[i]})`) : names;
     const groups = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false);
     const gl = groups.map(g => cfg.groupLabels[g] || g);
@@ -818,16 +826,18 @@ const Analysis = (() => {
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
           footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost }, [withinNote, v.note].filter(Boolean).join(', ')),
           comment: wording(comment),
-          figures: [(() => {
-            const meanChart = param && opts.chartStyle !== 'box' || opts.chartStyle === 'bar' || opts.chartStyle === 'line';
+          figures: v.chart === 'none' ? [] : [(() => {
+            // per-variable chart type overrides the global chart style
+            const ct = v.chart && v.chart !== 'auto' ? v.chart : opts.chartStyle;
+            const meanChart = ct === 'bar' || ct === 'line' || (ct === 'auto' && param);
             return {
-            sig: sigAny,
-            caption: `${v.label} of the studied groups${meanChart && param ? errNote : ''}`,
+            sig: sigAny, vid: v.id,
+            caption: v.caption || `${v.label} of the studied groups${meanChart && param ? errNote : ''}`,
             spec: meanChart
-              ? { type: opts.chartStyle === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks, ...(opts.chartStyle === 'line' ? {} : valueLabels),
+              ? { type: ct === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks, ...(ct === 'line' ? {} : valueLabels),
                   series: withN(gl, gN).map((g, i) => ({ name: g, values: results.map(r => param ? r.desc[i].mean : r.desc[i].median),
                     err: results.map(r => param ? errOf(r.desc[i]) : null), lo: param ? null : results.map(r => r.desc[i].q1), hi: param ? null : results.map(r => r.desc[i].q3) })) }
-              : { type: 'box', categories: tps, yLabel: v.label, points: opts.points, ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
+              : { type: 'box', categories: tps, yLabel: v.label, points: opts.points || ct === 'dot', ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
             };
           })()],
           meta: { param, results, within, tps }
@@ -928,18 +938,41 @@ const Analysis = (() => {
           if (k === 2) return { sig: [{ i: 0, j: 1, p: x.p }], alpha };
           return x.pairs ? { sig: x.pairs.filter(q => q.p <= alpha).map(q => ({ i: q.i, j: q.j, p: q.p })), alpha } : {};
         };
-        const figures = res.map(r => ({ sig: (r.num || r.cat).p <= alpha, ...figureFor(r) }));
+        const figures = res.filter(r => r.v.chart !== 'none').map(r => {
+          const f = { sig: (r.num || r.cat).p <= alpha, vid: r.v.id, ...figureFor(r) };
+          if (r.v.caption) f.caption = r.v.caption;
+          return f;
+        });
         function figureFor(r) {
+          const ct = r.v.chart || 'auto';
           if (r.num) {
-            const bar = r.num.param && opts.chartStyle !== 'box';
+            const cats = withN(gl, r.num.desc.map(x => x.n)), P = r.num.param;
+            if (ct === 'hist') {
+              // grouped histogram: equal-width bins over all patients
+              const all = r.gv.flat(), sc = niceScale(Math.min(...all), Math.max(...all), 8), edges = [];
+              for (let e = sc.min; e < sc.max - 1e-9; e += sc.step) edges.push(e);
+              const bin = v => Math.min(edges.length - 1, Math.floor((v - sc.min) / sc.step + 1e-9));
+              return { caption: `Distribution of ${lowerFirst(plain(r.v.label))} in the studied groups`,
+                spec: { type: 'bar', integer: true, categories: edges.map(e => `${fmt(e, d)}-${fmt(e + sc.step, d)}`), xLabel: r.v.label, yLabel: 'Number of patients',
+                  series: withN(gl, r.num.desc.map(x => x.n)).map((g, i) => { const n = new Array(edges.length).fill(0); r.gv[i].forEach(v => n[bin(v)]++); return { name: g, values: n }; }) } };
+            }
+            if (ct === 'dot') return { caption: `${r.v.label} of the studied groups (${P ? 'mean ± SD' : 'median and IQR'})`,
+              spec: { type: 'dot', perGroup: true, categories: cats, yLabel: r.v.label, median: !P, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
+            const bar = ct === 'bar' || (ct === 'auto' && P && opts.chartStyle !== 'box');
+            if (bar && !P) return { caption: `${r.v.label} of the studied groups (median and IQR)`,
+              spec: { type: 'bar', perGroup: true, categories: cats, yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.median), lo: r.num.desc.map(x => x.q1), hi: r.num.desc.map(x => x.q3) }] } };
             return {
               caption: `${r.v.label} of the studied groups${bar ? errNote : ''}`,
               spec: bar
-                ? { type: 'bar', perGroup: true, categories: withN(gl, r.num.desc.map(x => x.n)), yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(errOf) }] }
-                : { type: 'box', perGroup: true, categories: withN(gl, r.num.desc.map(x => x.n)), yLabel: r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
+                ? { type: 'bar', perGroup: true, categories: cats, yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(errOf) }] }
+                : { type: 'box', perGroup: true, categories: cats, yLabel: r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
             };
           }
           const c = r.cat;
+          if (ct === 'stacked' || ct === 'pie') return {
+            caption: `${r.v.label} of the studied groups`,
+            spec: { type: ct, categories: withN(gl, c.ns), yLabel: '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
+          };
           if (isCompact(r)) return {
             caption: `${r.v.label} of the studied groups`,
             spec: { type: 'bar', perGroup: true, percent: true, labels: true, categories: withN(gl, c.ns), yLabel: '% of the studied patients', ...brackets(c), series: [{ name: r.levels[0], values: c.pct[0] }] }

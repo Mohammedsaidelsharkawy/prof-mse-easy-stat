@@ -53,8 +53,10 @@ The original engine's output (1,808 test values) was checked against R 4.6.1. Th
 - Word tables: grid or three-line academic (APA) style; choice of body font
 - Chart appearance: text size, shape (wide, 4:3, square), bar fill (gradient, solid, outline, hatched), gridlines, axis arrows, legend position, y axis from zero or fitted, group sizes on axes, high-resolution images, custom colours
 - Figures: all, significant results only, or none; error bars as SD, SEM or 95% CI; size and one or two per row in Word; value labels on bars; significance brackets and stars; optional individual data points on box plots
+- Figures by variable: choose each variable's chart (bar, box, dot plot with every patient, line, histogram, 100% stacked bar, donut, or none) and caption, with a live preview in step 3
+- Figure placement: after each table, all at the end, or at the end grouped by chart type; caption style "Figure 1:", "Figure 1." or "Fig. 1."; optional title on each chart; captions editable in step 5
 - Legend: bottom, top, right, inside the plot or hidden; text size, title and frame
-- Repeated measures: choose the timepoints per outcome, include/exclude and reorder timepoints globally, or analyse an outcome's timepoints as separate variables
+- Repeated measures: create a repeated measure from any numeric columns, edit its columns, timepoint labels and order, or ungroup it into single variables; choose the timepoints per outcome, include/exclude and reorder timepoints globally, or analyse an outcome's timepoints as separate variables
 - Export: tick which sections, tables and figures go into the Word file (numbering follows); the choice is saved with the setup
 - Light and dark theme for the app
 

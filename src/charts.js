@@ -57,15 +57,18 @@ const Charts = (() => {
     const f = v => Math.round(amt >= 0 ? v + (255 - v) * amt : v * (1 + amt));
     return `rgb(${f(r)},${f(g)},${f(b)})`;
   }
-  function niceScale(min, max, ticks = 6) {
+  function niceScale(min, max, ticks = 6, integer = false) {
     if (min === max) { max = min + 1; }
     const span = max - min, raw = span / ticks;
     const mag = 10 ** Math.floor(Math.log10(raw));
-    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+    // counts get whole-number steps (no 2.5)
+    let step = (integer ? [1, 2, 5, 10] : [1, 2, 2.5, 5, 10]).map(m => m * mag).find(s => s >= raw);
+    if (integer) step = Math.max(1, step);
     return { min: Math.floor(min / step) * step, max: Math.ceil(max / step) * step, step };
   }
+  // as many decimals as the step needs: 2.5 → "7.5", 0.25 → "0.75"
   const fmtTick = (v, step) => {
-    const dec = Math.max(0, -Math.floor(Math.log10(step)) + (step % 1 && (step * 10) % 1 ? 1 : 0));
+    const dec = (String(+step.toPrecision(6)).split('.')[1] || '').length;
     return (+v.toFixed(Math.min(dec, 3))).toString();
   };
 
@@ -124,8 +127,26 @@ const Charts = (() => {
     items.forEach((it, i) => { swatch(it, i, x0, yy); ctx.fillStyle = '#333'; ctx.fillText(it.name, x0 + 58 * m.q, yy); yy += m.rowH; });
   }
 
+  // public entry: draws the chart, then adds the optional title band above it
   function draw(spec, paletteName = 'brand', style = {}) {
+    const c = drawChart(spec, paletteName, style);
+    return spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
+  }
+  function withTitle(src, title, st) {
+    const res = +st.res || 1, ts = TEXT[st.text] || 1, out = document.createElement('canvas'), ctx = out.getContext('2d');
+    ctx.font = `700 ${Math.round(32 * ts * res)}px ${FONT}`;
+    const lines = measureLines(ctx, title, src.width - 80 * res), band = (lines * 42 * ts + 36) * res;
+    out.width = src.width; out.height = src.height + band;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, out.width, out.height);
+    ctx.font = `700 ${Math.round(32 * ts * res)}px ${FONT}`; ctx.fillStyle = '#1C1648'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    wrapText(ctx, title, out.width / 2, 24 * res, src.width - 80 * res, 42 * ts * res);
+    ctx.drawImage(src, 0, band);
+    return out;
+  }
+
+  function drawChart(spec, paletteName = 'brand', style = {}) {
     const st = { ...DEFAULT_STYLE, ...style };
+    if (spec.type === 'pie') return pieChart(spec, paletteName, st);
     if (spec.type === 'scatter') return scatter(spec, paletteName, st);
     if (spec.type === 'roc') return rocChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
@@ -137,6 +158,7 @@ const Charts = (() => {
 
     const perGroup = !!spec.perGroup && spec.series.length === 1;
     const legendItems = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: spec.type === 'box' && i === 2 }));
+    if (spec.type === 'stacked') spec = { ...spec, percent: true, series: spec.series.map(s => ({ ...s })) };
     const lm = legendMetrics(ctx, legendItems, st, ts);
     const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0);
     const T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
@@ -144,9 +166,9 @@ const Charts = (() => {
 
     // y range
     let lo = Infinity, hi = -Infinity;
-    if (spec.type === 'box') {
+    if (spec.type === 'box' || spec.type === 'dot') {
       spec.series.forEach(s => s.data.forEach(arr => arr.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); })));
-    } else {
+    } else if (spec.type === 'stacked') { lo = 0; hi = 100; } else {
       spec.series.forEach(s => s.values.forEach((v, i) => {
         const up = s.err && s.err[i] != null ? v + s.err[i] : s.hi ? s.hi[i] : v;
         const dn = s.err && s.err[i] != null ? v - s.err[i] : s.lo ? s.lo[i] : v;
@@ -159,7 +181,7 @@ const Charts = (() => {
     const fit = spec.type !== 'bar' && !spec.percent && (st.yAxis === 'fit' || (st.yAxis !== 'zero' && spec.type === 'line'));
     if (!fit && lo > 0) lo = 0;
     if (fit) { const pad = (hi - lo) * 0.1 || 1; lo = Math.max(lo > 0 && spec.type === 'line' && st.yAxis !== 'fit' ? 0 : -Infinity, lo - pad); }
-    let sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02));
+    let sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02), 6, spec.integer);
     if (spec.percent && sc.max > 100) sc.max = 100;
     let y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
     // room above the data for stacked significance brackets / stars
@@ -167,7 +189,7 @@ const Charts = (() => {
     const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 * ts : 0;
     for (let top = hi, tries = 0; need && y(dataHi) - need < T && tries < 12; tries++) {
       top += (top - sc.min) * 0.12;
-      sc = niceScale(lo, top);
+      sc = niceScale(lo, top, 6, spec.integer);
       y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
     }
 
@@ -236,6 +258,39 @@ const Charts = (() => {
         ctx.setLineDash([]); ctx.fillStyle = color;
         s.values.forEach((v, ci) => { ctx.beginPath(); ctx.arc(xs[ci], y(v), 10, 0, Math.PI * 2); ctx.fill(); });
       });
+    } else if (spec.type === 'stacked') {
+      // one 100% bar per group, segments = categories
+      const w = cw * 0.5;
+      spec.categories.forEach((_, ci) => {
+        let base = 0;
+        spec.series.forEach((s, si) => {
+          const v = s.values[ci] || 0, x0 = L + cw * ci + (cw - w) / 2;
+          if (v <= 0) return;
+          fillBar(ctx, st, pal[si % pal.length], si, x0, y(base + v), w, y(base) - y(base + v));
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x0, y(base + v), w, y(base) - y(base + v));
+          if (v >= 6) {
+            ctx.font = F(700, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = st.barFill === 'outline' || st.barFill === 'hatched' ? '#222' : '#fff';
+            ctx.fillText(`${Math.round(v * 10) / 10}%`, x0 + w / 2, y(base + v / 2));
+          }
+          base += v;
+        });
+      });
+    } else if (spec.type === 'dot') {
+      // every patient as a dot, with mean ± SD (or median and IQR) as a bar and whiskers
+      const gw = cw * 0.42;
+      spec.series[0].data.forEach((arr, ci) => {
+        if (!arr.length) return;
+        const color = pal[ci % pal.length], cx = L + cw * (ci + 0.5);
+        ctx.fillStyle = color; ctx.globalAlpha = 0.55;
+        arr.forEach((v, i) => { ctx.beginPath(); ctx.arc(cx + jitter(i + 1) * gw * 0.8, y(v), 7, 0, Math.PI * 2); ctx.fill(); });
+        ctx.globalAlpha = 1;
+        const m = spec.median ? Stats.median(arr) : Stats.mean(arr);
+        const a = spec.median ? Stats.quantile(arr, 0.25) : m - Stats.sd(arr), b = spec.median ? Stats.quantile(arr, 0.75) : m + Stats.sd(arr);
+        ctx.strokeStyle = '#222'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(cx - gw / 2, y(m)); ctx.lineTo(cx + gw / 2, y(m)); ctx.stroke();
+        if (isFinite(a) && isFinite(b)) errBar(cx, a, b, gw / 4);
+      });
     } else if (spec.type === 'box') {
       const slots = perGroup ? 1 : ns;
       const gw = cw * (perGroup ? 0.36 : 0.8), bw = gw / slots;
@@ -274,6 +329,38 @@ const Charts = (() => {
     catStars.forEach((s, ci) => { if (s) ctx.fillText(s, L + cw * (ci + 0.5), y(dataHi) - 24); });
 
     drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2 })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
+    return c;
+  }
+
+  /* ---------- donut charts: one per group, slices = categories ---------- */
+  function pieChart(spec, paletteName, st) {
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length] }));
+    const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'inside' ? 'bottom' : st.legend }, ts);
+    const T = 30 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 80 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0), R = 30 + (lm.pos === 'right' ? lm.w + 40 : 0);
+    const k = spec.categories.length, cw = (W - 30 - R) / k, r = Math.min(cw * 0.42, (H - T - B) / 2 - 10), r0 = r * 0.52;
+    spec.categories.forEach((cat, ci) => {
+      const cx = 30 + cw * (ci + 0.5), cy = T + (H - T - B) / 2;
+      let a0 = -Math.PI / 2;
+      spec.series.forEach((s, si) => {
+        const v = (s.values[ci] || 0) / 100;
+        if (v <= 0) return;
+        const a1 = a0 + v * 2 * Math.PI;
+        ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1); ctx.arc(cx, cy, r0, a1, a0, true); ctx.closePath();
+        ctx.fillStyle = st.barFill === 'hatched' ? hatch(ctx, pal[si % pal.length], si) : pal[si % pal.length]; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+        if (v >= 0.06) {
+          const am = (a0 + a1) / 2, rm = (r + r0) / 2;
+          ctx.font = F(700, 22); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = st.barFill === 'hatched' ? '#222' : '#fff';
+          ctx.fillText(`${Math.round(v * 1000) / 10}%`, cx + Math.cos(am) * rm, cy + Math.sin(am) * rm);
+        }
+        a0 = a1;
+      });
+      ctx.font = F(700, 26); ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      wrapText(ctx, cat, cx, cy + r + 14, cw - 10, 30 * ts);
+    });
+    drawLegend(ctx, items, 'fill', st, lm, { W, H, L: 30, T, pw: W - 30 - R, ph: H - T - B, ts });
     return c;
   }
 

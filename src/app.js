@@ -18,6 +18,7 @@
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
     welch: false, dunn: false, chiPost: false, mixed: false, normality: 'sw', catEffect: 'rr',
+    figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -29,7 +30,8 @@
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
     legendSize: ['optLegendSize'], legendTitle: ['optLegendTitle'], legendFrame: ['optLegendFrame', true],
-    normality: ['optNormality'], catEffect: ['optCatEffect'], welch: ['optWelch', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
+    normality: ['optNormality'], catEffect: ['optCatEffect'], welch: ['optWelch', true],
+    figPlacement: ['optFigPlacement'], captionStyle: ['optCaptionStyle'], chartTitle: ['optChartTitle', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -229,13 +231,7 @@
     const variables = [];
     headers.forEach((h, pos) => {
       if (h === groupCol || idCols.includes(h) || inRepeated.has(h)) return;
-      const inf = info[h];
-      const type = inf.numeric && inf.distinct.length > 5 ? 'numeric' : 'categorical';
-      variables.push({
-        id: 'v' + pos, kind: 'single', pos, cols: [{ col: h }], label: labelFrom(tokens(h)), type, dist: 'auto',
-        table: pos < firstRepPos ? 'Demographic and baseline data' : 'Other outcomes',
-        levels: type === 'categorical' ? defaultLevels(inf.distinct) : [], note: '', include: true
-      });
+      variables.push(singleVariable(rows, h, pos, pos < firstRepPos ? 'Demographic and baseline data' : 'Other outcomes', info[h]));
     });
     repeated.forEach(r => variables.push({
       id: 'r' + r.cols[0].pos, kind: 'repeated', pos: r.cols[0].pos, cols: r.cols.map(c => ({ col: c.col, tp: c.tp })),
@@ -252,6 +248,12 @@
     };
     setGroups(cfg);
     return cfg;
+  }
+  // a single (one-column) variable with the detected type and default levels
+  function singleVariable(rows, h, pos, table, inf = columnInfo(rows, h)) {
+    const type = inf.numeric && inf.distinct.length > 5 ? 'numeric' : 'categorical';
+    return { id: 'v' + pos, kind: 'single', pos, cols: [{ col: h }], label: labelFrom(tokens(h)), type, dist: 'auto', table,
+      levels: type === 'categorical' ? defaultLevels(inf.distinct) : [], note: '', include: true };
   }
   function defaultLevels(distinct) {
     const pos = distinct.filter(v => Analysis.POSITIVE.test(v));
@@ -307,6 +309,7 @@
         <td>${v.type === 'categorical' ? `<input type="text" data-k="levels" value="${esc(v.levels.join(', '))}">` : '<span class="legend-note">—</span>'}</td>
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
       </tr>`).join('')}</tbody>`;
+    renderRepeated();
   }
   $('#groupsTbl').addEventListener('click', e => {
     const b = e.target.closest('[data-gmove]'); if (!b) return;
@@ -324,6 +327,92 @@
       renderVariables();
     }
   });
+  /* ---------- repeated-measure builder: create, edit, ungroup ---------- */
+  let repEdit = null; // { id (null = new), label, cols: [{ col, tp }] } while the editor is open
+  const tpText = tp => state.cfg.tpLabels[tp] || tp;
+  function renderRepeated() {
+    const cfg = state.cfg, reps = cfg.variables.filter(v => v.kind === 'repeated');
+    $('#repList').innerHTML = reps.length ? reps.map(v => `<div class="gcard row" style="margin-bottom:6px">
+        <div style="flex:1"><b>${esc(v.label)}</b> <span class="legend-note">— ${v.cols.map(c => `${esc(tpText(c.tp))} <span class="mono">(${esc(c.col)})</span>`).join(' → ')}</span></div>
+        <button class="btn ghost small" data-repedit="${v.id}" type="button">✎ Edit</button>
+        <button class="btn ghost small" data-repungroup="${v.id}" type="button" title="Turn the columns back into single variables">Ungroup</button></div>`).join('')
+      : '<p class="legend-note">No repeated measures yet. Create one from columns measured at several timepoints.</p>';
+    if (!repEdit) { $('#repEditor').innerHTML = ''; return; }
+    // columns that can be added: numeric, not the group / ID, not already in another repeated measure
+    const used = new Set(cfg.variables.filter(v => v.kind === 'repeated' && v.id !== repEdit.id).flatMap(v => v.cols.map(c => c.col)));
+    const avail = state.data.headers.filter(h => h !== cfg.groupCol && !cfg.idCols.includes(h) && !used.has(h) && !repEdit.cols.some(c => c.col === h) && columnInfo(state.data.rows, h).numeric);
+    $('#repEditor').innerHTML = `<div class="gcard" style="margin-top:10px">
+      <h4>${repEdit.id ? 'Edit repeated measure' : 'New repeated measure'}</h4>
+      <div class="grid g2"><div><label class="f">Name (outcome label)</label><input type="text" id="repName" value="${esc(repEdit.label)}" placeholder="e.g. Pain score"></div></div>
+      <label class="f" style="margin-top:10px">Columns in time order — give each its timepoint label (this order is kept in tables and charts)</label>
+      <table class="t"><thead><tr><th>#</th><th>Column</th><th>Timepoint label</th><th></th></tr></thead><tbody>${repEdit.cols.map((c, i) => `<tr>
+        <td>${i + 1}</td><td class="mono">${esc(c.col)}</td><td><input type="text" data-reptp="${i}" value="${esc(tpText(c.tp))}"></td>
+        <td><button class="btn ghost small" data-repmove="${i},-1" type="button">↑</button> <button class="btn ghost small" data-repmove="${i},1" type="button">↓</button> <button class="btn ghost small" data-repdel="${i}" type="button">✕</button></td></tr>`).join('') || '<tr><td colspan="4" class="legend-note">Add at least two columns.</td></tr>'}</tbody></table>
+      <div class="row" style="margin-top:8px"><select id="repAdd" style="max-width:320px"><option value="">+ Add a column…</option>${avail.map(h => `<option>${esc(h)}</option>`).join('')}</select>
+        <span class="spacer"></span><button class="btn ghost" data-repact="cancel" type="button">Cancel</button><button class="btn primary" data-repact="save" type="button">Save repeated measure</button></div>
+    </div>`;
+  }
+  // keep the editor's typed values before re-rendering it
+  function readRepEditor() {
+    if (!repEdit || !$('#repName')) return;
+    repEdit.label = $('#repName').value;
+    document.querySelectorAll('[data-reptp]').forEach(el => { repEdit.cols[+el.dataset.reptp].label = el.value; });
+  }
+  function saveRepeated() {
+    readRepEditor();
+    const cfg = state.cfg, rows = state.data.rows, h = state.data.headers;
+    if (repEdit.cols.length < 2) { toast('A repeated measure needs at least two columns'); return; }
+    const labels = repEdit.cols.map(c => (c.label ?? tpText(c.tp)).trim() || c.col);
+    if (new Set(labels.map(l => l.toLowerCase())).size !== labels.length) { toast('Each timepoint label must be different'); return; }
+    // timepoint tokens: reuse one whose label matches, otherwise the label becomes a new token
+    const cols = repEdit.cols.map((c, i) => {
+      const existing = cfg.tpOrder.find(t => tpText(t).toLowerCase() === labels[i].toLowerCase());
+      const tp = existing || labels[i];
+      if (!existing) { cfg.tpOrder.push(tp); cfg.tpLabels[tp] = labels[i]; }
+      return { col: c.col, tp };
+    });
+    const old = repEdit.id ? cfg.variables.find(v => v.id === repEdit.id) : null;
+    const chosen = new Set(cols.map(c => c.col));
+    // chosen columns leave the single variables; columns dropped from an edited measure come back as single variables
+    cfg.variables = cfg.variables.filter(v => !(v.kind === 'single' && chosen.has(v.cols[0].col)));
+    if (old) old.cols.filter(c => !chosen.has(c.col)).forEach(c => cfg.variables.push(singleVariable(rows, c.col, h.indexOf(c.col), 'Other outcomes')));
+    const pos = Math.min(...cols.map(c => h.indexOf(c.col)));
+    const label = repEdit.label.trim() || labelFrom(tokens(cols[0].col));
+    if (old) Object.assign(old, { cols, label, pos, ownOrder: true });
+    else cfg.variables.push({ id: 'rc' + pos + '_' + Date.now().toString(36), kind: 'repeated', pos, cols, label, type: 'numeric', dist: 'auto', table: '', levels: [], note: '', include: true, ownOrder: true });
+    cfg.variables.sort((a, b) => a.pos - b.pos);
+    repEdit = null;
+    renderVariables();
+    toast(`Repeated measure “${label}” saved`);
+  }
+  function ungroupRepeated(id) {
+    const cfg = state.cfg, v = cfg.variables.find(x => x.id === id), h = state.data.headers;
+    cfg.variables = cfg.variables.filter(x => x !== v);
+    v.cols.forEach(c => cfg.variables.push(singleVariable(state.data.rows, c.col, h.indexOf(c.col), 'Other outcomes')));
+    cfg.variables.sort((a, b) => a.pos - b.pos);
+    renderVariables();
+    toast(`“${v.label}” ungrouped into ${v.cols.length} single variables`);
+  }
+  $('#repCreate').onclick = () => { readUiIntoCfg(); repEdit = { id: null, label: '', cols: [] }; renderRepeated(); };
+  $('#repCard').addEventListener('click', e => {
+    const b = e.target.closest('[data-repedit],[data-repungroup],[data-repmove],[data-repdel],[data-repact]'); if (!b) return;
+    readUiIntoCfg(); readRepEditor();
+    if (b.dataset.repedit) { const v = state.cfg.variables.find(x => x.id === b.dataset.repedit); repEdit = { id: v.id, label: v.label, cols: v.cols.map(c => ({ ...c })) }; }
+    else if (b.dataset.repungroup) { repEdit = null; ungroupRepeated(b.dataset.repungroup); return; }
+    else if (b.dataset.repmove) { const [i, d] = b.dataset.repmove.split(',').map(Number), j = i + d, a = repEdit.cols; if (j >= 0 && j < a.length) [a[i], a[j]] = [a[j], a[i]]; }
+    else if (b.dataset.repdel !== undefined) repEdit.cols.splice(+b.dataset.repdel, 1);
+    else if (b.dataset.repact === 'cancel') repEdit = null;
+    else if (b.dataset.repact === 'save') { saveRepeated(); return; }
+    renderRepeated();
+  });
+  $('#repCard').addEventListener('change', e => {
+    if (e.target.id !== 'repAdd' || !e.target.value) return;
+    readRepEditor();
+    const col = e.target.value, toks = tokens(col), tp = toks.find(t => TP_RE.test(t));
+    repEdit.cols.push({ col, tp: tp || ('T' + (repEdit.cols.length + 1)), label: tp ? tpLabel(tp) : 'T' + (repEdit.cols.length + 1) });
+    renderRepeated();
+  });
+
   $('#groupsTbl').addEventListener('change', e => { if (e.target.dataset.ginc !== undefined) { readUiIntoCfg(); state.cfg.consort = null; renderVariables(); } });
 
   /* ---------- step 3: timepoints & options ---------- */
@@ -338,8 +427,51 @@
     for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
     $('#customColors').innerHTML = o.customColors.map((col, i) => `<input type="color" data-ccol="${i}" value="${esc(col)}" title="Colour ${i + 1}">`).join('');
     $('#customBox').style.display = o.palette === 'custom' ? '' : 'none';
+    renderFigureTable();
     renderAdvanced();
   }
+  /* ---------- figures by variable + live preview ---------- */
+  const CHART_TYPES = {
+    repeated: [['auto', 'Auto (chart style)'], ['bar', 'Bars'], ['line', 'Lines over time'], ['box', 'Box plots'], ['dot', 'Box plots + every patient'], ['none', 'No figure']],
+    numeric: [['auto', 'Auto'], ['bar', 'Bars (mean ± error / median, IQR)'], ['box', 'Box plot'], ['dot', 'Dot plot (every patient)'], ['hist', 'Histogram'], ['none', 'No figure']],
+    categorical: [['auto', 'Auto (bars)'], ['stacked', '100% stacked bar'], ['pie', 'Donut / pie'], ['none', 'No figure']]
+  };
+  const chartKind = v => v.kind === 'repeated' ? 'repeated' : v.type;
+  function renderFigureTable() {
+    const vars = state.cfg.variables.filter(v => v.include);
+    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
+      <td><b>${esc(v.label)}</b><div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
+      <td><select data-fv="${v.id}" data-fk="chart">${CHART_TYPES[chartKind(v)].map(([k, l]) => `<option value="${k}" ${(v.chart || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+      <td><input type="text" data-fv="${v.id}" data-fk="caption" value="${esc(v.caption || '')}" placeholder="${esc(v.label)} of the studied groups"></td>
+      <td><button class="btn ghost small" data-fprev="${v.id}" type="button" title="Preview this figure">👁</button></td></tr>`).join('')}</tbody>`;
+    const cur = $('#figPrevVar').value;
+    $('#figPrevVar').innerHTML = vars.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
+    if (vars.some(v => v.id === cur)) $('#figPrevVar').value = cur;
+    schedulePreview();
+  }
+  let prevTimer = null;
+  const schedulePreview = () => { clearTimeout(prevTimer); prevTimer = setTimeout(drawFigurePreview, 200); };
+  // runs the analysis for the chosen variable only, with the options as they stand on the page
+  function drawFigurePreview() {
+    if (!$('#p3').classList.contains('active')) return;
+    readUiIntoCfg();
+    const cfg = state.cfg, v = cfg.variables.find(x => x.id === $('#figPrevVar').value), cv = $('#figPrevCanvas');
+    if (!v) { cv.width = cv.height = 0; $('#figPrevNote').textContent = 'No variable selected.'; return; }
+    try {
+      const res = Analysis.run(state.data, { ...cfg, variables: [{ ...v, include: true }], advanced: [], options: { ...cfg.options, correlation: false, figures: 'all' } });
+      const f = res.sections.flatMap(x => x.figures)[0];
+      if (!f) { cv.width = cv.height = 0; $('#figPrevNote').textContent = 'No figure for this variable (chart type “No figure”).'; return; }
+      renderFigure(f, cfg.options);
+      const img = new Image();
+      img.onload = () => { cv.width = img.width; cv.height = img.height; cv.getContext('2d').drawImage(img, 0, 0); };
+      img.src = f.url;
+      $('#figPrevNote').textContent = `${Report.figLabel(1, cfg.options.captionStyle)} ${f.caption}`;
+    } catch (err) { console.error(err); $('#figPrevNote').textContent = 'Preview failed: ' + err.message; }
+  }
+  $('#p3').addEventListener('input', schedulePreview);
+  $('#p3').addEventListener('change', schedulePreview);
+  $('#figTbl').addEventListener('click', e => { const b = e.target.closest('[data-fprev]'); if (b) { $('#figPrevVar').value = b.dataset.fprev; schedulePreview(); } });
+
   $('#tpTbl').addEventListener('click', e => {
     const b = e.target.closest('[data-tpmove]'); if (!b) return;
     readUiIntoCfg();
@@ -584,6 +716,7 @@
         o[k] = box ? el.checked : typeof DEFAULT_OPTIONS[k] === 'number' ? +el.value : el.value;
       }
       document.querySelectorAll('[data-ccol]').forEach(el => { o.customColors[+el.dataset.ccol] = el.value; });
+      document.querySelectorAll('#figTbl [data-fv]').forEach(el => { const v = cfg.variables.find(x => x.id === el.dataset.fv); if (v) v[el.dataset.fk] = el.value.trim(); });
       readAdvanced();
     }
     if ($('#p4').classList.contains('active')) readConsort();
@@ -604,8 +737,8 @@
         syncAssessed(ensureConsort());
         const cfg = state.cfg;
         const res = Analysis.run(state.data, cfg);
-        const pal = chartPalette(cfg.options), sty = chartStyle(cfg.options);
-        res.sections.forEach(s => s.figures.forEach(f => { const c = Charts.draw(f.spec, pal, sty); f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height; }));
+        res.sections.forEach(s => s.figures.forEach(f => { f.key = f.caption; renderFigure(f, cfg.options); }));
+        const pal = chartPalette(cfg.options);
         const gl = res.groups;
         if (cfg.consort.enabled) {
           const cv = Charts.consort(cfg.consort, gl, pal);
@@ -618,8 +751,15 @@
     }, 30);
   }
 
-  // export selection: keys of items left out of the Word file (kept across re-runs and in saved setups)
-  const exKey = { methods: () => 'methods', consort: () => 'consort', table: s => 't:' + s.title, figure: f => 'f:' + f.caption };
+  // draws a figure's image; the caption is printed on the chart when "chart titles" is on
+  function renderFigure(f, o) {
+    const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, chartPalette(o), chartStyle(o));
+    f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height;
+  }
+
+  // export selection: keys of items left out of the Word file (kept across re-runs and in saved setups);
+  // a figure keeps its original caption as key, so editing the caption keeps the choice
+  const exKey = { methods: () => 'methods', consort: () => 'consort', table: s => 't:' + s.title, figure: f => 'f:' + (f.key || f.caption) };
   const isOut = key => !!state.cfg.exportExclude[key];
   const exBox = (key, label) => `<label class="check exp"><input type="checkbox" data-export="${esc(key)}" ${isOut(key) ? '' : 'checked'}><span>${label}</span></label>`;
   // pull the editable text back into the result before re-rendering or exporting
@@ -628,6 +768,7 @@
     r.methods = $('#edMethods').value;
     if ($('#edIntro')) r.intro = $('#edIntro').value;
     document.querySelectorAll('[data-comment]').forEach(t => { r.sections[+t.dataset.comment].comment = t.value; });
+    document.querySelectorAll('[data-fcap]').forEach(t => { const [si, fi] = t.dataset.fcap.split(':').map(Number); r.sections[si].figures[fi].caption = t.value; });
   }
   function renderReport() {
     const r = state.result;
@@ -640,20 +781,36 @@
     html += `<div class="report-sec"><h3>Results</h3>`;
     if (r.consort) {
       const out = isOut('consort');
-      html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${out ? 'Not exported' : `Figure ${fig++}`}: ${esc(r.flowCaption)}</div></div>`;
+      html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${out ? 'Not exported:' : Report.figLabel(fig++, state.cfg.options.captionStyle)} ${esc(r.flowCaption)}</div></div>`;
     }
     html += `</div>`;
+    // figure numbers follow the Word layout: after each table, or all at the end (optionally grouped by type)
+    const o = state.cfg.options, lab = n => Report.figLabel(n, o.captionStyle);
+    const atEnd = Report.arrangeFigures(r.sections, o.figPlacement);
+    const num = new Map();
+    (atEnd || r.sections.flatMap(s => s.figures)).forEach(f => { if (!isOut(exKey.figure(f))) num.set(f, fig++); });
+    const figHtml = f => {
+      const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f), fOut = isOut(fk);
+      return `<figure class="${fOut ? 'off' : ''}"><img src="${f.url}" alt=""><figcaption>${fOut ? 'Not exported:' : lab(num.get(f))} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption"></figcaption>${exBox(fk, 'Figure')}</figure>`;
+    };
     r.sections.forEach((s, i) => {
       const tk = exKey.table(s), tOut = isOut(tk);
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported' : `Table ${tab++}`}: ${esc(s.title)}</div>${exBox(tk, 'Table')}</div><div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
         <div class="foot">${esc(s.footnote)}</div>
         <label class="f">Comment (editable — exported with the table)</label><textarea data-comment="${i}">${esc(s.comment)}</textarea></div>
-        <div class="figs">${s.figures.map(f => { const fk = exKey.figure(f), fOut = isOut(fk);
-          return `<figure class="${fOut ? 'off' : ''}"><img src="${f.url}" alt=""><figcaption>${fOut ? 'Not exported' : `Figure ${fig++}`}: ${esc(f.caption)}</figcaption>${exBox(fk, 'Figure')}</figure>`; }).join('')}</div></div>`;
+        ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
     });
+    if (atEnd && atEnd.length) html += `<div class="report-sec"><h3>Figures</h3><div class="figs">${atEnd.map(figHtml).join('')}</div></div>`;
     $('#report').innerHTML = html;
   }
   $('#report').addEventListener('change', e => {
+    // an edited caption redraws its chart when the caption is printed on the chart
+    if (e.target.dataset.fcap !== undefined) {
+      syncEdits();
+      const [si, fi] = e.target.dataset.fcap.split(':').map(Number), f = state.result.sections[si].figures[fi];
+      if (state.cfg.options.chartTitle) { renderFigure(f, state.cfg.options); e.target.closest('figure').querySelector('img').src = f.url; }
+      return;
+    }
     const key = e.target.dataset.export; if (key === undefined) return;
     syncEdits();
     if (e.target.checked) delete state.cfg.exportExclude[key]; else state.cfg.exportExclude[key] = true;
@@ -684,7 +841,7 @@
       const r = exportModel(state.result);
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = state.cfg.options;
-      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow });
+      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '') + ' - Statistical report.docx';

@@ -88,6 +88,13 @@ table.t td select{min-width:120px}
 .predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
+.fig-prev{margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;position:sticky;top:90px}
+.fig-prev canvas{width:100%;display:block}
+.fig-prev .legend-note{text-align:center;margin-top:4px}
+#figTbl td select{min-width:150px}
+#figTbl td input[type=text]{min-width:180px}
+input.fcap{border:0;border-bottom:1px dashed var(--line);border-radius:0;padding:1px 2px;font-weight:600;font-size:13px;color:var(--title);background:transparent;width:auto;min-width:60%;text-align:center}
+input.fcap:focus{border-bottom-color:var(--purple);outline:none}
 .check.exp{margin:0;font-size:13px;color:var(--muted);white-space:nowrap}
 .figs figure .check.exp{justify-content:center;margin-top:4px}
 .exp-bar{background:var(--lav);border-radius:10px;padding:8px 12px;margin-bottom:14px}
@@ -205,6 +212,12 @@ footer b{color:var(--purple)}
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
       <p class="legend-note"><b>Distribution</b>: Auto uses the normality test chosen in step 3 (Shapiro-Wilk by default) in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk / odds ratio).</p>
     </div>
+    <div class="card" id="repCard">
+      <div class="row"><h2>Repeated measures</h2><span class="spacer"></span><button class="btn ghost small" id="repCreate" type="button">+ Create repeated measure</button></div>
+      <p class="hint">Detected from column names with timepoints (e.g. <span class="mono">VAS_baseline</span>, <span class="mono">VAS_W1</span>). Create your own from any numeric columns, edit which columns enter and their timepoint labels and order, or ungroup a measure back into single variables. In the table above you can also untick single timepoints or analyse a measure as separate variables.</p>
+      <div id="repList"></div>
+      <div id="repEditor"></div>
+    </div>
     <div class="nav"><button class="btn ghost" data-go="1">← Back</button><button class="btn primary" data-go="3">Next: Timepoints & options →</button></div>
   </section>
 
@@ -264,6 +277,8 @@ footer b{color:var(--purple)}
         <div><label class="f">Error bars (mean charts)</label><select id="optErrorBar"><option value="sd" selected>Standard deviation (SD)</option><option value="sem">Standard error (SEM)</option><option value="ci">95% confidence interval</option></select></div>
         <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option></select></div>
         <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
+        <div><label class="f">Figure placement (classify)</label><select id="optFigPlacement"><option value="after" selected>After each table</option><option value="end">All at the end (Figures section)</option><option value="endType">At the end, grouped by chart type</option></select></div>
+        <div><label class="f">Caption style</label><select id="optCaptionStyle"><option value="colon" selected>Figure 1: …</option><option value="period">Figure 1. …</option><option value="fig">Fig. 1. …</option></select></div>
       </div>
       <div id="customBox" style="display:none;margin-top:12px">
         <label class="f">Custom colours (group 1, 2, 3 …)</label>
@@ -290,7 +305,19 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
         </div>
         <div>
+          <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
           <label class="check"><input type="checkbox" id="optBrand" checked><span><b>Prof MSE branding</b> in the Word header</span></label>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Figures by variable &amp; live preview</h2>
+      <p class="hint">Choose the chart type of each variable and, if you like, its own caption. The preview redraws as you change any figure option on this page.</p>
+      <div class="grid g2">
+        <div class="tbl-wrap" style="max-height:560px"><table class="t" id="figTbl"></table></div>
+        <div>
+          <div class="row"><label class="f" style="margin:0">Preview</label><select id="figPrevVar" style="flex:1"></select></div>
+          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div></div>
         </div>
       </div>
     </div>

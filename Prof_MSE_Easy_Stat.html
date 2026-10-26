@@ -88,6 +88,13 @@ table.t td select{min-width:120px}
 .predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
+.fig-prev{margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;position:sticky;top:90px}
+.fig-prev canvas{width:100%;display:block}
+.fig-prev .legend-note{text-align:center;margin-top:4px}
+#figTbl td select{min-width:150px}
+#figTbl td input[type=text]{min-width:180px}
+input.fcap{border:0;border-bottom:1px dashed var(--line);border-radius:0;padding:1px 2px;font-weight:600;font-size:13px;color:var(--title);background:transparent;width:auto;min-width:60%;text-align:center}
+input.fcap:focus{border-bottom-color:var(--purple);outline:none}
 .check.exp{margin:0;font-size:13px;color:var(--muted);white-space:nowrap}
 .figs figure .check.exp{justify-content:center;margin-top:4px}
 .exp-bar{background:var(--lav);border-radius:10px;padding:8px 12px;margin-bottom:14px}
@@ -205,6 +212,12 @@ footer b{color:var(--purple)}
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
       <p class="legend-note"><b>Distribution</b>: Auto uses the normality test chosen in step 3 (Shapiro-Wilk by default) in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk / odds ratio).</p>
     </div>
+    <div class="card" id="repCard">
+      <div class="row"><h2>Repeated measures</h2><span class="spacer"></span><button class="btn ghost small" id="repCreate" type="button">+ Create repeated measure</button></div>
+      <p class="hint">Detected from column names with timepoints (e.g. <span class="mono">VAS_baseline</span>, <span class="mono">VAS_W1</span>). Create your own from any numeric columns, edit which columns enter and their timepoint labels and order, or ungroup a measure back into single variables. In the table above you can also untick single timepoints or analyse a measure as separate variables.</p>
+      <div id="repList"></div>
+      <div id="repEditor"></div>
+    </div>
     <div class="nav"><button class="btn ghost" data-go="1">← Back</button><button class="btn primary" data-go="3">Next: Timepoints & options →</button></div>
   </section>
 
@@ -264,6 +277,8 @@ footer b{color:var(--purple)}
         <div><label class="f">Error bars (mean charts)</label><select id="optErrorBar"><option value="sd" selected>Standard deviation (SD)</option><option value="sem">Standard error (SEM)</option><option value="ci">95% confidence interval</option></select></div>
         <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option></select></div>
         <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
+        <div><label class="f">Figure placement (classify)</label><select id="optFigPlacement"><option value="after" selected>After each table</option><option value="end">All at the end (Figures section)</option><option value="endType">At the end, grouped by chart type</option></select></div>
+        <div><label class="f">Caption style</label><select id="optCaptionStyle"><option value="colon" selected>Figure 1: …</option><option value="period">Figure 1. …</option><option value="fig">Fig. 1. …</option></select></div>
       </div>
       <div id="customBox" style="display:none;margin-top:12px">
         <label class="f">Custom colours (group 1, 2, 3 …)</label>
@@ -290,7 +305,19 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
         </div>
         <div>
+          <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
           <label class="check"><input type="checkbox" id="optBrand" checked><span><b>Prof MSE branding</b> in the Word header</span></label>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Figures by variable &amp; live preview</h2>
+      <p class="hint">Choose the chart type of each variable and, if you like, its own caption. The preview redraws as you change any figure option on this page.</p>
+      <div class="grid g2">
+        <div class="tbl-wrap" style="max-height:560px"><table class="t" id="figTbl"></table></div>
+        <div>
+          <div class="row"><label class="f" style="margin:0">Preview</label><select id="figPrevVar" style="flex:1"></select></div>
+          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div></div>
         </div>
       </div>
     </div>
@@ -21553,8 +21580,9 @@ const Analysis = (() => {
     for (const v of cfg.variables) {
       if (!v.include || v.role === 'ignore') continue;
       if (v.kind !== 'repeated') { out.push(v); continue; }
-      const cols = v.cols.filter(c => c.include !== false && (cfg.tpInclude || {})[c.tp] !== false)
-        .sort((a, b) => order(a.tp) - order(b.tp));
+      // a measure built in the repeated-measure editor keeps its own column order
+      const cols = v.cols.filter(c => c.include !== false && (cfg.tpInclude || {})[c.tp] !== false);
+      if (!v.ownOrder) cols.sort((a, b) => order(a.tp) - order(b.tp));
       if (!cols.length) continue;
       if (v.split || cols.length === 1) {
         cols.forEach((c, i) => out.push({ ...v, id: v.id + '_' + i, kind: 'single', type: 'numeric', cols: [c], pos: v.pos + i * 1e-3,
@@ -21958,7 +21986,14 @@ const Analysis = (() => {
       : opts.errorBar === 'ci' ? jStat.studentt.inv(0.975, dd.n - 1) * dd.sd / Math.sqrt(dd.n) : dd.sd;
     const errNote = { sem: ' (mean ± SEM)', ci: ' (mean ± 95% CI)' }[opts.errorBar] || '';
     const valueLabels = opts.valueLabels ? { labels: true, labelDec: d } : {};
-    // optional group sizes on chart axes / legends: "A group (n=30)"
+    // nice equal-width bins for histograms (same rule as chart axes)
+  function niceScale(min, max, ticks) {
+    if (min === max) max = min + 1;
+    const raw = (max - min) / ticks, mag = 10 ** Math.floor(Math.log10(raw));
+    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(x => x >= raw);
+    return { min: Math.floor(min / step) * step, max: Math.max(Math.ceil(max / step) * step, Math.floor(min / step) * step + step), step };
+  }
+  // optional group sizes on chart axes / legends: "A group (n=30)"
     const withN = (names, ns) => opts.nLabels ? names.map((g, i) => `${g} (n=${ns[i]})`) : names;
     const groups = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false);
     const gl = groups.map(g => cfg.groupLabels[g] || g);
@@ -22078,16 +22113,18 @@ const Analysis = (() => {
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
           footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost }, [withinNote, v.note].filter(Boolean).join(', ')),
           comment: wording(comment),
-          figures: [(() => {
-            const meanChart = param && opts.chartStyle !== 'box' || opts.chartStyle === 'bar' || opts.chartStyle === 'line';
+          figures: v.chart === 'none' ? [] : [(() => {
+            // per-variable chart type overrides the global chart style
+            const ct = v.chart && v.chart !== 'auto' ? v.chart : opts.chartStyle;
+            const meanChart = ct === 'bar' || ct === 'line' || (ct === 'auto' && param);
             return {
-            sig: sigAny,
-            caption: `${v.label} of the studied groups${meanChart && param ? errNote : ''}`,
+            sig: sigAny, vid: v.id,
+            caption: v.caption || `${v.label} of the studied groups${meanChart && param ? errNote : ''}`,
             spec: meanChart
-              ? { type: opts.chartStyle === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks, ...(opts.chartStyle === 'line' ? {} : valueLabels),
+              ? { type: ct === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks, ...(ct === 'line' ? {} : valueLabels),
                   series: withN(gl, gN).map((g, i) => ({ name: g, values: results.map(r => param ? r.desc[i].mean : r.desc[i].median),
                     err: results.map(r => param ? errOf(r.desc[i]) : null), lo: param ? null : results.map(r => r.desc[i].q1), hi: param ? null : results.map(r => r.desc[i].q3) })) }
-              : { type: 'box', categories: tps, yLabel: v.label, points: opts.points, ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
+              : { type: 'box', categories: tps, yLabel: v.label, points: opts.points || ct === 'dot', ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
             };
           })()],
           meta: { param, results, within, tps }
@@ -22188,18 +22225,41 @@ const Analysis = (() => {
           if (k === 2) return { sig: [{ i: 0, j: 1, p: x.p }], alpha };
           return x.pairs ? { sig: x.pairs.filter(q => q.p <= alpha).map(q => ({ i: q.i, j: q.j, p: q.p })), alpha } : {};
         };
-        const figures = res.map(r => ({ sig: (r.num || r.cat).p <= alpha, ...figureFor(r) }));
+        const figures = res.filter(r => r.v.chart !== 'none').map(r => {
+          const f = { sig: (r.num || r.cat).p <= alpha, vid: r.v.id, ...figureFor(r) };
+          if (r.v.caption) f.caption = r.v.caption;
+          return f;
+        });
         function figureFor(r) {
+          const ct = r.v.chart || 'auto';
           if (r.num) {
-            const bar = r.num.param && opts.chartStyle !== 'box';
+            const cats = withN(gl, r.num.desc.map(x => x.n)), P = r.num.param;
+            if (ct === 'hist') {
+              // grouped histogram: equal-width bins over all patients
+              const all = r.gv.flat(), sc = niceScale(Math.min(...all), Math.max(...all), 8), edges = [];
+              for (let e = sc.min; e < sc.max - 1e-9; e += sc.step) edges.push(e);
+              const bin = v => Math.min(edges.length - 1, Math.floor((v - sc.min) / sc.step + 1e-9));
+              return { caption: `Distribution of ${lowerFirst(plain(r.v.label))} in the studied groups`,
+                spec: { type: 'bar', integer: true, categories: edges.map(e => `${fmt(e, d)}-${fmt(e + sc.step, d)}`), xLabel: r.v.label, yLabel: 'Number of patients',
+                  series: withN(gl, r.num.desc.map(x => x.n)).map((g, i) => { const n = new Array(edges.length).fill(0); r.gv[i].forEach(v => n[bin(v)]++); return { name: g, values: n }; }) } };
+            }
+            if (ct === 'dot') return { caption: `${r.v.label} of the studied groups (${P ? 'mean ± SD' : 'median and IQR'})`,
+              spec: { type: 'dot', perGroup: true, categories: cats, yLabel: r.v.label, median: !P, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
+            const bar = ct === 'bar' || (ct === 'auto' && P && opts.chartStyle !== 'box');
+            if (bar && !P) return { caption: `${r.v.label} of the studied groups (median and IQR)`,
+              spec: { type: 'bar', perGroup: true, categories: cats, yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.median), lo: r.num.desc.map(x => x.q1), hi: r.num.desc.map(x => x.q3) }] } };
             return {
               caption: `${r.v.label} of the studied groups${bar ? errNote : ''}`,
               spec: bar
-                ? { type: 'bar', perGroup: true, categories: withN(gl, r.num.desc.map(x => x.n)), yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(errOf) }] }
-                : { type: 'box', perGroup: true, categories: withN(gl, r.num.desc.map(x => x.n)), yLabel: r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
+                ? { type: 'bar', perGroup: true, categories: cats, yLabel: r.v.label, ...valueLabels, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(errOf) }] }
+                : { type: 'box', perGroup: true, categories: cats, yLabel: r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
             };
           }
           const c = r.cat;
+          if (ct === 'stacked' || ct === 'pie') return {
+            caption: `${r.v.label} of the studied groups`,
+            spec: { type: ct, categories: withN(gl, c.ns), yLabel: '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
+          };
           if (isCompact(r)) return {
             caption: `${r.v.label} of the studied groups`,
             spec: { type: 'bar', perGroup: true, percent: true, labels: true, categories: withN(gl, c.ns), yLabel: '% of the studied patients', ...brackets(c), series: [{ name: r.levels[0], values: c.pct[0] }] }
@@ -22467,15 +22527,18 @@ const Charts = (() => {
     const f = v => Math.round(amt >= 0 ? v + (255 - v) * amt : v * (1 + amt));
     return `rgb(${f(r)},${f(g)},${f(b)})`;
   }
-  function niceScale(min, max, ticks = 6) {
+  function niceScale(min, max, ticks = 6, integer = false) {
     if (min === max) { max = min + 1; }
     const span = max - min, raw = span / ticks;
     const mag = 10 ** Math.floor(Math.log10(raw));
-    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+    // counts get whole-number steps (no 2.5)
+    let step = (integer ? [1, 2, 5, 10] : [1, 2, 2.5, 5, 10]).map(m => m * mag).find(s => s >= raw);
+    if (integer) step = Math.max(1, step);
     return { min: Math.floor(min / step) * step, max: Math.ceil(max / step) * step, step };
   }
+  // as many decimals as the step needs: 2.5 → "7.5", 0.25 → "0.75"
   const fmtTick = (v, step) => {
-    const dec = Math.max(0, -Math.floor(Math.log10(step)) + (step % 1 && (step * 10) % 1 ? 1 : 0));
+    const dec = (String(+step.toPrecision(6)).split('.')[1] || '').length;
     return (+v.toFixed(Math.min(dec, 3))).toString();
   };
 
@@ -22534,8 +22597,26 @@ const Charts = (() => {
     items.forEach((it, i) => { swatch(it, i, x0, yy); ctx.fillStyle = '#333'; ctx.fillText(it.name, x0 + 58 * m.q, yy); yy += m.rowH; });
   }
 
+  // public entry: draws the chart, then adds the optional title band above it
   function draw(spec, paletteName = 'brand', style = {}) {
+    const c = drawChart(spec, paletteName, style);
+    return spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
+  }
+  function withTitle(src, title, st) {
+    const res = +st.res || 1, ts = TEXT[st.text] || 1, out = document.createElement('canvas'), ctx = out.getContext('2d');
+    ctx.font = `700 ${Math.round(32 * ts * res)}px ${FONT}`;
+    const lines = measureLines(ctx, title, src.width - 80 * res), band = (lines * 42 * ts + 36) * res;
+    out.width = src.width; out.height = src.height + band;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, out.width, out.height);
+    ctx.font = `700 ${Math.round(32 * ts * res)}px ${FONT}`; ctx.fillStyle = '#1C1648'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    wrapText(ctx, title, out.width / 2, 24 * res, src.width - 80 * res, 42 * ts * res);
+    ctx.drawImage(src, 0, band);
+    return out;
+  }
+
+  function drawChart(spec, paletteName = 'brand', style = {}) {
     const st = { ...DEFAULT_STYLE, ...style };
+    if (spec.type === 'pie') return pieChart(spec, paletteName, st);
     if (spec.type === 'scatter') return scatter(spec, paletteName, st);
     if (spec.type === 'roc') return rocChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
@@ -22547,6 +22628,7 @@ const Charts = (() => {
 
     const perGroup = !!spec.perGroup && spec.series.length === 1;
     const legendItems = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: spec.type === 'box' && i === 2 }));
+    if (spec.type === 'stacked') spec = { ...spec, percent: true, series: spec.series.map(s => ({ ...s })) };
     const lm = legendMetrics(ctx, legendItems, st, ts);
     const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0);
     const T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
@@ -22554,9 +22636,9 @@ const Charts = (() => {
 
     // y range
     let lo = Infinity, hi = -Infinity;
-    if (spec.type === 'box') {
+    if (spec.type === 'box' || spec.type === 'dot') {
       spec.series.forEach(s => s.data.forEach(arr => arr.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); })));
-    } else {
+    } else if (spec.type === 'stacked') { lo = 0; hi = 100; } else {
       spec.series.forEach(s => s.values.forEach((v, i) => {
         const up = s.err && s.err[i] != null ? v + s.err[i] : s.hi ? s.hi[i] : v;
         const dn = s.err && s.err[i] != null ? v - s.err[i] : s.lo ? s.lo[i] : v;
@@ -22569,7 +22651,7 @@ const Charts = (() => {
     const fit = spec.type !== 'bar' && !spec.percent && (st.yAxis === 'fit' || (st.yAxis !== 'zero' && spec.type === 'line'));
     if (!fit && lo > 0) lo = 0;
     if (fit) { const pad = (hi - lo) * 0.1 || 1; lo = Math.max(lo > 0 && spec.type === 'line' && st.yAxis !== 'fit' ? 0 : -Infinity, lo - pad); }
-    let sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02));
+    let sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02), 6, spec.integer);
     if (spec.percent && sc.max > 100) sc.max = 100;
     let y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
     // room above the data for stacked significance brackets / stars
@@ -22577,7 +22659,7 @@ const Charts = (() => {
     const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 * ts : 0;
     for (let top = hi, tries = 0; need && y(dataHi) - need < T && tries < 12; tries++) {
       top += (top - sc.min) * 0.12;
-      sc = niceScale(lo, top);
+      sc = niceScale(lo, top, 6, spec.integer);
       y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
     }
 
@@ -22646,6 +22728,39 @@ const Charts = (() => {
         ctx.setLineDash([]); ctx.fillStyle = color;
         s.values.forEach((v, ci) => { ctx.beginPath(); ctx.arc(xs[ci], y(v), 10, 0, Math.PI * 2); ctx.fill(); });
       });
+    } else if (spec.type === 'stacked') {
+      // one 100% bar per group, segments = categories
+      const w = cw * 0.5;
+      spec.categories.forEach((_, ci) => {
+        let base = 0;
+        spec.series.forEach((s, si) => {
+          const v = s.values[ci] || 0, x0 = L + cw * ci + (cw - w) / 2;
+          if (v <= 0) return;
+          fillBar(ctx, st, pal[si % pal.length], si, x0, y(base + v), w, y(base) - y(base + v));
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x0, y(base + v), w, y(base) - y(base + v));
+          if (v >= 6) {
+            ctx.font = F(700, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = st.barFill === 'outline' || st.barFill === 'hatched' ? '#222' : '#fff';
+            ctx.fillText(`${Math.round(v * 10) / 10}%`, x0 + w / 2, y(base + v / 2));
+          }
+          base += v;
+        });
+      });
+    } else if (spec.type === 'dot') {
+      // every patient as a dot, with mean ± SD (or median and IQR) as a bar and whiskers
+      const gw = cw * 0.42;
+      spec.series[0].data.forEach((arr, ci) => {
+        if (!arr.length) return;
+        const color = pal[ci % pal.length], cx = L + cw * (ci + 0.5);
+        ctx.fillStyle = color; ctx.globalAlpha = 0.55;
+        arr.forEach((v, i) => { ctx.beginPath(); ctx.arc(cx + jitter(i + 1) * gw * 0.8, y(v), 7, 0, Math.PI * 2); ctx.fill(); });
+        ctx.globalAlpha = 1;
+        const m = spec.median ? Stats.median(arr) : Stats.mean(arr);
+        const a = spec.median ? Stats.quantile(arr, 0.25) : m - Stats.sd(arr), b = spec.median ? Stats.quantile(arr, 0.75) : m + Stats.sd(arr);
+        ctx.strokeStyle = '#222'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(cx - gw / 2, y(m)); ctx.lineTo(cx + gw / 2, y(m)); ctx.stroke();
+        if (isFinite(a) && isFinite(b)) errBar(cx, a, b, gw / 4);
+      });
     } else if (spec.type === 'box') {
       const slots = perGroup ? 1 : ns;
       const gw = cw * (perGroup ? 0.36 : 0.8), bw = gw / slots;
@@ -22684,6 +22799,38 @@ const Charts = (() => {
     catStars.forEach((s, ci) => { if (s) ctx.fillText(s, L + cw * (ci + 0.5), y(dataHi) - 24); });
 
     drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2 })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
+    return c;
+  }
+
+  /* ---------- donut charts: one per group, slices = categories ---------- */
+  function pieChart(spec, paletteName, st) {
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length] }));
+    const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'inside' ? 'bottom' : st.legend }, ts);
+    const T = 30 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 80 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0), R = 30 + (lm.pos === 'right' ? lm.w + 40 : 0);
+    const k = spec.categories.length, cw = (W - 30 - R) / k, r = Math.min(cw * 0.42, (H - T - B) / 2 - 10), r0 = r * 0.52;
+    spec.categories.forEach((cat, ci) => {
+      const cx = 30 + cw * (ci + 0.5), cy = T + (H - T - B) / 2;
+      let a0 = -Math.PI / 2;
+      spec.series.forEach((s, si) => {
+        const v = (s.values[ci] || 0) / 100;
+        if (v <= 0) return;
+        const a1 = a0 + v * 2 * Math.PI;
+        ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1); ctx.arc(cx, cy, r0, a1, a0, true); ctx.closePath();
+        ctx.fillStyle = st.barFill === 'hatched' ? hatch(ctx, pal[si % pal.length], si) : pal[si % pal.length]; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+        if (v >= 0.06) {
+          const am = (a0 + a1) / 2, rm = (r + r0) / 2;
+          ctx.font = F(700, 22); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = st.barFill === 'hatched' ? '#222' : '#fff';
+          ctx.fillText(`${Math.round(v * 1000) / 10}%`, cx + Math.cos(am) * rm, cy + Math.sin(am) * rm);
+        }
+        a0 = a1;
+      });
+      ctx.font = F(700, 26); ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      wrapText(ctx, cat, cx, cy + r + 14, cw - 10, 30 * ts);
+    });
+    drawLegend(ctx, items, 'fill', st, lm, { W, H, L: 30, T, pw: W - 30 - R, ph: H - T - B, ts });
     return c;
   }
 
@@ -23170,6 +23317,20 @@ const Report = (() => {
       borders: { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none } });
   }
 
+  // "Figure 1:" (default), "Figure 1." or "Fig. 1."
+  const figLabel = (n, style) => style === 'period' ? `Figure ${n}.` : style === 'fig' ? `Fig. ${n}.` : `Figure ${n}:`;
+  // figures placed after their table (null), or all together at the end, optionally grouped by chart type
+  const TYPE_ORDER = ['bar', 'line', 'box', 'dot', 'stacked', 'pie', 'scatter', 'roc', 'km', 'ba'];
+  function arrangeFigures(sections, placement) {
+    if (placement !== 'end' && placement !== 'endType') return null;
+    const all = sections.flatMap(s => s.figures);
+    if (placement === 'endType') {
+      const rank = f => { const i = TYPE_ORDER.indexOf(f.spec.type); return i < 0 ? TYPE_ORDER.length : i; };
+      return all.map((f, i) => ({ f, i })).sort((a, b) => rank(a.f) - rank(b.f) || a.i - b.i).map(x => x.f);
+    }
+    return all;
+  }
+
   async function build(model, opts) {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
@@ -23185,8 +23346,18 @@ const Report = (() => {
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
       children.push(image(model.consort.url, model.consort.w, model.consort.h, 600));
-      children.push(caption(`Figure ${fig++}: ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
+      children.push(caption(`${figLabel(fig++, opts.captionStyle)} ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
     }
+    const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
+    const placeFigures = list => {
+      const figs = list.filter(f => f.url).map(f => ({ ...f, label: `${figLabel(fig++, opts.captionStyle)} ${f.caption}` }));
+      if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
+      else for (const f of figs) {
+        children.push(image(f.url, f.w, f.h, w1));
+        children.push(caption(f.label));
+      }
+    };
+    const atEnd = arrangeFigures(model.sections, opts.figPlacement);
     for (const s of model.sections) {
       if (s.tableOn !== false) {
         children.push(caption(`Table ${tab++}: ${s.title}`));
@@ -23194,13 +23365,11 @@ const Report = (() => {
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment) children.push(para(s.comment));
       }
-      const figs = s.figures.filter(f => f.url).map(f => ({ ...f, label: `Figure ${fig++}: ${f.caption}` }));
-      const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
-      if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
-      else for (const f of figs) {
-        children.push(image(f.url, f.w, f.h, w1));
-        children.push(caption(f.label));
-      }
+      if (!atEnd) placeFigures(s.figures);
+    }
+    if (atEnd && atEnd.some(f => f.url)) {
+      children.push(heading('Figures', brand));
+      placeFigures(atEnd);
     }
 
     const headerKids = [];
@@ -23235,7 +23404,7 @@ const Report = (() => {
     return Packer.toBlob(doc);
   }
 
-  return { build };
+  return { build, figLabel, arrangeFigures };
 })();
 
 /* Prof MSE Easy Stat — built-in example datasets (simulated, reproducible) */
@@ -23495,6 +23664,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
     welch: false, dunn: false, chiPost: false, mixed: false, normality: 'sw', catEffect: 'rr',
+    figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -23506,7 +23676,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
     legendSize: ['optLegendSize'], legendTitle: ['optLegendTitle'], legendFrame: ['optLegendFrame', true],
-    normality: ['optNormality'], catEffect: ['optCatEffect'], welch: ['optWelch', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
+    normality: ['optNormality'], catEffect: ['optCatEffect'], welch: ['optWelch', true],
+    figPlacement: ['optFigPlacement'], captionStyle: ['optCaptionStyle'], chartTitle: ['optChartTitle', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -23706,13 +23877,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const variables = [];
     headers.forEach((h, pos) => {
       if (h === groupCol || idCols.includes(h) || inRepeated.has(h)) return;
-      const inf = info[h];
-      const type = inf.numeric && inf.distinct.length > 5 ? 'numeric' : 'categorical';
-      variables.push({
-        id: 'v' + pos, kind: 'single', pos, cols: [{ col: h }], label: labelFrom(tokens(h)), type, dist: 'auto',
-        table: pos < firstRepPos ? 'Demographic and baseline data' : 'Other outcomes',
-        levels: type === 'categorical' ? defaultLevels(inf.distinct) : [], note: '', include: true
-      });
+      variables.push(singleVariable(rows, h, pos, pos < firstRepPos ? 'Demographic and baseline data' : 'Other outcomes', info[h]));
     });
     repeated.forEach(r => variables.push({
       id: 'r' + r.cols[0].pos, kind: 'repeated', pos: r.cols[0].pos, cols: r.cols.map(c => ({ col: c.col, tp: c.tp })),
@@ -23729,6 +23894,12 @@ if (typeof module !== 'undefined') module.exports = Examples;
     };
     setGroups(cfg);
     return cfg;
+  }
+  // a single (one-column) variable with the detected type and default levels
+  function singleVariable(rows, h, pos, table, inf = columnInfo(rows, h)) {
+    const type = inf.numeric && inf.distinct.length > 5 ? 'numeric' : 'categorical';
+    return { id: 'v' + pos, kind: 'single', pos, cols: [{ col: h }], label: labelFrom(tokens(h)), type, dist: 'auto', table,
+      levels: type === 'categorical' ? defaultLevels(inf.distinct) : [], note: '', include: true };
   }
   function defaultLevels(distinct) {
     const pos = distinct.filter(v => Analysis.POSITIVE.test(v));
@@ -23784,6 +23955,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
         <td>${v.type === 'categorical' ? `<input type="text" data-k="levels" value="${esc(v.levels.join(', '))}">` : '<span class="legend-note">—</span>'}</td>
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
       </tr>`).join('')}</tbody>`;
+    renderRepeated();
   }
   $('#groupsTbl').addEventListener('click', e => {
     const b = e.target.closest('[data-gmove]'); if (!b) return;
@@ -23801,6 +23973,92 @@ if (typeof module !== 'undefined') module.exports = Examples;
       renderVariables();
     }
   });
+  /* ---------- repeated-measure builder: create, edit, ungroup ---------- */
+  let repEdit = null; // { id (null = new), label, cols: [{ col, tp }] } while the editor is open
+  const tpText = tp => state.cfg.tpLabels[tp] || tp;
+  function renderRepeated() {
+    const cfg = state.cfg, reps = cfg.variables.filter(v => v.kind === 'repeated');
+    $('#repList').innerHTML = reps.length ? reps.map(v => `<div class="gcard row" style="margin-bottom:6px">
+        <div style="flex:1"><b>${esc(v.label)}</b> <span class="legend-note">— ${v.cols.map(c => `${esc(tpText(c.tp))} <span class="mono">(${esc(c.col)})</span>`).join(' → ')}</span></div>
+        <button class="btn ghost small" data-repedit="${v.id}" type="button">✎ Edit</button>
+        <button class="btn ghost small" data-repungroup="${v.id}" type="button" title="Turn the columns back into single variables">Ungroup</button></div>`).join('')
+      : '<p class="legend-note">No repeated measures yet. Create one from columns measured at several timepoints.</p>';
+    if (!repEdit) { $('#repEditor').innerHTML = ''; return; }
+    // columns that can be added: numeric, not the group / ID, not already in another repeated measure
+    const used = new Set(cfg.variables.filter(v => v.kind === 'repeated' && v.id !== repEdit.id).flatMap(v => v.cols.map(c => c.col)));
+    const avail = state.data.headers.filter(h => h !== cfg.groupCol && !cfg.idCols.includes(h) && !used.has(h) && !repEdit.cols.some(c => c.col === h) && columnInfo(state.data.rows, h).numeric);
+    $('#repEditor').innerHTML = `<div class="gcard" style="margin-top:10px">
+      <h4>${repEdit.id ? 'Edit repeated measure' : 'New repeated measure'}</h4>
+      <div class="grid g2"><div><label class="f">Name (outcome label)</label><input type="text" id="repName" value="${esc(repEdit.label)}" placeholder="e.g. Pain score"></div></div>
+      <label class="f" style="margin-top:10px">Columns in time order — give each its timepoint label (this order is kept in tables and charts)</label>
+      <table class="t"><thead><tr><th>#</th><th>Column</th><th>Timepoint label</th><th></th></tr></thead><tbody>${repEdit.cols.map((c, i) => `<tr>
+        <td>${i + 1}</td><td class="mono">${esc(c.col)}</td><td><input type="text" data-reptp="${i}" value="${esc(tpText(c.tp))}"></td>
+        <td><button class="btn ghost small" data-repmove="${i},-1" type="button">↑</button> <button class="btn ghost small" data-repmove="${i},1" type="button">↓</button> <button class="btn ghost small" data-repdel="${i}" type="button">✕</button></td></tr>`).join('') || '<tr><td colspan="4" class="legend-note">Add at least two columns.</td></tr>'}</tbody></table>
+      <div class="row" style="margin-top:8px"><select id="repAdd" style="max-width:320px"><option value="">+ Add a column…</option>${avail.map(h => `<option>${esc(h)}</option>`).join('')}</select>
+        <span class="spacer"></span><button class="btn ghost" data-repact="cancel" type="button">Cancel</button><button class="btn primary" data-repact="save" type="button">Save repeated measure</button></div>
+    </div>`;
+  }
+  // keep the editor's typed values before re-rendering it
+  function readRepEditor() {
+    if (!repEdit || !$('#repName')) return;
+    repEdit.label = $('#repName').value;
+    document.querySelectorAll('[data-reptp]').forEach(el => { repEdit.cols[+el.dataset.reptp].label = el.value; });
+  }
+  function saveRepeated() {
+    readRepEditor();
+    const cfg = state.cfg, rows = state.data.rows, h = state.data.headers;
+    if (repEdit.cols.length < 2) { toast('A repeated measure needs at least two columns'); return; }
+    const labels = repEdit.cols.map(c => (c.label ?? tpText(c.tp)).trim() || c.col);
+    if (new Set(labels.map(l => l.toLowerCase())).size !== labels.length) { toast('Each timepoint label must be different'); return; }
+    // timepoint tokens: reuse one whose label matches, otherwise the label becomes a new token
+    const cols = repEdit.cols.map((c, i) => {
+      const existing = cfg.tpOrder.find(t => tpText(t).toLowerCase() === labels[i].toLowerCase());
+      const tp = existing || labels[i];
+      if (!existing) { cfg.tpOrder.push(tp); cfg.tpLabels[tp] = labels[i]; }
+      return { col: c.col, tp };
+    });
+    const old = repEdit.id ? cfg.variables.find(v => v.id === repEdit.id) : null;
+    const chosen = new Set(cols.map(c => c.col));
+    // chosen columns leave the single variables; columns dropped from an edited measure come back as single variables
+    cfg.variables = cfg.variables.filter(v => !(v.kind === 'single' && chosen.has(v.cols[0].col)));
+    if (old) old.cols.filter(c => !chosen.has(c.col)).forEach(c => cfg.variables.push(singleVariable(rows, c.col, h.indexOf(c.col), 'Other outcomes')));
+    const pos = Math.min(...cols.map(c => h.indexOf(c.col)));
+    const label = repEdit.label.trim() || labelFrom(tokens(cols[0].col));
+    if (old) Object.assign(old, { cols, label, pos, ownOrder: true });
+    else cfg.variables.push({ id: 'rc' + pos + '_' + Date.now().toString(36), kind: 'repeated', pos, cols, label, type: 'numeric', dist: 'auto', table: '', levels: [], note: '', include: true, ownOrder: true });
+    cfg.variables.sort((a, b) => a.pos - b.pos);
+    repEdit = null;
+    renderVariables();
+    toast(`Repeated measure “${label}” saved`);
+  }
+  function ungroupRepeated(id) {
+    const cfg = state.cfg, v = cfg.variables.find(x => x.id === id), h = state.data.headers;
+    cfg.variables = cfg.variables.filter(x => x !== v);
+    v.cols.forEach(c => cfg.variables.push(singleVariable(state.data.rows, c.col, h.indexOf(c.col), 'Other outcomes')));
+    cfg.variables.sort((a, b) => a.pos - b.pos);
+    renderVariables();
+    toast(`“${v.label}” ungrouped into ${v.cols.length} single variables`);
+  }
+  $('#repCreate').onclick = () => { readUiIntoCfg(); repEdit = { id: null, label: '', cols: [] }; renderRepeated(); };
+  $('#repCard').addEventListener('click', e => {
+    const b = e.target.closest('[data-repedit],[data-repungroup],[data-repmove],[data-repdel],[data-repact]'); if (!b) return;
+    readUiIntoCfg(); readRepEditor();
+    if (b.dataset.repedit) { const v = state.cfg.variables.find(x => x.id === b.dataset.repedit); repEdit = { id: v.id, label: v.label, cols: v.cols.map(c => ({ ...c })) }; }
+    else if (b.dataset.repungroup) { repEdit = null; ungroupRepeated(b.dataset.repungroup); return; }
+    else if (b.dataset.repmove) { const [i, d] = b.dataset.repmove.split(',').map(Number), j = i + d, a = repEdit.cols; if (j >= 0 && j < a.length) [a[i], a[j]] = [a[j], a[i]]; }
+    else if (b.dataset.repdel !== undefined) repEdit.cols.splice(+b.dataset.repdel, 1);
+    else if (b.dataset.repact === 'cancel') repEdit = null;
+    else if (b.dataset.repact === 'save') { saveRepeated(); return; }
+    renderRepeated();
+  });
+  $('#repCard').addEventListener('change', e => {
+    if (e.target.id !== 'repAdd' || !e.target.value) return;
+    readRepEditor();
+    const col = e.target.value, toks = tokens(col), tp = toks.find(t => TP_RE.test(t));
+    repEdit.cols.push({ col, tp: tp || ('T' + (repEdit.cols.length + 1)), label: tp ? tpLabel(tp) : 'T' + (repEdit.cols.length + 1) });
+    renderRepeated();
+  });
+
   $('#groupsTbl').addEventListener('change', e => { if (e.target.dataset.ginc !== undefined) { readUiIntoCfg(); state.cfg.consort = null; renderVariables(); } });
 
   /* ---------- step 3: timepoints & options ---------- */
@@ -23815,8 +24073,51 @@ if (typeof module !== 'undefined') module.exports = Examples;
     for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
     $('#customColors').innerHTML = o.customColors.map((col, i) => `<input type="color" data-ccol="${i}" value="${esc(col)}" title="Colour ${i + 1}">`).join('');
     $('#customBox').style.display = o.palette === 'custom' ? '' : 'none';
+    renderFigureTable();
     renderAdvanced();
   }
+  /* ---------- figures by variable + live preview ---------- */
+  const CHART_TYPES = {
+    repeated: [['auto', 'Auto (chart style)'], ['bar', 'Bars'], ['line', 'Lines over time'], ['box', 'Box plots'], ['dot', 'Box plots + every patient'], ['none', 'No figure']],
+    numeric: [['auto', 'Auto'], ['bar', 'Bars (mean ± error / median, IQR)'], ['box', 'Box plot'], ['dot', 'Dot plot (every patient)'], ['hist', 'Histogram'], ['none', 'No figure']],
+    categorical: [['auto', 'Auto (bars)'], ['stacked', '100% stacked bar'], ['pie', 'Donut / pie'], ['none', 'No figure']]
+  };
+  const chartKind = v => v.kind === 'repeated' ? 'repeated' : v.type;
+  function renderFigureTable() {
+    const vars = state.cfg.variables.filter(v => v.include);
+    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
+      <td><b>${esc(v.label)}</b><div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
+      <td><select data-fv="${v.id}" data-fk="chart">${CHART_TYPES[chartKind(v)].map(([k, l]) => `<option value="${k}" ${(v.chart || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+      <td><input type="text" data-fv="${v.id}" data-fk="caption" value="${esc(v.caption || '')}" placeholder="${esc(v.label)} of the studied groups"></td>
+      <td><button class="btn ghost small" data-fprev="${v.id}" type="button" title="Preview this figure">👁</button></td></tr>`).join('')}</tbody>`;
+    const cur = $('#figPrevVar').value;
+    $('#figPrevVar').innerHTML = vars.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
+    if (vars.some(v => v.id === cur)) $('#figPrevVar').value = cur;
+    schedulePreview();
+  }
+  let prevTimer = null;
+  const schedulePreview = () => { clearTimeout(prevTimer); prevTimer = setTimeout(drawFigurePreview, 200); };
+  // runs the analysis for the chosen variable only, with the options as they stand on the page
+  function drawFigurePreview() {
+    if (!$('#p3').classList.contains('active')) return;
+    readUiIntoCfg();
+    const cfg = state.cfg, v = cfg.variables.find(x => x.id === $('#figPrevVar').value), cv = $('#figPrevCanvas');
+    if (!v) { cv.width = cv.height = 0; $('#figPrevNote').textContent = 'No variable selected.'; return; }
+    try {
+      const res = Analysis.run(state.data, { ...cfg, variables: [{ ...v, include: true }], advanced: [], options: { ...cfg.options, correlation: false, figures: 'all' } });
+      const f = res.sections.flatMap(x => x.figures)[0];
+      if (!f) { cv.width = cv.height = 0; $('#figPrevNote').textContent = 'No figure for this variable (chart type “No figure”).'; return; }
+      renderFigure(f, cfg.options);
+      const img = new Image();
+      img.onload = () => { cv.width = img.width; cv.height = img.height; cv.getContext('2d').drawImage(img, 0, 0); };
+      img.src = f.url;
+      $('#figPrevNote').textContent = `${Report.figLabel(1, cfg.options.captionStyle)} ${f.caption}`;
+    } catch (err) { console.error(err); $('#figPrevNote').textContent = 'Preview failed: ' + err.message; }
+  }
+  $('#p3').addEventListener('input', schedulePreview);
+  $('#p3').addEventListener('change', schedulePreview);
+  $('#figTbl').addEventListener('click', e => { const b = e.target.closest('[data-fprev]'); if (b) { $('#figPrevVar').value = b.dataset.fprev; schedulePreview(); } });
+
   $('#tpTbl').addEventListener('click', e => {
     const b = e.target.closest('[data-tpmove]'); if (!b) return;
     readUiIntoCfg();
@@ -24061,6 +24362,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
         o[k] = box ? el.checked : typeof DEFAULT_OPTIONS[k] === 'number' ? +el.value : el.value;
       }
       document.querySelectorAll('[data-ccol]').forEach(el => { o.customColors[+el.dataset.ccol] = el.value; });
+      document.querySelectorAll('#figTbl [data-fv]').forEach(el => { const v = cfg.variables.find(x => x.id === el.dataset.fv); if (v) v[el.dataset.fk] = el.value.trim(); });
       readAdvanced();
     }
     if ($('#p4').classList.contains('active')) readConsort();
@@ -24081,8 +24383,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
         syncAssessed(ensureConsort());
         const cfg = state.cfg;
         const res = Analysis.run(state.data, cfg);
-        const pal = chartPalette(cfg.options), sty = chartStyle(cfg.options);
-        res.sections.forEach(s => s.figures.forEach(f => { const c = Charts.draw(f.spec, pal, sty); f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height; }));
+        res.sections.forEach(s => s.figures.forEach(f => { f.key = f.caption; renderFigure(f, cfg.options); }));
+        const pal = chartPalette(cfg.options);
         const gl = res.groups;
         if (cfg.consort.enabled) {
           const cv = Charts.consort(cfg.consort, gl, pal);
@@ -24095,8 +24397,15 @@ if (typeof module !== 'undefined') module.exports = Examples;
     }, 30);
   }
 
-  // export selection: keys of items left out of the Word file (kept across re-runs and in saved setups)
-  const exKey = { methods: () => 'methods', consort: () => 'consort', table: s => 't:' + s.title, figure: f => 'f:' + f.caption };
+  // draws a figure's image; the caption is printed on the chart when "chart titles" is on
+  function renderFigure(f, o) {
+    const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, chartPalette(o), chartStyle(o));
+    f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height;
+  }
+
+  // export selection: keys of items left out of the Word file (kept across re-runs and in saved setups);
+  // a figure keeps its original caption as key, so editing the caption keeps the choice
+  const exKey = { methods: () => 'methods', consort: () => 'consort', table: s => 't:' + s.title, figure: f => 'f:' + (f.key || f.caption) };
   const isOut = key => !!state.cfg.exportExclude[key];
   const exBox = (key, label) => `<label class="check exp"><input type="checkbox" data-export="${esc(key)}" ${isOut(key) ? '' : 'checked'}><span>${label}</span></label>`;
   // pull the editable text back into the result before re-rendering or exporting
@@ -24105,6 +24414,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     r.methods = $('#edMethods').value;
     if ($('#edIntro')) r.intro = $('#edIntro').value;
     document.querySelectorAll('[data-comment]').forEach(t => { r.sections[+t.dataset.comment].comment = t.value; });
+    document.querySelectorAll('[data-fcap]').forEach(t => { const [si, fi] = t.dataset.fcap.split(':').map(Number); r.sections[si].figures[fi].caption = t.value; });
   }
   function renderReport() {
     const r = state.result;
@@ -24117,20 +24427,36 @@ if (typeof module !== 'undefined') module.exports = Examples;
     html += `<div class="report-sec"><h3>Results</h3>`;
     if (r.consort) {
       const out = isOut('consort');
-      html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${out ? 'Not exported' : `Figure ${fig++}`}: ${esc(r.flowCaption)}</div></div>`;
+      html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${out ? 'Not exported:' : Report.figLabel(fig++, state.cfg.options.captionStyle)} ${esc(r.flowCaption)}</div></div>`;
     }
     html += `</div>`;
+    // figure numbers follow the Word layout: after each table, or all at the end (optionally grouped by type)
+    const o = state.cfg.options, lab = n => Report.figLabel(n, o.captionStyle);
+    const atEnd = Report.arrangeFigures(r.sections, o.figPlacement);
+    const num = new Map();
+    (atEnd || r.sections.flatMap(s => s.figures)).forEach(f => { if (!isOut(exKey.figure(f))) num.set(f, fig++); });
+    const figHtml = f => {
+      const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f), fOut = isOut(fk);
+      return `<figure class="${fOut ? 'off' : ''}"><img src="${f.url}" alt=""><figcaption>${fOut ? 'Not exported:' : lab(num.get(f))} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption"></figcaption>${exBox(fk, 'Figure')}</figure>`;
+    };
     r.sections.forEach((s, i) => {
       const tk = exKey.table(s), tOut = isOut(tk);
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported' : `Table ${tab++}`}: ${esc(s.title)}</div>${exBox(tk, 'Table')}</div><div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
         <div class="foot">${esc(s.footnote)}</div>
         <label class="f">Comment (editable — exported with the table)</label><textarea data-comment="${i}">${esc(s.comment)}</textarea></div>
-        <div class="figs">${s.figures.map(f => { const fk = exKey.figure(f), fOut = isOut(fk);
-          return `<figure class="${fOut ? 'off' : ''}"><img src="${f.url}" alt=""><figcaption>${fOut ? 'Not exported' : `Figure ${fig++}`}: ${esc(f.caption)}</figcaption>${exBox(fk, 'Figure')}</figure>`; }).join('')}</div></div>`;
+        ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
     });
+    if (atEnd && atEnd.length) html += `<div class="report-sec"><h3>Figures</h3><div class="figs">${atEnd.map(figHtml).join('')}</div></div>`;
     $('#report').innerHTML = html;
   }
   $('#report').addEventListener('change', e => {
+    // an edited caption redraws its chart when the caption is printed on the chart
+    if (e.target.dataset.fcap !== undefined) {
+      syncEdits();
+      const [si, fi] = e.target.dataset.fcap.split(':').map(Number), f = state.result.sections[si].figures[fi];
+      if (state.cfg.options.chartTitle) { renderFigure(f, state.cfg.options); e.target.closest('figure').querySelector('img').src = f.url; }
+      return;
+    }
     const key = e.target.dataset.export; if (key === undefined) return;
     syncEdits();
     if (e.target.checked) delete state.cfg.exportExclude[key]; else state.cfg.exportExclude[key] = true;
@@ -24161,7 +24487,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       const r = exportModel(state.result);
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = state.cfg.options;
-      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow });
+      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '') + ' - Statistical report.docx';
