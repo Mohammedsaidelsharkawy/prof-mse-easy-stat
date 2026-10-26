@@ -109,12 +109,39 @@ const Analysis = (() => {
   }
 
   /* ---------- within-group repeated measures ---------- */
-  function analyzeWithin(matrixByGroup, param, used) {
+  // Two timepoints → paired t / Wilcoxon; more → RM ANOVA / Friedman with Bonferroni post hoc vs the first timepoint
+  function analyzeWithin(matrixByGroup, param, used, alpha) {
     return matrixByGroup.map(Y => {
       if (Y.length < 3) return { p: NaN };
-      if (param) { used.add('rmanova'); return { ...S.rmAnova(Y), test: 'RM ANOVA' }; }
-      used.add('friedman'); return { ...S.friedman(Y), test: 'Friedman' };
+      const col = j => Y.map(r => r[j]), T = Y[0].length;
+      if (T === 2) {
+        if (param) { used.add('pairedt'); return { ...S.pairedT(col(1), col(0)), test: 'Paired t-test' }; }
+        used.add('wilcoxon'); return { ...S.wilcoxonSigned(col(1), col(0)), test: 'Wilcoxon' };
+      }
+      const omnibus = param ? { ...S.rmAnova(Y), test: 'RM ANOVA' } : { ...S.friedman(Y), test: 'Friedman' };
+      used.add(param ? 'rmanova' : 'friedman');
+      if (omnibus.p <= alpha) {
+        used.add(param ? 'postPairedt' : 'postWilcoxon');
+        omnibus.post = Array.from({ length: T - 1 }, (_, t) => {
+          const raw = param ? S.pairedT(col(t + 1), col(0)).p : S.wilcoxonSigned(col(t + 1), col(0)).p;
+          return { t: t + 1, p: S.bonferroni(raw, T - 1) };
+        });
+      }
+      return omnibus;
     });
+  }
+
+  /* ---------- correlation among numeric variables (all patients pooled) ---------- */
+  function analyzeCorrelation(items, alpha) {
+    const pairsOut = [];
+    for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+      const x = [], y = [];
+      items[i].vals.forEach((v, r) => { if (isFinite(v) && isFinite(items[j].vals[r])) { x.push(v); y.push(items[j].vals[r]); } });
+      const normal = [x, y].every(a => { const sw = S.shapiroWilk(a); return !sw || sw.p > 0.05; });
+      const res = normal ? S.pearson(x, y) : S.spearman(x, y);
+      pairsOut.push({ i, j, ...res, method: normal ? 'pearson' : 'spearman', sig: res.p <= alpha });
+    }
+    return pairsOut;
   }
 
   /* ---------- comment helpers ---------- */
@@ -142,7 +169,7 @@ const Analysis = (() => {
     for (const [lo, his] of byLow) {
       const names = his.map(h => gl[h.hi]);
       const target = names.length > 1 ? `(${listJoin(names)})` : names[0];
-      parts.push(`significantly lower in ${gl[lo]} than ${target} (P value ${his.length > 1 ? '= ' + his.map(h => pTxt(h.p).replace(/^= /, '')).join(' and ') + ' respectively' : '{P}'})`);
+      parts.push(`significantly lower in ${gl[lo]} than ${target} (P value ${his.length > 1 ? pList(his.map(h => h.p)) : '{P}'})`);
       if (his.length === 1) ps.push(his[0].p);
     }
     let key = parts.join(' and was ');
@@ -165,18 +192,22 @@ const Analysis = (() => {
   function fillP(key, ps) {
     if (key.includes('although')) return key.replace(', although', ` (P value ${pTxt(ps[0])}), although`);
     const n = (key.match(/\{P\}/g) || []).length;
-    if (n === 1 && ps.length > 1) return key.replace('{P}', '= ' + ps.map(p => pTxt(p).replace(/^= /, '')).join(' and ') + ' respectively');
+    if (n === 1 && ps.length > 1) return key.replace('{P}', pList(ps));
     let i = 0;
     return key.replace(/\{P\}/g, () => pTxt(ps[i++]));
   }
 
-  function repeatedComment(label, tps, results, gl, alpha) {
+  function repeatedComment(label, tps, results, gl, alpha, detailed) {
     const k = gl.length, sentences = [];
-    const nsTps = tps.filter((_, t) => !(results[t].p <= alpha));
+    const nsIdx = tps.map((_, t) => t).filter(t => !(results[t].p <= alpha));
+    const nsTps = nsIdx.map(t => tps[t]);
     const sigIdx = tps.map((_, t) => t).filter(t => results[t].p <= alpha);
-    const tpList = list => list.length === 1 ? list[0] : `(${listJoin(list)})`;
-    if (!sigIdx.length) return `${cap(label)} at all measurements was insignificantly different ${amongTxt(k)}.`;
-    if (nsTps.length) sentences.push(`${cap(label)} at ${tpList(nsTps)} was insignificantly different ${amongTxt(k)}.`);
+    const tpList = tpGroup;
+    // detailed style quotes the P values of the insignificant timepoints too
+    const nsPs = nsIdx.map(t => results[t].p).filter(isFinite);
+    const nsP = detailed && nsPs.length ? ` (P value ${pList(nsPs)})` : '';
+    if (!sigIdx.length) return `${cap(label)} at all measurements was insignificantly different ${amongTxt(k)}${nsP}.`;
+    if (nsTps.length) sentences.push(`${cap(label)} at ${tpList(nsTps)} was insignificantly different ${amongTxt(k)}${nsP}.`);
     // merge consecutive significant timepoints with an identical description
     const descs = sigIdx.map(t => ({ t, ...pairDescription(results[t], gl, alpha) }));
     for (let a = 0; a < descs.length;) {
@@ -203,18 +234,41 @@ const Analysis = (() => {
       if (!buckets.has(verb)) buckets.set(verb, []);
       buckets.get(verb).push({ g: gl[g], p: w.p });
     });
-    const parts = [...buckets].map(([verb, items]) => {
-      const ps = items.map(x => pTxt(x.p).replace(/^= /, ''));
-      const pPart = items.length === 1 ? pTxt(items[0].p)
-        : items.every(x => x.p < 0.001) ? '< 0.001 in each' : '= ' + listJoin(ps) + ' respectively';
-      return `${verb} in ${listJoin(items.map(x => x.g))} (P value ${pPart})`;
+    const parts = [...buckets].map(([verb, items]) => `${verb} in ${listJoin(items.map(x => x.g))} (P value ${pList(items.map(x => x.p))})`);
+    if (!parts.length) return '';
+    const sentences = [`Within each group, ${lowerFirst(label)} ${parts.join(', while it ')}.`];
+    // post hoc versus the first timepoint, grouped by direction
+    within.forEach((w, g) => {
+      if (!w.post) return;
+      const base = center({ desc: results[0].desc[g] }, param);
+      const dirs = { lower: [], higher: [] }, ns = [];
+      w.post.forEach(q => {
+        if (q.p > alpha) { ns.push(tps[q.t]); return; }
+        dirs[center({ desc: results[q.t].desc[g] }, param) < base ? 'lower' : 'higher'].push(q);
+      });
+      const bits = Object.entries(dirs).filter(([, qs]) => qs.length).map(([dir, qs]) =>
+        `significantly ${dir} at ${tpGroup(qs.map(q => tps[q.t]))} than at ${tps[0]} (P value ${pList(qs.map(q => q.p))})`);
+      if (!bits.length) return;
+      let s = `In ${gl[g]}, it was ${bits.join(' and ')}`;
+      if (ns.length) s += `, with no significant difference at ${tpGroup(ns)}`;
+      sentences.push(s + '.');
     });
-    return parts.length ? `Within each group, ${lowerFirst(label)} ${parts.join(', while it ')}.` : '';
+    return sentences.join(' ');
+  }
+  const tpGroup = list => list.length === 1 ? list[0] : `(${listJoin(list)})`;
+  // "P value = 0.01" / "= 0.01 and 0.02 respectively" / "< 0.001 in each"
+  function pList(ps) {
+    if (ps.length === 1) return pTxt(ps[0]);
+    if (ps.every(p => p < 0.001)) return '< 0.001 in each';
+    const vals = listJoin(ps.map(p => pTxt(p).replace(/^= /, '')));
+    return (ps[0] < 0.001 ? '' : '= ') + vals + ' respectively';
   }
 
   /* ---------- main ---------- */
   function run(data, cfg) {
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
+    const detailed = opts.commentStyle === 'detailed';
+    const wording = s => opts.notSig ? s.replace(/insignificant(ly)?/g, 'not significant$1') : s;
     const used = new Set();
     const groups = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false);
     const gl = groups.map(g => cfg.groupLabels[g] || g);
@@ -300,28 +354,33 @@ const Analysis = (() => {
           if (opts.effect) cells.push({ t: effectLines(r), small: true });
           return cells;
         });
-        let within = null;
+        let within = null, withinNote = '';
         if (opts.within && v.cols.length >= 2) {
           const mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
-          within = analyzeWithin(mats, param, used);
-          const cells = [{ t: ['P (within group)'], b: true }, ...within.map(w => ({ t: [fmtP(w.p, alpha)] }))];
-          cells.push({ t: [''], span: head.length - 1 - k });
-          trows.push(cells);
+          within = analyzeWithin(mats, param, used, alpha);
+          const filler = () => ({ t: [''], span: head.length - 1 - k });
+          trows.push([{ t: ['P (within group)'], b: true }, ...within.map(w => ({ t: [fmtP(w.p, alpha)] })), filler()]);
+          const hasPost = within.some(w => w.post);
+          if (hasPost) for (let t = 1; t < tps.length; t++)
+            trows.push([{ t: [`P (${tps[t]} vs ${tps[0]})`], b: true }, ...within.map(w => ({ t: [w.post ? fmtP(w.post[t - 1].p, alpha) : '---'] })), filler()]);
+          withinNote = `P (within group): change over time within each group by ${tps.length === 2 ? (param ? 'paired t-test' : 'Wilcoxon signed-rank test') : (param ? 'repeated-measures ANOVA' : 'Friedman test')}`;
+          if (hasPost) withinNote += `, P (… vs ${tps[0]}): Bonferroni-adjusted ${param ? 'paired t-test' : 'Wilcoxon signed-rank test'} versus ${tps[0]}`;
         }
-        let comment = repeatedComment(plain(v.label), tps, results, gl, alpha);
+        let comment = repeatedComment(plain(v.label), tps, results, gl, alpha, detailed);
         if (within) comment += ' ' + withinComment(plain(v.label), tps, within, results, gl, alpha, param);
         const sigAny = anySig || (within && within.some(w => w.p <= alpha));
+        const marks = opts.sigMarks ? { sigCat: results.map(r => r.p), alpha } : {};
         sections.push({
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
-          footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost }, v.note),
-          comment,
+          footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost }, [withinNote, v.note].filter(Boolean).join(', ')),
+          comment: wording(comment),
           figures: [{
             caption: `${v.label} of the studied groups`,
             spec: param && opts.chartStyle !== 'box' || opts.chartStyle === 'bar' || opts.chartStyle === 'line'
-              ? { type: opts.chartStyle === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time',
+              ? { type: opts.chartStyle === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.label, xLabel: 'Time', ...marks,
                   series: gl.map((g, i) => ({ name: g, values: results.map(r => param ? r.desc[i].mean : r.desc[i].median),
                     err: results.map(r => param ? r.desc[i].sd : null), lo: param ? null : results.map(r => r.desc[i].q1), hi: param ? null : results.map(r => r.desc[i].q3) })) }
-              : { type: 'box', categories: tps, yLabel: v.label, series: gl.map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
+              : { type: 'box', categories: tps, yLabel: v.label, points: opts.points, ...marks, series: gl.map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
           }],
           meta: { param, results, within, tps }
         });
@@ -376,11 +435,26 @@ const Analysis = (() => {
           }
         }
         // comment
-        const nsLabels = res.filter(r => !((r.num || r.cat).p <= alpha)).map(r => lowerFirst(plain(r.v.label)));
+        // detailed style: "Age (Group A: 45.2 ± 8.1, Group B: 44.9 ± 7.6)" with P values on every sentence
+        const values = r => {
+          if (r.num) return r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? `${fmt(dd.mean, d)} ± ${fmt(dd.sd, d)}` : `${fmt(dd.median, d)} (${fmt(dd.q1, d)} - ${fmt(dd.q3, d)})`}`).join(', ');
+          if (isCompact(r)) return r.cat.pct[0].map((p, i) => `${gl[i]}: ${fmt(p, 1)}%`).join(', ');
+          return '';
+        };
+        const withValues = (r, lab) => detailed && values(r) ? `${lab} (${values(r)})` : lab;
+        const nsRes = res.filter(r => !((r.num || r.cat).p <= alpha));
         const sent = [];
-        if (nsLabels.length) sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`);
+        if (detailed) nsRes.forEach(r => {
+          const p = (r.num || r.cat).p;
+          sent.push(`${cap(withValues(r, plain(r.v.label)))} was insignificantly different ${amongTxt(k)}${isFinite(p) ? ` (P value ${pTxt(p)})` : ''}.`);
+        });
+        else if (nsRes.length) {
+          const nsLabels = nsRes.map(r => lowerFirst(plain(r.v.label)));
+          sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`);
+        }
         for (const r of res.filter(r => (r.num || r.cat).p <= alpha)) {
-          const lab = plain(r.v.label);
+          // compact categorical sentences already quote their percentages
+          const lab = isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label));
           if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps)}.`); }
           else {
             const c = r.cat, row = 0;
@@ -395,30 +469,89 @@ const Analysis = (() => {
         }
         const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: opts.effect, rr: hasRR, posthoc: showPost };
         const notes = b.vars.map(v => v.note).filter(Boolean).join(', ');
+        // significance brackets between groups: pairwise P values once the overall test is significant
+        const brackets = x => {
+          if (!opts.sigMarks || !(x.p <= alpha)) return {};
+          if (k === 2) return { sig: [{ i: 0, j: 1, p: x.p }], alpha };
+          return x.pairs ? { sig: x.pairs.filter(q => q.p <= alpha).map(q => ({ i: q.i, j: q.j, p: q.p })), alpha } : {};
+        };
         const figures = res.map(r => {
           if (r.num) {
             return {
               caption: `${r.v.label} of the studied groups`,
               spec: r.num.param && opts.chartStyle !== 'box'
-                ? { type: 'bar', perGroup: true, categories: gl, yLabel: r.v.label, series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(x => x.sd) }] }
-                : { type: 'box', perGroup: true, categories: gl, yLabel: r.v.label, series: [{ name: r.v.label, data: r.gv }] }
+                ? { type: 'bar', perGroup: true, categories: gl, yLabel: r.v.label, ...brackets(r.num), series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(x => x.sd) }] }
+                : { type: 'box', perGroup: true, categories: gl, yLabel: r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] }
             };
           }
           const c = r.cat;
           if (isCompact(r)) return {
             caption: `${r.v.label} of the studied groups`,
-            spec: { type: 'bar', perGroup: true, percent: true, labels: true, categories: gl, yLabel: '% of the studied patients', series: [{ name: r.levels[0], values: c.pct[0] }] }
+            spec: { type: 'bar', perGroup: true, percent: true, labels: true, categories: gl, yLabel: '% of the studied patients', ...brackets(c), series: [{ name: r.levels[0], values: c.pct[0] }] }
           };
           return {
             caption: `${r.v.label} of the studied groups`,
             spec: { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
         });
-        sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: sent.join(' '), figures, twoCol, meta: { res } });
+        sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res } });
+      }
+    }
+
+    if (opts.correlation) {
+      const sec = correlationSection(vars, rows, cfg, alpha, d);
+      if (sec) {
+        if (sec.meta.pairs.some(q => q.method === 'pearson')) used.add('pearson');
+        if (sec.meta.pairs.some(q => q.method === 'spearman')) used.add('spearman');
+        sec.comment = wording(sec.comment);
+        sections.push(sec);
       }
     }
 
     return { sections, used, groups: gl, gN, k, methods: methodsText(used, k, cfg), intro: introText(cfg, gl, gN) };
+  }
+
+  // Correlation table across all analysed patients: single numeric variables and each repeated outcome at its last timepoint
+  const MAX_SCATTER = 4;
+  function correlationSection(vars, rows, cfg, alpha, d) {
+    const items = [];
+    for (const v of vars) {
+      if (v.type !== 'numeric') continue;
+      const c = v.kind === 'repeated' ? v.cols[v.cols.length - 1] : v.cols[0];
+      const label = v.kind === 'repeated' ? `${plain(v.label)} at ${cfg.tpLabels[c.tp] || c.tp}` : v.label;
+      items.push({ label, vals: rows.map(r => toNum(r[c.col])) });
+    }
+    if (items.length < 2) return null;
+    const pr = analyzeCorrelation(items, alpha);
+    const m = items.length, get = (i, j) => pr.find(q => (q.i === i && q.j === j) || (q.i === j && q.j === i));
+    const coef = q => `${q.method === 'pearson' ? 'r' : 'rs'} = ${fmt(q.r, 2)}`;
+    let head, trows;
+    if (m <= 6) {
+      // lower-triangular matrix
+      head = ['', ...items.slice(0, -1).map(it => it.label)];
+      trows = items.slice(1).map((it, ii) => [{ t: [it.label], b: true },
+        ...items.slice(0, -1).map((_, j) => j <= ii ? (q => ({ t: [coef(q), `P ${q.p < 0.001 ? '' : '= '}${fmtP(q.p, alpha)}`], small: true }))(get(ii + 1, j)) : { t: [''] })]);
+    } else {
+      head = ['Variable', 'Variable', 'Coefficient', 'P value'];
+      trows = pr.map(q => [{ t: [items[q.i].label], b: true }, { t: [items[q.j].label] }, { t: [coef(q)] }, { t: [fmtP(q.p, alpha)] }]);
+    }
+    const strength = r => Math.abs(r) < 0.3 ? 'weak' : Math.abs(r) < 0.7 ? 'moderate' : 'strong';
+    const sig = pr.filter(q => q.sig);
+    const sent = sig.map(q => `There was a significant ${strength(q.r)} ${q.r > 0 ? 'positive' : 'negative'} correlation between ${lowerFirst(plain(items[q.i].label))} and ${lowerFirst(plain(items[q.j].label))} (${coef(q)}, P value ${pTxt(q.p)}).`);
+    if (!sig.length) sent.push('No significant correlations were found among the studied variables.');
+    else if (sig.length < pr.length) sent.push('The remaining correlations were insignificant.');
+    const f = [];
+    if (sig.length) f.push(`*: Significant as P value ≤ ${alpha}`);
+    if (pr.some(q => q.method === 'pearson')) f.push('r: Pearson correlation coefficient');
+    if (pr.some(q => q.method === 'spearman')) f.push("rs: Spearman's rank correlation coefficient");
+    const figures = [...sig].sort((a, b) => Math.abs(b.r) - Math.abs(a.r)).slice(0, MAX_SCATTER).map(q => {
+      const xs = [], ys = [];
+      items[q.i].vals.forEach((v, r) => { if (isFinite(v) && isFinite(items[q.j].vals[r])) { xs.push(v); ys.push(items[q.j].vals[r]); } });
+      return { caption: `Correlation between ${lowerFirst(plain(items[q.i].label))} and ${lowerFirst(plain(items[q.j].label))}`,
+        spec: { type: 'scatter', x: xs, y: ys, xLabel: items[q.i].label, yLabel: items[q.j].label, note: `${coef(q)}, P ${pTxt(q.p)}` } };
+    });
+    return { kind: 'correlation', title: `Correlation between the studied variables in all patients (n=${rows.length})`, head, rows: trows,
+      footnote: f.join(', ') + '.', comment: sent.join(' '), figures, meta: { pairs: pr, items: items.map(it => it.label) } };
   }
 
   function isCompact(r) {
@@ -449,11 +582,21 @@ const Analysis = (() => {
       if (used.has('cat')) e.push('relative risks (RR)');
       if (e.length) s.push(`Effect estimates were reported as ${listJoin(e)} with 95% confidence intervals (CI).`);
     }
-    if (used.has('rmanova') || used.has('friedman')) {
-      const t = [];
-      if (used.has('rmanova')) t.push('repeated-measures ANOVA with Greenhouse-Geisser correction for parametric data');
-      if (used.has('friedman')) t.push('Friedman test for non-parametric data');
-      s.push(`Changes over time within each group were assessed using ${listJoin(t)}.`);
+    const within = [];
+    if (used.has('pairedt')) within.push('paired t-test for parametric data with two measurements');
+    if (used.has('wilcoxon')) within.push('Wilcoxon signed-rank test for non-parametric data with two measurements');
+    if (used.has('rmanova')) within.push('repeated-measures ANOVA with Greenhouse-Geisser correction for parametric data');
+    if (used.has('friedman')) within.push('Friedman test for non-parametric data');
+    if (within.length) s.push(`Changes over time within each group were assessed using ${listJoin(within)}.`);
+    const post = [];
+    if (used.has('postPairedt')) post.push('paired t-tests');
+    if (used.has('postWilcoxon')) post.push('Wilcoxon signed-rank tests');
+    if (post.length) s.push(`When significant, each measurement was compared with the first one using ${listJoin(post)} with Bonferroni correction.`);
+    if (used.has('pearson') || used.has('spearman')) {
+      const c = [];
+      if (used.has('pearson')) c.push("Pearson's correlation coefficient (r) for normally distributed variables");
+      if (used.has('spearman')) c.push(`Spearman's rank correlation coefficient (rs)${c.length ? ' otherwise' : ''}`);
+      s.push(`Correlation between quantitative variables was assessed using ${c.join(' or ')}.`);
     }
     s.push(`A two tailed P value ≤ ${o.alpha} was considered statistically significant.`);
     return s.join(' ');

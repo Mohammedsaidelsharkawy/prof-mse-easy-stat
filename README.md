@@ -18,10 +18,18 @@ An offline web app that turns an Excel mastersheet into a formatted Word statist
 
 - Normality: Shapiro–Wilk
 - Between groups: independent t-test, Mann–Whitney U, one-way ANOVA, Kruskal–Wallis, Chi-square, Fisher's exact
-- Within subjects: repeated-measures ANOVA and Friedman test, with post-hoc comparisons
+- Within subjects: paired t-test and Wilcoxon signed-rank (two timepoints); repeated-measures ANOVA (Greenhouse–Geisser) and Friedman test (three or more), with Bonferroni-adjusted post hoc comparisons against the first timepoint
+- Correlation (optional): Pearson or Spearman between numeric variables, with scatter plots of significant pairs
 - Effect sizes and 95% confidence intervals
 
-The engine's output (1,808 test values) was checked against R 4.6.1.
+The original engine's output (1,808 test values) was checked against R 4.6.1. The paired, Wilcoxon signed-rank and correlation tests were checked against SciPy 1.18 on 300 random datasets.
+
+## Report options
+
+- Comment style: concise, or detailed (quotes group values and every P value); optional "not significantly" wording
+- Word tables: grid or three-line academic (APA) style; choice of body font
+- Figures: significance brackets and stars; optional individual data points on box plots
+- Light and dark theme for the app
 
 ## Development
 

@@ -8,6 +8,17 @@
   const ID_RE = /(^id$|_id$|^id_|study.?id|patient.?(id|no|code)|^code$|^serial|^no\.?$|^s\.?n\.?$|^name$)/i;
   const GROUP_RE = /^(group|groups|arm|treatment|allocation|intervention|study.?group)$/i;
 
+  const DEFAULT_OPTIONS = {
+    decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: true,
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false
+  };
+  // option key → [element id, checkbox?]
+  const OPTION_FIELDS = {
+    decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
+    tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
+    branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true]
+  };
+
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
   /* ---------- helpers ---------- */
@@ -145,7 +156,7 @@
     repeated.forEach(r => r.cols.forEach(c => { if (!tpOrder.includes(c.tp)) tpOrder.push(c.tp); }));
     const cfg = {
       groupCol, idCols, variables, tpOrder, tpLabels: Object.fromEntries(tpOrder.map(t => [t, tpLabel(t)])),
-      options: { decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: true },
+      options: { ...DEFAULT_OPTIONS },
       study: { title: '', software: $('#software').value },
       consort: null
     };
@@ -230,8 +241,7 @@
       cfg.tpOrder.map(t => `<tr><td class="mono">${esc(t)}</td><td><input type="text" data-tp="${esc(t)}" value="${esc(cfg.tpLabels[t])}"></td></tr>`).join('')}</tbody>`
       : '<tbody><tr><td>No repeated measures detected.</td></tr></tbody>';
     const o = cfg.options;
-    $('#optDec').value = o.decimals; $('#optAlpha').value = o.alpha; $('#optChart').value = o.chartStyle; $('#optPal').value = o.palette;
-    $('#optEffect').checked = o.effect; $('#optWithin').checked = o.within; $('#optFisher').checked = o.fisher; $('#optBrand').checked = o.branding;
+    for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
   }
 
   /* ---------- step 4: CONSORT ---------- */
@@ -311,8 +321,10 @@
     document.querySelectorAll('[data-tp]').forEach(el => cfg.tpLabels[el.dataset.tp] = el.value.trim() || el.dataset.tp);
     if ($('#p3').classList.contains('active')) {
       const o = cfg.options;
-      o.decimals = +$('#optDec').value; o.alpha = +$('#optAlpha').value; o.chartStyle = $('#optChart').value; o.palette = $('#optPal').value;
-      o.effect = $('#optEffect').checked; o.within = $('#optWithin').checked; o.fisher = $('#optFisher').checked; o.branding = $('#optBrand').checked;
+      for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) {
+        const el = $('#' + id);
+        o[k] = box ? el.checked : typeof DEFAULT_OPTIONS[k] === 'number' ? +el.value : el.value;
+      }
     }
     if ($('#p4').classList.contains('active')) readConsort();
   }
@@ -320,8 +332,9 @@
   /* ---------- step 5: analysis + preview ---------- */
   function htmlTable(head, rows) {
     const h = head.map(c => typeof c === 'string' ? { t: c } : c);
-    return `<table class="rt"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${
-      rows.map(r => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const o = state.cfg.options;
+    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''}" style="font-family:'${esc(o.font)}',serif"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${
+      rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
   function runAnalysis() {
@@ -370,7 +383,8 @@
       r.methods = $('#edMethods').value;
       if ($('#edIntro')) r.intro = $('#edIntro').value;
       document.querySelectorAll('[data-comment]').forEach(t => r.sections[+t.dataset.comment].comment = t.value);
-      const blob = await Report.build(r, { title: state.cfg.study.title, branding: state.cfg.options.branding, logo: LOGO });
+      const o = state.cfg.options;
+      const blob = await Report.build(r, { title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '') + ' - Statistical report.docx';
@@ -403,6 +417,7 @@
     const h = state.data.headers;
     const ok = saved.variables.every(v => v.cols.every(c => h.includes(c.col))) && h.includes(saved.groupCol);
     if (!ok) { toast('Saved setup does not match this file’s columns — using auto-detection'); return; }
+    saved.options = { ...DEFAULT_OPTIONS, ...saved.options }; // setups saved by older versions lack the newer options
     state.cfg = saved;
     $('#studyTitle').value = saved.study.title || ''; $('#software').value = saved.study.software;
     // keep any new group values found in this file
@@ -411,6 +426,16 @@
     saved.groupOrder = saved.groupOrder.filter(g => cur.includes(g));
     state.pendingCfg = null;
   }
+
+  /* ---------- light / dark theme ---------- */
+  function setTheme(t) {
+    document.documentElement.dataset.theme = t;
+    try { localStorage.setItem('easystat-theme', t); } catch (e) { /* storage unavailable */ }
+  }
+  let savedTheme = null;
+  try { savedTheme = localStorage.getItem('easystat-theme'); } catch (e) { /* storage unavailable */ }
+  setTheme(savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  $('#btnTheme').onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 
   renderStepper();
   window.EasyStat = state; // for debugging

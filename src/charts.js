@@ -33,12 +33,19 @@ const Charts = (() => {
     return { q1, q3, med, lo: Math.min(...inside), hi: Math.max(...inside), out: a.filter(v => v < loF || v > hiF) };
   }
 
+  const stars = (p, alpha) => !(p <= alpha) ? '' : p <= 0.001 ? '***' : p <= 0.01 ? '**' : '*';
+  // deterministic jitter so the same data always gives the same picture
+  const jitter = i => ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1 - 0.5;
+
   function draw(spec, paletteName = 'brand') {
+    if (spec.type === 'scatter') return scatter(spec, paletteName);
     const pal = PALETTES[paletteName] || PALETTES.brand;
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    const brackets = (spec.sig || []).filter(q => stars(q.p, spec.alpha));
+    const catStars = (spec.sigCat || []).map(p => stars(p, spec.alpha));
 
     const perGroup = !!spec.perGroup && spec.series.length === 1;
     const legendItems = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: spec.type === 'box' && i === 2 }));
@@ -60,13 +67,22 @@ const Charts = (() => {
     if (!isFinite(lo)) { lo = 0; hi = 1; }
     if (spec.type !== 'line' && lo > 0) lo = 0;
     if (spec.type === 'line') { const pad = (hi - lo) * 0.1 || 1; lo = Math.max(lo > 0 ? 0 : -Infinity, lo - pad); }
-    const sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02));
+    let sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02));
     if (spec.percent && sc.max > 100) sc.max = 100;
-    const y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
+    let y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
+    // room above the data for stacked significance brackets / stars
+    const dataHi = hi, BR0 = spec.labels ? 70 : 34, BRSTEP = 50;
+    const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 : 0;
+    for (let top = hi, tries = 0; need && y(dataHi) - need < T && tries < 12; tries++) {
+      top += (top - sc.min) * 0.12;
+      sc = niceScale(lo, top);
+      y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
+    }
 
     // grid + y axis
     ctx.font = `600 26px ${FONT}`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) {
+      if (spec.percent && v > 100 + 1e-9) break;
       const yy = y(v);
       ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
       ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(L + pw, yy); ctx.stroke();
@@ -144,9 +160,24 @@ const Charts = (() => {
         ctx.setLineDash([]); ctx.lineWidth = 5;
         ctx.beginPath(); ctx.moveTo(cx - w / 2, y(b.med)); ctx.lineTo(cx + w / 2, y(b.med)); ctx.stroke();
         ctx.lineWidth = 2.5;
-        b.out.forEach(v => { ctx.beginPath(); ctx.arc(cx, y(v), 7, 0, Math.PI * 2); ctx.stroke(); });
+        if (spec.points) {
+          // every observation as a translucent dot (outliers included)
+          ctx.fillStyle = color; ctx.globalAlpha = 0.55;
+          arr.forEach((v, i) => { ctx.beginPath(); ctx.arc(cx + jitter(i + 1) * w * 0.7, y(v), 6, 0, Math.PI * 2); ctx.fill(); });
+          ctx.globalAlpha = 1;
+        } else b.out.forEach(v => { ctx.beginPath(); ctx.arc(cx, y(v), 7, 0, Math.PI * 2); ctx.stroke(); });
       }));
     }
+
+    // significance: brackets between groups, or stars above timepoints
+    ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = `700 30px ${FONT}`;
+    [...brackets].sort((a, b) => (a.j - a.i) - (b.j - b.i)).forEach((q, n) => {
+      const x1 = L + cw * (q.i + 0.5), x2 = L + cw * (q.j + 0.5), yy = y(dataHi) - BR0 - BRSTEP * n;
+      ctx.beginPath(); ctx.moveTo(x1, yy + 14); ctx.lineTo(x1, yy); ctx.lineTo(x2, yy); ctx.lineTo(x2, yy + 14); ctx.stroke();
+      ctx.fillText(stars(q.p, spec.alpha), (x1 + x2) / 2, yy - 2);
+    });
+    catStars.forEach((s, ci) => { if (s) ctx.fillText(s, L + cw * (ci + 0.5), y(dataHi) - 24); });
 
     // legend
     if (legendItems.length) {
@@ -162,6 +193,61 @@ const Charts = (() => {
         ctx.fillStyle = '#333'; ctx.fillText(it.name, x + 58, yy);
         x += widths[i];
       });
+    }
+    return c;
+  }
+
+  /* ---------- scatter plot with least-squares line ---------- */
+  function scatter(spec, paletteName) {
+    const pal = PALETTES[paletteName] || PALETTES.brand;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    const L = 150, R = 50, T = 60, B = 130, pw = W - L - R, ph = H - T - B;
+    const { x: xs, y: ys } = spec;
+    const pad = (a, b) => (b - a) * 0.05 || 1;
+    const xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
+    const sx = niceScale(xmin - pad(xmin, xmax), xmax + pad(xmin, xmax)), sy = niceScale(ymin - pad(ymin, ymax), ymax + pad(ymin, ymax));
+    const X = v => L + (v - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - sy.min) / (sy.max - sy.min) * ph;
+
+    ctx.font = `600 26px ${FONT}`; ctx.lineWidth = 1.5;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) {
+      ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke();
+      ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sy.step), L - 14, Y(v));
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let v = sx.min; v <= sx.max + 1e-9; v += sx.step) {
+      ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke();
+      ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sx.step), X(v), T + ph + 12);
+    }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+    ctx.font = `700 28px ${FONT}`; ctx.fillStyle = '#333';
+    ctx.fillText(spec.xLabel || '', L + pw / 2, T + ph + 60);
+    ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle';
+    ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
+
+    ctx.fillStyle = pal[0]; ctx.globalAlpha = 0.6;
+    xs.forEach((v, i) => { ctx.beginPath(); ctx.arc(X(v), Y(ys[i]), 9, 0, Math.PI * 2); ctx.fill(); });
+    ctx.globalAlpha = 1;
+    const mx = Stats.mean(xs), my = Stats.mean(ys);
+    const sxx = Stats.sum(xs.map(v => (v - mx) ** 2));
+    const slope = sxx > 0 ? Stats.sum(xs.map((v, i) => (v - mx) * (ys[i] - my))) / sxx : 0;
+    if (sxx > 0) {
+      const icpt = my - slope * mx;
+      ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+      ctx.strokeStyle = pal[1]; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(X(sx.min), Y(icpt + slope * sx.min)); ctx.lineTo(X(sx.max), Y(icpt + slope * sx.max)); ctx.stroke();
+      ctx.restore();
+    }
+    if (spec.note) {
+      ctx.font = `700 28px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      // put the label in the corner the points leave empty
+      const tw = ctx.measureText(spec.note).width, nx = slope < 0 ? L + pw - tw - 44 : L + 20;
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(nx, T + 10, tw + 24, 44);
+      ctx.fillStyle = '#222'; ctx.fillText(spec.note, nx + 12, T + 18);
     }
     return c;
   }

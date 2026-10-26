@@ -1,7 +1,8 @@
 /* Prof MSE Easy Stat — Word (.docx) export using docx.js */
 const Report = (() => {
   const D = () => window.docx;
-  const BODY_FONT = 'Times New Roman';
+  const DEFAULT_FONT = 'Times New Roman';
+  let BODY_FONT = DEFAULT_FONT; // set per build from the report options
   const PAGE_W = 9026; // A4 text width with 1" margins (DXA)
 
   const dataUrlToBytes = url => {
@@ -39,7 +40,7 @@ const Report = (() => {
   }
 
   // Generic table model → docx Table. Cells: {t:[lines], b, rs (rowSpan), span (colSpan), small}
-  function table(head, rows, brand) {
+  function table(head, rows, brand, style = 'grid') {
     const { Table, TableRow, TableCell, Paragraph, TextRun, WidthType, AlignmentType, ShadingType, VerticalAlign, BorderStyle } = D();
     const headCells = head.map(h => typeof h === 'string' ? { t: h } : h);
     const nCols = headCells.reduce((s, h) => s + (h.span || 1), 0);
@@ -55,18 +56,23 @@ const Report = (() => {
     const widths = weights.map(w => Math.floor(PAGE_W * w / tot));
     widths[widths.length - 1] += PAGE_W - widths.reduce((a, b) => a + b, 0);
 
+    const apa = style === 'apa';
     const border = { style: BorderStyle.SINGLE, size: 4, color: '8C8C8C' };
-    const borders = { top: border, bottom: border, left: border, right: border };
-    const mkCell = (cell, colIdx, isHead) => {
+    const none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+    const rule = size => ({ style: BorderStyle.SINGLE, size, color: '000000' });
+    const gridBorders = { top: border, bottom: border, left: border, right: border };
+    // three-line (academic) tables: heavy rule above and below the header, heavy rule closing the table
+    const apaBorders = (isHead, isLast) => ({ top: isHead ? rule(12) : none, bottom: isHead ? rule(8) : isLast ? rule(12) : none, left: none, right: none });
+    const mkCell = (cell, colIdx, isHead, isLast) => {
       const lines = Array.isArray(cell.t) ? cell.t : [cell.t ?? ''];
       let w = 0;
       for (let s = 0; s < (cell.span || 1); s++) w += widths[colIdx + s] || 0;
       return new TableCell({
         width: { size: w, type: WidthType.DXA },
         columnSpan: cell.span, rowSpan: cell.rs,
-        verticalAlign: VerticalAlign.CENTER, borders,
+        verticalAlign: VerticalAlign.CENTER, borders: apa ? apaBorders(isHead, isLast) : gridBorders,
         margins: { top: 40, bottom: 40, left: 50, right: 50 },
-        shading: isHead ? { type: ShadingType.CLEAR, color: 'auto', fill: brand ? 'EBDDF6' : 'D9D9D9' } : undefined,
+        shading: isHead && !apa ? { type: ShadingType.CLEAR, color: 'auto', fill: brand ? 'EBDDF6' : 'D9D9D9' } : undefined,
         children: lines.map(l => new Paragraph({
           alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240 },
           children: [new TextRun({ text: String(l), bold: isHead || cell.b, size: cell.small ? 17 : 20, font: BODY_FONT })]
@@ -83,7 +89,7 @@ const Report = (() => {
       const cells = [];
       for (const cell of r) {
         while (occupied[ri] && occupied[ri][col]) col++;
-        cells.push(mkCell(cell, col, false));
+        cells.push(mkCell(cell, col, false, ri + (cell.rs || 1) === rows.length));
         if (cell.rs > 1) for (let k = 1; k < cell.rs; k++) {
           occupied[ri + k] = occupied[ri + k] || [];
           for (let s = 0; s < (cell.span || 1); s++) occupied[ri + k][col + s] = true;
@@ -92,12 +98,14 @@ const Report = (() => {
       }
       trs.push(new TableRow({ cantSplit: true, children: cells }));
     });
-    return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: widths, rows: trs });
+    const tableBorders = apa ? { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none } : undefined;
+    return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: widths, rows: trs, borders: tableBorders });
   }
 
   async function build(model, opts) {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
+    BODY_FONT = opts.font || DEFAULT_FONT;
     const children = [];
     if (opts.title) children.push(para(opts.title, { bold: true, size: 32, align: AlignmentType.CENTER, after: 240, color: brand ? '7B2FBE' : undefined }));
     children.push(heading('Statistical Analysis', brand));
@@ -111,7 +119,7 @@ const Report = (() => {
     }
     for (const s of model.sections) {
       children.push(caption(`Table ${tab++}: ${s.title}`));
-      children.push(table(s.head, s.rows, brand));
+      children.push(table(s.head, s.rows, brand, opts.tableStyle));
       children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
       if (s.comment) children.push(para(s.comment));
       for (const f of s.figures) {

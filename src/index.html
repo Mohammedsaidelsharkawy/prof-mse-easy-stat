@@ -10,6 +10,15 @@
   --purple:#7B2FBE; --purple-d:#5E1F96; --navy:#1C1648; --lav:#F4EEFA; --lav2:#E7DAF4;
   --ink:#1F1B2E; --muted:#6B6580; --line:#E2DAEC; --bg:#FBF9FD; --card:#FFFFFF;
   --ok:#1E8E5A; --warn:#B26A00; --bad:#C0392B;
+  --field:#FFFFFF; --hover:#FCFAFE; --soft:#FDFBFF; --drop-over:#EFE4FA; --title:var(--navy); --accent:var(--purple-d);
+  --ok-bg:#E3F5EC; --warn-bg:#FFF2DC;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --lav:#2A2440; --lav2:#3A3258; --ink:#ECE8F4; --muted:#A79FBD; --line:#3A3452; --bg:#141122; --card:#1D1930;
+  --field:#252038; --hover:#241F38; --soft:#221D36; --drop-over:#30285090; --title:#D9C4F2; --accent:#C9A2EC;
+  --ok:#5CCB94; --warn:#F0B35A; --bad:#F08273; --ok-bg:#1D3A2C; --warn-bg:#3D2E14;
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -27,7 +36,7 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 main{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
 .stepper{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
 .step{flex:1;min-width:150px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);cursor:pointer;user-select:none;transition:.15s}
-.step .num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:var(--lav2);color:var(--purple-d);flex:none}
+.step .num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:var(--lav2);color:var(--accent);flex:none}
 .step .lbl{font-weight:600;font-size:14px}
 .step .sub{font-size:12px;color:var(--muted)}
 .step.active{border-color:var(--purple);box-shadow:0 0 0 3px rgba(123,47,190,.15)}
@@ -36,27 +45,27 @@ main{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
 .step.disabled{opacity:.45;pointer-events:none}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;margin-bottom:18px;box-shadow:0 1px 3px rgba(28,22,72,.04)}
-.card h2{margin:0 0 4px;font-size:19px;color:var(--navy)}
-.card h3{margin:18px 0 8px;font-size:15.5px;color:var(--navy)}
+.card h2{margin:0 0 4px;font-size:19px;color:var(--title)}
+.card h3{margin:18px 0 8px;font-size:15.5px;color:var(--title)}
 .card .hint{color:var(--muted);font-size:13.5px;margin:0 0 14px}
 .panel{display:none}.panel.active{display:block}
 
 .btn{border:0;border-radius:10px;padding:10px 18px;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;transition:.15s;display:inline-flex;align-items:center;gap:8px}
 .btn.primary{background:var(--purple);color:#fff}.btn.primary:hover{background:var(--purple-d)}
 .btn.navy{background:var(--navy);color:#fff}
-.btn.ghost{background:var(--lav);color:var(--purple-d)}.btn.ghost:hover{background:var(--lav2)}
+.btn.ghost{background:var(--lav);color:var(--accent)}.btn.ghost:hover{background:var(--lav2)}
 .btn.light{background:rgba(255,255,255,.12);color:#fff}.btn.light:hover{background:rgba(255,255,255,.22)}
 .btn.small{padding:6px 12px;font-size:13px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .nav{display:flex;justify-content:space-between;margin-top:6px}
 
 .drop{border:2.5px dashed var(--lav2);border-radius:16px;padding:40px 20px;text-align:center;background:var(--lav);cursor:pointer;transition:.15s}
-.drop:hover,.drop.over{border-color:var(--purple);background:#EFE4FA}
-.drop .big{font-size:18px;font-weight:700;color:var(--navy)}
+.drop:hover,.drop.over{border-color:var(--purple);background:var(--drop-over)}
+.drop .big{font-size:18px;font-weight:700;color:var(--title)}
 .drop svg{width:52px;height:52px;color:var(--purple)}
 
 label.f{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:4px}
-input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff;color:var(--ink);width:100%}
+input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--field);color:var(--ink);width:100%}
 input:focus,select:focus,textarea:focus{outline:2px solid rgba(123,47,190,.35);border-color:var(--purple)}
 textarea{min-height:90px;resize:vertical;line-height:1.5}
 .grid{display:grid;gap:14px}
@@ -67,35 +76,38 @@ textarea{min-height:90px;resize:vertical;line-height:1.5}
 
 .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:520px}
 table.t{border-collapse:collapse;width:100%;font-size:13.5px}
-table.t th{background:var(--lav);color:var(--navy);text-align:left;font-weight:700;padding:8px 10px;position:sticky;top:0;z-index:1;white-space:nowrap}
+table.t th{background:var(--lav);color:var(--title);text-align:left;font-weight:700;padding:8px 10px;position:sticky;top:0;z-index:1;white-space:nowrap}
 table.t td{padding:6px 10px;border-top:1px solid var(--line);vertical-align:middle}
-table.t tr:hover td{background:#FCFAFE}
+table.t tr:hover td{background:var(--hover)}
 table.t td input[type=text]{min-width:150px}
 table.t td select{min-width:120px}
 .mono{font-family:Consolas,monospace;font-size:12.5px;color:var(--muted)}
 .chip{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
-.chip.ok{background:#E3F5EC;color:var(--ok)}.chip.warn{background:#FFF2DC;color:var(--warn)}.chip.info{background:var(--lav);color:var(--purple-d)}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}.chip.warn{background:var(--warn-bg);color:var(--warn)}.chip.info{background:var(--lav);color:var(--accent)}
 
 .report-sec{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}
 .report-sec:first-child{border-top:0;margin-top:0;padding-top:0}
-.cap{font-weight:700;text-align:center;margin:10px 0;color:var(--navy)}
-table.rt{border-collapse:collapse;width:100%;font-family:"Times New Roman",serif;font-size:14px;margin:6px 0}
+.cap{font-weight:700;text-align:center;margin:10px 0;color:var(--title)}
+table.rt{border-collapse:collapse;width:100%;font-family:"Times New Roman",serif;font-size:14px;margin:6px 0;background:#fff;color:#111}
 table.rt th,table.rt td{border:1px solid #9a9a9a;padding:5px 7px;text-align:center;vertical-align:middle}
 table.rt th{background:#EBDDF6}
 table.rt td.b{font-weight:700}
 table.rt td.s{font-size:12.5px}
-.foot{font-family:"Times New Roman",serif;font-size:12.5px;color:#333;margin:4px 0 10px}
+table.rt.apa th,table.rt.apa td{border:0}
+table.rt.apa th{background:#fff;border-top:2px solid #000;border-bottom:1.5px solid #000}
+table.rt.apa tbody tr:last-child td,table.rt.apa td.last{border-bottom:2px solid #000}
+.foot{font-family:"Times New Roman",serif;font-size:12.5px;color:var(--muted);margin:4px 0 10px}
 .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:10px}
 .figs figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px}
 .figs img{width:100%;display:block}
-.figs figcaption{text-align:center;font-weight:600;font-size:13px;color:var(--navy);margin-top:4px}
+.figs figcaption{text-align:center;font-weight:600;font-size:13px;color:var(--title);margin-top:4px}
 .consort-prev{max-width:760px;margin:0 auto;display:block;width:100%;border:1px solid var(--line);border-radius:10px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .spacer{flex:1}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);z-index:50;font-weight:600;opacity:0;transition:.25s;pointer-events:none}
 .toast.show{opacity:1}
-.gcard{border:1px solid var(--line);border-radius:12px;padding:14px;background:#FDFBFF}
-.gcard h4{margin:0 0 8px;color:var(--purple-d)}
+.gcard{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--soft)}
+.gcard h4{margin:0 0 8px;color:var(--accent)}
 footer{text-align:center;color:var(--muted);font-size:12.5px;padding:20px}
 footer b{color:var(--purple)}
 .check{display:flex;gap:8px;align-items:flex-start;margin:6px 0}
@@ -103,7 +115,7 @@ footer b{color:var(--purple)}
 .legend-note{font-size:12.5px;color:var(--muted)}
 .busy{position:fixed;inset:0;background:rgba(28,22,72,.35);display:none;place-items:center;z-index:60}
 .busy.show{display:grid}
-.busy div{background:#fff;padding:22px 30px;border-radius:14px;font-weight:700;color:var(--navy)}
+.busy div{background:var(--card);padding:22px 30px;border-radius:14px;font-weight:700;color:var(--title)}
 </style>
 </head>
 <body>
@@ -115,6 +127,7 @@ footer b{color:var(--purple)}
       <p>Medical Research · Excel → publication-ready statistical report</p>
     </div>
     <div class="top-actions">
+      <button class="btn light small" id="btnTheme" title="Switch light / dark theme">◐ Theme</button>
       <button class="btn light small" id="btnSaveCfg" title="Save your column setup to reuse later">Save setup</button>
       <label class="btn light small" title="Load a saved setup">Load setup<input type="file" id="cfgFile" accept=".json" hidden></label>
     </div>
@@ -189,13 +202,33 @@ footer b{color:var(--purple)}
         <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
         <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option></select></div>
       </div>
-      <div class="grid g2" style="margin-top:12px">
+      <h3>Tests</h3>
+      <div class="grid g2">
         <div>
           <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
-          <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — repeated-measures ANOVA (Greenhouse-Geisser) or Friedman test</span></label>
+          <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — paired t / Wilcoxon for two timepoints; repeated-measures ANOVA (Greenhouse-Geisser) or Friedman for more, with Bonferroni post hoc versus the first timepoint</span></label>
         </div>
         <div>
           <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
+          <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots of significant pairs</span></label>
+        </div>
+      </div>
+      <h3>Comments</h3>
+      <div class="grid g2">
+        <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option></select></div>
+        <div><label class="check" style="margin-top:24px"><input type="checkbox" id="optNotSig"><span>Write “not significantly” instead of “insignificantly”</span></label></div>
+      </div>
+      <h3>Word report & figures</h3>
+      <div class="grid g4">
+        <div><label class="f">Table style</label><select id="optTable"><option value="grid" selected>Grid (all borders, shaded header)</option><option value="apa">Three-line academic (APA)</option></select></div>
+        <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:12px">
+        <div>
+          <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
+          <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
+        </div>
+        <div>
           <label class="check"><input type="checkbox" id="optBrand" checked><span><b>Prof MSE branding</b> in the Word header</span></label>
         </div>
       </div>

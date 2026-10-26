@@ -255,6 +255,42 @@ const Stats = (() => {
     return { chi, df: k - 1, p: C > 0 ? 1 - jStat.chisquare.cdf(chi, k - 1) : 1 };
   }
 
+  /* ---------- Paired (two timepoints) ---------- */
+  function pairedT(x, y) {
+    const d = x.map((v, i) => v - y[i]), n = d.length, md = mean(d), se = sd(d) / Math.sqrt(n), df = n - 1;
+    if (!(se > 0)) return { t: 0, df, p: md === 0 ? 1 : 0, diff: md, lo: md, hi: md };
+    const t = md / se, tc = jStat.studentt.inv(0.975, df);
+    return { t, df, p: 2 * (1 - jStat.studentt.cdf(Math.abs(t), df)), diff: md, lo: md - tc * se, hi: md + tc * se };
+  }
+
+  // Wilcoxon signed-rank, normal approximation with tie correction, zero differences dropped (as in SPSS)
+  function wilcoxonSigned(x, y) {
+    const d = x.map((v, i) => v - y[i]).filter(v => v !== 0), n = d.length;
+    if (!n) return { z: 0, p: 1, n: 0 };
+    const { ranks, ties } = rank(d.map(Math.abs));
+    const Wp = sum(ranks.filter((_, i) => d[i] > 0));
+    const mu = n * (n + 1) / 4;
+    const sigma = Math.sqrt(n * (n + 1) * (2 * n + 1) / 24 - sum(ties.map(t => t ** 3 - t)) / 48);
+    const z = sigma === 0 ? 0 : (Wp - mu) / sigma;
+    return { W: Wp, z, n, p: sigma === 0 ? 1 : 2 * jStat.normal.cdf(-Math.abs(z), 0, 1) };
+  }
+
+  /* ---------- Correlation ---------- */
+  function pearson(x, y) {
+    const n = x.length, mx = mean(x), my = mean(y);
+    let sxy = 0, sxx = 0, syy = 0;
+    for (let i = 0; i < n; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; }
+    if (!(sxx > 0 && syy > 0) || n < 3) return { r: NaN, p: NaN, n };
+    const r = Math.max(-1, Math.min(1, sxy / Math.sqrt(sxx * syy)));
+    if (Math.abs(r) === 1) return { r, p: 0, n };
+    const t = r * Math.sqrt((n - 2) / (1 - r * r));
+    return { r, n, p: 2 * (1 - jStat.studentt.cdf(Math.abs(t), n - 2)) };
+  }
+  // Spearman's rho with the t approximation used by SPSS
+  const spearman = (x, y) => pearson(rank(x).ranks, rank(y).ranks);
+
+  const bonferroni = (p, m) => Math.min(1, p * m);
+
   function rmAnova(Y) {
     const n = Y.length, k = Y[0].length, all = Y.flat(), gm = mean(all);
     const cm = Array.from({ length: k }, (_, j) => mean(Y.map(r => r[j])));
@@ -281,6 +317,7 @@ const Stats = (() => {
   return {
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
-    chiSquare, fisher2x2, relativeRisk, friedman, rmAnova
+    chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
+    pairedT, wilcoxonSigned, pearson, spearman, bonferroni
   };
 })();
