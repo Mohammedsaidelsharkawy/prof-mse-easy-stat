@@ -189,7 +189,7 @@ const Report = (() => {
       children.push(para(model.methods));
     }
     if (model.consort || model.sections.length) children.push(heading('Results', brand));
-    let fig = 1, tab = 1;
+    let fig = opts.figStart || 1, tab = opts.tabStart || 1; // numbering may continue from an earlier chapter or paper
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
       const fl = figLabel(pre + fig++, opts.captionStyle), ft = model.flowCaption || 'CONSORT flowchart of the enrolled patients';

@@ -22,7 +22,7 @@
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
     pctDecimals: 1, meanStyle: 'pm', iqrStyle: 'dash', secondRow: 'auto', pDigits: 3, pHead: 'P value', sigSym: '*', showStat: false, missingNote: false,
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
-    pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none',
+    pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none', tableNewPage: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -39,7 +39,7 @@
     pctDecimals: ['optPctDec'], meanStyle: ['optMeanStyle'], iqrStyle: ['optIqrStyle'], secondRow: ['optSecondRow'], pDigits: ['optPDigits'], pHead: ['optPHead'],
     sigSym: ['optSigSym'], showStat: ['optShowStat', true], missingNote: ['optMissingNote', true], orientation: ['optOrientation'], tableCaption: ['optTableCaption'],
     pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
-    pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote']
+    pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote'], tableNewPage: ['optTableNewPage', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -812,8 +812,13 @@
         ['manual', 'My own cut-off value']], a.cutoff)}</div>`);
       if (a.cutoff === 'manual') out.push(`<div><label class="f">Cut-off value (positive when ≥, or ≤ for lower values)</label><input type="text" data-af="manualCut" value="${esc(a.manualCut || '')}" placeholder="e.g. 2.5"></div>`);
       out.push(`<div><label class="f">Positive test direction</label>${sel('direction', [['auto', 'Automatic (from the AUC)'], ['higher', 'Higher values positive'], ['lower', 'Lower values positive']], a.direction)}</div>`);
-      out.push(`<div>${box('ci', '95% CI of sensitivity and specificity')}</div>`, `<div>${box('lr', 'Likelihood ratios (LR+, LR−)')}</div>`, `<div>${box('youdenCol', 'Youden index column')}</div>`,
-        `<div>${box('showCut', 'Mark the cut-off on the curve')}</div>`, `<div>${box('compare', 'Compare the AUCs (DeLong test)')}</div>`, `<div>${box('combined', 'Combined model of all tests (logistic)')}</div>`);
+      out.push(`<div>${box('ci', '95% CI of sensitivity and specificity')}</div>`, `<div>${box('ciAll', '95% CI of every measure (PPV, NPV, accuracy, LRs)')}</div>`, `<div>${box('lr', 'Likelihood ratios (LR+, LR−)')}</div>`, `<div>${box('youdenCol', 'Youden index column')}</div>`,
+        `<div>${box('compare', 'Compare the AUCs (DeLong test)')}</div>`, `<div>${box('combined', 'Combined model of all tests (logistic)')}</div>`);
+      // the ROC figure
+      out.push(`<div><label class="f">ROC figure</label>${sel('figure', [['one', 'All curves in one figure'], ['each', 'One figure per test'], ['none', 'No figure']], a.figure)}</div>`,
+        `<div><label class="f">Curve lines</label>${sel('figLines', [['normal', 'Normal'], ['thin', 'Thin'], ['bold', 'Bold']], a.figLines)}</div>`,
+        `<div>${box('showCut', 'Mark the cut-off on the curve')}</div>`, `<div>${box('figAucCi', 'AUC with its 95% CI in the legend')}</div>`,
+        `<div>${box('noDiagonal', 'Hide the diagonal reference line')}</div>`, `<div>${box('figFill', 'Shade the area under a single curve')}</div>`);
     }
     return out.join('');
   }
@@ -891,7 +896,16 @@
     $('#cEnabled').checked = c.enabled;
     $('#cType').value = t;
     const fsv = { ...FLOW_STYLE, ...(c.style || {}) };
-    document.querySelectorAll('#p9 [data-fs]').forEach(el => { const v = el.dataset.fs === 'colorMode' ? (fsv.color ? 'custom' : 'palette') : el.dataset.fs === 'color' ? (fsv.color || chartPalette(state.cfg.options)[0] || '#7B2FBE') : fsv[el.dataset.fs]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v); });
+    const accent0 = chartPalette(state.cfg.options)[0] || '#7B2FBE';
+    document.querySelectorAll('#p9 [data-fs]').forEach(el => {
+      const k = el.dataset.fs, v = k === 'colorMode' ? (fsv.color ? 'custom' : 'palette') : k === 'color' ? (fsv.color || accent0)
+        : k === 'pillMode' ? (fsv.pillColor ? 'custom' : 'theme') : k === 'pillColor' ? (fsv.pillColor || fsv.color || accent0) : fsv[k];
+      el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v);
+    });
+    // section labels: own text per flowchart type, the standard text as placeholder
+    $('#flLabels').style.display = t === 'simple' ? 'none' : '';
+    const defs = Charts.FLOW_LABELS[t] || [], own = (fsv.labels || {})[t] || [];
+    document.querySelectorAll('#p9 [data-fsl]').forEach(el => { el.placeholder = defs[+el.dataset.fsl] || ''; el.value = own[+el.dataset.fsl] || ''; });
     $('#cHint').textContent = FLOW_HINTS[t];
     const excluded = `<h3>Excluded (reasons)</h3>${c.excluded.map((e, i) => `<div class="row" style="margin-bottom:6px"><input type="text" data-ex="${i}" data-f="text" value="${esc(e.text)}" style="flex:3">${num(`data-ex="${i}" data-f="n" style="flex:1;max-width:100px"`, e.n)}<button class="btn ghost small" data-exdel="${i}" type="button">✕</button></div>`).join('')}
       <button class="btn ghost small" data-cact="addEx" type="button">+ Add reason</button>`;
@@ -936,13 +950,16 @@
     $('#cForm').innerHTML = html;
     drawConsortPreview();
   }
-  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false };
+  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {} };
   function readConsort() {
     const c = state.cfg && state.cfg.consort; if (!c || !$('#cForm').innerHTML) return;
     c.enabled = $('#cEnabled').checked;
     // appearance: the custom colour applies only when "Custom" is chosen
     const st = {}; document.querySelectorAll('#p9 [data-fs]').forEach(el => { st[el.dataset.fs] = el.type === 'checkbox' ? el.checked : el.value; });
-    c.style = { theme: st.theme, color: st.colorMode === 'custom' ? st.color : '', corners: st.corners, lines: st.lines, textSize: st.textSize, font: st.font, pills: st.pills, shadow: st.shadow };
+    const labels = { ...((c.style || {}).labels || {}) };
+    if (c.type !== 'simple') labels[c.type] = [...document.querySelectorAll('#p9 [data-fsl]')].map(el => el.value);
+    c.style = { theme: st.theme, color: st.colorMode === 'custom' ? st.color : '', corners: st.corners, lines: st.lines, textSize: st.textSize, font: st.font, pills: st.pills, shadow: st.shadow,
+      pillColor: st.pillMode === 'custom' ? st.pillColor : '', pillTextColor: st.pillTextColor, labels };
     const val = el => el.type === 'checkbox' ? el.checked : el.type === 'number' ? (+el.value || 0) : el.value;
     document.querySelectorAll('#cForm [data-c]').forEach(el => { c[el.dataset.c] = val(el); });
     document.querySelectorAll('#cForm [data-ex]').forEach(el => { c.excluded[+el.dataset.ex][el.dataset.f] = val(el); });
@@ -1034,7 +1051,7 @@
   }
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false };
+  const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
   // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
   const JOURNAL_STYLES = {
     none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
@@ -1070,6 +1087,7 @@
     $('#fmtPaper').style.display = r.format === 'paper' ? '' : 'none';
     $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
     $('#fmtNewPage').checked = r.newPage; $('#fmtNonSig').checked = r.nonSig;
+    $('#fmtTabStart').value = r.tabStart; $('#fmtFigStart').value = r.figStart;
     $('#fmtStyle').value = JOURNAL_STYLES[r.style] ? r.style : 'none'; $('#fmtStyleNote').textContent = (JOURNAL_STYLES[r.style] || JOURNAL_STYLES.none).note;
   }
   $('#fmtBar').addEventListener('click', e => {
@@ -1084,6 +1102,7 @@
     else if (e.target.id === 'fmtAbstract') r.abstract = e.target.checked;
     else if (e.target.id === 'fmtNewPage') { r.newPage = e.target.checked; return; }
     else if (e.target.id === 'fmtNonSig') r.nonSig = e.target.checked;
+    else if (e.target.id === 'fmtTabStart' || e.target.id === 'fmtFigStart') r[e.target.id === 'fmtTabStart' ? 'tabStart' : 'figStart'] = Math.max(1, Math.round(+e.target.value) || 1);
     // the journal style changes number formats: run the analysis again
     else if (e.target.id === 'fmtStyle') { r.style = e.target.value; syncEdits(); runAnalysis(); return; }
     else return;
@@ -1147,7 +1166,8 @@
       if (spec.points) out.push('Each dot is one patient.');
     }
     if (spec.type === 'dot') out.push(`Each dot is one patient; the line and whiskers show the ${spec.median ? 'median and IQR' : 'mean ± SD'}.`);
-    if (spec.type === 'roc') out.push(`The dashed diagonal is the line of no discrimination (AUC = 0.5).${series.some(s => s.cut) ? ' Circles mark the chosen cut-off values.' : ''}`);
+    if (spec.type === 'roc') out.push([spec.diagonal === false ? '' : 'The dashed diagonal is the line of no discrimination (AUC = 0.5).', spec.fill && series.length === 1 ? 'The shaded region is the area under the curve.' : '',
+      series.some(s => s.cut) ? 'Circles mark the chosen cut-off values.' : ''].filter(Boolean).join(' '));
     if (spec.type === 'km') out.push('Vertical ticks mark censored patients.');
     if (spec.type === 'ba') out.push('The middle line shows the mean difference (bias) and the dashed lines the 95% limits of agreement (mean ± 1.96 SD).');
     if (['bar', 'line', 'box', 'dot'].includes(spec.type)) {
@@ -1159,7 +1179,7 @@
         out.push(`${lv.join(', ')} (${spec.sig ? 'brackets: comparison between the groups' : 'difference between the groups at that time'}).`);
       }
     }
-    return out.join(' ');
+    return out.filter(Boolean).join(' ');
   }
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
   function renderFigure(f, o) {
@@ -1202,11 +1222,11 @@
     const filtered = r.sections.map(s => ({ ...s, figures: s.figures.filter(f => kept.has(f)) }));
     const order = Report.arrangeFigures(filtered, o.figPlacement) || filtered.flatMap(s => s.figures);
     const consortOn = !!r.consort && !isOut('consort');
-    const figNum = new Map(); let n = consortOn ? 2 : 1;
+    const f0 = +rep.figStart || 1, figNum = new Map(); let n = consortOn ? f0 + 1 : f0;
     order.forEach(f => figNum.set(f, pre + n++));
-    const tabNum = new Map(); let t = 1;
+    const tabNum = new Map(); let t = +rep.tabStart || 1;
     r.sections.forEach(s => { if (!isOut(exKey.table(s))) tabNum.set(s, pre + t++); });
-    return { o, rep, paper, pre, kept, order, figNum, tabNum, consortNum: pre + 1, consortOn };
+    return { o, rep, paper, pre, kept, order, figNum, tabNum, consortNum: pre + f0, consortOn };
   }
   // the paper's Results narrative: significant findings per table, each citing its table and figure
   function paperNarrative(r, plan) {
@@ -1315,7 +1335,7 @@
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
       const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
-        tableNewPage: rp.format === 'thesis' && rp.newPage, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

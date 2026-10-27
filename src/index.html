@@ -369,6 +369,7 @@ footer b{color:var(--purple)}
         <div>
           <label class="check"><input type="checkbox" id="optNHead" checked><span><b>Group sizes in the headings</b> — “A group (n=30)”</span></label>
           <label class="check"><input type="checkbox" id="optBoldSig"><span><b>Bold significant P values</b> in the tables</span></label>
+          <label class="check"><input type="checkbox" id="optTableNewPage"><span><b>Each table starts on a new page</b> in the Word file</span></label>
         </div>
       </div>
       <h3>Word document</h3>
@@ -508,8 +509,21 @@ footer b{color:var(--purple)}
           <div><label class="f">Lines</label><select data-fs="lines"><option value="thin">Thin</option><option value="normal">Normal</option><option value="bold">Bold</option></select></div>
           <div><label class="f">Text size</label><select data-fs="textSize"><option value="small">Small</option><option value="normal">Normal</option><option value="large">Large</option></select></div>
           <div><label class="f">Font</label><select data-fs="font"><option value="sans">Segoe UI</option><option value="arial">Arial</option><option value="calibri">Calibri</option><option value="times">Times New Roman</option></select></div>
-          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="pills"><span>Section labels (Enrollment, Allocation…)</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="shadow"><span>Box shadows</span></label></div>
+        </div>
+        <div id="flLabels">
+          <h3 style="margin:12px 0 4px">Section labels</h3>
+          <div class="grid g4">
+            <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="pills"><span>Show the section labels</span></label></div>
+            <div><label class="f">Label colour</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select data-fs="pillMode" style="width:auto"><option value="theme">Same as the boxes</option><option value="custom">Custom</option></select><input type="color" data-fs="pillColor" value="#7B2FBE" style="width:52px;padding:2px"></div></div>
+            <div><label class="f">Label text colour</label><input type="color" data-fs="pillTextColor" value="#ffffff" style="width:52px;padding:2px"></div>
+            <div></div>
+            <div><label class="f">Label 1</label><input type="text" data-fsl="0"></div>
+            <div><label class="f">Label 2</label><input type="text" data-fsl="1"></div>
+            <div><label class="f">Label 3</label><input type="text" data-fsl="2"></div>
+            <div><label class="f">Label 4</label><input type="text" data-fsl="3"></div>
+          </div>
+          <p class="legend-note">Leave a label empty to use the standard text shown in it.</p>
         </div>
       </details>
       <p class="hint" id="cHint"></p>
@@ -547,6 +561,8 @@ footer b{color:var(--purple)}
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtAbstract"><span>Results paragraph for the abstract</span></label>
         </div>
         <div class="row fmt-opts">
+          <div><label class="f">First table number</label><input type="number" id="fmtTabStart" min="1" value="1" style="width:90px"></div>
+          <div><label class="f">First figure number</label><input type="number" id="fmtFigStart" min="1" value="1" style="width:90px"></div>
           <div><label class="f">Journal style</label><select id="fmtStyle" style="width:auto"></select></div>
           <span class="legend-note" id="fmtStyleNote" style="margin-top:20px;flex:1"></span>
         </div>

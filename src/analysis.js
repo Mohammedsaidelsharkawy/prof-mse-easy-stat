@@ -537,18 +537,22 @@ const Analysis = (() => {
     const pct = v => `${fmt(100 * v, 1)}%`;
     const ci = (lo, hi) => `(${fmt(100 * lo, 1)}-${fmt(100 * hi, 1)})`;
     const lrTxt = v => isFinite(v) ? fmt(v, 2) : '∞';
+    // ciAll: 95% CI of every measure at the cut-off (exact for proportions, log method for likelihood ratios)
+    const ciAll = !!a.ciAll, ciSS = ciAll || !!a.ci;
+    const pc = (v, q) => ciAll && q && isFinite(q.lo) ? [pct(v), ci(q.lo, q.hi)] : [pct(v)];
+    const lrc = (v, q) => ciAll && q && isFinite(q.lo) ? [lrTxt(v), `(${fmt(q.lo, 2)}-${fmt(q.hi, 2)})`] : [lrTxt(v)];
     const head = ['', 'AUC (95% CI)', 'P value', 'Cut-off', 'Sensitivity', 'Specificity', 'PPV', 'NPV', 'Accuracy'];
     if (a.lr) head.push('LR+', 'LR−');
     if (a.youdenCol) head.push('Youden index');
-    if (a.ci) used.add('rocCI');
+    if (ciSS) used.add('rocCI');
     const cutTxt = x => x.combined ? `> ${fmt(x.r.cutoff.cut, 3)}` : `${x.r.cutoff.inclusive ? (x.r.higher ? '≥' : '≤') : (x.r.higher ? '>' : '≤')} ${fmt(x.r.cutoff.cut, d)}`;
     const trows = res.map(x => {
       const { label, r } = x;
       if (!r) return [{ t: [label], b: true }, { t: ['—'], span: head.length - 1 }];
       const c = r.cutoff, row = [{ t: [label], b: true }, { t: [`${fmt(r.auc, 3)} (${fmt(r.lo, 3)}-${fmt(r.hi, 3)})`] }, { t: [fmtP(r.p, alpha)] },
-        { t: [cutTxt(x)] }, { t: a.ci ? [pct(c.sens), ci(c.sensLo, c.sensHi)] : [pct(c.sens)] }, { t: a.ci ? [pct(c.spec), ci(c.specLo, c.specHi)] : [pct(c.spec)] },
-        { t: [pct(c.ppv)] }, { t: [pct(c.npv)] }, { t: [pct(c.accuracy)] }];
-      if (a.lr) row.push({ t: [lrTxt(c.lrPos)] }, { t: [lrTxt(c.lrNeg)] });
+        { t: [cutTxt(x)] }, { t: ciSS ? [pct(c.sens), ci(c.sensLo, c.sensHi)] : [pct(c.sens)] }, { t: ciSS ? [pct(c.spec), ci(c.specLo, c.specHi)] : [pct(c.spec)] },
+        { t: pc(c.ppv, c.dx.ppv) }, { t: pc(c.npv, c.dx.npv) }, { t: pc(c.accuracy, c.dx.accuracy) }];
+      if (a.lr) row.push({ t: lrc(c.lrPos, c.dx.lrPos) }, { t: lrc(c.lrNeg, c.dx.lrNeg) });
       if (a.youdenCol) row.push({ t: [fmt(c.youden, 3)] });
       return row;
     });
@@ -556,29 +560,36 @@ const Analysis = (() => {
     const what = eventName(cfg, a);
     const sent = res.filter(x => x.r).map(x => {
       const { label, r } = x, nm = x.combined ? 'The combined model of all test variables' : cap(plain(label));
-      const extra = (a.ci ? ` (95% CI ${fmt(100 * r.cutoff.sensLo, 1)}-${fmt(100 * r.cutoff.sensHi, 1)}%)` : '');
-      const extraS = (a.ci ? ` (95% CI ${fmt(100 * r.cutoff.specLo, 1)}-${fmt(100 * r.cutoff.specHi, 1)}%)` : '');
+      const extra = (ciSS ? ` (95% CI ${fmt(100 * r.cutoff.sensLo, 1)}-${fmt(100 * r.cutoff.sensHi, 1)}%)` : '');
+      const extraS = (ciSS ? ` (95% CI ${fmt(100 * r.cutoff.specLo, 1)}-${fmt(100 * r.cutoff.specHi, 1)}%)` : '');
       const lrs = a.lr ? `, with LR+ of ${lrTxt(r.cutoff.lrPos)} and LR− of ${lrTxt(r.cutoff.lrNeg)}` : '';
+      const pv = ciAll ? `; PPV was ${pct(r.cutoff.ppv)} (95% CI ${fmt(100 * r.cutoff.dx.ppv.lo, 1)}-${fmt(100 * r.cutoff.dx.ppv.hi, 1)}%) and NPV was ${pct(r.cutoff.npv)} (95% CI ${fmt(100 * r.cutoff.dx.npv.lo, 1)}-${fmt(100 * r.cutoff.dx.npv.hi, 1)}%)` : '';
       return r.p <= alpha
-        ? `${nm} ${r.higher || x.combined ? '' : '(lower values) '}could significantly predict ${what} with ${grade(r.auc)} discrimination (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)}); at a cut-off of ${cutTxt(x)}${x.combined ? ' (predicted probability)' : ''}, sensitivity was ${pct(r.cutoff.sens)}${extra} and specificity was ${pct(r.cutoff.spec)}${extraS}${lrs}.`
+        ? `${nm} ${r.higher || x.combined ? '' : '(lower values) '}could significantly predict ${what} with ${grade(r.auc)} discrimination (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)}); at a cut-off of ${cutTxt(x)}${x.combined ? ' (predicted probability)' : ''}, sensitivity was ${pct(r.cutoff.sens)}${extra} and specificity was ${pct(r.cutoff.spec)}${extraS}${lrs}${pv}.`
         : `${nm} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}, P value ${pTxt(r.p)}).`;
     });
     res.filter(x => !x.r).forEach(x => sent.push(`The ROC curve of ${lowerFirst(plain(x.label))} could not be estimated: fewer than two patients with or without ${what}.`));
     const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', ROC_CUT[cutM][1]];
     if (res.some(x => x.r && x.r.cutoff.fallback)) f.push(`${listJoin(res.filter(x => x.r && x.r.cutoff.fallback).map(x => x.combined ? 'combined model' : plain(x.label)))}: no cut-off reached the target, Youden index used`);
-    if (a.ci) f.push('Sensitivity and specificity with exact (Clopper-Pearson) 95% CI');
+    if (ciAll) f.push(`95% CI in brackets: exact (Clopper-Pearson) for sensitivity, specificity, PPV, NPV and accuracy${a.lr ? ', log method for likelihood ratios' : ''}`);
+    else if (a.ci) f.push('Sensitivity and specificity with exact (Clopper-Pearson) 95% CI');
     if (a.lr) f.push('LR+: Positive likelihood ratio', 'LR−: Negative likelihood ratio');
     if (a.youdenCol) f.push('Youden index: sensitivity + specificity − 1');
     if (combo) f.push('Combined model: predicted probability of a logistic regression including all test variables');
     if (res.some(x => x.r && !x.r.higher && !x.combined)) f.push('≤: lower values predict the outcome');
     const ok = res.filter(x => x.r);
     const n1 = ok.length ? ok[0].r.n1 : 0, n0 = ok.length ? ok[0].r.n0 : 0;
+    // figure controls: one chart or one per test, AUC with its CI in the legend, the diagonal, line weight, the cut-off point
+    const serie = x => ({ name: `${x.combined ? 'Combined model' : plain(x.label)} (AUC = ${fmt(x.r.auc, 3)}${a.figAucCi ? `, 95% CI ${fmt(x.r.lo, 3)}-${fmt(x.r.hi, 3)}` : ''})`, points: x.r.points,
+      ...(a.showCut ? { cut: { fpr: 1 - x.r.cutoff.spec, tpr: x.r.cutoff.sens, label: x.combined ? '' : cutTxt(x) } } : {}) });
+    const figSpec = list => ({ type: 'roc', series: list.map(serie), note: `n = ${n1} with, ${n0} without`,
+      ...(a.noDiagonal ? { diagonal: false } : {}), ...(a.figLines && a.figLines !== 'normal' ? { lineW: a.figLines } : {}), ...(a.figFill ? { fill: true } : {}) });
+    const figures = !ok.length || a.figure === 'none' ? []
+      : a.figure === 'each' ? ok.map(x => ({ sig: x.r.p <= alpha, caption: `ROC curve of ${x.combined ? 'the combined model' : lowerFirst(plain(x.label))} for prediction of ${what}`, spec: figSpec([x]) }))
+      : [{ sig: ok.some(x => x.r.p <= alpha), caption: `ROC curve for prediction of ${what}`, spec: figSpec(ok) }];
     const sec = {
       kind: 'roc', title: `Diagnostic performance for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
-      figures: ok.length ? [{ sig: ok.some(x => x.r.p <= alpha), caption: `ROC curve for prediction of ${what}`,
-        spec: { type: 'roc', series: ok.map(x => ({ name: `${x.combined ? 'Combined model' : plain(x.label)} (AUC = ${fmt(x.r.auc, 3)})`, points: x.r.points,
-          ...(a.showCut ? { cut: { fpr: 1 - x.r.cutoff.spec, tpr: x.r.cutoff.sens, label: x.combined ? '' : cutTxt(x) } } : {}) })), note: `n = ${n1} with, ${n0} without` } }] : [],
-      meta: { res }
+      figures, meta: { res }
     };
     if (!a.compare || ok.length < 2) return sec;
     // pairwise DeLong comparison of the AUCs, on the patients with every compared value

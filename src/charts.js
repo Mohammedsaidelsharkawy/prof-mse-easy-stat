@@ -473,14 +473,21 @@ const Charts = (() => {
       ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(v.toFixed(1), X(v), T + ph + 12);
     }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
-    ctx.strokeStyle = '#999'; ctx.lineWidth = 2.5; ctx.setLineDash([12, 10]);
-    ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(1), Y(1)); ctx.stroke(); ctx.setLineDash([]);
+    if (spec.diagonal !== false) {
+      ctx.strokeStyle = '#999'; ctx.lineWidth = 2.5; ctx.setLineDash([12, 10]);
+      ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(1), Y(1)); ctx.stroke(); ctx.setLineDash([]);
+    }
     ctx.font = F(700, 28); ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.fillText('1 - Specificity', L + pw / 2, T + ph + 60 * ts);
     ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText('Sensitivity', 0, 0); ctx.restore();
     spec.series.forEach((s, i) => {
-      ctx.strokeStyle = items[i].color; ctx.lineWidth = 5; ctx.setLineDash(items[i].dash ? [16, 10] : []);
       const pts = [...s.points].sort((a, b) => a.fpr - b.fpr || a.tpr - b.tpr);
+      // optional shaded area under a single curve
+      if (spec.fill && spec.series.length === 1) {
+        ctx.fillStyle = items[i].color + '22'; ctx.beginPath(); ctx.moveTo(X(0), Y(0));
+        pts.forEach(q => ctx.lineTo(X(q.fpr), Y(q.tpr))); ctx.lineTo(X(1), Y(0)); ctx.closePath(); ctx.fill();
+      }
+      ctx.strokeStyle = items[i].color; ctx.lineWidth = { thin: 3, bold: 8 }[spec.lineW] || 5; ctx.setLineDash(items[i].dash ? [16, 10] : []);
       ctx.beginPath(); pts.forEach((q, k) => k ? ctx.lineTo(X(q.fpr), Y(q.tpr)) : ctx.moveTo(X(q.fpr), Y(q.tpr))); ctx.stroke();
     });
     ctx.setLineDash([]);
@@ -592,6 +599,7 @@ const Charts = (() => {
   // section labels and shadows; roles: main path boxes, side (exclusion) boxes and the group columns
   const mix = (hex, to, a) => { const h = n => parseInt(hex.slice(n, n + 2), 16), t = n => parseInt(to.slice(n, n + 2), 16);
     return '#' + [1, 3, 5].map(n => Math.round(h(n) + (t(n) - h(n)) * a).toString(16).padStart(2, '0')).join(''); };
+  const FLOW_LABELS = { consort: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], strobe: ['Identification', 'Inclusion', 'Follow-Up', 'Analysis'], stard: ['Enrollment', 'Index test', 'Reference', 'Diagnosis'] };
   function flowStyle(c, pal) {
     const st = c.style || {}, theme = st.theme || 'classic';
     const accent = theme === 'bw' ? '#444444' : /^#[0-9a-f]{6}$/i.test(st.color || '') ? st.color : pal[0];
@@ -606,7 +614,8 @@ const Charts = (() => {
       fill: r => (F[r] || F.main)[0], stroke: r => (F[r] || F.main)[1], text: r => (F[r] || F.main)[2],
       accent, arrow: theme === 'classic' || theme === 'bw' ? '#222222' : mix(accent, '#000000', 0.35),
       lw: { thin: 1.6, bold: 4 }[st.lines] || 2.5, radius: st.corners === 'rounded' ? 14 : 0, fs, lh: Math.round(fs * 1.3),
-      pills: st.pills !== false, shadow: !!st.shadow, font: FONTS[st.font] || FONTS.sans
+      pills: st.pills !== false, shadow: !!st.shadow, font: FONTS[st.font] || FONTS.sans,
+      pill: /^#[0-9a-f]{6}$/i.test(st.pillColor || '') ? st.pillColor : accent, pillText: /^#[0-9a-f]{6}$/i.test(st.pillTextColor || '') ? st.pillTextColor : '#fff'
     };
   }
   function flowBox(ctx, S, x, y, w, h, role) {
@@ -652,7 +661,9 @@ const Charts = (() => {
       follow = c.groups.map(g => [{ t: `${strobe ? 'Lost to follow-up / missing data' : 'Lost to follow-up'} (n=${+g.lost || 0})`, b: true, w: colW }, ...(g.lostReason && +g.lost ? [{ t: g.lostReason, w: colW }] : [{ t: strobe ? 'None' : 'No drop out', w: colW }])]);
       anal = c.groups.map(g => [{ t: `Analysed (n=${g.analysed})`, b: true, w: colW }, { t: `Excluded from analysis (n=${+g.excludedAnalysis || 0})${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
     }
-    const PILLS = { consort: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], strobe: ['Identification', 'Inclusion', 'Follow-Up', 'Analysis'], stard: ['Enrollment', 'Index test', 'Reference', 'Diagnosis'] }[type];
+    // section labels: the user's own text where given, else the defaults of the flowchart type
+    const own = ((c.style || {}).labels || {})[type] || [];
+    const PILLS = FLOW_LABELS[type].map((d, i) => String(own[i] || '').trim() || d);
 
     const hA = boxH(assessed), hE = boxH(excluded), hR = boxH(randomized);
     const hAl = Math.max(MIN_ROW, ...alloc.map(boxH)), hF = Math.max(MIN_ROW, ...follow.map(boxH)), hAn = Math.max(MIN_ROW, ...anal.map(boxH));
@@ -686,11 +697,14 @@ const Charts = (() => {
     };
     const pill = (label, y1, y2) => {
       if (!S.pills) return;
-      ctx.fillStyle = S.accent;
+      ctx.fillStyle = S.pill;
       const x = 10, w = 54;
       ctx.beginPath(); ctx.roundRect(x, y1, w, y2 - y1, 18); ctx.fill();
       ctx.save(); ctx.translate(x + w / 2, (y1 + y2) / 2); ctx.rotate(-Math.PI / 2);
-      ctx.fillStyle = '#fff'; ctx.font = `700 24px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = S.pillText; ctx.font = `700 24px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      // long labels shrink to fit their section
+      const room = y2 - y1 - 16, tw = ctx.measureText(label).width;
+      if (tw > room) ctx.font = `700 ${Math.max(14, Math.floor(24 * room / tw))}px ${FONT}`;
       ctx.fillText(label, 0, 0); ctx.restore();
     };
 
@@ -780,5 +794,5 @@ const Charts = (() => {
     return cv;
   }
 
-  return { draw, consort, PALETTES, DEFAULT_STYLE };
+  return { draw, consort, PALETTES, DEFAULT_STYLE, FLOW_LABELS };
 })();

@@ -762,7 +762,8 @@ const Stats = (() => {
       points: points.map(q => ({ fpr: 1 - q.spec, tpr: q.sens })),
       cutoff: { ...best, ppv: best.tp / (best.tp + best.fp), npv: best.tn / (best.tn + best.fn), accuracy: (best.tp + best.tn) / (n1 + n0),
         sensLo: sLo, sensHi: sHi, specLo: cLo, specHi: cHi, youden: best.sens + best.spec - 1,
-        lrPos: best.spec < 1 ? best.sens / (1 - best.spec) : Infinity, lrNeg: best.spec > 0 ? (1 - best.sens) / best.spec : Infinity }
+        lrPos: best.spec < 1 ? best.sens / (1 - best.spec) : Infinity, lrNeg: best.spec > 0 ? (1 - best.sens) / best.spec : Infinity,
+        dx: diagnostic2x2(best.tp, best.fp, best.fn, best.tn) } // exact CIs of every measure at the cut-off
     };
   }
   // DeLong test comparing two correlated AUCs (same patients); each test keeps its own direction
