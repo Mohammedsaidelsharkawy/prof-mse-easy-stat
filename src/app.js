@@ -13,7 +13,7 @@
   const GROUP_RE = /^(group|groups|arm|treatment|allocation|intervention|study.?group)$/i;
 
   const DEFAULT_OPTIONS = {
-    decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: true,
+    decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
     commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
@@ -22,7 +22,7 @@
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
     pctDecimals: 1, meanStyle: 'pm', iqrStyle: 'dash', secondRow: 'auto', pDigits: 3, pHead: 'P value', sigSym: '*', showStat: false, missingNote: false,
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
-    pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans',
+    pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -39,7 +39,7 @@
     pctDecimals: ['optPctDec'], meanStyle: ['optMeanStyle'], iqrStyle: ['optIqrStyle'], secondRow: ['optSecondRow'], pDigits: ['optPDigits'], pHead: ['optPHead'],
     sigSym: ['optSigSym'], showStat: ['optShowStat', true], missingNote: ['optMissingNote', true], orientation: ['optOrientation'], tableCaption: ['optTableCaption'],
     pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
-    pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont']
+    pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -890,6 +890,8 @@
     syncAssessed(c);
     $('#cEnabled').checked = c.enabled;
     $('#cType').value = t;
+    const fsv = { ...FLOW_STYLE, ...(c.style || {}) };
+    document.querySelectorAll('#p9 [data-fs]').forEach(el => { const v = el.dataset.fs === 'colorMode' ? (fsv.color ? 'custom' : 'palette') : el.dataset.fs === 'color' ? (fsv.color || chartPalette(state.cfg.options)[0] || '#7B2FBE') : fsv[el.dataset.fs]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v); });
     $('#cHint').textContent = FLOW_HINTS[t];
     const excluded = `<h3>Excluded (reasons)</h3>${c.excluded.map((e, i) => `<div class="row" style="margin-bottom:6px"><input type="text" data-ex="${i}" data-f="text" value="${esc(e.text)}" style="flex:3">${num(`data-ex="${i}" data-f="n" style="flex:1;max-width:100px"`, e.n)}<button class="btn ghost small" data-exdel="${i}" type="button">✕</button></div>`).join('')}
       <button class="btn ghost small" data-cact="addEx" type="button">+ Add reason</button>`;
@@ -934,9 +936,13 @@
     $('#cForm').innerHTML = html;
     drawConsortPreview();
   }
+  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false };
   function readConsort() {
     const c = state.cfg && state.cfg.consort; if (!c || !$('#cForm').innerHTML) return;
     c.enabled = $('#cEnabled').checked;
+    // appearance: the custom colour applies only when "Custom" is chosen
+    const st = {}; document.querySelectorAll('#p9 [data-fs]').forEach(el => { st[el.dataset.fs] = el.type === 'checkbox' ? el.checked : el.value; });
+    c.style = { theme: st.theme, color: st.colorMode === 'custom' ? st.color : '', corners: st.corners, lines: st.lines, textSize: st.textSize, font: st.font, pills: st.pills, shadow: st.shadow };
     const val = el => el.type === 'checkbox' ? el.checked : el.type === 'number' ? (+el.value || 0) : el.value;
     document.querySelectorAll('#cForm [data-c]').forEach(el => { c[el.dataset.c] = val(el); });
     document.querySelectorAll('#cForm [data-ex]').forEach(el => { c.excluded[+el.dataset.ex][el.dataset.f] = val(el); });

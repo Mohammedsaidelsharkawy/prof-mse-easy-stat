@@ -588,17 +588,49 @@ const Charts = (() => {
 
   /* ---------- CONSORT 2010 flow diagram ---------- */
   // Flow diagrams: CONSORT 2010 (default), STROBE and STARD 2015 share this layout; 'simple' is a chain of steps
+  // flowchart appearance (c.style): theme classic / tinted / filled / bw, accent colour, corners, line weight, text size, font,
+  // section labels and shadows; roles: main path boxes, side (exclusion) boxes and the group columns
+  const mix = (hex, to, a) => { const h = n => parseInt(hex.slice(n, n + 2), 16), t = n => parseInt(to.slice(n, n + 2), 16);
+    return '#' + [1, 3, 5].map(n => Math.round(h(n) + (t(n) - h(n)) * a).toString(16).padStart(2, '0')).join(''); };
+  function flowStyle(c, pal) {
+    const st = c.style || {}, theme = st.theme || 'classic';
+    const accent = theme === 'bw' ? '#444444' : /^#[0-9a-f]{6}$/i.test(st.color || '') ? st.color : pal[0];
+    const fs = { small: 23, large: 31 }[st.textSize] || 27;
+    const F = {
+      classic: { main: ['#ffffff', '#222222', '#111111'], side: ['#ffffff', '#222222', '#111111'], col: ['#ffffff', '#222222', '#111111'] },
+      bw: { main: ['#ffffff', '#222222', '#111111'], side: ['#ffffff', '#222222', '#111111'], col: ['#ffffff', '#222222', '#111111'] },
+      tinted: { main: [mix(accent, '#ffffff', 0.8), accent, '#111111'], side: ['#f5f5f5', '#9a9a9a', '#222222'], col: [mix(accent, '#ffffff', 0.9), accent, '#111111'] },
+      filled: { main: [accent, accent, '#ffffff'], side: ['#ffffff', '#9a9a9a', '#222222'], col: [mix(accent, '#ffffff', 0.86), accent, '#111111'] }
+    }[theme] || {};
+    return {
+      fill: r => (F[r] || F.main)[0], stroke: r => (F[r] || F.main)[1], text: r => (F[r] || F.main)[2],
+      accent, arrow: theme === 'classic' || theme === 'bw' ? '#222222' : mix(accent, '#000000', 0.35),
+      lw: { thin: 1.6, bold: 4 }[st.lines] || 2.5, radius: st.corners === 'rounded' ? 14 : 0, fs, lh: Math.round(fs * 1.3),
+      pills: st.pills !== false, shadow: !!st.shadow, font: FONTS[st.font] || FONTS.sans
+    };
+  }
+  function flowBox(ctx, S, x, y, w, h, role) {
+    ctx.save();
+    if (S.shadow) { ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4; }
+    ctx.fillStyle = S.fill(role);
+    if (S.radius) { ctx.beginPath(); ctx.roundRect(x, y, w, h, S.radius); ctx.fill(); } else ctx.fillRect(x, y, w, h);
+    ctx.restore();
+    ctx.strokeStyle = S.stroke(role); ctx.lineWidth = S.lw;
+    if (S.radius) { ctx.beginPath(); ctx.roundRect(x, y, w, h, S.radius); ctx.stroke(); } else ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = S.text(role);
+  }
   function consort(c, groupLabels, palName = 'brand') {
-    FONT = FONTS.sans;
-    if (c.type === 'simple') return simpleFlow(c, groupLabels, palName);
+    const S = flowStyle(c, palette(palName));
+    FONT = S.font;
+    if (c.type === 'simple') return simpleFlow(c, groupLabels, palName, S);
     const pal = palette(palName), type = c.type || 'consort';
     const branches = type === 'stard' ? stardBranches(c) : null;
     const k = branches ? branches.length : groupLabels.length;
     const cv = document.createElement('canvas');
     const CW = 1200;
     const ctx = cv.getContext('2d');
-    const gutter = 80, pad = 18, colW = (CW - gutter - pad * (k + 1)) / k;
-    const fs = 27, lh = 35, MIN_ROW = 175; // rows tall enough for the rotated section labels
+    const gutter = S.pills ? 80 : 0, pad = 18, colW = (CW - gutter - pad * (k + 1)) / k;
+    const fs = S.fs, lh = S.lh, MIN_ROW = S.pills ? 175 : 0; // rows tall enough for the rotated section labels
     const boxH = (lines) => lines.reduce((h, ln) => { ctx.font = `${ln.b ? 700 : 400} ${fs}px ${FONT}`; return h + measureLines(ctx, ln.t, ln.w - 28) * lh; }, 0) + 26;
 
     const ex = c.excluded.filter(e => +e.n > 0);
@@ -631,11 +663,10 @@ const Charts = (() => {
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
 
     const midX = gutter + (CW - gutter) / 2;
-    const box = (x, y, w, h, lines, align = 'center') => {
-      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5;
-      ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+    const box = (x, y, w, h, lines, align = 'center', role = 'main') => {
+      flowBox(ctx, S, x, y, w, h, role);
       let yy = y + 14;
-      ctx.fillStyle = '#111'; ctx.textBaseline = 'top';
+      ctx.textBaseline = 'top';
       lines.forEach(ln => {
         ctx.font = `${ln.b ? 700 : 400} ${fs}px ${FONT}`;
         ln.t.split('\n').forEach(par => {
@@ -646,7 +677,7 @@ const Charts = (() => {
       });
     };
     const arrow = (x1, y1, x2, y2) => {
-      ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = S.arrow; ctx.fillStyle = S.arrow; ctx.lineWidth = S.lw;
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
       const a = Math.atan2(y2 - y1, x2 - x1);
       ctx.beginPath(); ctx.moveTo(x2, y2);
@@ -654,7 +685,8 @@ const Charts = (() => {
       ctx.lineTo(x2 - 16 * Math.cos(a + 0.4), y2 - 16 * Math.sin(a + 0.4)); ctx.fill();
     };
     const pill = (label, y1, y2) => {
-      ctx.fillStyle = pal[0];
+      if (!S.pills) return;
+      ctx.fillStyle = S.accent;
       const x = 10, w = 54;
       ctx.beginPath(); ctx.roundRect(x, y1, w, y2 - y1, 18); ctx.fill();
       ctx.save(); ctx.translate(x + w / 2, (y1 + y2) / 2); ctx.rotate(-Math.PI / 2);
@@ -670,8 +702,7 @@ const Charts = (() => {
     box(midX - topW / 2, yA, topW, hA, assessed);
     if (exTotal) {
       const exX = midX + 60;
-      box(exX, yE, exW, hE, excluded, 'left');
-      ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5;
+      box(exX, yE, exW, hE, excluded, 'left', 'side');
       arrow(midX, yE + hE / 2, exX, yE + hE / 2);
     }
     arrow(midX, yA + hA, midX, yR);
@@ -679,17 +710,17 @@ const Charts = (() => {
 
     const colX = i => gutter + pad + i * (colW + pad);
     const busY = yR + hR + gap / 2 + 10;
-    ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5;
+    ctx.strokeStyle = S.arrow; ctx.lineWidth = S.lw;
     ctx.beginPath(); ctx.moveTo(midX, yR + hR); ctx.lineTo(midX, busY);
     ctx.moveTo(colX(0) + colW / 2, busY); ctx.lineTo(colX(k - 1) + colW / 2, busY); ctx.stroke();
     for (let i = 0; i < k; i++) {
       const x = colX(i), cx = x + colW / 2;
       arrow(cx, busY, cx, yAl);
-      box(x, yAl, colW, hAl, alloc[i]);
+      box(x, yAl, colW, hAl, alloc[i], 'center', 'col');
       arrow(cx, yAl + hAl, cx, yF);
-      box(x, yF, colW, hF, follow[i]);
+      box(x, yF, colW, hF, follow[i], 'center', 'col');
       arrow(cx, yF + hF, cx, yAn);
-      box(x, yAn, colW, hAn, anal[i]);
+      box(x, yAn, colW, hAn, anal[i], 'center', 'col');
     }
     return cv;
   }
@@ -698,10 +729,9 @@ const Charts = (() => {
   const stardBranches = c => c.stard.branches.filter((b, i) => i < 2 || +b.n > 0);
 
   /* ---------- simple flowchart: a chain of steps with optional exclusions, optionally split into the groups ---------- */
-  function simpleFlow(c, groupLabels, palName) {
-    const pal = palette(palName);
+  function simpleFlow(c, groupLabels, palName, S) {
     const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
-    const CW = 1200, fs = 27, lh = 35, boxW = 520, exW = 420, gap = 56;
+    const CW = 1200, fs = S.fs, lh = S.lh, boxW = 520, exW = 420, gap = 56;
     const boxH = (text, w, bold) => { ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; return text.split('\n').reduce((h, par) => h + measureLines(ctx, par, w - 28) * lh, 0) + 26; };
     const steps = c.steps.filter(s => String(s.text).trim());
     const midX = CW / 2 - (steps.some(s => +s.exN > 0) ? 160 : 0);
@@ -720,14 +750,14 @@ const Charts = (() => {
     const busY = y - gap / 2;
     cv.width = CW; cv.height = (split ? y + gH + 30 : y - gap + 30);
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
-    const box = (x, yy, w, h, text, bold, align = 'center') => {
-      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5; ctx.fillRect(x, yy, w, h); ctx.strokeRect(x, yy, w, h);
-      ctx.fillStyle = '#111'; ctx.textBaseline = 'top'; ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; ctx.textAlign = align;
+    const box = (x, yy, w, h, text, bold, align = 'center', role = 'main') => {
+      flowBox(ctx, S, x, yy, w, h, role);
+      ctx.textBaseline = 'top'; ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; ctx.textAlign = align;
       let ty = yy + 13;
       text.split('\n').forEach(par => { ty += wrapText(ctx, par, align === 'center' ? x + w / 2 : x + 14, ty, w - 28, lh) * lh; });
     };
     const arrow = (x1, y1, x2, y2) => {
-      ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = S.arrow; ctx.fillStyle = S.arrow; ctx.lineWidth = S.lw;
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
       const a = Math.atan2(y2 - y1, x2 - x1);
       ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - 16 * Math.cos(a - 0.4), y2 - 16 * Math.sin(a - 0.4)); ctx.lineTo(x2 - 16 * Math.cos(a + 0.4), y2 - 16 * Math.sin(a + 0.4)); ctx.fill();
@@ -736,16 +766,16 @@ const Charts = (() => {
       box(midX - boxW / 2, b.y, boxW, b.h, b.text, true);
       if (b.ex) {
         const ey = b.y + b.h + (gap + 24) / 2, ex0 = midX + 60;
-        box(ex0, ey, exW, b.ex.h, b.ex.text, false, 'left');
+        box(ex0, ey, exW, b.ex.h, b.ex.text, false, 'left', 'side');
         arrow(midX, ey + b.ex.h / 2, ex0, ey + b.ex.h / 2);
       }
       if (i < layout.length - 1) arrow(midX, b.y + b.h, midX, layout[i + 1].y);
     });
     if (split) {
       const last = layout[layout.length - 1], cx = i => pad + colW / 2 + i * ((CW - 2 * pad - colW) / (k - 1));
-      ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = S.arrow; ctx.lineWidth = S.lw;
       ctx.beginPath(); ctx.moveTo(midX, last.y + last.h); ctx.lineTo(midX, busY); ctx.moveTo(cx(0), busY); ctx.lineTo(cx(k - 1), busY); ctx.stroke();
-      groupLabels.forEach((g, i) => { arrow(cx(i), busY, cx(i), y); box(cx(i) - colW / 2, y, colW, gH, `${g}\n(n=${c.groups[i].analysed})`, true); });
+      groupLabels.forEach((g, i) => { arrow(cx(i), busY, cx(i), y); box(cx(i) - colW / 2, y, colW, gH, `${g}\n(n=${c.groups[i].analysed})`, true, 'center', 'col'); });
     }
     return cv;
   }

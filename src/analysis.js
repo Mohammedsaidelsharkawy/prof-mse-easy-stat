@@ -916,6 +916,16 @@ const Analysis = (() => {
       `${numbered ? EF + (idx + 1) + ': ' : ''}${fmt(q.rr, 2)} (${fmt(q.lo, 2)}-${fmt(q.hi, 2)})`);
     const postHocLines = res => res.pairs.map((q, idx) => `P${idx + 1}=${fmtP(q.p, alpha)}`);
 
+    // the tests behind a table's P values: listed in its footnote, or as letters after each P value (testNote = 'list' / 'marks')
+    const SUP = 'ᵃᵇᶜᵈᵉᶠᵍʰ';
+    function testMarker(names) {
+      const order = opts.testNote === 'list' || opts.testNote === 'marks' ? [...new Set(names.filter(n => TEST_NAME[n]))] : [];
+      return {
+        mark: n => opts.testNote === 'marks' && order.includes(n) ? SUP[order.indexOf(n)] : '',
+        note: !order.length ? '' : opts.testNote === 'marks' ? order.map((n, i) => `${SUP[i]}: ${TEST_NAME[n]}`).join(', ')
+          : `Test${order.length > 1 ? 's' : ''} used: ${listJoin(order.map(n => TEST_NAME[n]))}`
+      };
+    }
     function footnote(flags, note) {
       const f = [];
       if (flags.sig) f.push(`*: Significant as P value ≤ ${alpha}`);
@@ -966,6 +976,7 @@ const Analysis = (() => {
           param = cells.filter(r => r && r.p <= 0.05).length <= cells.length * NONNORMAL_SHARE;
         }
         const results = per.map(gv => analyzeNumeric(gv, param ? 'param' : 'nonparam', used, opts));
+        const tm = testMarker(results.map(r => r.test));
         const anySig = results.some(r => r.p <= alpha);
         const showPost = numbered && anySig;
         const head = ['', ...groupHeads, 'P value'];
@@ -975,7 +986,7 @@ const Analysis = (() => {
         const trows = results.map((r, t) => {
           const cells = [{ t: [tps[t]], b: true }];
           r.desc.forEach(dd => cells.push({ t: [param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)] }));
-          cells.push({ t: [fmtP(r.p, alpha)] });
+          cells.push({ t: [fmtP(r.p, alpha) + (isFinite(r.p) ? tm.mark(r.test) : '')] });
           if (opts.showStat) cells.push({ t: [r.stat], small: true });
           if (showPost) cells.push({ t: r.p <= alpha ? postHocLines(r) : ['---'], small: true });
           if (opts.effect) cells.push({ t: effectLines(r), small: true });
@@ -1024,7 +1035,7 @@ const Analysis = (() => {
         sections.push({
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
           footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost, stats: results.map(r => r.stat),
-            missing: v.cols.map((c, t) => [tps[t], missingIn(c.col, true)]).filter(x => x[1]).map(([t, m]) => `${t} (n=${m})`) }, [withinNote, v.note].filter(Boolean).join(', ')),
+            missing: v.cols.map((c, t) => [tps[t], missingIn(c.col, true)]).filter(x => x[1]).map(([t, m]) => `${t} (n=${m})`) }, [tm.note, withinNote, v.note].filter(Boolean).join(', ')),
           comment: wording(comment), brief: opts.paperStyle ? wording(briefRepeated(plain(v.label), tps, results, within, gl, alpha, param, d)) : '', briefSig: !!sigAny,
           figures: v.chart === 'none' ? [] : [(() => {
             // per-variable chart type overrides the global chart style
@@ -1061,7 +1072,7 @@ const Analysis = (() => {
         const hasRR = opts.effect && res.some(r => r.cat && r.cat.binary);
         const twoCol = res.some(r => r.num || (r.cat && !isCompact(r)));
         const effHead = hasNum && hasRR ? `MD/${EF} (95% CI)` : hasRR ? `${EF} (95% CI)` : 'MD (95% CI)';
-        const totalCol = !!opts.totalCol;
+        const totalCol = !!opts.totalCol, tm = testMarker(res.map(r => (r.num || r.cat).test));
         const head = [{ t: '', span: twoCol ? 2 : 1 }, ...groupHeads, ...(totalCol ? [opts.nHead === false ? 'Total' : `Total (n=${rows.length})`] : []), 'P value'];
         if (opts.showStat) head.push('Test');
         // the Total column: every analysed patient, whatever the group
@@ -1072,7 +1083,7 @@ const Analysis = (() => {
         if (opts.effect) head.push(effHead);
         const trows = [];
         const tail = (r, span) => {
-          const cells = [{ t: [fmtP((r.num || r.cat).p, alpha)], rs: span }];
+          const x = r.num || r.cat, cells = [{ t: [fmtP(x.p, alpha) + (isFinite(x.p) ? tm.mark(x.test) : '')], rs: span }];
           if (opts.showStat) cells.push({ t: [(r.num || r.cat).stat], rs: span, small: true });
           if (showPost) cells.push({ t: r.num && r.num.p <= alpha ? postHocLines(r.num) : r.cat && r.cat.pairs ? postHocLines(r.cat) : ['---'], rs: span, small: true });
           if (opts.effect) cells.push({ t: r.num ? effectLines(r.num) : (r.cat.binary ? rrLines(r.cat) : ['---']), rs: span, small: true });
@@ -1196,7 +1207,7 @@ const Analysis = (() => {
         const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: opts.effect, rr: hasRR, posthoc: showPost,
           stats: res.map(r => (r.num || r.cat).stat), ci: opts.secondRow === 'ci' && res.some(r => r.num && r.num.param),
           missing: res.map(r => [plain(r.v.label), missingIn(r.v.cols[0].col, !!r.num)]).filter(x => x[1]).map(([l, m]) => `${l} (n=${m})`) };
-        const notes = b.vars.map(v => v.note).filter(Boolean).join(', ');
+        const notes = [tm.note, ...b.vars.map(v => v.note)].filter(Boolean).join(', ');
         // significance brackets between groups: pairwise P values once the overall test is significant
         const brackets = x => {
           if (!opts.sigMarks || !(x.p <= alpha)) return {};

@@ -96,6 +96,7 @@ table.t td select{min-width:120px}
 .predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
+.fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
 .fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
 .fmt-card b{font-size:15px;color:var(--title)}
@@ -193,7 +194,6 @@ footer b{color:var(--purple)}
     <img class="logo" src="__LOGO__" alt="Prof MSE logo">
     <div class="brand">
       <h1>Prof MSE <span>Easy Stat</span></h1>
-      <p>Medical Research · Excel → publication-ready statistical report</p>
     </div>
     <div class="top-actions">
       <button class="btn light small" id="btnTheme" title="Switch light / dark theme">◐ Theme</button>
@@ -355,6 +355,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Median and IQR</label><select id="optIqrStyle"><option value="dash" selected>25 - 30</option><option value="endash">25–30</option><option value="bracket">[25, 30]</option></select></div>
         <div><label class="f">Second row of numeric variables</label><select id="optSecondRow"><option value="auto" selected>Range (mean) / IQR (median)</option><option value="ci">95% CI of the mean / IQR</option><option value="none">None — one row per variable</option></select></div>
         <div><label class="f">Leading zero of P values</label><select id="optPLead"><option value="1" selected>0.013</option><option value="0">.013 (APA / AMA)</option></select></div>
+        <div><label class="f">Tests in the footnote</label><select id="optTestNote"><option value="none" selected>Not named</option><option value="list">Listed — “Tests used: …”</option><option value="marks">Letters after each P value (0.013ᵃ)</option></select></div>
         <div><label class="f">P values</label><select id="optPDigits"><option value="3" selected>3 decimals (&lt;0.001)</option><option value="4">4 decimals (&lt;0.0001)</option></select></div>
         <div><label class="f">P value column heading</label><select id="optPHead"><option selected>P value</option><option>P</option><option>p-value</option></select></div>
         <div><label class="f">Mark of significant P values</label><select id="optSigSym"><option value="*" selected>* (asterisk)</option><option value="†">† (dagger)</option><option value="">none</option></select></div>
@@ -377,7 +378,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option></select></div>
         <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
       </div>
-      <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand" checked><span><b>Prof MSE branding</b> in the Word header</span></label></div>
+      <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand"><span><b>Prof MSE branding</b> in the Word header</span></label></div>
       <p class="legend-note">Table titles can be edited in the report preview (step 10).</p>
     </div>
     <div class="nav"><button class="btn ghost" data-go="4">← Back</button><button class="btn primary" data-go="6">Next: Comments →</button></div>
@@ -499,6 +500,18 @@ footer b{color:var(--purple)}
       <div class="grid g3" style="margin:6px 0 4px"><div><label class="f">Flowchart type</label><select id="cType">
         <option value="consort">CONSORT 2010 — randomized trial</option><option value="strobe">STROBE — observational study</option>
         <option value="stard">STARD 2015 — diagnostic accuracy</option><option value="simple">Simple flowchart — custom steps</option></select></div></div>
+      <details class="fl-style"><summary><b>Appearance</b> — colours, corners, lines, text</summary>
+        <div class="grid g4" style="margin-top:8px">
+          <div><label class="f">Colour theme</label><select data-fs="theme"><option value="classic">Classic — white boxes, coloured labels</option><option value="tinted">Tinted — lightly coloured boxes</option><option value="filled">Filled — main boxes in colour</option><option value="bw">Black and white</option></select></div>
+          <div><label class="f">Colour</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select data-fs="colorMode" style="width:auto"><option value="palette">Chart palette</option><option value="custom">Custom</option></select><input type="color" data-fs="color" value="#7B2FBE" style="width:52px;padding:2px"></div></div>
+          <div><label class="f">Box corners</label><select data-fs="corners"><option value="square">Square</option><option value="rounded">Rounded</option></select></div>
+          <div><label class="f">Lines</label><select data-fs="lines"><option value="thin">Thin</option><option value="normal">Normal</option><option value="bold">Bold</option></select></div>
+          <div><label class="f">Text size</label><select data-fs="textSize"><option value="small">Small</option><option value="normal">Normal</option><option value="large">Large</option></select></div>
+          <div><label class="f">Font</label><select data-fs="font"><option value="sans">Segoe UI</option><option value="arial">Arial</option><option value="calibri">Calibri</option><option value="times">Times New Roman</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="pills"><span>Section labels (Enrollment, Allocation…)</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="shadow"><span>Box shadows</span></label></div>
+        </div>
+      </details>
       <p class="hint" id="cHint"></p>
       <div class="grid g2">
         <div id="cForm"></div>
