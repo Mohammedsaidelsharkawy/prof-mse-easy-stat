@@ -35,7 +35,8 @@ const Analysis = (() => {
     return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
   }
   // names like "HbA1c", "sFlt1" or "CRP" keep their case at the start of a sentence and inside it
-  const keepCase = s => /^\S*?([A-Z].*[A-Z]|\d)/.test(s.split(/\s/)[0].slice(1)) || /^[A-Z]{2,}/.test(s) || /^.[A-Z]/.test(s);
+  // names with a capital or digit after their first letter (HbA1c, QoL, sFlt1, CRP) keep their case
+  const keepCase = s => /[A-Z\d]/.test(s.split(/\s/)[0].slice(1)) || /^[A-Z]{2,}/.test(s) || /^.[A-Z]/.test(s);
   const cap = s => s && !keepCase(s) ? s[0].toUpperCase() + s.slice(1) : s;
   // label without a trailing unit, for use inside sentences: "Age (years)" → "Age"
   const plain = s => s.replace(/\s*\([^)]*\)\s*$/, '');
@@ -167,14 +168,18 @@ const Analysis = (() => {
   }
 
   /* ---------- correlation among numeric variables (all patients pooled) ---------- */
-  function analyzeCorrelation(items, alpha) {
+  // method: 'auto' (Pearson when both are normal, else Spearman), 'pearson' or 'spearman'; only: pairs with item 0 (one variable against the others)
+  function analyzeCorrelation(items, alpha, method = 'auto', only = false) {
     const pairsOut = [];
     for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+      if (only && i > 0) continue;
       const x = [], y = [];
       items[i].vals.forEach((v, r) => { if (isFinite(v) && isFinite(items[j].vals[r])) { x.push(v); y.push(items[j].vals[r]); } });
-      const normal = [x, y].every(a => { const sw = normality(a); return !sw || sw.p > 0.05; });
-      const res = normal ? S.pearson(x, y) : S.spearman(x, y);
-      pairsOut.push({ i, j, ...res, method: normal ? 'pearson' : 'spearman', sig: res.p <= alpha });
+      const normal = method === 'pearson' ? true : method === 'spearman' ? false : [x, y].every(a => { const sw = normality(a); return !sw || sw.p > 0.05; });
+      const res = x.length >= 3 ? (normal ? S.pearson(x, y) : S.spearman(x, y)) : { r: NaN, p: NaN };
+      // 95% CI by Fisher's z transformation
+      const z = Math.atanh(Math.max(-0.999999, Math.min(0.999999, res.r))), se = x.length > 3 ? 1 / Math.sqrt(x.length - 3) : NaN;
+      pairsOut.push({ i, j, ...res, n: x.length, lo: Math.tanh(z - 1.959964 * se), hi: Math.tanh(z + 1.959964 * se), method: normal ? 'pearson' : 'spearman', sig: res.p <= alpha });
     }
     return pairsOut;
   }
@@ -778,7 +783,7 @@ const Analysis = (() => {
     if (res.some(x => x.test && x.test.p <= alpha)) f.push(`*: Significant as P value ≤ ${alpha}`);
     f.push(`Data are presented as frequency (%), P values by ${listJoin(tests)} test${tests.length > 1 ? 's' : ''}`);
     if (lv.length > 2) f.push(`categories: ${lv.join(', ')}`);
-    return { kind: 'mcnemar', title: `${plain(l1)} versus ${lowerFirst(plain(l2))} in the studied groups (paired comparison)`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { res } };
+    return { kind: 'mcnemar', title: `${plain(l1)} versus ${lowerFirst(plain(l2))} in the studied ${sets.length > 1 ? 'groups' : 'patients'} (paired comparison)`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { res } };
   }
 
   // Cohen's kappa between two raters / methods (categorical), with the cross-table
@@ -982,6 +987,7 @@ const Analysis = (() => {
     /* ---------- one group (no group column): description of the patients and change over time ---------- */
     const WITHIN_NAME = { 'Paired t-test': 'paired t-test', Wilcoxon: 'Wilcoxon signed-rank test', 'RM ANOVA': 'repeated-measures ANOVA', Friedman: 'Friedman test' };
     const isNormal = vals => { const t = normality(vals); return !t || t.p > 0.05; };
+    const ciHalf = dd => dd.n > 1 ? jStat.studentt.inv(0.975, dd.n - 1) * dd.sd / Math.sqrt(dd.n) : null;
     const ciOfMean = dd => { const h = jStat.studentt.inv(0.975, dd.n - 1) * dd.sd / Math.sqrt(dd.n); return `${fmt(dd.mean - h, d)} to ${fmt(dd.mean + h, d)}`; };
     function oneGroupSingle(b) {
       const all = byGroup[0], G = gl[0], head = [{ t: '', span: 2 }, groupHeads[0]];
@@ -1003,7 +1009,11 @@ const Analysis = (() => {
           if (chart === 'none') continue;
           const ct = chart === 'auto' ? (opts.chartStyle === 'box' ? 'box' : opts.chartStyle === 'bar' ? 'bar' : 'hist') : chart;
           let f;
-          if (ct === 'box' || ct === 'dot') f = { caption: `${v.label} of the studied patients${ct === 'dot' ? ` (${P ? 'mean ± SD' : 'median and IQR'})` : ''}`,
+          if (ct === 'violin') f = { caption: `${v.label} of the studied patients`,
+            spec: { type: 'violin', perGroup: true, categories: [G], yLabel: v.ylabel || v.label, points: opts.points, series: [{ name: v.label, data: [vals] }] } };
+          else if (ct === 'meanci') f = { caption: `${v.label} of the studied patients (mean with 95% CI)`,
+            spec: { type: 'line', noLine: true, perGroup: true, errKind: 'ci', categories: [G], yLabel: v.ylabel || v.label, series: [{ name: v.label, values: [dd.mean], err: [ciHalf(dd)] }] } };
+          else if (ct === 'box' || ct === 'dot') f = { caption: `${v.label} of the studied patients${ct === 'dot' ? ` (${P ? 'mean ± SD' : 'median and IQR'})` : ''}`,
             spec: { type: ct, perGroup: true, categories: [G], yLabel: v.ylabel || v.label, points: opts.points, median: !P, series: [{ name: v.label, data: [vals] }] } };
           else if (ct === 'bar' || ct === 'line') f = { caption: `${v.label} of the studied patients (${P ? 'mean' : 'median'}${P ? ({ sem: ' ± SEM', ci: ' ± 95% CI' }[opts.errorBar] || ' ± SD') : ' and IQR'})`,
             spec: { type: 'bar', perGroup: true, categories: [G], yLabel: v.ylabel || v.label, ...valueLabels,
@@ -1032,9 +1042,10 @@ const Analysis = (() => {
             if (levels.length) sent.push(`Regarding ${lowerFirst(lab)}, ${listJoin(levels.map((lv, li) => `${cnt[li]} patients (${pctTxt(pc[li])}%) were ${/^[A-Z][a-z]/.test(lv) ? lv.toLowerCase() : lv}`))}.`);
           }
           if (chart === 'none' || !levels.length) continue;
-          const ct = chart === 'pie' ? 'pie' : 'bar';
+          const ct = chart === 'pie' || chart === 'piefull' ? 'pie' : chart === 'hbar' ? 'hbar' : 'bar';
           figures.push({ sig: true, vid: v.id, caption: v.caption || `${v.label} of the studied patients`,
-            spec: ct === 'pie' ? { type: 'pie', categories: [G], yLabel: '% of the studied patients', series: levels.map((lv, li) => ({ name: lv, values: [pc[li]] })) }
+            spec: ct === 'pie' ? { type: 'pie', ...(chart === 'piefull' ? { full: true } : {}), categories: [G], yLabel: '% of the studied patients', series: levels.map((lv, li) => ({ name: lv, values: [pc[li]] })) }
+              : ct === 'hbar' ? { type: 'hbar', perGroup: true, categories: levels, yLabel: v.ylabel || '% of the studied patients', series: [{ name: v.label, values: pc }] }
               : { type: 'bar', perGroup: true, percent: true, labels: true, categories: levels, yLabel: v.ylabel || '% of the studied patients', series: [{ name: v.label, values: pc }] } });
         }
       }
@@ -1094,8 +1105,10 @@ const Analysis = (() => {
       const ct = v.chart && v.chart !== 'auto' ? v.chart : opts.chartStyle;
       const meanChart = ct === 'bar' || ct === 'line' || (ct === 'auto' && param);
       const marks = opts.sigMarks ? { sigCat: tps.map((_, t) => pAt(t)), alpha, sigWhat: tps[0] } : {};
-      const figures = v.chart === 'none' ? [] : [{ sig: !!sig, vid: v.id, caption: v.caption || `${v.label} of the studied patients over time`,
-        spec: meanChart
+      const figures = v.chart === 'none' ? [] : [{ sig: !!sig, vid: v.id, caption: v.caption || `${v.label} of the studied patients over time${ct === 'meanci' ? ' (mean with 95% CI)' : ''}`,
+        spec: ct === 'violin' ? { type: 'violin', categories: tps, yLabel: v.ylabel || v.label, legend: false, points: opts.points, ...marks, series: [{ name: G, data: tps.map((_, t) => col(t)) }] }
+        : ct === 'meanci' ? { type: 'line', errKind: 'ci', categories: tps, yLabel: v.ylabel || v.label, xLabel: 'Time', legend: false, ...marks, series: [{ name: G, values: desc.map(x => x.mean), err: desc.map(ciHalf) }] }
+        : meanChart
           ? { type: ct === 'bar' ? 'bar' : 'line', categories: tps, yLabel: v.ylabel || v.label, xLabel: 'Time', legend: false, ...marks, ...(ct === 'bar' ? valueLabels : {}),
               series: [{ name: G, values: desc.map(x => param ? x.mean : x.median), err: desc.map(x => param ? errOf(x) : null), lo: param ? null : desc.map(x => x.q1), hi: param ? null : desc.map(x => x.q3) }] }
           : { type: 'box', categories: tps, yLabel: v.ylabel || v.label, legend: false, points: opts.points || ct === 'dot', ...marks, series: [{ name: G, data: tps.map((_, t) => col(t)) }] } }];
@@ -1184,6 +1197,11 @@ const Analysis = (() => {
             // per-variable chart type overrides the global chart style
             const ct = v.chart && v.chart !== 'auto' ? v.chart : opts.chartStyle;
             const meanChart = ct === 'bar' || ct === 'line' || (ct === 'auto' && param);
+            if (ct === 'violin' || ct === 'meanci') return { sig: sigAny, vid: v.id,
+              caption: v.caption || `${v.label} of the studied groups${ct === 'meanci' ? ' (mean with 95% CI)' : ''}`,
+              spec: ct === 'violin'
+                ? { type: 'violin', categories: tps, yLabel: v.ylabel || v.label, points: opts.points, ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
+                : { type: 'line', errKind: 'ci', categories: tps, yLabel: v.ylabel || v.label, xLabel: 'Time', ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, values: results.map(r => r.desc[i].mean), err: results.map(r => ciHalf(r.desc[i])) })) } };
             return {
             sig: sigAny, vid: v.id,
             caption: v.caption || `${v.label} of the studied groups${meanChart && param ? errNote : ''}`,
@@ -1375,6 +1393,11 @@ const Analysis = (() => {
                 spec: { type: 'bar', integer: true, categories: edges.map(e => `${fmt(e, d)}-${fmt(e + sc.step, d)}`), xLabel: r.v.label, yLabel: 'Number of patients',
                   series: withN(gl, r.num.desc.map(x => x.n)).map((g, i) => { const n = new Array(edges.length).fill(0); r.gv[i].forEach(v => n[bin(v)]++); return { name: g, values: n }; }) } };
             }
+            if (ct === 'violin') return { caption: `${r.v.label} of the studied groups`,
+              spec: { type: 'violin', perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
+            if (ct === 'meanci') return { caption: `${r.v.label} of the studied groups (mean with 95% CI)`,
+              spec: { type: 'line', noLine: true, perGroup: true, errKind: 'ci', categories: cats, yLabel: r.v.ylabel || r.v.label, ...brackets(r.num),
+                series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(ciHalf) }] } };
             if (ct === 'dot') return { caption: `${r.v.label} of the studied groups (${P ? 'mean ± SD' : 'median and IQR'})`,
               spec: { type: 'dot', perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, median: !P, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
             const bar = ct === 'bar' || (ct === 'auto' && P && opts.chartStyle !== 'box');
@@ -1388,9 +1411,13 @@ const Analysis = (() => {
             };
           }
           const c = r.cat;
-          if (ct === 'stacked' || ct === 'pie') return {
+          if (ct === 'hbar') return {
             caption: `${r.v.label} of the studied groups`,
-            spec: { type: ct, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
+            spec: { type: 'hbar', categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
+          };
+          if (ct === 'stacked' || ct === 'pie' || ct === 'piefull') return {
+            caption: `${r.v.label} of the studied groups`,
+            spec: { type: ct === 'piefull' ? 'pie' : ct, ...(ct === 'piefull' ? { full: true } : {}), categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
           if (isCompact(r)) return {
             caption: `${r.v.label} of the studied groups`,
@@ -1417,17 +1444,18 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (a.include === false || (!a.outcome && a.type !== 'cronbach')) continue;
+      if (a.include === false || (!a.outcome && a.type !== 'cronbach' && a.type !== 'correlation')) continue;
       const needs = {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
-        mcnemar: () => a.second, kappa: () => a.second, agreement: () => a.second, diagnostic: () => a.positive && a.event && a.eventPositive, cronbach: () => true
+        mcnemar: () => a.second, kappa: () => a.second, agreement: () => a.second, diagnostic: () => a.positive && a.event && a.eventPositive, cronbach: () => true,
+        correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
-        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, linear: regressionSection, logistic: regressionSection }[a.type];
+        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
       const compares = ['ancova', 'survival', 'mcnemar'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
@@ -1460,6 +1488,18 @@ const Analysis = (() => {
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
+  // correlation as an advanced analysis: chosen columns, optionally one main variable against the others
+  function advCorrelationSection(a, cfg, rows, alpha, d, used) {
+    const cols = [...new Set([a.outcome, ...(a.predictors || [])].filter(Boolean))].filter(c => isNumberColumn(rows, c));
+    if (cols.length < 2) return null;
+    const items = cols.map(c => ({ label: columnLabel(cfg, c), vals: rows.map(r => toNum(r[c])) }));
+    const target = !!a.outcome && cols[0] === a.outcome;
+    const title = target ? `Correlation of ${lowerFirst(plain(items[0].label))} with the studied variables (n=${rows.length})` : `Correlation between the studied variables (n=${rows.length})`;
+    const sec = corrTable(items, rows, cfg, alpha, d, { method: a.method === 'pearson' || a.method === 'spearman' ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter ?? '2', ci: !!a.ci }, title);
+    if (sec.meta.pairs.some(q => q.method === 'pearson')) used.add('pearson');
+    if (sec.meta.pairs.some(q => q.method === 'spearman')) used.add('spearman');
+    return sec;
+  }
   // bold significant P values in the P value column (row spans followed as in the Word table)
   function boldSigP(sec, pHead, alpha) {
     let col = 0, pc = -1;
@@ -1491,18 +1531,26 @@ const Analysis = (() => {
       items.push({ label, vals: rows.map(r => toNum(r[c.col])) });
     }
     if (items.length < 2) return null;
-    const pr = analyzeCorrelation(items, alpha);
+    return corrTable(items, rows, cfg, alpha, d, {}, `Correlation between the studied variables in all patients (n=${rows.length})`);
+  }
+  // o: method (auto / pearson / spearman), layout (auto / matrix / pairs), target (item 0 against the others), scatter (number of scatter plots), ci
+  function corrTable(items, rows, cfg, alpha, d, o, title) {
+    const pr = analyzeCorrelation(items, alpha, o.method || 'auto', !!o.target);
     const m = items.length, get = (i, j) => pr.find(q => (q.i === i && q.j === j) || (q.i === j && q.j === i));
     const coef = q => `${q.method === 'pearson' ? 'r' : 'rs'} = ${fmt(q.r, 2)}`;
+    const ciTxt = q => isFinite(q.lo) ? `${fmt(q.lo, 2)} to ${fmt(q.hi, 2)}` : '—';
     let head, trows;
-    if (m <= 6) {
+    if (o.target) {
+      head = ['Variable', 'n', 'Coefficient', ...(o.ci ? ['95% CI'] : []), 'P value'];
+      trows = pr.map(q => [{ t: [items[q.j].label], b: true }, { t: [String(q.n)] }, { t: [coef(q)] }, ...(o.ci ? [{ t: [ciTxt(q)] }] : []), { t: [fmtP(q.p, alpha)] }]);
+    } else if (o.layout === 'pairs' || o.ci || (o.layout !== 'matrix' && m > 6)) {
+      head = ['Variable', 'Variable', 'Coefficient', ...(o.ci ? ['95% CI'] : []), 'P value'];
+      trows = pr.map(q => [{ t: [items[q.i].label], b: true }, { t: [items[q.j].label] }, { t: [coef(q)] }, ...(o.ci ? [{ t: [ciTxt(q)] }] : []), { t: [fmtP(q.p, alpha)] }]);
+    } else if (m <= 6 || o.layout === 'matrix') {
       // lower-triangular matrix
       head = ['', ...items.slice(0, -1).map(it => it.label)];
       trows = items.slice(1).map((it, ii) => [{ t: [it.label], b: true },
         ...items.slice(0, -1).map((_, j) => j <= ii ? (q => ({ t: [coef(q), `P ${q.p < 0.001 ? '' : '= '}${fmtP(q.p, alpha)}`], small: true }))(get(ii + 1, j)) : { t: [''] })]);
-    } else {
-      head = ['Variable', 'Variable', 'Coefficient', 'P value'];
-      trows = pr.map(q => [{ t: [items[q.i].label], b: true }, { t: [items[q.j].label] }, { t: [coef(q)] }, { t: [fmtP(q.p, alpha)] }]);
     }
     const strength = r => Math.abs(r) < 0.3 ? 'weak' : Math.abs(r) < 0.7 ? 'moderate' : 'strong';
     const sig = pr.filter(q => q.sig);
@@ -1513,13 +1561,15 @@ const Analysis = (() => {
     if (sig.length) f.push(`*: Significant as P value ≤ ${alpha}`);
     if (pr.some(q => q.method === 'pearson')) f.push('r: Pearson correlation coefficient');
     if (pr.some(q => q.method === 'spearman')) f.push("rs: Spearman's rank correlation coefficient");
-    const figures = [...sig].sort((a, b) => Math.abs(b.r) - Math.abs(a.r)).slice(0, MAX_SCATTER).map(q => {
+    if (o.ci) f.push("CI: Confidence interval (Fisher's z transformation)");
+    const nScatter = o.scatter === undefined ? MAX_SCATTER : o.scatter === 'all' ? Infinity : +o.scatter;
+    const figures = [...sig].sort((a, b) => Math.abs(b.r) - Math.abs(a.r)).slice(0, nScatter).map(q => {
       const xs = [], ys = [];
       items[q.i].vals.forEach((v, r) => { if (isFinite(v) && isFinite(items[q.j].vals[r])) { xs.push(v); ys.push(items[q.j].vals[r]); } });
       return { caption: `Correlation between ${lowerFirst(plain(items[q.i].label))} and ${lowerFirst(plain(items[q.j].label))}`,
         spec: { type: 'scatter', x: xs, y: ys, xLabel: items[q.i].label, yLabel: items[q.j].label, note: `${coef(q)}, P ${pTxt(q.p)}` } };
     });
-    return { kind: 'correlation', title: `Correlation between the studied variables in all patients (n=${rows.length})`, head, rows: trows,
+    return { kind: 'correlation', title, head, rows: trows,
       footnote: f.join(', ') + '.', comment: sent.join(' '), figures, meta: { pairs: pr, items: items.map(it => it.label) } };
   }
 

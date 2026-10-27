@@ -197,6 +197,9 @@ footer b{color:var(--purple)}
       <h1>Prof MSE <span>Easy Stat</span></h1>
     </div>
     <div class="top-actions">
+      <button class="btn light small" id="btnNew" title="Start a new project (clears the current data and settings)">＋ New</button>
+      <label class="btn light small" title="Open a saved project: data, settings and edited text">📂 Open project<input type="file" id="projFile" accept=".json,.easystat" hidden></label>
+      <button class="btn light small" id="btnSaveProj" title="Save everything — the data, all settings and the text edited in step 10 — in one file">💾 Save project</button>
       <button class="btn light small" id="btnTheme" title="Switch light / dark theme">◐ Theme</button>
       <button class="btn light small" id="btnSaveCfg" title="Save your column setup to reuse later">Save setup</button>
       <label class="btn light small" title="Load a saved setup">Load setup<input type="file" id="cfgFile" accept=".json" hidden></label>
@@ -304,6 +307,13 @@ footer b{color:var(--purple)}
       <p class="hint">Detected automatically — check and adjust. Repeated measures (same name, different timepoints) are analysed as one outcome with one table. Single variables sharing the same <b>Table</b> name appear together in one table.</p>
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
       <p class="legend-note"><b>Distribution</b>: Auto uses the normality test chosen in step 3 (Shapiro-Wilk by default) in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk / odds ratio).</p>
+    </div>
+    <div class="card" id="calcCard">
+      <h2>Calculated variables</h2>
+      <p class="hint">Create a new column from existing ones, e.g. BMI from weight and height, a change score, a total score or BMI classes. The column is added to the sheet (undo with ↶ in step 1) and to the variables above.</p>
+      <div class="grid g4" id="calcForm"></div>
+      <div class="row" style="margin-top:10px"><button class="btn primary small" id="calcAdd" type="button">+ Add calculated variable</button><span class="legend-note" id="calcPreview"></span></div>
+      <div id="calcList" style="margin-top:10px"></div>
     </div>
     <div class="card" id="repCard">
       <div class="row"><h2>Repeated measures</h2><span class="spacer"></span><button class="btn ghost small" id="repCreate" type="button">+ Create repeated measure</button></div>
@@ -491,6 +501,7 @@ footer b{color:var(--purple)}
       <p class="hint">Optional. Each analysis adds its own table (and ROC figure) after the main results. Categorical predictors are compared with their first level (group order / levels order from step 2). Patients with missing values are left out of that analysis.</p>
       <div id="advList" class="grid"></div>
       <div class="row" id="advAdd" style="margin-top:12px">
+        <button class="btn ghost small" data-advadd="correlation" type="button">+ Correlation</button>
         <button class="btn ghost small" data-advadd="linear" type="button">+ Linear regression</button>
         <button class="btn ghost small" data-advadd="logistic" type="button">+ Logistic regression</button>
         <button class="btn ghost small" data-advadd="roc" type="button">+ ROC curve</button>

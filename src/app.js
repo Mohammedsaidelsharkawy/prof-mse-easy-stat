@@ -159,6 +159,7 @@
     $('#studyTitle').value = ex.title;
     selectSheet('Data');
     // the example's suggested options and advanced analyses
+    if (ex.noGroups) setNoGroups(state.cfg, true);
     Object.assign(state.cfg.options, ex.options || {});
     for (const [col, lv] of Object.entries(ex.levels || {})) {
       const v = state.cfg.variables.find(x => x.kind === 'single' && x.cols[0].col === col);
@@ -481,6 +482,16 @@
   }
   // default label of a group value; one-group studies have a single group of all patients
   const groupName = g => g === Analysis.ALL_GROUP ? 'All patients' : /group/i.test(g) ? g : `${g} group`;
+  // one group: the former group column (e.g. sex, picked by the detection) becomes an ordinary variable again
+  function setNoGroups(cfg, on) {
+    cfg.noGroups = on; setGroups(cfg);
+    const v = cfg.variables.find(x => x.kind === 'single' && x.cols[0].col === cfg.groupCol);
+    if (on && !v && state.data.headers.includes(cfg.groupCol)) {
+      const pos = state.data.headers.indexOf(cfg.groupCol), near = cfg.variables.filter(x => x.kind === 'single').sort((a, b) => Math.abs(a.pos - pos) - Math.abs(b.pos - pos))[0];
+      cfg.variables.push(singleVariable(state.data.rows, cfg.groupCol, pos, near ? near.table : 'Demographic and baseline data'));
+      cfg.variables.sort((a, b) => a.pos - b.pos);
+    } else if (v) v.include = on;
+  }
   function setGroups(cfg) {
     const seen = [];
     state.data.rows.forEach(r => { const g = Analysis.groupOf(cfg, r); if (g !== null && !seen.includes(g)) seen.push(g); });
@@ -494,12 +505,13 @@
 
   /* ---------- step 2: variables ---------- */
   function renderVariables() {
+    renderCalcForm();
     const cfg = state.cfg, { headers } = state.data;
     $('#groupCol').innerHTML = headers.map(h => `<option ${h === cfg.groupCol ? 'selected' : ''}>${esc(h)}</option>`).join('');
     // study design: compare the groups of a column, or analyse every patient as one group
     $('#groupMode').value = cfg.noGroups ? 'one' : 'groups';
     $('#groupColBox').style.display = cfg.noGroups ? 'none' : '';
-    $('#groupMode').onchange = e => { readUiIntoCfg(); cfg.noGroups = e.target.value === 'one'; setGroups(cfg); renderVariables(); renderStepper();
+    $('#groupMode').onchange = e => { readUiIntoCfg(); setNoGroups(cfg, e.target.value === 'one'); renderVariables(); renderStepper();
       toast(cfg.noGroups ? 'All patients are analysed as one group: descriptive tables and changes over time' : 'Groups are compared again'); };
     $('#groupCol').onchange = e => { readUiIntoCfg(); cfg.groupCol = e.target.value; cfg.variables.forEach(v => { if (v.cols[0].col === cfg.groupCol) v.include = false; }); setGroups(cfg); renderVariables(); };
     $('#groupsTbl').innerHTML = `<thead><tr><th>Use</th><th>Value in Excel</th><th>Label in report</th><th>n</th><th>Order</th></tr></thead><tbody>${
@@ -697,11 +709,170 @@
     [a[from], a[to]] = [a[to], a[from]];
     renderTpVars();
   });
+  /* ---------- calculated variables: new columns computed from existing ones ---------- */
+  const CALC_TYPES = {
+    bmi: 'BMI = weight (kg) / height (m)²', diff: 'Change = B − A', pct: '% change = (B − A) / A × 100', ratio: 'Ratio = A / B',
+    sum: 'Total score (sum of columns)', mean: 'Mean of columns', log: 'Logarithm (ln or log10)', cat: 'Categories from cut-offs (e.g. BMI classes)', formula: 'Own formula'
+  };
+  const calc = { type: 'bmi' };
+  const numCols = () => state.data.headers.filter(h => columnInfo(state.data.rows, h).numeric);
+  function renderCalcForm() {
+    if (!state.data) return;
+    const t = calc.type, nums = numCols(), reps = state.cfg.variables.filter(v => v.kind === 'repeated' && v.type === 'numeric');
+    const opt = (list, v) => list.map(h => `<option ${h === v ? 'selected' : ''}>${esc(h)}</option>`).join('');
+    const sel = (k, label, list = nums) => `<div><label class="f">${label}</label><select data-calc="${k}"><option value="">— choose —</option>${opt(list, calc[k])}</select></div>`;
+    let f = `<div><label class="f">Calculation</label><select data-calc="type">${Object.entries(CALC_TYPES).map(([k, l]) => `<option value="${k}" ${k === t ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+    if (t === 'bmi') f += `<div><label class="f">Weight (kg)</label><select data-calc="a"><option value="">— choose —</option>${opt(nums, calc.a)}${reps.map(v => `<option value="rep:${v.id}" ${calc.a === 'rep:' + v.id ? 'selected' : ''}>${esc(v.label)} — every timepoint</option>`).join('')}</select></div>`
+      + sel('b', 'Height') + `<div><label class="f">Height unit</label><select data-calc="unit"><option value="cm" ${calc.unit !== 'm' ? 'selected' : ''}>cm</option><option value="m" ${calc.unit === 'm' ? 'selected' : ''}>m</option></select></div>`;
+    if (t === 'diff' || t === 'pct' || t === 'ratio') f += sel('a', t === 'ratio' ? 'A (numerator)' : 'A (first, e.g. baseline)') + sel('b', t === 'ratio' ? 'B (denominator)' : 'B (second, e.g. follow-up)');
+    if (t === 'log') f += sel('a', 'Column') + `<div><label class="f">Base</label><select data-calc="base"><option value="ln" ${calc.base !== '10' ? 'selected' : ''}>Natural (ln)</option><option value="10" ${calc.base === '10' ? 'selected' : ''}>log10</option></select></div>`;
+    if (t === 'cat') f += sel('a', 'Column') + `<div><label class="f">Cut-offs (lower limits)</label><input type="text" data-calc="cuts" value="${esc(calc.cuts ?? '18.5, 25, 30')}" placeholder="18.5, 25, 30"></div>`
+      + `<div><label class="f">Category names (one more than cut-offs)</label><input type="text" data-calc="labels" value="${esc(calc.labels ?? 'Underweight, Normal, Overweight, Obese')}"></div>`;
+    if (t === 'sum' || t === 'mean') f += `<div style="grid-column:span 3"><label class="f">Columns (a patient with any of them missing gets no value)</label><div class="predlist">${nums.map(h => `<label><input type="checkbox" data-calccol="${esc(h)}" ${(calc.cols || []).includes(h) ? 'checked' : ''}>${esc(h)}</label>`).join('')}</div></div>`;
+    if (t === 'formula') f += `<div style="grid-column:span 3"><label class="f">Formula — column names in [brackets]; + − × / ^ ( ), ln, log10, sqrt, abs, exp, round, min, max</label><input type="text" data-calc="expr" value="${esc(calc.expr || '')}" placeholder="e.g. [Weight_kg] / ([Height_cm] / 100) ^ 2"></div>`;
+    f += `<div><label class="f">New column name</label><input type="text" data-calc="name" value="${esc(calc.name || '')}" placeholder="${esc(calcDefaultName())}"></div>`;
+    $('#calcForm').innerHTML = f;
+    const done = state.cfg.computed || [];
+    $('#calcList').innerHTML = done.length ? `<table class="t"><thead><tr><th>Column</th><th>Calculation</th><th></th></tr></thead><tbody>${done.map((c, i) =>
+      `<tr><td class="mono">${esc(c.names.join(', '))}</td><td>${esc(c.desc)}</td><td><button class="btn ghost small" data-calcre="${i}" type="button" title="Calculate again from the current sheet">⟳ Recalculate</button></td></tr>`).join('')}</tbody></table>` : '';
+    calcPreview();
+  }
+  function calcDefaultName() {
+    const t = calc.type, a = String(calc.a || '').replace(/^rep:.*/, 'BMI');
+    return { bmi: 'BMI_kg_m2', diff: a ? `${a}_change` : 'Change', pct: a ? `${a}_pct_change` : 'Pct_change', ratio: 'Ratio', sum: 'Total_score', mean: 'Mean_score',
+      log: a ? `${calc.base === '10' ? 'Log10' : 'Ln'}_${a}` : 'Log', cat: a ? `${a}_class` : 'Class', formula: 'Calculated' }[t];
+  }
+  // own formulas: every token is checked against a whitelist (numbers, operators, column names, a few functions) before it becomes code
+  const FUNCS = { ln: Math.log, log: Math.log, log10: Math.log10, sqrt: Math.sqrt, abs: Math.abs, exp: Math.exp, round: (x, n = 0) => Math.round(x * 10 ** n) / 10 ** n, min: Math.min, max: Math.max };
+  function compileFormula(expr) {
+    const heads = state.data.headers, used = [], re = /\s*(\d+(?:\.\d+)?(?:e[+-]?\d+)?|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.]*|[-+*/^(),])/gy;
+    let js = '', m, pos = 0;
+    const src = String(expr || '').trim();
+    if (!src) throw new Error('type a formula');
+    while (pos < src.length) {
+      re.lastIndex = pos; m = re.exec(src);
+      if (!m) throw new Error(`cannot read “${src.slice(pos, pos + 12)}”`);
+      pos = re.lastIndex;
+      const t = m[1];
+      if (/^\d/.test(t)) js += t;
+      else if (t[0] === '[' || heads.includes(t)) {
+        const name = t[0] === '[' ? t.slice(1, -1).trim() : t;
+        if (!heads.includes(name)) throw new Error(`no column named “${name}”`);
+        if (!used.includes(name)) used.push(name);
+        js += `c[${used.indexOf(name)}]`;
+      } else if (/^[A-Za-z_]/.test(t)) {
+        if (!FUNCS[t.toLowerCase()]) throw new Error(`unknown name “${t}” — put column names in [brackets]`);
+        js += `F.${t.toLowerCase()}`;
+      } else js += t === '^' ? '**' : t;
+    }
+    if (!used.length) throw new Error('the formula uses no column');
+    let fn;
+    try { fn = new Function('c', 'F', `return (${js});`); } catch (e) { throw new Error('the formula is incomplete'); }
+    return { cols: used, f: vals => fn(vals, FUNCS) };
+  }
+  // the calculation as a list of [new column, source columns, function of their values]
+  function calcPlan() {
+    const t = calc.type, num = Analysis.toNum, name = String(calc.name || '').trim() || calcDefaultName();
+    const need = (...k) => { k.forEach(x => { if (!calc[x]) throw new Error('choose the columns'); }); };
+    if (t === 'bmi') {
+      need('a', 'b');
+      const div = calc.unit === 'm' ? 1 : 100, bmi = ([w, h]) => w / (h / div) ** 2;
+      if (String(calc.a).startsWith('rep:')) {
+        const v = state.cfg.variables.find(x => x.id === calc.a.slice(4)); if (!v) throw new Error('choose the weight');
+        const base = name.replace(/_?kg_m2$/i, '') || 'BMI';
+        return { desc: `BMI from ${v.label} at every timepoint and ${calc.b}`, repeated: { label: 'BMI (kg/m2)', from: v },
+          items: v.cols.map(c => ({ name: `${base}_${c.tp}`, src: [c.col, calc.b], f: bmi, tp: c.tp, label: c.label })) };
+      }
+      return { desc: `${calc.a} / (${calc.b}${calc.unit === 'm' ? '' : ' / 100'})²`, items: [{ name, src: [calc.a, calc.b], f: bmi }] };
+    }
+    if (t === 'diff') { need('a', 'b'); return { desc: `${calc.b} − ${calc.a}`, items: [{ name, src: [calc.a, calc.b], f: ([a, b]) => b - a }] }; }
+    if (t === 'pct') { need('a', 'b'); return { desc: `(${calc.b} − ${calc.a}) / ${calc.a} × 100`, items: [{ name, src: [calc.a, calc.b], f: ([a, b]) => a ? (b - a) / a * 100 : NaN }] }; }
+    if (t === 'ratio') { need('a', 'b'); return { desc: `${calc.a} / ${calc.b}`, items: [{ name, src: [calc.a, calc.b], f: ([a, b]) => b ? a / b : NaN }] }; }
+    if (t === 'log') { need('a'); return { desc: `${calc.base === '10' ? 'log10' : 'ln'}(${calc.a})`, items: [{ name, src: [calc.a], f: ([a]) => a > 0 ? (calc.base === '10' ? Math.log10(a) : Math.log(a)) : NaN }] }; }
+    if (t === 'sum' || t === 'mean') {
+      const cols = calc.cols || []; if (cols.length < 2) throw new Error('tick at least two columns');
+      return { desc: `${t === 'sum' ? 'sum' : 'mean'} of ${cols.join(', ')}`, items: [{ name, src: cols, f: v => t === 'sum' ? v.reduce((a, b) => a + b, 0) : v.reduce((a, b) => a + b, 0) / v.length }] };
+    }
+    if (t === 'cat') {
+      need('a');
+      const cuts = String(calc.cuts ?? '18.5, 25, 30').split(/[,;]/).map(x => parseFloat(x.trim().replace(',', '.'))).filter(isFinite).sort((a, b) => a - b);
+      const labels = String(calc.labels ?? 'Underweight, Normal, Overweight, Obese').split(',').map(x => x.trim()).filter(Boolean);
+      if (!cuts.length || labels.length !== cuts.length + 1) throw new Error(`give ${cuts.length + 1} category names for ${cuts.length} cut-offs`);
+      return { desc: `${calc.a}: ${labels.map((l, i) => `${l} ${i === 0 ? `< ${cuts[0]}` : i === cuts.length ? `≥ ${cuts[i - 1]}` : `${cuts[i - 1]}–<${cuts[i]}`}`).join(', ')}`, levels: labels, text: true,
+        items: [{ name, src: [calc.a], f: ([a]) => labels[cuts.filter(c => a >= c).length] }] };
+    }
+    const fm = compileFormula(calc.expr);
+    return { desc: String(calc.expr).trim(), items: [{ name, src: fm.cols, f: fm.f }] };
+  }
+  // value of one item for one patient: missing when any source value is missing or the result is not a number
+  function calcValue(it, r, text) {
+    const vals = it.src.map(c => Analysis.toNum(r[c]));
+    if (vals.some(v => !isFinite(v))) return null;
+    const v = it.f(vals);
+    if (text) return v ?? null;
+    return isFinite(v) ? Math.round(v * 100) / 100 : null;
+  }
+  function calcPreview() {
+    try {
+      const plan = calcPlan(), it = plan.items[0], r = state.data.rows.find(x => calcValue(it, x, plan.text) !== null);
+      $('#calcPreview').textContent = `${plan.items.map(x => x.name).join(', ')} = ${plan.desc}${r ? ` — first patient: ${calcValue(it, r, plan.text)}` : ''}`;
+      $('#calcPreview').style.color = '';
+    } catch (e) { $('#calcPreview').textContent = e.message; $('#calcPreview').style.color = 'var(--bad)'; }
+  }
+  function applyCalc(plan, existing) {
+    const { headers } = state.data, cfg = state.cfg;
+    editSheet(() => {
+      plan.items.forEach(it => {
+        if (!headers.includes(it.name)) headers.push(it.name);
+        state.data.rows.forEach(r => { r[it.name] = calcValue(it, r, plan.text); });
+      });
+      if (existing) return;
+      // new variables: one repeated measure (BMI at every timepoint) or one single variable in the table of its first source column
+      if (plan.repeated) {
+        const pos = headers.indexOf(plan.items[0].name), from = plan.repeated.from;
+        cfg.variables.push({ ...from, id: 'v' + pos, pos, label: plan.repeated.label, cols: plan.items.map(it => ({ col: it.name, tp: it.tp, ...(it.label ? { label: it.label } : {}) })),
+          chart: undefined, caption: undefined, ylabel: undefined, include: true });
+      } else {
+        const it = plan.items[0], pos = headers.indexOf(it.name);
+        const src = cfg.variables.find(v => v.kind === 'single' && v.cols[0].col === it.src[0]);
+        const v = singleVariable(state.data.rows, it.name, pos, src ? src.table : 'Other outcomes');
+        if (plan.levels) { v.type = 'categorical'; v.levels = plan.levels.filter(l => state.data.rows.some(r => r[it.name] === l)); }
+        if (!cfg.variables.some(x => x.cols.some(c => c.col === it.name))) cfg.variables.push(v);
+      }
+      cfg.computed = [...(cfg.computed || []), { names: plan.items.map(i => i.name), desc: plan.desc, calc: JSON.parse(JSON.stringify(calc)) }];
+    });
+  }
+  $('#calcCard').addEventListener('input', e => {
+    const k = e.target.dataset.calc;
+    if (e.target.dataset.calccol !== undefined) { const h = e.target.dataset.calccol; calc.cols = e.target.checked ? [...(calc.cols || []), h] : (calc.cols || []).filter(x => x !== h); }
+    else if (k) { calc[k] = e.target.value; if (k === 'type' || k === 'a') { if (k === 'type') calc.name = ''; renderCalcForm(); return; } }
+    calcPreview();
+  });
+  $('#calcAdd').onclick = () => {
+    readUiIntoCfg();
+    let plan;
+    try { plan = calcPlan(); } catch (e) { toast('Cannot calculate: ' + e.message); return; }
+    const clash = plan.items.find(it => state.data.headers.includes(it.name));
+    if (clash && !confirm(`A column named “${clash.name}” exists. Replace its values?`)) return;
+    applyCalc(plan, !!clash);
+    const n = state.data.rows.filter(r => r[plan.items[0].name] !== null).length;
+    toast(`${plan.items.map(i => i.name).join(', ')} added (${n} of ${state.data.rows.length} patients have a value)`);
+    calc.name = ''; renderVariables();
+  };
+  $('#calcList').addEventListener('click', e => {
+    const b = e.target.closest('[data-calcre]'); if (!b) return;
+    const c = state.cfg.computed[+b.dataset.calcre], keep = { ...calc };
+    Object.keys(calc).forEach(k => delete calc[k]); Object.assign(calc, c.calc);
+    try { const plan = calcPlan(); state.cfg.computed.splice(+b.dataset.calcre, 1); applyCalc(plan, true); state.cfg.computed.push(c); toast('Recalculated from the current sheet'); }
+    catch (err) { toast('Cannot recalculate: ' + err.message); }
+    Object.keys(calc).forEach(k => delete calc[k]); Object.assign(calc, keep); renderVariables();
+  });
+
   /* ---------- figures by variable + live preview ---------- */
   const CHART_TYPES = {
-    repeated: [['auto', 'Auto (chart style)'], ['bar', 'Bars'], ['line', 'Lines over time'], ['box', 'Box plots'], ['dot', 'Box plots + every patient'], ['none', 'No figure']],
-    numeric: [['auto', 'Auto'], ['bar', 'Bars (mean ± error / median, IQR)'], ['box', 'Box plot'], ['dot', 'Dot plot (every patient)'], ['hist', 'Histogram'], ['none', 'No figure']],
-    categorical: [['auto', 'Auto (bars)'], ['stacked', '100% stacked bar'], ['pie', 'Donut / pie'], ['none', 'No figure']]
+    repeated: [['auto', 'Auto (chart style)'], ['bar', 'Bars'], ['line', 'Lines over time'], ['meanci', 'Means with 95% CI over time'], ['box', 'Box plots'], ['dot', 'Box plots + every patient'], ['violin', 'Violin plots'], ['none', 'No figure']],
+    numeric: [['auto', 'Auto'], ['bar', 'Bars (mean ± error / median, IQR)'], ['box', 'Box plot'], ['violin', 'Violin plot'], ['dot', 'Dot plot (every patient)'], ['meanci', 'Mean with 95% CI (error plot)'], ['hist', 'Histogram'], ['none', 'No figure']],
+    categorical: [['auto', 'Auto (bars)'], ['hbar', 'Horizontal bars'], ['stacked', '100% stacked bar'], ['pie', 'Donut'], ['piefull', 'Pie'], ['none', 'No figure']]
   };
   const chartKind = v => v.kind === 'repeated' ? 'repeated' : v.type;
   function renderFigureTable() {
@@ -749,7 +920,7 @@
   });
 
   /* ---------- advanced analyses (regression, ROC) ---------- */
-  const ADV_TYPES = { linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
+  const ADV_TYPES = { correlation: 'Correlation (Pearson / Spearman)', linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
     cox: 'Cox regression (hazard ratios)', mcnemar: 'McNemar test (paired categorical)', kappa: "Cohen's kappa (agreement, categorical)",
     agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)" };
   const analysedRows = () => { const g = activeGroups(); return state.data.rows.filter(r => g.includes(Analysis.groupOf(state.cfg, r))); };
@@ -785,8 +956,10 @@
       if (t === 'agreement') fields = select('outcome', 'Method / rater A', num, a.outcome) + select('second', 'Method / rater B', num.filter(c => c.col !== a.outcome), a.second);
       if (t === 'diagnostic') fields = select('outcome', 'Reference standard (true diagnosis)', cat, a.outcome) + levelSelect('Condition present when', a.outcome, a.positive)
         + select('event', 'Index test (categorical result)', cat.filter(c => c.col !== a.outcome), a.event) + levelSelect('Test positive when', a.event, a.eventPositive, 'eventPositive');
+      if (t === 'correlation') { fields = select('outcome', 'Main variable (optional — correlated with each ticked variable)', cols.filter(c => Analysis.isNumberColumn(rows, c.col)), a.outcome)
+        + '<p class="legend-note" style="margin:22px 0 0">Leave the main variable empty to correlate every pair of the ticked variables.</p>'; predLabel = 'Variables (numeric or ordinal scores)'; preds = cols.filter(c => Analysis.isNumberColumn(rows, c.col)); }
       if (t === 'cronbach') { fields = '<p class="legend-note" style="margin:0">Tick the questionnaire items (numeric scores). Patients with any missing item are left out.</p>'; predLabel = 'Items'; preds = cols.filter(c => Analysis.isNumberColumn(rows, c.col)); }
-      const withPreds = ['linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach'].includes(t);
+      const withPreds = ['linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation'].includes(t);
       const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
       return `<div class="gcard" data-adv="${ai}">
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
@@ -809,6 +982,10 @@
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
       out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
+    if (t === 'correlation') out.push(`<div><label class="f">Coefficient</label>${sel('method', [['auto', 'Automatic (Pearson if normal, else Spearman)'], ['pearson', 'Pearson'], ['spearman', 'Spearman']], a.method)}</div>`,
+      `<div><label class="f">Table layout</label>${sel('layout', [['auto', 'Automatic'], ['matrix', 'Matrix'], ['pairs', 'List of pairs']], a.layout)}</div>`,
+      `<div><label class="f">Scatter plots of significant pairs</label>${sel('scatter', [['2', 'Up to 2'], ['0', 'None'], ['1', 'Up to 1'], ['4', 'Up to 4'], ['all', 'All']], a.scatter)}</div>`,
+      `<div>${box('ci', '95% CI of the coefficients')}</div>`);
     if (t === 'linear') out.push(`<div>${box('vif', 'Collinearity (VIF)')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('hl', 'Hosmer-Lemeshow goodness of fit')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('classTable', 'Classification table (sensitivity / specificity)')}</div>`);
@@ -1142,6 +1319,7 @@
           res.consort = { url: cv.toDataURL('image/png'), w: cv.width, h: cv.height };
         }
         state.result = res;
+        if (state.pendingEdits) { applyEdits(res, state.pendingEdits); state.pendingEdits = null; }
         renderReport();
       } catch (err) { console.error(err); $('#report').innerHTML = `<p style="color:var(--bad)"><b>Analysis failed:</b> ${esc(err.message)}</p>`; }
       finally { busy(false); }
@@ -1162,7 +1340,7 @@
   // the caption's explanation of what the chart shows: bars, error bars, boxes, markers and significance stars
   function figNote(spec, o) {
     const P = o.pWord === 'p' ? 'p' : 'P', out = [], series = spec.series || [];
-    const err = { sem: 'the standard error of the mean (SEM)', ci: 'the 95% CI of the mean' }[o.errorBar] || '±1 standard deviation (SD)';
+    const err = { sem: 'the standard error of the mean (SEM)', ci: 'the 95% CI of the mean' }[spec.errKind || o.errorBar] || '±1 standard deviation (SD)';
     if ((spec.type === 'bar' || spec.type === 'line') && !spec.percent && !spec.integer) {
       const what = spec.type === 'bar' ? 'Bars' : 'Points';
       if (series.some(s => s.err && s.err.some(v => v !== null && v !== undefined))) out.push(`${what} show the mean; error bars show ${err}.`);
@@ -1173,12 +1351,13 @@
       if (o.boxMean) out.push('◆ marks the mean.');
       if (spec.points) out.push('Each dot is one patient.');
     }
+    if (spec.type === 'violin') out.push(`Violins show the distribution of the values (kernel density); the inner bar shows the interquartile range (IQR), the white dot the median and the line the range within 1.5 × IQR.${o.boxMean ? ' ◆ marks the mean.' : ''}${spec.points ? ' Each dot is one patient.' : ''}`);
     if (spec.type === 'dot') out.push(`Each dot is one patient; the line and whiskers show the ${spec.median ? 'median and IQR' : 'mean ± SD'}.`);
     if (spec.type === 'roc') out.push([spec.diagonal === false ? '' : 'The dashed diagonal is the line of no discrimination (AUC = 0.5).', spec.fill && series.length === 1 ? 'The shaded region is the area under the curve.' : '',
       series.some(s => s.cut) ? 'Circles mark the chosen cut-off values.' : ''].filter(Boolean).join(' '));
     if (spec.type === 'km') out.push('Vertical ticks mark censored patients.');
     if (spec.type === 'ba') out.push('The middle line shows the mean difference (bias) and the dashed lines the 95% limits of agreement (mean ± 1.96 SD).');
-    if (['bar', 'line', 'box', 'dot'].includes(spec.type)) {
+    if (['bar', 'line', 'box', 'dot', 'violin'].includes(spec.type)) {
       const ps = [...(spec.sig || []).map(q => q.p), ...(spec.sigCat || [])].filter(p => p <= spec.alpha);
       if (ps.length) {
         const lv = [`*${P} ≤ ${+o.pLead === 0 ? String(spec.alpha).replace(/^0\./, '.') : spec.alpha}`];
@@ -1449,6 +1628,63 @@
     e.target.value = '';
   };
   renderPresets();
+
+  /* ---------- projects: the data, every setting and the edited report text in one file ---------- */
+  // text edited in step 10, keyed like the export choices so it finds its table or figure again after the analysis is re-run
+  function reportEdits() {
+    const r = state.result; if (!r) return null;
+    syncEdits();
+    return { methods: r.methods, intro: r.intro, summary: r.summary, narrative: r.narrativeEdited ? r.narrative : undefined, abstract: r.abstractEdited ? r.abstract : undefined,
+      sections: Object.fromEntries(r.sections.map(s => [s.key, { title: s.title, comment: s.comment }])),
+      figures: Object.fromEntries(r.sections.flatMap(s => s.figures.map(f => [f.key, { caption: f.caption, note: f.note }]))) };
+  }
+  function applyEdits(r, e) {
+    ['methods', 'intro', 'summary'].forEach(k => { if (typeof e[k] === 'string' && r[k] !== undefined) r[k] = e[k]; });
+    if (typeof e.narrative === 'string') { r.narrative = e.narrative; r.narrativeEdited = true; }
+    if (typeof e.abstract === 'string') { r.abstract = e.abstract; r.abstractEdited = true; }
+    r.sections.forEach(s => {
+      const x = (e.sections || {})[s.key]; if (x) { s.title = x.title ?? s.title; s.comment = x.comment ?? s.comment; }
+      s.figures.forEach(f => { const y = (e.figures || {})[f.key]; if (y) { f.caption = y.caption ?? f.caption; if (y.note !== undefined) f.note = y.note; } });
+    });
+  }
+  $('#btnSaveProj').onclick = () => {
+    if (!state.data) { toast('Nothing to save yet — load an Excel file or an example'); return; }
+    readUiIntoCfg();
+    const proj = { app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step,
+      data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null };
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(proj)], { type: 'application/json' }));
+    a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - project.easystat.json';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Project saved — open it later with 📂 Open project');
+  };
+  $('#projFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const j = JSON.parse(await f.text());
+      if (j.app !== 'ProfMSE-EasyStat-project' || !j.data || !j.cfg) throw new Error(j.app === 'ProfMSE-EasyStat' ? 'this is a setup file — use Load setup' : 'not an Easy Stat project');
+      if (state.data && !confirm('Open this project? Unsaved changes to the current one are lost.')) return;
+      const cfg = j.cfg;
+      cfg.options = { ...defaultOptions(), ...cfg.options };
+      cfg.tpInclude = cfg.tpInclude || {}; cfg.advanced = cfg.advanced || []; cfg.exportExclude = cfg.exportExclude || {}; cfg.report = { ...DEFAULT_REPORT, ...(cfg.report || {}) };
+      state.data = j.data; state.cfg = cfg; state.file = j.file || f.name; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
+      state.undo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
+      $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option>${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
+      $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value;
+      $('#to2').disabled = false; renderGrid();
+      // leave no step active, so the controls of the old project are not read into the opened one
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      go(Math.min(10, Math.max(2, +j.step || 2)));
+      toast(`Project opened: ${state.data.rows.length} patients, saved ${String(j.saved || '').slice(0, 10)}`);
+    } catch (err) { toast('Could not open the project: ' + err.message); }
+  };
+  $('#btnNew').onclick = () => {
+    if (state.data && !confirm('Start a new project? The current data and settings are cleared (save the project first to keep them).')) return;
+    Object.assign(state, { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, pendingCfg: null, pendingEdits: null, undo: [] });
+    $('#sheetBox').style.display = 'none'; $('#fileName').textContent = ''; $('#studyTitle').value = ''; $('#file').value = '';
+    $('#to2').disabled = true; $('#report').innerHTML = '';
+    go(1); toast('New project — upload an Excel file or open an example');
+  };
 
   /* ---------- save / load setup ---------- */
   $('#btnSaveCfg').onclick = () => {

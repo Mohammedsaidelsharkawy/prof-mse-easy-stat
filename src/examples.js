@@ -228,6 +228,32 @@ const Examples = (() => {
         } });
         return out;
       }
+    },
+    {
+      id: 'sleeve-gastrectomy-cohort', name: 'One-group cohort — weight loss after sleeve gastrectomy', noGroups: true,
+      description: 'One group of 64 patients followed for a year: weight at 4 timepoints (with height, to calculate BMI), HbA1c, blood pressure and quality of life before and after. Shows one-group analysis and change over time in the same patients.',
+      title: 'Weight loss and metabolic outcomes one year after laparoscopic sleeve gastrectomy: a prospective cohort study',
+      options: { within: true, figNotes: true },
+      levels: { Satisfaction: ['Poor', 'Fair', 'Good', 'Excellent'] },
+      flow: { type: 'strobe', excluded: [{ text: 'Previous bariatric surgery', n: 6 }, { text: 'Declined to participate', n: 4 }], groups: [{ lost: 3, lostReason: 'Lost to follow-up before 12 months' }] },
+      advanced: [{ type: 'correlation', outcome: 'Weight_baseline', predictors: ['Age_years', 'HbA1c_baseline', 'SBP_baseline', 'QoL_score_baseline'], method: 'auto', scatter: '2' },
+        { type: 'mcnemar', outcome: 'Hypertension_baseline', second: 'Hypertension_12m', positive: 'Yes' }],
+      rows() {
+        const R = rng(1111), out = [];
+        for (let i = 0; i < 64; i++) {
+          const h = R.n(166, 9), w0 = R.n(128, 18), loss = clamp(R.n(0.27, 0.07), 0.08, 0.45), dm = R.yes(0.35), htn = R.u() < 0.45;
+          const w = f => r1(w0 * (1 - loss * f) + R.n(0, 2));
+          const a1c0 = dm === 'Yes' ? R.n(8.1, 1.2) : R.n(5.7, 0.4), sbp0 = R.n(htn ? 146 : 128, 10) + 0.2 * (w0 - 128);
+          out.push({ ID: i + 1, Age_years: Math.round(clamp(R.n(38, 10), 18, 62)), Sex: R.pick(['Female', 'Male'], [70, 30]), Height_cm: Math.round(h), Diabetes: dm,
+            Weight_baseline: r1(w0), Weight_3m: w(0.45), Weight_6m: R.miss(w(0.75)), Weight_12m: R.miss(w(1), 0.05),
+            HbA1c_baseline: r1(a1c0), HbA1c_6m: r1(a1c0 - (dm === 'Yes' ? 1.3 : 0.3) + R.n(0, 0.4)), HbA1c_12m: r1(a1c0 - (dm === 'Yes' ? 1.7 : 0.35) + R.n(0, 0.45)),
+            SBP_baseline: Math.round(sbp0), SBP_12m: Math.round(sbp0 - R.n(12, 8)),
+            Hypertension_baseline: htn ? 'Yes' : 'No', Hypertension_12m: htn && R.u() < 0.45 ? 'Yes' : 'No',
+            QoL_score_baseline: Math.round(clamp(R.n(52, 9) - 0.35 * (w0 - 128), 10, 100)), QoL_score_12m: Math.round(clamp(R.n(74, 11), 10, 100)),
+            Complications: R.yes(0.09), Satisfaction: R.pick(['Poor', 'Fair', 'Good', 'Excellent'], [5, 15, 45, 35]) });
+        }
+        return out;
+      }
     }
   ];
 
