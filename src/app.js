@@ -90,6 +90,7 @@
     if (n === 8) renderAdvanced();
     if (n === 9) renderConsortForm();
     if (n === 10) runAnalysis();
+    $('#presetBar').style.display = n >= 4 ? '' : 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   document.addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) go(+g.dataset.go); });
@@ -1346,6 +1347,101 @@
     } catch (err) { console.error(err); toast('Word export failed: ' + err.message); }
     finally { busy(false); }
   };
+
+  /* ---------- presets: ready-made settings for steps 4–10, and the user's own (kept in this browser) ---------- */
+  // built-in presets start from the defaults; o = options, flow = flowchart appearance, report = report format fields
+  const PRESETS = [
+    { id: 'default', name: 'Default settings', note: 'The settings the app starts with.', o: {} },
+    { id: 'thesis', name: 'Thesis — classic', note: 'Detailed comments after each table, grid tables, figures after each table, summary of key findings, each table on a new page.',
+      o: { commentStyle: 'detailed', summary: true, within: true, tableNewPage: true }, report: { format: 'thesis', style: 'none', newPage: true } },
+    { id: 'thesisFull', name: 'Thesis — fully descriptive', note: 'Descriptive comments (values, tests, effect sizes), Total column, tests as letters after P values, bold significant P values, post hoc and interaction tests.',
+      o: { commentStyle: 'descriptive', commentEffect: true, totalCol: true, testNote: 'marks', boldSig: true, within: true, dunn: true, chiPost: true, mixed: true, summary: true, tableNewPage: true },
+      report: { format: 'thesis', style: 'none', newPage: true } },
+    { id: 'medical', name: 'Journal — medical (Vancouver)', note: 'Concise paper, three-line tables, P = 0.013, tests listed in the footnotes, significant figures only, two per row.',
+      o: { tableStyle: 'apa', testNote: 'list', figures: 'sig', figPerRow: 2, figWidth: 'medium', captionStyle: 'period', tableCaption: 'period', boldSig: false },
+      report: { format: 'paper', style: 'vancouver', maxFigs: 3, nonSig: false } },
+    { id: 'apa', name: 'Journal — APA 7th', note: 'APA style: p = .013 in italics, M (SD), three-line tables, captions above figures, figures after the tables at the end.',
+      o: { tableStyle: 'apa', testNote: 'list', figPerRow: 1, figWidth: 'medium' }, report: { format: 'paper', style: 'apa', maxFigs: 3 } },
+    { id: 'jama', name: 'Journal — AMA / JAMA', note: 'P = .01 in italics, mean (SD), three-line tables, effect sizes in the comments.',
+      o: { tableStyle: 'apa', commentEffect: true, testNote: 'list' }, report: { format: 'paper', style: 'ama', maxFigs: 3 } },
+    { id: 'print', name: 'Black and white print', note: 'Grayscale charts with outlined bars, black-and-white flowchart, Times New Roman in charts.',
+      o: { palette: 'gray', barFill: 'outline', chartFont: 'times', gridlines: false }, flow: { theme: 'bw', font: 'times' } },
+    { id: 'slides', name: 'Presentation', note: 'Large chart text, value labels, every patient shown on box plots, colourful filled flowchart.',
+      o: { chartText: 'xlarge', valueLabels: true, points: true, boxMean: true, legendSize: 'large', chartRes: 2, figWidth: 'full' }, flow: { theme: 'filled', corners: 'rounded', shadow: true, textSize: 'large' } },
+    { id: 'minimal', name: 'Tables only', note: 'Concise comments, no figures, no effect-size columns.', o: { figures: 'none', effect: false, commentStyle: 'concise' } },
+    { id: 'complete', name: 'Comprehensive analysis', note: 'Every optional test: within-group change, Welch / Games-Howell, Dunn, pairwise Chi-square, group × time interaction, correlations, effect sizes in comments and a summary.',
+      o: { within: true, welch: true, dunn: true, chiPost: true, mixed: true, correlation: true, commentEffect: true, summary: true, showStat: true } }
+  ];
+  const MY_KEY = 'easystat-presets';
+  const myPresets = () => { try { return JSON.parse(localStorage.getItem(MY_KEY) || '[]'); } catch (e) { return []; } };
+  const saveMine = list => { try { localStorage.setItem(MY_KEY, JSON.stringify(list)); return true; } catch (e) { toast('Presets cannot be stored in this browser — use Export'); return false; } };
+  const REPORT_KEYS = ['format', 'style', 'chapter', 'sectionHeads', 'newPage', 'maxFigs', 'nonSig', 'abstract'];
+  function renderPresets(sel) {
+    const mine = myPresets();
+    $('#presetSel').innerHTML = `<optgroup label="Ready-made">${PRESETS.map(p => `<option value="b:${p.id}">${esc(p.name)}</option>`).join('')}</optgroup>`
+      + (mine.length ? `<optgroup label="My presets">${mine.map((p, i) => `<option value="m:${i}">${esc(p.name)}</option>`).join('')}</optgroup>` : '');
+    if (sel) $('#presetSel').value = sel;
+    presetNote();
+  }
+  const selectedPreset = () => { const [k, v] = $('#presetSel').value.split(':'); return k === 'b' ? PRESETS.find(p => p.id === v) : myPresets()[+v]; };
+  function presetNote() {
+    const p = selectedPreset(), mine = $('#presetSel').value.startsWith('m:');
+    $('#presetNote').textContent = p ? (mine ? `Your preset${p.saved ? ', saved ' + p.saved : ''}.` : p.note) : '';
+    $('#presetDel').disabled = !mine;
+  }
+  $('#presetSel').onchange = presetNote;
+  $('#presetApply').onclick = () => {
+    const p = selectedPreset(); if (!p || !state.cfg) return;
+    readUiIntoCfg();
+    const cfg = state.cfg, keepColors = cfg.options.customColors;
+    // ready-made presets start from the defaults; your own presets hold every option
+    cfg.options = { ...defaultOptions(), ...JSON.parse(JSON.stringify(p.o || {})) };
+    if (!(p.o && p.o.customColors)) cfg.options.customColors = keepColors;
+    // the flowchart's own section-label wording is kept unless the preset brings its own
+    const labels = (cfg.consort && cfg.consort.style || {}).labels || {};
+    if (cfg.consort) cfg.consort.style = { ...FLOW_STYLE, labels, ...JSON.parse(JSON.stringify(p.flow || {})) };
+    cfg.report = { ...DEFAULT_REPORT, ...(cfg.report || {}), ...(p.report || (p.mine ? {} : { format: 'custom', style: 'none' })) };
+    // show the new settings on the current step without reading the old controls back
+    renderOptions();
+    if (state.step === 7) renderFigureTable();
+    if (state.step === 9) renderConsortForm();
+    if (state.step === 10) runAnalysis();
+    toast(`Preset applied: ${p.name}`);
+  };
+  $('#presetSave').onclick = () => {
+    if (!state.cfg) return;
+    readUiIntoCfg();
+    const name = (prompt('Name of the preset:', 'My settings') || '').trim(); if (!name) return;
+    const r = report(), list = myPresets().filter(x => x.name !== name);
+    list.push({ name, mine: true, saved: new Date().toISOString().slice(0, 10), o: JSON.parse(JSON.stringify(state.cfg.options)),
+      flow: state.cfg.consort && state.cfg.consort.style ? JSON.parse(JSON.stringify(state.cfg.consort.style)) : null,
+      report: Object.fromEntries(REPORT_KEYS.map(k => [k, r[k]])) });
+    if (saveMine(list)) { renderPresets('m:' + (list.length - 1)); toast(`Preset “${name}” saved`); }
+  };
+  $('#presetDel').onclick = () => {
+    const v = $('#presetSel').value; if (!v.startsWith('m:')) return;
+    const list = myPresets(), p = list[+v.slice(2)];
+    if (!p || !confirm(`Delete the preset “${p.name}”?`)) return;
+    list.splice(+v.slice(2), 1); saveMine(list); renderPresets(); toast('Preset deleted');
+  };
+  $('#presetExport').onclick = () => {
+    const list = myPresets(); if (!list.length) { toast('No presets of your own yet — save one first'); return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'ProfMSE-EasyStat-presets', presets: list }, null, 2)], { type: 'application/json' }));
+    a.download = 'EasyStat presets.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  };
+  $('#presetFile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const j = JSON.parse(await f.text());
+      if (j.app !== 'ProfMSE-EasyStat-presets' || !Array.isArray(j.presets)) throw new Error('not an Easy Stat presets file');
+      const list = myPresets();
+      j.presets.filter(p => p && p.name && p.o).forEach(p => { const i = list.findIndex(x => x.name === p.name); const q = { ...p, mine: true }; if (i >= 0) list[i] = q; else list.push(q); });
+      if (saveMine(list)) { renderPresets(); toast(`${j.presets.length} preset(s) imported`); }
+    } catch (err) { toast('Could not import presets: ' + err.message); }
+    e.target.value = '';
+  };
+  renderPresets();
 
   /* ---------- save / load setup ---------- */
   $('#btnSaveCfg').onclick = () => {

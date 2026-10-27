@@ -96,6 +96,7 @@ table.t td select{min-width:120px}
 .predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
+.preset-bar{gap:10px;margin:0 0 14px;padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;align-items:center}
 .fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
 .fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
@@ -206,6 +207,16 @@ footer b{color:var(--purple)}
 
 <main>
   <div class="stepper" id="stepper"></div>
+  <div class="preset-bar row" id="presetBar" style="display:none">
+    <b>⚡ Preset</b>
+    <select id="presetSel" style="width:auto;max-width:320px"></select>
+    <button class="btn primary small" id="presetApply" type="button">Apply</button>
+    <span class="legend-note" id="presetNote" style="flex:1;min-width:200px"></span>
+    <button class="btn ghost small" id="presetSave" type="button" title="Save the current settings of steps 4–10 as your own preset">＋ Save current as preset</button>
+    <button class="btn ghost small" id="presetDel" type="button" title="Delete the selected preset of your own">✕ Delete</button>
+    <button class="btn ghost small" id="presetExport" type="button" title="Download your presets to use on another computer">⬇ Export</button>
+    <label class="btn ghost small" style="margin:0" title="Load presets from a file">⬆ Import<input type="file" id="presetFile" accept=".json" hidden></label>
+  </div>
 
   <!-- STEP 1 -->
   <section class="panel active" id="p1">
