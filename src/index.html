@@ -105,15 +105,30 @@ table.t td select{min-width:120px}
 .fmt-opts{margin-top:10px;gap:20px}
 @media (max-width:820px){.fmt-cards{grid-template-columns:1fr}}
 .grid-bar{margin:14px 0 8px;gap:12px}
-table.grid td.miss{background:rgba(192,57,43,.09)}
-table.grid td.rn,table.grid th.rn{color:var(--muted);font-size:12px;white-space:nowrap;position:sticky;left:0;background:var(--card);z-index:2}
-table.grid th.rn{z-index:3;background:var(--lav)}
-table.grid th.sortable{cursor:pointer}
-table.grid th.sortable:hover{color:var(--purple)}
-table.grid td[contenteditable]{outline:none;cursor:text}
-table.grid td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
-table.grid tr.gsum td{background:var(--soft);font-size:11.5px;color:var(--muted);white-space:nowrap}
-table.grid .miss-n{color:var(--bad);font-weight:600}
+table.dgrid{width:auto;min-width:100%}
+table.dgrid td,table.dgrid th{white-space:nowrap}
+table.dgrid td{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+table.dgrid.wrap td{white-space:normal;overflow:visible;min-width:90px}
+table.dgrid.compact td{padding:2px 8px;font-size:12.5px}table.dgrid.compact th{padding:5px 8px;font-size:12.5px}
+table.dgrid.comfy td{padding:10px 12px}table.dgrid.comfy th{padding:11px 12px}
+table.dgrid td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.dgrid th.num{text-align:right}
+table.dgrid.stripes tbody tr:nth-child(even) td{background:var(--soft)}
+table.dgrid .ty{display:inline-block;margin-left:5px;font-size:10px;font-weight:600;padding:0 5px;border-radius:4px;background:var(--card);color:var(--muted);vertical-align:1px}
+table.dgrid.freeze td.c1,table.dgrid.freeze th.c1{position:sticky;left:var(--rnw,40px);background:var(--card);z-index:2;box-shadow:1px 0 0 var(--line)}
+table.dgrid.freeze th.c1{z-index:3;background:var(--lav)}
+.colpick{position:relative}.colpick summary{list-style:none}.colpick summary::-webkit-details-marker{display:none}
+.colpick-box{position:absolute;z-index:20;top:110%;left:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:340px;overflow:auto;min-width:240px}
+.colpick-box label{display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0;white-space:nowrap}
+table.dgrid td.miss{background:rgba(192,57,43,.09)}
+table.dgrid td.rn,table.dgrid th.rn{color:var(--muted);font-size:12px;white-space:nowrap;position:sticky;left:0;background:var(--card);z-index:2}
+table.dgrid th.rn{z-index:3;background:var(--lav)}
+table.dgrid th.sortable{cursor:pointer}
+table.dgrid th.sortable:hover{color:var(--purple)}
+table.dgrid td[contenteditable]{outline:none;cursor:text}
+table.dgrid td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
+table.dgrid tr.gsum td{background:var(--soft);font-size:11.5px;color:var(--muted);white-space:nowrap}
+table.dgrid .miss-n{color:var(--bad);font-weight:600}
 .gh{display:flex;flex-direction:column;gap:3px}
 .gh input{min-width:110px!important;padding:3px 6px;font-size:12.5px}
 .gh-btns,.gr-btns{display:inline-flex;gap:2px}
@@ -221,6 +236,15 @@ footer b{color:var(--purple)}
             <span class="spacer"></span>
             <button class="btn ghost small" id="gridEdit" type="button">✎ Edit sheet</button>
           </div>
+          <div class="row grid-bar" id="gridViewBar">
+            <label class="f" style="margin:0">Density</label>
+            <select id="gridDensity" style="width:auto"><option value="compact">Compact</option><option value="normal" selected>Normal</option><option value="comfy">Comfortable</option></select>
+            <details class="colpick"><summary class="btn ghost small">Columns <span id="gridColCount"></span></summary><div class="colpick-box"><div class="row" style="gap:6px;margin-bottom:6px"><button class="btn ghost small" type="button" data-gcols="all">All</button><button class="btn ghost small" type="button" data-gcols="none">None</button><button class="btn ghost small" type="button" data-gcols="num">Numeric</button><button class="btn ghost small" type="button" data-gcols="text">Text</button></div><div id="gridCols"></div></div></details>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridTypes" checked><span>Column types</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridWrapText"><span>Wrap long text</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridFreeze"><span>Freeze first column</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridStripes"><span>Striped rows</span></label>
+          </div>
           <div class="row grid-bar" id="gridEditBar" style="display:none">
             <span class="legend-note">Click a cell to change it · rename a column in its heading · ◀ ▶ move · ⇅ sort · ✕ delete · ↑ ↓ move rows</span>
             <span class="spacer"></span>
@@ -230,7 +254,7 @@ footer b{color:var(--purple)}
             <button class="btn ghost small" id="gridRedetect" type="button" title="Detect variables again from the edited sheet">⟳ Re-detect variables</button>
             <button class="btn ghost small" id="gridSave" type="button">⬇ Edited Excel</button>
           </div>
-          <div class="tbl-wrap" style="max-height:480px"><table class="t grid" id="preview"></table></div>
+          <div class="tbl-wrap" style="max-height:480px"><table class="t dgrid" id="preview"></table></div>
           <div class="row" style="margin-top:6px"><span id="gridInfo" class="legend-note"></span><span class="spacer"></span>
             <button class="btn ghost small" id="gridPrev" type="button">‹ Previous</button><button class="btn ghost small" id="gridNext" type="button">Next ›</button></div>
         </div>
@@ -241,7 +265,7 @@ footer b{color:var(--purple)}
       <div class="grid g2">
         <div><label class="f">Study title (optional, printed at top of report)</label><input type="text" id="studyTitle" placeholder="e.g. PRF versus Ozone for chronic shoulder pain"></div>
         <div><label class="f">Software statement (first sentence of Statistical Analysis)</label>
-          <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was done by Prof MSE Easy Stat v1.0."></div>
+          <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA)."></div>
           <div class="legend-note">Pick a template, then check the version. Name the software actually used for the analysis you report.</div></div>
       </div>
     </div>
@@ -330,6 +354,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Mean and SD</label><select id="optMeanStyle"><option value="pm" selected>Mean ± SD</option><option value="paren">Mean (SD)</option></select></div>
         <div><label class="f">Median and IQR</label><select id="optIqrStyle"><option value="dash" selected>25 - 30</option><option value="endash">25–30</option><option value="bracket">[25, 30]</option></select></div>
         <div><label class="f">Second row of numeric variables</label><select id="optSecondRow"><option value="auto" selected>Range (mean) / IQR (median)</option><option value="ci">95% CI of the mean / IQR</option><option value="none">None — one row per variable</option></select></div>
+        <div><label class="f">Leading zero of P values</label><select id="optPLead"><option value="1" selected>0.013</option><option value="0">.013 (APA / AMA)</option></select></div>
         <div><label class="f">P values</label><select id="optPDigits"><option value="3" selected>3 decimals (&lt;0.001)</option><option value="4">4 decimals (&lt;0.0001)</option></select></div>
         <div><label class="f">P value column heading</label><select id="optPHead"><option selected>P value</option><option>P</option><option>p-value</option></select></div>
         <div><label class="f">Mark of significant P values</label><select id="optSigSym"><option value="*" selected>* (asterisk)</option><option value="†">† (dagger)</option><option value="">none</option></select></div>
@@ -338,6 +363,11 @@ footer b{color:var(--purple)}
         <div>
           <label class="check"><input type="checkbox" id="optShowStat"><span><b>Test statistic column</b> — t, F, U, H or χ² value of the test behind each P value</span></label>
           <label class="check"><input type="checkbox" id="optMissingNote"><span><b>Missing data</b> — number of missing values per variable in the table footnote</span></label>
+          <label class="check"><input type="checkbox" id="optTotalCol"><span><b>Total column</b> — all patients together, next to the groups (tables of single variables)</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optNHead" checked><span><b>Group sizes in the headings</b> — “A group (n=30)”</span></label>
+          <label class="check"><input type="checkbox" id="optBoldSig"><span><b>Bold significant P values</b> in the tables</span></label>
         </div>
       </div>
       <h3>Word document</h3>
@@ -358,7 +388,7 @@ footer b{color:var(--purple)}
     <div class="card">
       <h2>6 · Comments</h2>
       <div class="grid g4">
-        <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option></select></div>
+        <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option><option value="descriptive">Descriptive — values, test, statistic, effect size and an overview</option></select></div>
         <div><label class="f">P value wording</label><select id="optPWord"><option value="P value" selected>(P value = 0.013)</option><option value="P">(P = 0.013)</option><option value="p">(p = 0.013)</option></select></div>
         <div><label class="f">Comment placement</label><select id="optCommentPlace"><option value="after" selected>After each table</option><option value="before">Before each table</option><option value="none">No comments</option></select></div>
       </div>
@@ -397,6 +427,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Chart text size</label><select id="optChartText"><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
         <div><label class="f">Chart shape</label><select id="optAspect"><option value="wide" selected>Wide</option><option value="standard">Standard (4:3)</option><option value="square">Square</option></select></div>
         <div><label class="f">Bar fill</label><select id="optBarFill"><option value="gradient" selected>Gradient</option><option value="solid">Solid</option><option value="outline">Outline only</option><option value="hatched">Hatched (black &amp; white print)</option></select></div>
+        <div><label class="f">Chart font</label><select id="optChartFont"><option value="sans" selected>Segoe UI</option><option value="arial">Arial</option><option value="calibri">Calibri</option><option value="times">Times New Roman</option></select></div>
         <div><label class="f">Bar width</label><select id="optBarWidth"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="wide">Wide</option></select></div>
         <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
         <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
@@ -420,6 +451,7 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
           <label class="check"><input type="checkbox" id="optBoxMean"><span><b>Mean marker</b> (◆) on box plots</span></label>
           <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
+          <label class="check"><input type="checkbox" id="optFigNotes" checked><span><b>Explain the symbols in the caption</b> — what *, **, ***, the bars, error bars, boxes and markers show</span></label>
         </div>
       </div>
     </div>
@@ -494,10 +526,16 @@ footer b{color:var(--purple)}
         <div class="row fmt-opts" id="fmtThesis" style="display:none">
           <div><label class="f">Chapter number (optional)</label><input type="text" id="fmtChapter" placeholder="e.g. 4 → Table 4.1" style="width:180px"></div>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtHeads"><span>A subheading before each table</span></label>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtNewPage"><span>Each table starts on a new page</span></label>
         </div>
         <div class="row fmt-opts" id="fmtPaper" style="display:none">
-          <div><label class="f">Figures in the paper</label><select id="fmtMaxFigs" style="width:auto"><option value="0">None</option><option>1</option><option>2</option><option value="3">3</option><option>4</option><option>5</option><option>6</option></select></div>
+          <div><label class="f">Figures in the paper</label><select id="fmtMaxFigs" style="width:auto"><option value="0">None</option><option>1</option><option>2</option><option value="3">3</option><option>4</option><option>5</option><option>6</option><option>8</option><option>10</option><option value="99">All</option></select></div>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtNonSig"><span>Include figures of non-significant results</span></label>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtAbstract"><span>Results paragraph for the abstract</span></label>
+        </div>
+        <div class="row fmt-opts">
+          <div><label class="f">Journal style</label><select id="fmtStyle" style="width:auto"></select></div>
+          <span class="legend-note" id="fmtStyleNote" style="margin-top:20px;flex:1"></span>
         </div>
       </div>
       <p class="hint" style="margin-top:12px">Review everything below. You can edit the text boxes — your edits go into the Word file. The format changes only this report; your settings in steps 4–9 stay as they are.</p>

@@ -22,6 +22,7 @@
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
     pctDecimals: 1, meanStyle: 'pm', iqrStyle: 'dash', secondRow: 'auto', pDigits: 3, pHead: 'P value', sigSym: '*', showStat: false, missingNote: false,
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
+    pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -37,13 +38,14 @@
     figPlacement: ['optFigPlacement'], captionStyle: ['optCaptionStyle'], chartTitle: ['optChartTitle', true],
     pctDecimals: ['optPctDec'], meanStyle: ['optMeanStyle'], iqrStyle: ['optIqrStyle'], secondRow: ['optSecondRow'], pDigits: ['optPDigits'], pHead: ['optPHead'],
     sigSym: ['optSigSym'], showStat: ['optShowStat', true], missingNote: ['optMissingNote', true], orientation: ['optOrientation'], tableCaption: ['optTableCaption'],
-    pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
+    pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
+    pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
   const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
-    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean });
+    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -117,8 +119,8 @@
 
   /* ---------- software statement presets (first sentence of Statistical Analysis) ---------- */
   const SOFTWARE = [
-    ['Prof MSE Easy Stat', 'Statistical analysis was done by Prof MSE Easy Stat v1.0.'],
     ['IBM SPSS Statistics', 'Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA).'],
+    ['Prof MSE Easy Stat', 'Statistical analysis was done by Prof MSE Easy Stat v1.0.'],
     ['R', 'Statistical analysis was performed using R software, version 4.4 (R Foundation for Statistical Computing, Vienna, Austria).'],
     ['Stata', 'Statistical analysis was performed using Stata, version 18 (StataCorp LLC, College Station, TX, USA).'],
     ['GraphPad Prism', 'Statistical analysis was performed using GraphPad Prism, version 10 (GraphPad Software, Boston, MA, USA).'],
@@ -133,6 +135,7 @@
     ['Excel + SPSS', 'Data were collected and coded in Microsoft Excel (Microsoft Corp., Redmond, WA, USA) and analyzed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA).']
   ];
   $('#softwarePreset').innerHTML = '<option value="">— choose a template —</option>' + SOFTWARE.map(([n], i) => `<option value="${i}">${esc(n)}</option>`).join('');
+  $('#software').value = SOFTWARE[0][1]; $('#softwarePreset').value = '0';
   $('#softwarePreset').onchange = e => {
     if (e.target.value === '') return;
     $('#software').value = SOFTWARE[+e.target.value][1];
@@ -201,11 +204,21 @@
   $('#to2').onclick = () => go(2);
 
   /* ---------- data grid: preview options, editing and rearranging the sheet ---------- */
-  state.grid = { page: 0, per: 10, q: '', onlyMissing: false, hlMissing: true, summary: false, edit: false, sort: null };
+  state.grid = { page: 0, per: 10, q: '', onlyMissing: false, hlMissing: true, summary: false, edit: false, sort: null, density: 'normal', hidden: [], types: true, wrap: false, freeze: false, stripes: false };
   const isMissing = v => v === null || v === undefined || String(v).trim() === '';
   const parseCell = t => { t = t.replace(/\u00a0/g, ' ').trim(); if (t === '') return null; const n = Number(t.replace(',', '.')); return isFinite(n) && /^[-+]?[\d.,]+(e[-+]?\d+)?$/i.test(t) ? n : t; };
   function renderGrid() {
-    const g = state.grid, { headers, rows } = state.data;
+    const g = state.grid, { headers: allHeaders, rows } = state.data;
+    const kinds = Object.fromEntries(allHeaders.map(h => [h, columnInfo(rows, h).numeric ? 'num' : 'text']));
+    g.hidden = g.hidden.filter(h => allHeaders.includes(h));
+    const headers = allHeaders.filter(h => !g.hidden.includes(h));
+    $('#gridCols').innerHTML = allHeaders.map(h => `<label><input type="checkbox" data-gcol="${esc(h)}"${g.hidden.includes(h) ? '' : ' checked'}>${esc(h)} <span class="legend-note">${kinds[h] === 'num' ? 'numeric' : 'text'}</span></label>`).join('');
+    $('#gridColCount').textContent = g.hidden.length ? `(${headers.length} of ${allHeaders.length})` : '';
+    const tbl = $('#preview');
+    ['compact', 'comfy'].forEach(d => tbl.classList.toggle(d, g.density === d));
+    tbl.classList.toggle('wrap', g.wrap); tbl.classList.toggle('freeze', g.freeze); tbl.classList.toggle('stripes', g.stripes);
+    const cc = (h, ci) => [kinds[h] === 'num' ? 'num' : '', ci === 0 ? 'c1' : ''].filter(Boolean).join(' ');
+    const typeTag = h => g.types ? `<span class="ty" title="${kinds[h] === 'num' ? 'Numeric' : 'Text / categories'}">${kinds[h] === 'num' ? '123' : 'abc'}</span>` : '';
     $('#dims').textContent = `${rows.length} rows × ${headers.length} columns`;
     const q = g.q.trim().toLowerCase();
     const idx = rows.map((_, i) => i).filter(i => (!q || headers.some(h => String(rows[i][h] ?? '').toLowerCase().includes(q))) && (!g.onlyMissing || headers.some(h => isMissing(rows[i][h]))));
@@ -215,17 +228,18 @@
     const role = h => !cfg ? '' : h === cfg.groupCol ? '<span class="chip info">group</span>' : cfg.idCols.includes(h) ? '<span class="chip">ID</span>' : '';
     const sortMark = h => g.sort && g.sort.col === h ? (g.sort.dir > 0 ? ' ▲' : ' ▼') : '';
     const head = headers.map((h, ci) => g.edit
-      ? `<th><div class="gh"><input type="text" data-hname="${esc(h)}" value="${esc(h)}" title="Rename column">
+      ? `<th class="${cc(h, ci)}"><div class="gh"><input type="text" data-hname="${esc(h)}" value="${esc(h)}" title="Rename column">
           <span class="gh-btns"><button data-hmove="${ci},-1" title="Move left" type="button">◀</button><button data-hmove="${ci},1" title="Move right" type="button">▶</button><button data-hsort="${esc(h)}" title="Sort rows" type="button">⇅</button><button data-hdel="${esc(h)}" title="Delete column" type="button">✕</button></span></div>${role(h)}</th>`
-      : `<th data-hsort="${esc(h)}" class="sortable" title="Click to sort the rows (Undo in edit mode restores the order)">${esc(h)}${sortMark(h)} ${role(h)}</th>`).join('');
+      : `<th data-hsort="${esc(h)}" class="sortable ${cc(h, ci)}" title="Click to sort the rows (Undo in edit mode restores the order)">${esc(h)}${typeTag(h)}${sortMark(h)} ${role(h)}</th>`).join('');
     let summary = '';
-    if (g.summary) summary = `<tr class="gsum"><td>Summary</td>${headers.map(h => {
+    if (g.summary) summary = `<tr class="gsum"><td class="rn">Summary</td>${headers.map((h, ci) => {
       const info = columnInfo(rows, h), miss = rows.length - info.n, nums = rows.map(r => Analysis.toNum(r[h])).filter(isFinite);
       const desc = info.numeric && nums.length ? `num · ${Analysis.fmt(Math.min(...nums), 2)}–${Analysis.fmt(Math.max(...nums), 2)}` : `text · ${info.distinct.length} values`;
-      return `<td>${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
+      return `<td class="${ci === 0 ? 'c1' : ''}">${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
     const body = shown.map(i => `<tr><td class="rn">${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
-      headers.map(h => `<td class="${g.hlMissing && isMissing(rows[i][h]) ? 'miss' : ''}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`).join('')}</tr>`).join('');
+      headers.map((h, ci) => `<td class="${cc(h, ci)}${g.hlMissing && isMissing(rows[i][h]) ? ' miss' : ''}" title="${esc(rows[i][h] ?? '')}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`).join('')}</tr>`).join('');
     $('#preview').innerHTML = `<thead><tr><th class="rn">#</th>${head}</tr></thead><tbody>${summary}${body || `<tr><td colspan="${headers.length + 1}" class="legend-note">No rows match.</td></tr>`}</tbody>`;
+    const rn = tbl.querySelector('th.rn'); if (rn) tbl.style.setProperty('--rnw', rn.getBoundingClientRect().width + 'px');
     $('#gridInfo').textContent = idx.length ? `Rows ${g.page * per + 1}–${Math.min(idx.length, g.page * per + per)} of ${idx.length}${idx.length < rows.length ? ` (filtered from ${rows.length})` : ''}` : '0 rows';
     $('#gridPrev').disabled = g.page === 0; $('#gridNext').disabled = g.page >= pages - 1;
     $('#gridEditBar').style.display = g.edit ? '' : 'none';
@@ -318,6 +332,11 @@
     if (b.id === 'gridPrev') { g.page--; renderGrid(); }
     else if (b.id === 'gridNext') { g.page++; renderGrid(); }
     else if (b.id === 'gridEdit') { g.edit = !g.edit; renderGrid(); }
+    else if (d.gcols) {
+      const hs = state.data.headers, isNum = h => columnInfo(state.data.rows, h).numeric;
+      g.hidden = d.gcols === 'all' ? [] : d.gcols === 'none' ? [...hs] : hs.filter(h => d.gcols === 'num' ? !isNum(h) : isNum(h));
+      renderGrid();
+    }
     else if (b.id === 'gridUndo') {
       const snap = state.undo.pop(); if (!snap) return;
       const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg; renderGrid(); renderStepper(); toast('Undone');
@@ -378,6 +397,12 @@
     else if (t.id === 'gridOnlyMissing') { g.onlyMissing = t.checked; g.page = 0; }
     else if (t.id === 'gridHl') g.hlMissing = t.checked;
     else if (t.id === 'gridSummary') g.summary = t.checked;
+    else if (t.id === 'gridDensity') g.density = t.value;
+    else if (t.id === 'gridTypes') g.types = t.checked;
+    else if (t.id === 'gridWrapText') g.wrap = t.checked;
+    else if (t.id === 'gridFreeze') g.freeze = t.checked;
+    else if (t.id === 'gridStripes') g.stripes = t.checked;
+    else if (t.dataset.gcol !== undefined) g.hidden = t.checked ? g.hidden.filter(h => h !== t.dataset.gcol) : [...g.hidden, t.dataset.gcol];
     else return;
     renderGrid();
   });
@@ -778,7 +803,18 @@
       out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
     if (t === 'linear') out.push(`<div>${box('vif', 'Collinearity (VIF)')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('hl', 'Hosmer-Lemeshow goodness of fit')}</div>`);
-    if (t === 'roc') out.push(`<div><label class="f">Optimal cut-off</label>${sel('cutoff', [['youden', 'Youden index'], ['closest', 'Closest to top-left corner']], a.cutoff)}</div>`);
+    if (t === 'logistic') out.push(`<div>${box('classTable', 'Classification table (sensitivity / specificity)')}</div>`);
+    if (t === 'linear' || t === 'logistic') out.push(`<div>${box('constant', 'Show the constant')}</div>`);
+    if (t === 'roc') {
+      out.push(`<div><label class="f">Optimal cut-off</label>${sel('cutoff', [['youden', 'Youden index'], ['closest', 'Closest to top-left corner'],
+        ['sens80', 'Sensitivity ≥ 80% (best specificity)'], ['sens90', 'Sensitivity ≥ 90% (best specificity)'], ['sens95', 'Sensitivity ≥ 95% (best specificity)'],
+        ['spec80', 'Specificity ≥ 80% (best sensitivity)'], ['spec90', 'Specificity ≥ 90% (best sensitivity)'], ['spec95', 'Specificity ≥ 95% (best sensitivity)'],
+        ['manual', 'My own cut-off value']], a.cutoff)}</div>`);
+      if (a.cutoff === 'manual') out.push(`<div><label class="f">Cut-off value (positive when ≥, or ≤ for lower values)</label><input type="text" data-af="manualCut" value="${esc(a.manualCut || '')}" placeholder="e.g. 2.5"></div>`);
+      out.push(`<div><label class="f">Positive test direction</label>${sel('direction', [['auto', 'Automatic (from the AUC)'], ['higher', 'Higher values positive'], ['lower', 'Lower values positive']], a.direction)}</div>`);
+      out.push(`<div>${box('ci', '95% CI of sensitivity and specificity')}</div>`, `<div>${box('lr', 'Likelihood ratios (LR+, LR−)')}</div>`, `<div>${box('youdenCol', 'Youden index column')}</div>`,
+        `<div>${box('showCut', 'Mark the cut-off on the curve')}</div>`, `<div>${box('compare', 'Compare the AUCs (DeLong test)')}</div>`, `<div>${box('combined', 'Combined model of all tests (logistic)')}</div>`);
+    }
     return out.join('');
   }
   function readAdvanced() {
@@ -800,6 +836,7 @@
   });
   $('#advList').addEventListener('change', e => {
     const f = e.target.dataset.af;
+    if (f === 'cutoff') { readUiIntoCfg(); renderAdvanced(); return; }
     if (f !== 'outcome' && f !== 'event' && f !== 'second') return;
     readUiIntoCfg();
     const a = state.cfg.advanced[+e.target.closest('[data-adv]').dataset.adv];
@@ -991,7 +1028,22 @@
   }
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true };
+  const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false };
+  // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
+  const JOURNAL_STYLES = {
+    none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
+    vancouver: { name: 'Vancouver / ICMJE (medical journals)', note: 'P = 0.013, P < 0.001; mean ± SD; median (IQR) as 25–30; “Table 1.” and “Figure 1.”',
+      o: { pWord: 'P', pHead: 'P value', pLead: 1, meanStyle: 'pm', iqrStyle: 'endash', tableCaption: 'period', captionStyle: 'period' } },
+    apa: { name: 'APA 7th edition', note: 'p = .013 (italic p, no leading zero); M (SD); three-line tables; “Table 1” in bold with the title in italics below; “Figure 1” above the figure.',
+      o: { pWord: 'p', pHead: 'p', pLead: 0, meanStyle: 'paren', tableStyle: 'apa', tableCaption: 'apa', captionStyle: 'apa', italicP: true } },
+    ama: { name: 'AMA 11th edition (JAMA)', note: 'P = .01, P < .001 (italic P, no leading zero); mean (SD); “Table 1.” and “Figure 1.”',
+      o: { pWord: 'P', pHead: 'P value', pLead: 0, meanStyle: 'paren', iqrStyle: 'endash', tableCaption: 'period', captionStyle: 'period', italicP: true } },
+    nejm: { name: 'NEJM', note: 'P = 0.01 (italic P); mean ±SD; “Table 1.” and “Figure 1.”',
+      o: { pWord: 'P', pHead: 'P Value', pLead: 1, meanStyle: 'pm', iqrStyle: 'endash', tableCaption: 'period', captionStyle: 'period', italicP: true } },
+    lancet: { name: 'The Lancet', note: 'p=0·013 with the mid-line decimal point (0·5); mean (SD); IQR as 25–30.',
+      o: { pWord: 'p', pHead: 'p value', pLead: 1, meanStyle: 'paren', iqrStyle: 'endash', tableCaption: 'colon', captionStyle: 'colon', midDot: true } }
+  };
+  $('#fmtStyle').innerHTML = Object.entries(JOURNAL_STYLES).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
   // the format adjusts a copy of the options; the options of steps 4–9 are never changed
   const FORMAT_PRESETS = {
     custom: {},
@@ -1001,7 +1053,7 @@
   };
   const report = () => (state.cfg.report = { ...DEFAULT_REPORT, ...(state.cfg.report || {}) });
   function effOptions() {
-    const o = { ...state.cfg.options, ...FORMAT_PRESETS[report().format] };
+    const o = { ...state.cfg.options, ...FORMAT_PRESETS[report().format], ...(JOURNAL_STYLES[report().style] || JOURNAL_STYLES.none).o };
     if (report().format === 'thesis' && o.commentPlace === 'none') o.commentPlace = 'after';
     return o;
   }
@@ -1011,6 +1063,8 @@
     $('#fmtThesis').style.display = r.format === 'thesis' ? '' : 'none';
     $('#fmtPaper').style.display = r.format === 'paper' ? '' : 'none';
     $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
+    $('#fmtNewPage').checked = r.newPage; $('#fmtNonSig').checked = r.nonSig;
+    $('#fmtStyle').value = JOURNAL_STYLES[r.style] ? r.style : 'none'; $('#fmtStyleNote').textContent = (JOURNAL_STYLES[r.style] || JOURNAL_STYLES.none).note;
   }
   $('#fmtBar').addEventListener('click', e => {
     const b = e.target.closest('[data-format]'); if (!b) return;
@@ -1022,6 +1076,10 @@
     else if (e.target.id === 'fmtHeads') r.sectionHeads = e.target.checked;
     else if (e.target.id === 'fmtMaxFigs') r.maxFigs = +e.target.value;
     else if (e.target.id === 'fmtAbstract') r.abstract = e.target.checked;
+    else if (e.target.id === 'fmtNewPage') { r.newPage = e.target.checked; return; }
+    else if (e.target.id === 'fmtNonSig') r.nonSig = e.target.checked;
+    // the journal style changes number formats: run the analysis again
+    else if (e.target.id === 'fmtStyle') { r.style = e.target.value; syncEdits(); runAnalysis(); return; }
     else return;
     syncEdits(); state.result.narrativeEdited = false; renderReport();
   });
@@ -1034,7 +1092,16 @@
         syncAssessed(ensureConsort());
         const cfg = { ...state.cfg, options: effOptions() };
         const res = Analysis.run(state.data, cfg);
-        res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => { f.key = f.caption; renderFigure(f, cfg.options); }); });
+        // a journal style's P wording also goes into the table footnotes
+        if (report().style !== 'none' && cfg.options.pWord !== 'P value') res.sections.forEach(s => { s.footnote = s.footnote.replace(/\bP value\b/g, cfg.options.pWord); });
+        // P values without the leading zero: also the significance level in the footnotes
+        if (+cfg.options.pLead === 0) res.sections.forEach(s => { s.footnote = s.footnote.replace(/(P value|\bP|\bp) ([≤<]) 0\./g, '$1 $2 .'); });
+        if (cfg.options.midDot) midDots(res);
+        res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
+          f.key = f.caption; renderFigure(f, cfg.options);
+          f.note = cfg.options.figNotes ? figNote(f.spec, cfg.options) : '';
+          if (cfg.options.midDot) f.note = dot(f.note);
+        }); });
         const pal = chartPalette(cfg.options);
         const gl = res.groups;
         if (cfg.consort.enabled) {
@@ -1048,6 +1115,46 @@
     }, 30);
   }
 
+  // The Lancet's mid-line decimal point (0·5) in every text of the report
+  const dot = t => typeof t === 'string' ? t.replace(/(\d)\.(\d)/g, '$1·$2') : t;
+  function midDots(res) {
+    ['methods', 'intro', 'summary', 'flowCaption'].forEach(k => { res[k] = dot(res[k]); });
+    res.sections.forEach(s => {
+      ['title', 'comment', 'footnote', 'brief'].forEach(k => { s[k] = dot(s[k]); });
+      s.head = s.head.map(h => typeof h === 'string' ? dot(h) : h && { ...h, t: dot(h.t) });
+      s.rows.forEach(r => r.forEach(c => { c.t = (c.t || []).map(dot); }));
+      s.figures.forEach(f => { f.caption = dot(f.caption); });
+    });
+  }
+  // the caption's explanation of what the chart shows: bars, error bars, boxes, markers and significance stars
+  function figNote(spec, o) {
+    const P = o.pWord === 'p' ? 'p' : 'P', out = [], series = spec.series || [];
+    const err = { sem: 'the standard error of the mean (SEM)', ci: 'the 95% CI of the mean' }[o.errorBar] || '±1 standard deviation (SD)';
+    if ((spec.type === 'bar' || spec.type === 'line') && !spec.percent && !spec.integer) {
+      const what = spec.type === 'bar' ? 'Bars' : 'Points';
+      if (series.some(s => s.err && s.err.some(v => v !== null && v !== undefined))) out.push(`${what} show the mean; error bars show ${err}.`);
+      else if (series.some(s => s.lo)) out.push(`${what} show the median; error bars show the interquartile range (IQR).`);
+    }
+    if (spec.type === 'box') {
+      out.push('Boxes show the median and interquartile range (IQR); whiskers extend to the most extreme values within 1.5 × IQR, and points beyond them are outliers.');
+      if (o.boxMean) out.push('◆ marks the mean.');
+      if (spec.points) out.push('Each dot is one patient.');
+    }
+    if (spec.type === 'dot') out.push(`Each dot is one patient; the line and whiskers show the ${spec.median ? 'median and IQR' : 'mean ± SD'}.`);
+    if (spec.type === 'roc') out.push(`The dashed diagonal is the line of no discrimination (AUC = 0.5).${series.some(s => s.cut) ? ' Circles mark the chosen cut-off values.' : ''}`);
+    if (spec.type === 'km') out.push('Vertical ticks mark censored patients.');
+    if (spec.type === 'ba') out.push('The middle line shows the mean difference (bias) and the dashed lines the 95% limits of agreement (mean ± 1.96 SD).');
+    if (['bar', 'line', 'box', 'dot'].includes(spec.type)) {
+      const ps = [...(spec.sig || []).map(q => q.p), ...(spec.sigCat || [])].filter(p => p <= spec.alpha);
+      if (ps.length) {
+        const lv = [`*${P} ≤ ${+o.pLead === 0 ? String(spec.alpha).replace(/^0\./, '.') : spec.alpha}`];
+        if (ps.some(p => p <= 0.01)) lv.push(`**${P} ≤ 0.01`);
+        if (ps.some(p => p <= 0.001)) lv.push(`***${P} ≤ 0.001`);
+        out.push(`${lv.join(', ')} (${spec.sig ? 'brackets: comparison between the groups' : 'difference between the groups at that time'}).`);
+      }
+    }
+    return out.join(' ');
+  }
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
   function renderFigure(f, o) {
     const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, chartPalette(o), chartStyle(o));
@@ -1066,6 +1173,7 @@
     if ($('#edIntro')) r.intro = $('#edIntro').value;
     document.querySelectorAll('[data-comment]').forEach(t => { r.sections[+t.dataset.comment].comment = t.value; });
     document.querySelectorAll('[data-fcap]').forEach(t => { const [si, fi] = t.dataset.fcap.split(':').map(Number); r.sections[si].figures[fi].caption = t.value; });
+    document.querySelectorAll('[data-fnote]').forEach(t => { const [si, fi] = t.dataset.fnote.split(':').map(Number); r.sections[si].figures[fi].note = t.value; });
     document.querySelectorAll('[data-ttl]').forEach(t => { r.sections[+t.dataset.ttl].title = t.value; });
     if ($('#edSummary')) r.summary = $('#edSummary').value;
     if ($('#edNarrative') && $('#edNarrative').value !== r.narrative) { r.narrative = $('#edNarrative').value; r.narrativeEdited = true; }
@@ -1080,7 +1188,7 @@
       // the paper keeps a few figures: repeated outcomes before single variables
       const kindOf = f => r.sections.find(s => s.figures.includes(f)).kind;
       // only figures of significant results; the limit is a maximum
-      const ranked = figs.filter(f => f.sig !== false).map((f, i) => ({ f, i, k: kindOf(f) === 'repeated' ? 0 : 1 })).sort((a, b) => a.k - b.k || a.i - b.i);
+      const ranked = figs.filter(f => rep.nonSig || f.sig !== false).map((f, i) => ({ f, i, k: kindOf(f) === 'repeated' ? 0 : 1 })).sort((a, b) => a.k - b.k || a.i - b.i);
       const keep = new Set(ranked.slice(0, rep.maxFigs).map(x => x.f));
       figs = figs.filter(f => keep.has(f));
     }
@@ -1139,13 +1247,14 @@
     const atEnd = o.figPlacement === 'end' || o.figPlacement === 'endType';
     const figHtml = f => {
       const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f);
-      const label = isOut(fk) ? 'Not exported:' : plan.kept.has(f) ? lab(plan.figNum.get(f)) : (f.sig === false ? 'Not in the paper (not significant):' : `Not in the paper (limit ${plan.rep.maxFigs}):`);
-      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption"></figcaption>${exBox(fk, 'Figure')}</figure>`;
+      const label = isOut(fk) ? 'Not exported:' : plan.kept.has(f) ? lab(plan.figNum.get(f)) : (f.sig === false && !plan.rep.nonSig ? 'Not in the paper (not significant):' : `Not in the paper (limit ${plan.rep.maxFigs}):`);
+      const note = f.note !== undefined && (f.note || o.figNotes) ? `<input type="text" class="fcap fnote" data-fnote="${si}:${fi}" value="${esc(f.note)}" title="Explanation of the symbols (printed after the caption)" placeholder="Explanation of the symbols">` : '';
+      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption">${note}</figcaption>${exBox(fk, 'Figure')}</figure>`;
     };
     r.sections.forEach((s, i) => {
       const tk = exKey.table(s), tOut = isOut(tk), place = o.commentPlace || 'after';
       const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
-      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
+      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
         ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
         <div class="foot">${esc(s.footnote)}</div>
         ${place !== 'before' ? comment : ''}</div>
@@ -1199,7 +1308,8 @@
       const r = exportModel(state.result);
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
-      const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper', title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+      const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
+        tableNewPage: rp.format === 'thesis' && rp.newPage, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

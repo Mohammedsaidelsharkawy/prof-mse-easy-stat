@@ -105,15 +105,30 @@ table.t td select{min-width:120px}
 .fmt-opts{margin-top:10px;gap:20px}
 @media (max-width:820px){.fmt-cards{grid-template-columns:1fr}}
 .grid-bar{margin:14px 0 8px;gap:12px}
-table.grid td.miss{background:rgba(192,57,43,.09)}
-table.grid td.rn,table.grid th.rn{color:var(--muted);font-size:12px;white-space:nowrap;position:sticky;left:0;background:var(--card);z-index:2}
-table.grid th.rn{z-index:3;background:var(--lav)}
-table.grid th.sortable{cursor:pointer}
-table.grid th.sortable:hover{color:var(--purple)}
-table.grid td[contenteditable]{outline:none;cursor:text}
-table.grid td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
-table.grid tr.gsum td{background:var(--soft);font-size:11.5px;color:var(--muted);white-space:nowrap}
-table.grid .miss-n{color:var(--bad);font-weight:600}
+table.dgrid{width:auto;min-width:100%}
+table.dgrid td,table.dgrid th{white-space:nowrap}
+table.dgrid td{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+table.dgrid.wrap td{white-space:normal;overflow:visible;min-width:90px}
+table.dgrid.compact td{padding:2px 8px;font-size:12.5px}table.dgrid.compact th{padding:5px 8px;font-size:12.5px}
+table.dgrid.comfy td{padding:10px 12px}table.dgrid.comfy th{padding:11px 12px}
+table.dgrid td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.dgrid th.num{text-align:right}
+table.dgrid.stripes tbody tr:nth-child(even) td{background:var(--soft)}
+table.dgrid .ty{display:inline-block;margin-left:5px;font-size:10px;font-weight:600;padding:0 5px;border-radius:4px;background:var(--card);color:var(--muted);vertical-align:1px}
+table.dgrid.freeze td.c1,table.dgrid.freeze th.c1{position:sticky;left:var(--rnw,40px);background:var(--card);z-index:2;box-shadow:1px 0 0 var(--line)}
+table.dgrid.freeze th.c1{z-index:3;background:var(--lav)}
+.colpick{position:relative}.colpick summary{list-style:none}.colpick summary::-webkit-details-marker{display:none}
+.colpick-box{position:absolute;z-index:20;top:110%;left:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:340px;overflow:auto;min-width:240px}
+.colpick-box label{display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0;white-space:nowrap}
+table.dgrid td.miss{background:rgba(192,57,43,.09)}
+table.dgrid td.rn,table.dgrid th.rn{color:var(--muted);font-size:12px;white-space:nowrap;position:sticky;left:0;background:var(--card);z-index:2}
+table.dgrid th.rn{z-index:3;background:var(--lav)}
+table.dgrid th.sortable{cursor:pointer}
+table.dgrid th.sortable:hover{color:var(--purple)}
+table.dgrid td[contenteditable]{outline:none;cursor:text}
+table.dgrid td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
+table.dgrid tr.gsum td{background:var(--soft);font-size:11.5px;color:var(--muted);white-space:nowrap}
+table.dgrid .miss-n{color:var(--bad);font-weight:600}
 .gh{display:flex;flex-direction:column;gap:3px}
 .gh input{min-width:110px!important;padding:3px 6px;font-size:12.5px}
 .gh-btns,.gr-btns{display:inline-flex;gap:2px}
@@ -221,6 +236,15 @@ footer b{color:var(--purple)}
             <span class="spacer"></span>
             <button class="btn ghost small" id="gridEdit" type="button">✎ Edit sheet</button>
           </div>
+          <div class="row grid-bar" id="gridViewBar">
+            <label class="f" style="margin:0">Density</label>
+            <select id="gridDensity" style="width:auto"><option value="compact">Compact</option><option value="normal" selected>Normal</option><option value="comfy">Comfortable</option></select>
+            <details class="colpick"><summary class="btn ghost small">Columns <span id="gridColCount"></span></summary><div class="colpick-box"><div class="row" style="gap:6px;margin-bottom:6px"><button class="btn ghost small" type="button" data-gcols="all">All</button><button class="btn ghost small" type="button" data-gcols="none">None</button><button class="btn ghost small" type="button" data-gcols="num">Numeric</button><button class="btn ghost small" type="button" data-gcols="text">Text</button></div><div id="gridCols"></div></div></details>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridTypes" checked><span>Column types</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridWrapText"><span>Wrap long text</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridFreeze"><span>Freeze first column</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridStripes"><span>Striped rows</span></label>
+          </div>
           <div class="row grid-bar" id="gridEditBar" style="display:none">
             <span class="legend-note">Click a cell to change it · rename a column in its heading · ◀ ▶ move · ⇅ sort · ✕ delete · ↑ ↓ move rows</span>
             <span class="spacer"></span>
@@ -230,7 +254,7 @@ footer b{color:var(--purple)}
             <button class="btn ghost small" id="gridRedetect" type="button" title="Detect variables again from the edited sheet">⟳ Re-detect variables</button>
             <button class="btn ghost small" id="gridSave" type="button">⬇ Edited Excel</button>
           </div>
-          <div class="tbl-wrap" style="max-height:480px"><table class="t grid" id="preview"></table></div>
+          <div class="tbl-wrap" style="max-height:480px"><table class="t dgrid" id="preview"></table></div>
           <div class="row" style="margin-top:6px"><span id="gridInfo" class="legend-note"></span><span class="spacer"></span>
             <button class="btn ghost small" id="gridPrev" type="button">‹ Previous</button><button class="btn ghost small" id="gridNext" type="button">Next ›</button></div>
         </div>
@@ -241,7 +265,7 @@ footer b{color:var(--purple)}
       <div class="grid g2">
         <div><label class="f">Study title (optional, printed at top of report)</label><input type="text" id="studyTitle" placeholder="e.g. PRF versus Ozone for chronic shoulder pain"></div>
         <div><label class="f">Software statement (first sentence of Statistical Analysis)</label>
-          <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was done by Prof MSE Easy Stat v1.0."></div>
+          <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA)."></div>
           <div class="legend-note">Pick a template, then check the version. Name the software actually used for the analysis you report.</div></div>
       </div>
     </div>
@@ -330,6 +354,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Mean and SD</label><select id="optMeanStyle"><option value="pm" selected>Mean ± SD</option><option value="paren">Mean (SD)</option></select></div>
         <div><label class="f">Median and IQR</label><select id="optIqrStyle"><option value="dash" selected>25 - 30</option><option value="endash">25–30</option><option value="bracket">[25, 30]</option></select></div>
         <div><label class="f">Second row of numeric variables</label><select id="optSecondRow"><option value="auto" selected>Range (mean) / IQR (median)</option><option value="ci">95% CI of the mean / IQR</option><option value="none">None — one row per variable</option></select></div>
+        <div><label class="f">Leading zero of P values</label><select id="optPLead"><option value="1" selected>0.013</option><option value="0">.013 (APA / AMA)</option></select></div>
         <div><label class="f">P values</label><select id="optPDigits"><option value="3" selected>3 decimals (&lt;0.001)</option><option value="4">4 decimals (&lt;0.0001)</option></select></div>
         <div><label class="f">P value column heading</label><select id="optPHead"><option selected>P value</option><option>P</option><option>p-value</option></select></div>
         <div><label class="f">Mark of significant P values</label><select id="optSigSym"><option value="*" selected>* (asterisk)</option><option value="†">† (dagger)</option><option value="">none</option></select></div>
@@ -338,6 +363,11 @@ footer b{color:var(--purple)}
         <div>
           <label class="check"><input type="checkbox" id="optShowStat"><span><b>Test statistic column</b> — t, F, U, H or χ² value of the test behind each P value</span></label>
           <label class="check"><input type="checkbox" id="optMissingNote"><span><b>Missing data</b> — number of missing values per variable in the table footnote</span></label>
+          <label class="check"><input type="checkbox" id="optTotalCol"><span><b>Total column</b> — all patients together, next to the groups (tables of single variables)</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optNHead" checked><span><b>Group sizes in the headings</b> — “A group (n=30)”</span></label>
+          <label class="check"><input type="checkbox" id="optBoldSig"><span><b>Bold significant P values</b> in the tables</span></label>
         </div>
       </div>
       <h3>Word document</h3>
@@ -358,7 +388,7 @@ footer b{color:var(--purple)}
     <div class="card">
       <h2>6 · Comments</h2>
       <div class="grid g4">
-        <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option></select></div>
+        <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option><option value="descriptive">Descriptive — values, test, statistic, effect size and an overview</option></select></div>
         <div><label class="f">P value wording</label><select id="optPWord"><option value="P value" selected>(P value = 0.013)</option><option value="P">(P = 0.013)</option><option value="p">(p = 0.013)</option></select></div>
         <div><label class="f">Comment placement</label><select id="optCommentPlace"><option value="after" selected>After each table</option><option value="before">Before each table</option><option value="none">No comments</option></select></div>
       </div>
@@ -397,6 +427,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Chart text size</label><select id="optChartText"><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
         <div><label class="f">Chart shape</label><select id="optAspect"><option value="wide" selected>Wide</option><option value="standard">Standard (4:3)</option><option value="square">Square</option></select></div>
         <div><label class="f">Bar fill</label><select id="optBarFill"><option value="gradient" selected>Gradient</option><option value="solid">Solid</option><option value="outline">Outline only</option><option value="hatched">Hatched (black &amp; white print)</option></select></div>
+        <div><label class="f">Chart font</label><select id="optChartFont"><option value="sans" selected>Segoe UI</option><option value="arial">Arial</option><option value="calibri">Calibri</option><option value="times">Times New Roman</option></select></div>
         <div><label class="f">Bar width</label><select id="optBarWidth"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="wide">Wide</option></select></div>
         <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
         <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
@@ -420,6 +451,7 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
           <label class="check"><input type="checkbox" id="optBoxMean"><span><b>Mean marker</b> (◆) on box plots</span></label>
           <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
+          <label class="check"><input type="checkbox" id="optFigNotes" checked><span><b>Explain the symbols in the caption</b> — what *, **, ***, the bars, error bars, boxes and markers show</span></label>
         </div>
       </div>
     </div>
@@ -494,10 +526,16 @@ footer b{color:var(--purple)}
         <div class="row fmt-opts" id="fmtThesis" style="display:none">
           <div><label class="f">Chapter number (optional)</label><input type="text" id="fmtChapter" placeholder="e.g. 4 → Table 4.1" style="width:180px"></div>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtHeads"><span>A subheading before each table</span></label>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtNewPage"><span>Each table starts on a new page</span></label>
         </div>
         <div class="row fmt-opts" id="fmtPaper" style="display:none">
-          <div><label class="f">Figures in the paper</label><select id="fmtMaxFigs" style="width:auto"><option value="0">None</option><option>1</option><option>2</option><option value="3">3</option><option>4</option><option>5</option><option>6</option></select></div>
+          <div><label class="f">Figures in the paper</label><select id="fmtMaxFigs" style="width:auto"><option value="0">None</option><option>1</option><option>2</option><option value="3">3</option><option>4</option><option>5</option><option>6</option><option>8</option><option>10</option><option value="99">All</option></select></div>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtNonSig"><span>Include figures of non-significant results</span></label>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtAbstract"><span>Results paragraph for the abstract</span></label>
+        </div>
+        <div class="row fmt-opts">
+          <div><label class="f">Journal style</label><select id="fmtStyle" style="width:auto"></select></div>
+          <span class="legend-note" id="fmtStyleNote" style="margin-top:20px;flex:1"></span>
         </div>
       </div>
       <p class="hint" style="margin-top:12px">Review everything below. You can edit the text boxes — your edits go into the Word file. The format changes only this report; your settings in steps 4–9 stay as they are.</p>
@@ -21372,9 +21410,12 @@ const Stats = (() => {
   /* ---------- ROC curve ---------- */
   // values: test results; pos: booleans (true = condition present). Higher values are taken as positive;
   // when the AUC is below 0.5 the direction is flipped (lower values positive) and reported.
-  // cutoff: 'youden' (max sensitivity + specificity − 1) or 'closest' (nearest to the top-left corner)
-  function roc(values, pos, cutoff = 'youden') {
-    let higher = true;
+  // cutoff: 'youden' (max sensitivity + specificity − 1), 'closest' (nearest to the top-left corner),
+  // 'sens80' / 'sens90' / 'sens95' (best specificity with at least that sensitivity), 'spec80' / 'spec90' / 'spec95',
+  // or 'manual' with o.manual (positive when ≥ the value, or ≤ for lower values).
+  // o.direction: 'auto' (default), 'higher' or 'lower' values positive
+  function roc(values, pos, cutoff = 'youden', o = {}) {
+    let higher = o.direction !== 'lower';
     const run = (vals) => {
       const P = vals.filter((_, i) => pos[i]), N = vals.filter((_, i) => !pos[i]), n1 = P.length, n0 = N.length;
       const psi = (a, b) => a > b ? 1 : a === b ? 0.5 : 0;
@@ -21383,8 +21424,8 @@ const Stats = (() => {
       const se = Math.sqrt((n1 > 1 ? variance(V10) / n1 : 0) + (n0 > 1 ? variance(V01) / n0 : 0)); // DeLong
       return { auc, se, n1, n0, P, N };
     };
-    let r = run(values);
-    if (r.auc < 0.5) { higher = false; r = run(values.map(v => -v)); }
+    let r = run(higher ? values : values.map(v => -v));
+    if (!o.direction || o.direction === 'auto') if (r.auc < 0.5) { higher = false; r = run(values.map(v => -v)); }
     const { auc, se, n1, n0 } = r;
     const p = mannWhitney(values.filter((_, i) => pos[i]), values.filter((_, i) => !pos[i])).p;
     // curve and Youden-optimal cut-off at midpoints between observed values
@@ -21395,12 +21436,41 @@ const Stats = (() => {
       return { cut: c, sens: tp / n1, spec: 1 - fp / n0, tp, fp, fn: n1 - tp, tn: n0 - fp };
     });
     const score = cutoff === 'closest' ? q => -((1 - q.sens) ** 2 + (1 - q.spec) ** 2) : q => q.sens + q.spec;
-    const best = points.slice(1, -1).reduce((b, q) => (score(q) > score(b) ? q : b), points[1] || points[0]);
+    let best = points.slice(1, -1).reduce((b, q) => (score(q) > score(b) ? q : b), points[1] || points[0]);
+    const target = /^(sens|spec)(\d+)$/.exec(cutoff);
+    if (target) {
+      // the best of the other measure among cut-offs reaching the target (ties: the better target measure)
+      const [, m, x] = target, other = m === 'sens' ? 'spec' : 'sens', lim = +x / 100 - 1e-12;
+      const ok = points.filter(q => q[m] >= lim && q[other] > 0); // a cut-off missing every case (or every non-case) is no cut-off
+      if (ok.length) best = ok.reduce((b, q) => (q[other] > b[other] || (q[other] === b[other] && q[m] > b[m]) ? q : b));
+      else best = { ...best, fallback: true }; // target not reached by any cut-off: Youden index
+    } else if (cutoff === 'manual' && isFinite(o.manual)) {
+      const c = +o.manual, isPos = v => higher ? v >= c : v <= c;
+      const tp = values.filter((v, i) => pos[i] && isPos(v)).length, fp = values.filter((v, i) => !pos[i] && isPos(v)).length;
+      best = { cut: c, sens: tp / n1, spec: 1 - fp / n0, tp, fp, fn: n1 - tp, tn: n0 - fp, inclusive: true };
+    }
+    const [sLo, sHi] = clopperPearson(best.tp, n1), [cLo, cHi] = clopperPearson(best.tn, n0);
     return {
       auc, se, lo: Math.max(0, auc - 1.959964 * se), hi: Math.min(1, auc + 1.959964 * se), p, n1, n0, higher,
       points: points.map(q => ({ fpr: 1 - q.spec, tpr: q.sens })),
-      cutoff: { ...best, ppv: best.tp / (best.tp + best.fp), npv: best.tn / (best.tn + best.fn), accuracy: (best.tp + best.tn) / (n1 + n0) }
+      cutoff: { ...best, ppv: best.tp / (best.tp + best.fp), npv: best.tn / (best.tn + best.fn), accuracy: (best.tp + best.tn) / (n1 + n0),
+        sensLo: sLo, sensHi: sHi, specLo: cLo, specHi: cHi, youden: best.sens + best.spec - 1,
+        lrPos: best.spec < 1 ? best.sens / (1 - best.spec) : Infinity, lrNeg: best.spec > 0 ? (1 - best.sens) / best.spec : Infinity }
     };
+  }
+  // DeLong test comparing two correlated AUCs (same patients); each test keeps its own direction
+  function rocCompare(xa, xb, pos, higherA = true, higherB = true) {
+    const comp = (x, h) => {
+      const v = h ? x : x.map(t => -t), P = v.filter((_, i) => pos[i]), N = v.filter((_, i) => !pos[i]);
+      const psi = (a, b) => a > b ? 1 : a === b ? 0.5 : 0;
+      return { V10: P.map(a => mean(N.map(b => psi(a, b)))), V01: N.map(b => mean(P.map(a => psi(a, b)))) };
+    };
+    const A = comp(xa, higherA), B = comp(xb, higherB), n1 = A.V10.length, n0 = A.V01.length;
+    const cov = (u, w) => { const mu = mean(u), mw = mean(w); return sum(u.map((x, i) => (x - mu) * (w[i] - mw))) / (u.length - 1); };
+    const aucA = mean(A.V10), aucB = mean(B.V10), diff = aucA - aucB;
+    const v = (cov(A.V10, A.V10) + cov(B.V10, B.V10) - 2 * cov(A.V10, B.V10)) / n1 + (cov(A.V01, A.V01) + cov(B.V01, B.V01) - 2 * cov(A.V01, B.V01)) / n0;
+    const se = Math.sqrt(Math.max(v, 0)), z = se > 0 ? diff / se : 0;
+    return { aucA, aucB, diff, se, z, lo: diff - 1.959964 * se, hi: diff + 1.959964 * se, p: se > 0 ? 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1)) : 1 };
   }
 
   function rmAnova(Y) {
@@ -21431,7 +21501,7 @@ const Stats = (() => {
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
     pairedT, wilcoxonSigned, pearson, spearman, bonferroni,
-    invert, linearRegression, logisticRegression, hosmerLemeshow, roc,
+    invert, linearRegression, logisticRegression, hosmerLemeshow, roc, rocCompare,
     welchAnova, gamesHowell, dunn, chiSquarePairwise, mixedAnova, kaplanMeier, logRank, ancova,
     lilliefors, oddsRatio, mcnemar, cohenKappa, icc, blandAltman, cronbach, clopperPearson, diagnostic2x2, coxRegression
   };
@@ -21454,14 +21524,16 @@ const Analysis = (() => {
     return (Object.is(r, -0) ? 0 : r).toString();
   }
   // number formats of the current run (step 5 options): P decimals, significance mark, mean/SD, IQR and percent styles
-  let FMT = { pDig: 3, sig: '*', mean: 'pm', iqr: 'dash', pct: 1 };
+  let FMT = { pDig: 3, sig: '*', mean: 'pm', iqr: 'dash', pct: 1, pLead: true };
+  // P values without the leading zero (".013", APA / AMA style) when pLead is off
+  const pNum = v => { const t = v.toFixed(FMT.pDig); return FMT.pLead ? t : t.replace(/^0\./, '.'); };
   function fmtP(p, alpha) {
     if (p === null || p === undefined || !isFinite(p)) return '—';
-    const thr = 10 ** -FMT.pDig, s = p < thr ? '<' + thr.toFixed(FMT.pDig) : p.toFixed(FMT.pDig);
+    const thr = 10 ** -FMT.pDig, s = p < thr ? '<' + pNum(thr) : pNum(p);
     return s + (p <= alpha ? FMT.sig : '');
   }
   // p-value as used inside sentences: "= 0.013" or "< 0.001"
-  const pTxt = p => { const thr = 10 ** -FMT.pDig; return p < thr ? '< ' + thr.toFixed(FMT.pDig) : '= ' + p.toFixed(FMT.pDig); };
+  const pTxt = p => { const thr = 10 ** -FMT.pDig; return p < thr ? '< ' + pNum(thr) : '= ' + pNum(p); };
   const msd = (m, sdv, d) => FMT.mean === 'paren' ? `${fmt(m, d)} (${fmt(sdv, d)})` : `${fmt(m, d)} ± ${fmt(sdv, d)}`;
   const iqrTxt = (a, b, d) => FMT.iqr === 'bracket' ? `[${fmt(a, d)}, ${fmt(b, d)}]` : FMT.iqr === 'endash' ? `${fmt(a, d)}–${fmt(b, d)}` : `${fmt(a, d)} - ${fmt(b, d)}`;
   const medIqr = (dd, d) => FMT.iqr === 'bracket' ? `${fmt(dd.median, d)} ${iqrTxt(dd.q1, dd.q3, d)}` : `${fmt(dd.median, d)} (${iqrTxt(dd.q1, dd.q3, d)})`;
@@ -21478,6 +21550,10 @@ const Analysis = (() => {
   const plain = s => s.replace(/\s*\([^)]*\)\s*$/, '');
   const lowerFirst = s => (s && !keepCase(s)) ? s[0].toLowerCase() + s.slice(1) : s;
   const nWord = n => NUMW[n] || String(n);
+  // test names as written in the descriptive comments
+  const TEST_NAME = { 't-test': 'independent t-test', 'Welch t-test': "Welch's t-test", ANOVA: 'one-way ANOVA', 'Welch ANOVA': "Welch's ANOVA", 'Mann-Whitney': 'Mann-Whitney U test',
+    'Kruskal-Wallis': 'Kruskal-Wallis test', 'Chi-square': 'Chi-square test', "Fisher's exact": "Fisher's exact test" };
+  const testNames = rs => listJoin([...new Set(rs.map(r => TEST_NAME[r.test]).filter(Boolean))]);
   const amongTxt = k => k === 2 ? 'between the two groups' : `among the ${nWord(k)} groups`;
 
   /* ---------- data helpers ---------- */
@@ -21726,7 +21802,7 @@ const Analysis = (() => {
   function pList(ps) {
     if (ps.length === 1) return pTxt(ps[0]);
     const thr = 10 ** -FMT.pDig;
-    if (ps.every(p => p < thr)) return `< ${thr.toFixed(FMT.pDig)} in each`;
+    if (ps.every(p => p < thr)) return `< ${pNum(thr)} in each`;
     const vals = listJoin(ps.map(p => pTxt(p).replace(/^= /, '')));
     return (ps[0] < thr ? '' : '= ') + vals + ' respectively';
   }
@@ -21875,6 +21951,13 @@ const Analysis = (() => {
       if (multi) { row.push({ t: [m ? est(m) : '—'] }); if (!logistic) row.push({ t: [m ? fmt(m.beta, 2) : '—'] }); if (showVif) row.push({ t: [v != null ? fmt(v, 2) : '—'] }); row.push({ t: [m ? fmtP(m.p, alpha) : '—'] }); }
       return row;
     });
+    // optional constant (intercept) of the multivariable model
+    if (a.constant && multi && multi.terms[0]) {
+      const c0 = multi.terms[0], row = [{ t: ['Constant'], b: true }];
+      if (uni) row.push({ t: ['—'] }, { t: ['—'] });
+      row.push({ t: [est(c0)] }); if (!logistic) row.push({ t: ['—'] }); if (showVif) row.push({ t: ['—'] }); row.push({ t: [fmtP(c0.p, alpha)] });
+      trows.push(row);
+    }
     const sigM = terms.filter(x => x.m && x.m.p <= alpha).map(x => ({ label: x.label, t: x.m }));
     const uSig = terms.filter(x => x.u && x.u.p <= alpha);
     // footnote: model fit
@@ -21886,6 +21969,12 @@ const Analysis = (() => {
       if (logistic) f.push(`Model: n=${multi.n} (${multi.events} with ${outLabel} = ${a.positive}), χ²(${multi.dfModel}) = ${fmt(multi.chi, 2)}, P ${pTxt(multi.pModel)}, Nagelkerke R² = ${fmt(multi.nagelkerke, 3)}, correctly classified ${fmt(100 * multi.accuracy, 1)}%`);
       else f.push(`Model: n=${multi.n}, R² = ${fmt(multi.r2, 3)}, adjusted R² = ${fmt(multi.adjR2, 3)}, F(${multi.dfModel}, ${multi.df}) = ${fmt(multi.F, 2)}, P ${pTxt(multi.pModel)}`);
       if (logistic && multi.unstable) f.push('Warning: the model did not converge or shows separation, so its estimates are unreliable');
+      if (logistic && a.classTable) {
+        // classification table at a predicted probability of 0.5
+        let tp = 0, fp = 0, fn = 0, tn = 0;
+        multi.fitted.forEach((pr, i) => { const yes = pr >= 0.5; if (multi.y[i]) yes ? tp++ : fn++; else yes ? fp++ : tn++; });
+        f.push(`Classification at a predicted probability of 0.5: ${tp} of ${tp + fn} with ${outLabel} = ${a.positive} (sensitivity ${fmt(tp + fn ? 100 * tp / (tp + fn) : 0, 1)}%) and ${tn} of ${tn + fp} without (specificity ${fmt(tn + fp ? 100 * tn / (tn + fp) : 0, 1)}%) correctly classified`);
+      }
       if (logistic && a.hl) { const h = S.hosmerLemeshow(multi.y, multi.fitted); f.push(`Hosmer-Lemeshow χ²(${h.df}) = ${fmt(h.chi, 2)}, P ${pTxt(h.p)}${h.p > alpha ? ' (good fit)' : ' (poor fit)'}`); }
       if (showVif) f.push('VIF: Variance inflation factor (values above 5 suggest collinearity)');
     }
@@ -21913,39 +22002,123 @@ const Analysis = (() => {
     };
   }
 
+  const ROC_CUT = {
+    youden: ['the Youden index', 'Cut-off: Youden index'], closest: ['the point closest to the top-left corner of the curve', 'Cut-off: closest to the top-left corner of the ROC curve'],
+    sens80: ['the highest specificity with a sensitivity of at least 80%', 'Cut-off: highest specificity with sensitivity ≥ 80%'],
+    sens90: ['the highest specificity with a sensitivity of at least 90%', 'Cut-off: highest specificity with sensitivity ≥ 90%'],
+    sens95: ['the highest specificity with a sensitivity of at least 95%', 'Cut-off: highest specificity with sensitivity ≥ 95%'],
+    spec80: ['the highest sensitivity with a specificity of at least 80%', 'Cut-off: highest sensitivity with specificity ≥ 80%'],
+    spec90: ['the highest sensitivity with a specificity of at least 90%', 'Cut-off: highest sensitivity with specificity ≥ 90%'],
+    spec95: ['the highest sensitivity with a specificity of at least 95%', 'Cut-off: highest sensitivity with specificity ≥ 95%'],
+    manual: ['a cut-off value chosen in advance', 'Cut-off: chosen in advance']
+  };
+  // options: direction (auto / higher / lower), cutoff method (ROC_CUT; manual uses manualCut), CIs of sensitivity and specificity,
+  // likelihood ratios and Youden index columns, cut-off point on the curve, DeLong comparison of the AUCs, combined logistic score
   function rocSection(a, cfg, rows, alpha, d, used) {
     const outLabel = columnLabel(cfg, a.outcome);
     const tests = a.predictors.filter(c => c !== a.outcome && columnKind(cfg, rows, c) === 'numeric');
     if (!tests.length) return null;
-    used.add(a.cutoff === 'closest' ? 'rocClosest' : 'roc');
+    const method = ROC_CUT[a.cutoff] ? a.cutoff : 'youden';
+    const manual = method === 'manual' ? parseFloat(String(a.manualCut ?? '').replace(',', '.')) : NaN;
+    const cutM = method === 'manual' && !isFinite(manual) ? 'youden' : method;
+    used.add(cutM === 'closest' ? 'rocClosest' : 'roc'); used.add('rocCut:' + cutM);
+    const dir = a.direction === 'higher' || a.direction === 'lower' ? a.direction : 'auto';
     const res = tests.map(col => {
       const rs = rows.filter(r => toCat(r[a.outcome]) !== null && isFinite(toNum(r[col])));
       const pos = rs.map(r => toCat(r[a.outcome]) === a.positive);
       if (pos.filter(Boolean).length < 2 || pos.filter(x => !x).length < 2) return { col, label: columnLabel(cfg, col), r: null };
-      return { col, label: columnLabel(cfg, col), r: S.roc(rs.map(r => toNum(r[col])), pos, a.cutoff) };
+      return { col, label: columnLabel(cfg, col), r: S.roc(rs.map(r => toNum(r[col])), pos, cutM, { direction: dir, manual }) };
     });
+    // all test variables combined into one score: the predicted probability of a logistic model
+    const complete = rows.filter(r => toCat(r[a.outcome]) !== null && tests.every(c => isFinite(toNum(r[c]))));
+    let combo = null;
+    if (a.combined && tests.length > 1) {
+      const y = complete.map(r => toCat(r[a.outcome]) === a.positive ? 1 : 0);
+      if (y.filter(Boolean).length >= 2 && y.filter(x => !x).length >= 2) {
+        const fit = S.logisticRegression(complete.map(r => tests.map(c => toNum(r[c]))), y);
+        if (fit && fit.fitted) {
+          combo = { col: null, combined: true, label: 'Combined model (logistic)', fitted: fit.fitted,
+            r: S.roc(fit.fitted, y.map(Boolean), cutM === 'manual' ? 'youden' : cutM, { direction: 'higher' }) };
+          res.push(combo); used.add('rocCombined');
+        }
+      }
+    }
     const pct = v => `${fmt(100 * v, 1)}%`;
+    const ci = (lo, hi) => `(${fmt(100 * lo, 1)}-${fmt(100 * hi, 1)})`;
+    const lrTxt = v => isFinite(v) ? fmt(v, 2) : '∞';
     const head = ['', 'AUC (95% CI)', 'P value', 'Cut-off', 'Sensitivity', 'Specificity', 'PPV', 'NPV', 'Accuracy'];
-    const trows = res.map(({ label, r }) => r ? [{ t: [label], b: true }, { t: [`${fmt(r.auc, 3)} (${fmt(r.lo, 3)}-${fmt(r.hi, 3)})`] }, { t: [fmtP(r.p, alpha)] },
-      { t: [`${r.higher ? '>' : '≤'} ${fmt(r.cutoff.cut, d)}`] }, { t: [pct(r.cutoff.sens)] }, { t: [pct(r.cutoff.spec)] }, { t: [pct(r.cutoff.ppv)] }, { t: [pct(r.cutoff.npv)] }, { t: [pct(r.cutoff.accuracy)] }]
-      : [{ t: [label], b: true }, { t: ['—'], span: 8 }]);
+    if (a.lr) head.push('LR+', 'LR−');
+    if (a.youdenCol) head.push('Youden index');
+    if (a.ci) used.add('rocCI');
+    const cutTxt = x => x.combined ? `> ${fmt(x.r.cutoff.cut, 3)}` : `${x.r.cutoff.inclusive ? (x.r.higher ? '≥' : '≤') : (x.r.higher ? '>' : '≤')} ${fmt(x.r.cutoff.cut, d)}`;
+    const trows = res.map(x => {
+      const { label, r } = x;
+      if (!r) return [{ t: [label], b: true }, { t: ['—'], span: head.length - 1 }];
+      const c = r.cutoff, row = [{ t: [label], b: true }, { t: [`${fmt(r.auc, 3)} (${fmt(r.lo, 3)}-${fmt(r.hi, 3)})`] }, { t: [fmtP(r.p, alpha)] },
+        { t: [cutTxt(x)] }, { t: a.ci ? [pct(c.sens), ci(c.sensLo, c.sensHi)] : [pct(c.sens)] }, { t: a.ci ? [pct(c.spec), ci(c.specLo, c.specHi)] : [pct(c.spec)] },
+        { t: [pct(c.ppv)] }, { t: [pct(c.npv)] }, { t: [pct(c.accuracy)] }];
+      if (a.lr) row.push({ t: [lrTxt(c.lrPos)] }, { t: [lrTxt(c.lrNeg)] });
+      if (a.youdenCol) row.push({ t: [fmt(c.youden, 3)] });
+      return row;
+    });
     const grade = auc => auc >= 0.9 ? 'excellent' : auc >= 0.8 ? 'good' : auc >= 0.7 ? 'fair' : auc >= 0.6 ? 'poor' : 'failed';
     const what = eventName(cfg, a);
-    const sent = res.filter(x => x.r).map(({ label, r }) => r.p <= alpha
-      ? `${cap(plain(label))} ${r.higher ? '' : '(lower values) '}could significantly predict ${what} with ${grade(r.auc)} discrimination (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)}); at a cut-off of ${r.higher ? '>' : '≤'} ${fmt(r.cutoff.cut, d)}, sensitivity was ${pct(r.cutoff.sens)} and specificity was ${pct(r.cutoff.spec)}.`
-      : `${cap(plain(label))} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}, P value ${pTxt(r.p)}).`);
+    const sent = res.filter(x => x.r).map(x => {
+      const { label, r } = x, nm = x.combined ? 'The combined model of all test variables' : cap(plain(label));
+      const extra = (a.ci ? ` (95% CI ${fmt(100 * r.cutoff.sensLo, 1)}-${fmt(100 * r.cutoff.sensHi, 1)}%)` : '');
+      const extraS = (a.ci ? ` (95% CI ${fmt(100 * r.cutoff.specLo, 1)}-${fmt(100 * r.cutoff.specHi, 1)}%)` : '');
+      const lrs = a.lr ? `, with LR+ of ${lrTxt(r.cutoff.lrPos)} and LR− of ${lrTxt(r.cutoff.lrNeg)}` : '';
+      return r.p <= alpha
+        ? `${nm} ${r.higher || x.combined ? '' : '(lower values) '}could significantly predict ${what} with ${grade(r.auc)} discrimination (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)}); at a cut-off of ${cutTxt(x)}${x.combined ? ' (predicted probability)' : ''}, sensitivity was ${pct(r.cutoff.sens)}${extra} and specificity was ${pct(r.cutoff.spec)}${extraS}${lrs}.`
+        : `${nm} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}, P value ${pTxt(r.p)}).`;
+    });
     res.filter(x => !x.r).forEach(x => sent.push(`The ROC curve of ${lowerFirst(plain(x.label))} could not be estimated: fewer than two patients with or without ${what}.`));
-    const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', a.cutoff === 'closest' ? 'Cut-off: closest to the top-left corner of the ROC curve' : 'Cut-off: Youden index'];
-    if (res.some(x => x.r && !x.r.higher)) f.push('≤: lower values predict the outcome');
+    const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', ROC_CUT[cutM][1]];
+    if (res.some(x => x.r && x.r.cutoff.fallback)) f.push(`${listJoin(res.filter(x => x.r && x.r.cutoff.fallback).map(x => x.combined ? 'combined model' : plain(x.label)))}: no cut-off reached the target, Youden index used`);
+    if (a.ci) f.push('Sensitivity and specificity with exact (Clopper-Pearson) 95% CI');
+    if (a.lr) f.push('LR+: Positive likelihood ratio', 'LR−: Negative likelihood ratio');
+    if (a.youdenCol) f.push('Youden index: sensitivity + specificity − 1');
+    if (combo) f.push('Combined model: predicted probability of a logistic regression including all test variables');
+    if (res.some(x => x.r && !x.r.higher && !x.combined)) f.push('≤: lower values predict the outcome');
     const ok = res.filter(x => x.r);
     const n1 = ok.length ? ok[0].r.n1 : 0, n0 = ok.length ? ok[0].r.n0 : 0;
-    return {
+    const sec = {
       kind: 'roc', title: `Diagnostic performance for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
       figures: ok.length ? [{ sig: ok.some(x => x.r.p <= alpha), caption: `ROC curve for prediction of ${what}`,
-        spec: { type: 'roc', series: ok.map(x => ({ name: `${plain(x.label)} (AUC = ${fmt(x.r.auc, 3)})`, points: x.r.points })), note: `n = ${n1} with, ${n0} without` } }] : [],
+        spec: { type: 'roc', series: ok.map(x => ({ name: `${x.combined ? 'Combined model' : plain(x.label)} (AUC = ${fmt(x.r.auc, 3)})`, points: x.r.points,
+          ...(a.showCut ? { cut: { fpr: 1 - x.r.cutoff.spec, tpr: x.r.cutoff.sens, label: x.combined ? '' : cutTxt(x) } } : {}) })), note: `n = ${n1} with, ${n0} without` } }] : [],
       meta: { res }
     };
+    if (!a.compare || ok.length < 2) return sec;
+    // pairwise DeLong comparison of the AUCs, on the patients with every compared value
+    used.add('rocCompare');
+    const pairsOut = [];
+    for (let i = 0; i < ok.length; i++) for (let j = i + 1; j < ok.length; j++) {
+      const A = ok[i], B = ok[j];
+      const rs = complete.length && (A.combined || B.combined) ? complete
+        : rows.filter(r => toCat(r[a.outcome]) !== null && [A, B].every(x => x.combined || isFinite(toNum(r[x.col]))));
+      const vals = x => x.combined ? x.fitted : rs.map(r => toNum(r[x.col]));
+      const pos = rs.map(r => toCat(r[a.outcome]) === a.positive);
+      pairsOut.push({ A, B, n: rs.length, c: S.rocCompare(vals(A), vals(B), pos, A.r.higher, B.r.higher) });
+    }
+    const nm = x => x.combined ? 'Combined model' : x.label;
+    const crow = pairsOut.map(q => [{ t: [`${nm(q.A)} vs ${nm(q.B)}`], b: true }, { t: [`${fmt(q.c.aucA, 3)} vs ${fmt(q.c.aucB, 3)}`] },
+      { t: [`${fmt(q.c.diff, 3)} (${fmt(q.c.lo, 3)} to ${fmt(q.c.hi, 3)})`] }, { t: [fmt(q.c.z, 2)] }, { t: [fmtP(q.c.p, alpha)] }]);
+    const csent = pairsOut.map(q => {
+      const better = q.c.diff >= 0 ? q.A : q.B, worse = better === q.A ? q.B : q.A, lab = x => x.combined ? 'the combined model' : lowerFirst(plain(x.label));
+      return q.c.p <= alpha
+        ? `The AUC of ${lab(better)} was significantly higher than that of ${lab(worse)} (difference = ${fmt(Math.abs(q.c.diff), 3)}, P value ${pTxt(q.c.p)}).`
+        : `The AUCs of ${lab(q.A)} and ${lab(q.B)} were insignificantly different (P value ${pTxt(q.c.p)}).`;
+    });
+    const cmp = {
+      kind: 'roc', title: `Comparison of the areas under the ROC curves for prediction of ${what}`,
+      head: ['', 'AUC', 'Difference (95% CI)', 'Z', 'P value'], rows: crow,
+      footnote: `*: Significant as P value ≤ ${alpha}, AUC: Area under the curve, CI: Confidence interval, DeLong test for correlated ROC curves (patients with both values).`,
+      comment: csent.join(' '), figures: [], meta: { pairs: pairsOut }
+    };
+    return [sec, cmp];
   }
+
 
   // ANCOVA: outcome compared between the study groups, adjusted for covariates
   function ancovaSection(a, cfg, rows, alpha, d, used, G) {
@@ -22196,14 +22369,16 @@ const Analysis = (() => {
   /* ---------- main ---------- */
   function run(data, cfg) {
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
-    const detailed = opts.commentStyle === 'detailed';
+    // descriptive: the detailed comment plus the test used, effect sizes, values of every group and an overview of each table
+    const descriptive = opts.commentStyle === 'descriptive', detailed = opts.commentStyle === 'detailed' || descriptive;
+    const wantEff = opts.commentEffect || descriptive;
     normality = normalityTest(opts.normality);
     const wording = s => {
       if (opts.notSig) s = s.replace(/insignificant(ly)?/g, 'not significant$1');
       if (opts.pWord && opts.pWord !== 'P value') s = s.replace(/\bP value\b/g, opts.pWord);
       return s;
     };
-    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1 };
+    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0 };
     const used = new Set();
     // error bars of mean charts: SD (default), SEM or 95% CI of the mean
     const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
@@ -22283,7 +22458,7 @@ const Analysis = (() => {
     // missing values of one column among the analysed patients
     const missingIn = (col, numeric) => byGroup.flat().filter(r => numeric ? !isFinite(toNum(r[col])) : toCat(r[col]) === null).length;
 
-    const groupHeads = gl.map((g, i) => `${g} (n=${gN[i]})`);
+    const groupHeads = gl.map((g, i) => opts.nHead === false ? g : `${g} (n=${gN[i]})`);
 
     for (const b of blocks) {
       if (b.kind === 'repeated') {
@@ -22340,13 +22515,19 @@ const Analysis = (() => {
         let comment = repeatedComment(plain(v.label), tps, results, gl, alpha, detailed);
         if (within) comment += ' ' + withinComment(plain(v.label), tps, within, results, gl, alpha, param);
         // optional effect sizes for the significant timepoints of a two-group comparison
-        if (opts.commentEffect && k === 2) {
+        if (wantEff && k === 2) {
           const sig = results.map((r, t) => ({ q: r.pairs[0], t, p: r.p })).filter(x => x.p <= alpha && x.q && isFinite(x.q.diff));
           if (sig.length) comment += ` The ${param ? 'mean' : 'median'} difference${sig.length > 1 ? 's' : ''} (${gl[0]} − ${gl[1]}) ${sig.length > 1 ? 'were' : 'was'} ${listJoin(sig.map(x => `${fmt(x.q.diff, d)} (95% CI ${fmt(x.q.lo, d)} to ${fmt(x.q.hi, d)}) at ${tps[x.t]}`))}.`;
         }
         if (mixed) comment += mixed.interaction.p <= alpha
           ? ` There was a significant group × time interaction (P value ${pTxt(mixed.interaction.p)}), indicating that the change in ${lowerFirst(plain(v.label))} over time differed between the groups.`
           : ` The group × time interaction was insignificant (P value ${pTxt(mixed.interaction.p)}), indicating a similar pattern of change over time in the groups.`;
+        // descriptive style: each group's values at the first and last timepoint
+        if (descriptive && tps.length > 1) {
+          const at = (t, i) => { const dd = results[t].desc[i]; return dd && dd.n ? (param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)) : '—'; }, last = tps.length - 1;
+          comment = `${cap(plain(v.label))} was compared ${amongTxt(k)} at ${listJoin(tps.map(t => lowerFirst(t)))} using the ${testNames(results) || 'tests described in the methods'}. ` + comment
+            + ' ' + gl.map((g, i) => `In ${g}, the ${param ? meanSdName(true) : 'median (IQR)'} was ${at(0, i)} at ${lowerFirst(tps[0])} and ${at(last, i)} at ${lowerFirst(tps[last])}.`).join(' ');
+        }
         const sigAny = anySig || (within && within.some(w => w.p <= alpha)) || (mixed && mixed.interaction.p <= alpha);
         const marks = opts.sigMarks ? { sigCat: results.map(r => r.p), alpha } : {};
         sections.push({
@@ -22389,8 +22570,13 @@ const Analysis = (() => {
         const hasRR = opts.effect && res.some(r => r.cat && r.cat.binary);
         const twoCol = res.some(r => r.num || (r.cat && !isCompact(r)));
         const effHead = hasNum && hasRR ? `MD/${EF} (95% CI)` : hasRR ? `${EF} (95% CI)` : 'MD (95% CI)';
-        const head = [{ t: '', span: twoCol ? 2 : 1 }, ...groupHeads, 'P value'];
+        const totalCol = !!opts.totalCol;
+        const head = [{ t: '', span: twoCol ? 2 : 1 }, ...groupHeads, ...(totalCol ? [opts.nHead === false ? 'Total' : `Total (n=${rows.length})`] : []), 'P value'];
         if (opts.showStat) head.push('Test');
+        // the Total column: every analysed patient, whatever the group
+        const totDesc = r => S.describe(r.gv.flat());
+        const totCat = (r, li) => { const cnt = S.sum(r.cat.table[li]), n = S.sum(r.cat.ns); return `${cnt} (${pctTxt(n ? 100 * cnt / n : 0)}%)`; };
+        const tot = (on, f) => totalCol ? [{ t: [on ? f() : ''] }] : [];
         if (showPost) head.push('Post hoc');
         if (opts.effect) head.push(effHead);
         const trows = [];
@@ -22407,24 +22593,25 @@ const Analysis = (() => {
             if (opts.secondRow === 'none') {
               // one row: "Mean ± SD" or "Median (IQR)" in a single cell
               trows.push([{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] },
-                ...n.desc.map(dd => ({ t: [P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)] })), ...tail(r, 1)]);
+                ...n.desc.map(dd => ({ t: [P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)] })), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d); }), ...tail(r, 1)]);
             } else {
               const first = [{ t: [r.v.label], b: true, rs: 2 }, { t: [P ? meanSdName() : 'Median'] },
-                ...n.desc.map(dd => ({ t: [P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d)] })), ...tail(r, 2)];
+                ...n.desc.map(dd => ({ t: [P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d)] })), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d); }), ...tail(r, 2)];
               const ci = dd => { const h = jStat.studentt.inv(0.975, dd.n - 1) * dd.sd / Math.sqrt(dd.n); return `${fmt(dd.mean - h, d)} to ${fmt(dd.mean + h, d)}`; };
               const second = [{ t: [P ? (opts.secondRow === 'ci' ? '95% CI' : 'Range') : 'IQR'] },
-                ...n.desc.map(dd => ({ t: [P ? (opts.secondRow === 'ci' ? ci(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d)] }))];
+                ...n.desc.map(dd => ({ t: [P ? (opts.secondRow === 'ci' ? ci(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d)] })),
+                ...tot(true, () => { const dd = totDesc(r); return P ? (opts.secondRow === 'ci' ? ci(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d); })];
               trows.push(first, second);
             }
           } else if (isCompact(r)) {
             const c = r.cat;
-            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...c.table[0].map((cnt, j) => ({ t: [`${cnt} (${pctTxt(c.pct[0][j])}%)`] })), ...tail(r, 1)]);
+            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...c.table[0].map((cnt, j) => ({ t: [`${cnt} (${pctTxt(c.pct[0][j])}%)`] })), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
           } else {
             const c = r.cat, L = r.levels.length;
             r.levels.forEach((lv, li) => {
               const row = [];
               if (li === 0) row.push({ t: [r.v.label], b: true, rs: L });
-              row.push({ t: [lv] }, ...c.table[li].map((cnt, j) => ({ t: [`${cnt} (${pctTxt(c.pct[li][j])}%)`] })));
+              row.push({ t: [lv] }, ...c.table[li].map((cnt, j) => ({ t: [`${cnt} (${pctTxt(c.pct[li][j])}%)`] })), ...tot(true, () => totCat(r, li)));
               if (li === 0) row.push(...tail(r, L));
               trows.push(row);
             });
@@ -22440,14 +22627,15 @@ const Analysis = (() => {
         const withValues = (r, lab) => detailed && values(r) ? `${lab} (${values(r)})` : lab;
         // optional effect size inside the P value brackets of a significant two-group comparison
         const effTxt = r => {
-          if (!opts.commentEffect || k !== 2) return '';
+          if (!wantEff || k !== 2) return '';
           if (r.num) { const q = r.num.pairs[0]; return q && isFinite(q.diff) ? `; MD = ${fmt(q.diff, d)}, 95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}` : ''; }
           const q = r.cat.rr && r.cat.rr[0];
           return q && q.rr !== null && q.rr !== undefined ? `; ${EF} = ${fmt(q.rr, 2)}, 95% CI ${fmt(q.lo, 2)}-${fmt(q.hi, 2)}` : '';
         };
         const nsRes = res.filter(r => !((r.num || r.cat).p <= alpha));
         const sent = [];
-        if (detailed) nsRes.forEach(r => {
+        if (descriptive) sent.push(...descriptiveSentences(res, b.table));
+        else if (detailed) nsRes.forEach(r => {
           const p = (r.num || r.cat).p;
           sent.push(`${cap(withValues(r, plain(r.v.label)))} was insignificantly different ${amongTxt(k)}${isFinite(p) ? ` (P value ${pTxt(p)})` : ''}.`);
         });
@@ -22455,7 +22643,7 @@ const Analysis = (() => {
           const nsLabels = nsRes.map(r => lowerFirst(plain(r.v.label)));
           sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`);
         }
-        for (const r of res.filter(r => (r.num || r.cat).p <= alpha)) {
+        for (const r of res.filter(r => !descriptive && (r.num || r.cat).p <= alpha)) {
           // compact categorical sentences already quote their percentages
           const lab = isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label));
           if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps).replace(/\)$/, effTxt(r) + ')')}.`); }
@@ -22474,6 +22662,45 @@ const Analysis = (() => {
                 : 'Pairwise comparisons were insignificant after Bonferroni correction.');
             }
           }
+        }
+        // descriptive style: one sentence per variable with every group's values, the test, its statistic, the P value and the effect size,
+        // pairwise results for three or more groups, and a closing overview of the table
+        function descriptiveSentences(res, tableName) {
+          const out = [`This table compares ${lowerFirst(plain(tableName))} ${amongTxt(k)}.`];
+          for (const r of res) {
+            const x = r.num || r.cat, sig = x.p <= alpha, lab = plain(r.v.label);
+            const st = x.stat && x.stat !== '—' && x.stat !== 'FE' ? `, ${x.stat}` : '';
+            const pb = isFinite(x.p) ? `${TEST_NAME[x.test] || x.test}${st}, P value ${pTxt(x.p)}${sig ? effTxt(r) : ''}` : 'not testable';
+            if (r.num) {
+              const P = r.num.param, vals = listJoin(r.num.desc.map((dd, i) => `${dd.n ? (P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)) : '—'} in ${gl[i]}`));
+              const what = P ? meanSdName(true) : 'median (IQR)';
+              if (!sig) { out.push(`${cap(lab)} did not differ significantly ${amongTxt(k)}; the ${what} was ${vals} (${pb}).`); continue; }
+              if (k === 2) {
+                const loc = i => P ? r.num.desc[i].mean : r.num.desc[i].median, hi = loc(0) >= loc(1) ? 0 : 1;
+                out.push(`${cap(lab)} was significantly higher in ${gl[hi]} than in ${gl[1 - hi]}; the ${what} was ${vals} (${pb}).`);
+              } else {
+                out.push(`${cap(lab)} differed significantly ${amongTxt(k)}; the ${what} was ${vals} (${pb}).`);
+                const pd = pairDescription(r.num, gl, alpha);
+                out.push(pd.key.includes('although') ? 'However, none of the pairwise comparisons was significant.' : `Pairwise comparisons showed that it was ${fillP(pd.key, pd.ps)}.`);
+              }
+            } else {
+              const c = r.cat, compact = isCompact(r);
+              const vals = compact ? listJoin(c.table[0].map((cnt, i) => `${cnt} of ${c.ns[i]} (${pctTxt(c.pct[0][i])}%) in ${gl[i]}`))
+                : gl.map((g, i) => `${g}: ${r.levels.map((lv, li) => `${lv} ${pctTxt(c.pct[li][i])}%`).join(', ')}`).join('; ');
+              const best = c.pct[0].indexOf(Math.max(...c.pct[0]));
+              if (compact) out.push(`${cap(lab)} was found in ${vals}; the difference was ${sig ? `significant, being most frequent in ${gl[best]}` : 'insignificant'} (${pb}).`);
+              else out.push(`The distribution of ${lowerFirst(lab)} ${sig ? 'differed significantly' : 'did not differ significantly'} ${amongTxt(k)} (${vals}; ${pb}).`);
+              if (sig && c.pairs) {
+                const sp = c.pairs.filter(q => q.p <= alpha);
+                out.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).` : 'Pairwise comparisons were insignificant after Bonferroni correction.');
+              }
+            }
+          }
+          const sigL = res.filter(r => (r.num || r.cat).p <= alpha).map(r => lowerFirst(plain(r.v.label))), nsL = res.filter(r => !((r.num || r.cat).p <= alpha)).map(r => lowerFirst(plain(r.v.label)));
+          if (res.length > 1) out.push(!sigL.length ? `Overall, the groups were comparable in all the studied variables.`
+            : !nsL.length ? `Overall, the groups differed significantly in all the studied variables.`
+            : `Overall, the groups differed significantly in ${listJoin(sigL)}, whereas they were comparable in ${listJoin(nsL)}.`);
+          return out;
         }
         const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: opts.effect, rr: hasRR, posthoc: showPost,
           stats: res.map(r => (r.num || r.cat).stat), ci: opts.secondRow === 'ci' && res.some(r => r.num && r.num.param),
@@ -22561,12 +22788,15 @@ const Analysis = (() => {
         : a.subset === 'each' ? groups.map(g => ({ g, rows: rows.filter(r => toCat(r[cfg.groupCol]) === g) }))
         : groups.includes(a.subset) ? [{ g: a.subset, rows: rows.filter(r => toCat(r[cfg.groupCol]) === a.subset) }] : [{ g: null, rows }];
       for (const sub of subsets) {
-        const sec = make(a, cfg, sub.rows, alpha, d, used, G);
-        if (!sec) continue;
-        if (a.title && a.title.trim()) sec.title = a.title.trim();
-        if (sub.g !== null) sec.title += ` in ${cfg.groupLabels[sub.g] || sub.g}`;
-        sec.comment = wording(sec.comment);
-        sections.push(sec);
+        const made = make(a, cfg, sub.rows, alpha, d, used, G);
+        if (!made) continue;
+        // an analysis may add a second table (e.g. the comparison of ROC curves)
+        [].concat(made).forEach((sec, si) => {
+          if (si === 0 && a.title && a.title.trim()) sec.title = a.title.trim();
+          if (sub.g !== null) sec.title += ` in ${cfg.groupLabels[sub.g] || sub.g}`;
+          sec.comment = wording(sec.comment);
+          sections.push(sec);
+        });
       }
     }
 
@@ -22577,10 +22807,31 @@ const Analysis = (() => {
     // table headings and footnotes follow the chosen P value heading and significance mark
     sections.forEach(sec => {
       if (opts.pHead && opts.pHead !== 'P value') sec.head = sec.head.map(h => h === 'P value' ? opts.pHead : h && h.t === 'P value' ? { ...h, t: opts.pHead } : h);
+      if (opts.boldSig) boldSigP(sec, opts.pHead || 'P value', alpha);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
     });
     return { sections, used, groups: gl, gN, k, methods: opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
+  }
+
+  // bold significant P values in the P value column (row spans followed as in the Word table)
+  function boldSigP(sec, pHead, alpha) {
+    let col = 0, pc = -1;
+    sec.head.forEach(h => { const t = typeof h === 'string' ? h : h && h.t; if (pc < 0 && t === pHead) pc = col; col += (h && h.span) || 1; });
+    if (pc < 0) return;
+    const occ = [];
+    sec.rows.forEach((r, ri) => {
+      let c = 0;
+      for (const cell of r) {
+        while (occ[ri] && occ[ri][c]) c++;
+        if (c === pc) {
+          const m = String((cell.t || [])[0] || '').match(/^(<\s?)?(\d*[.·]\d+)/);
+          if (m && (m[1] || parseFloat(m[2].replace('·', '.')) <= alpha)) cell.b = true;
+        }
+        if (cell.rs > 1) for (let q = 1; q < cell.rs; q++) { occ[ri + q] = occ[ri + q] || []; for (let s = 0; s < (cell.span || 1); s++) occ[ri + q][c + s] = true; }
+        c += cell.span || 1;
+      }
+    });
   }
 
   // Correlation table across all analysed patients: single numeric variables and each repeated outcome at its last timepoint
@@ -22785,7 +23036,13 @@ const Analysis = (() => {
     if (used.has('sel_forward')) s.push(`Multivariable models were built by forward selection (P to enter < ${P_ENTER}).`);
     if (used.has('linear')) s.push('Multiple linear regression was used to identify predictors of quantitative outcomes, reporting unstandardized (B) and standardized (β) coefficients with 95% CI.');
     if (used.has('logistic')) s.push('Binary logistic regression was used to identify predictors of binary outcomes, reporting odds ratios (OR) with 95% CI; model fit was assessed by the omnibus chi-square test and Nagelkerke R².');
-    if (used.has('roc') || used.has('rocClosest')) s.push(`Receiver operating characteristic (ROC) curve analysis was used to assess diagnostic performance; the area under the curve (AUC) was reported with its 95% CI (DeLong method), and the optimal cut-off was chosen by ${[used.has('roc') ? 'the Youden index' : '', used.has('rocClosest') ? 'the point closest to the top-left corner of the curve' : ''].filter(Boolean).join(' or ')}.`);
+    if (used.has('roc') || used.has('rocClosest')) {
+      const cuts = Object.keys(ROC_CUT).filter(k => used.has('rocCut:' + k)).map(k => ROC_CUT[k][0]);
+      s.push(`Receiver operating characteristic (ROC) curve analysis was used to assess diagnostic performance; the area under the curve (AUC) was reported with its 95% CI (DeLong method), and the optimal cut-off was chosen by ${cuts.join(' or ')}.`);
+      if (used.has('rocCI')) s.push('Sensitivity and specificity at the cut-off were reported with exact (Clopper-Pearson) 95% CIs.');
+      if (used.has('rocCombined')) s.push('The test variables were also combined into one score, the predicted probability of a logistic regression model.');
+      if (used.has('rocCompare')) s.push('The AUCs were compared with the DeLong test for correlated ROC curves.');
+    }
     s.push(`A two tailed P value ≤ ${o.alpha} was considered statistically significant.`);
     return s.join(' ');
   }
@@ -22855,7 +23112,8 @@ const Charts = (() => {
     classic: ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47'],
     gray: ['#333333', '#777777', '#AAAAAA', '#555555', '#999999', '#CCCCCC']
   };
-  const FONT = '"Segoe UI", Arial, sans-serif';
+  const FONTS = { sans: '"Segoe UI", Arial, sans-serif', arial: 'Arial, Helvetica, sans-serif', times: '"Times New Roman", Times, serif', calibri: 'Calibri, Carlito, Arial, sans-serif' };
+  let FONT = FONTS.sans; // chart text font, set per chart from the style
   // figure shapes (logical canvas size before the resolution multiplier)
   const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300] };
   const TEXT = { normal: 1, large: 1.25, xlarge: 1.5 };
@@ -22982,6 +23240,7 @@ const Charts = (() => {
 
   // public entry: draws the chart, then adds the optional title band above it
   function draw(spec, paletteName = 'brand', style = {}) {
+    FONT = FONTS[style.font] || FONTS.sans;
     const c = drawChart(spec, paletteName, style);
     return spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
   }
@@ -23332,6 +23591,24 @@ const Charts = (() => {
       ctx.beginPath(); pts.forEach((q, k) => k ? ctx.lineTo(X(q.fpr), Y(q.tpr)) : ctx.moveTo(X(q.fpr), Y(q.tpr))); ctx.stroke();
     });
     ctx.setLineDash([]);
+    // optional cut-off point on each curve, labelled with its value (labels moved down until they do not overlap)
+    const placed = [];
+    spec.series.forEach((s, i) => {
+      if (!s.cut) return;
+      const x = X(s.cut.fpr), y = Y(s.cut.tpr);
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = items[i].color; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(x, y, 11, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = items[i].color; ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+      if (!s.cut.label) return;
+      ctx.font = F(700, 24); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      const w = ctx.measureText(s.cut.label).width + 8, h = 30;
+      let lx = Math.min(x + 16, L + pw - w), ly = y + 8;
+      const hit = () => placed.some(b => lx < b.x + b.w && lx + w > b.x && ly < b.y + b.h && ly + h > b.y);
+      for (let k = 0; k < 12 && hit(); k++) ly += h;
+      placed.push({ x: lx, y: ly, w, h });
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(lx - 4, ly - 2, w, h);
+      ctx.fillStyle = items[i].color; ctx.fillText(s.cut.label, lx, ly);
+    });
     // the inside legend sits bottom-right, where ROC curves leave space
     if (lm.pos === 'inside') drawLegend(ctx, items, 'line', st, lm, { W, H, L, T: T + ph - lm.h - 24, pw, ph, ts });
     else drawLegend(ctx, items, 'line', st, lm, { W, H, L, T, pw, ph, ts });
@@ -23419,6 +23696,7 @@ const Charts = (() => {
   /* ---------- CONSORT 2010 flow diagram ---------- */
   // Flow diagrams: CONSORT 2010 (default), STROBE and STARD 2015 share this layout; 'simple' is a chain of steps
   function consort(c, groupLabels, palName = 'brand') {
+    FONT = FONTS.sans;
     if (c.type === 'simple') return simpleFlow(c, groupLabels, palName);
     const pal = palette(palName), type = c.type || 'consort';
     const branches = type === 'stard' ? stardBranches(c) : null;
@@ -23589,6 +23867,20 @@ const Report = (() => {
   let BODY_FONT = DEFAULT_FONT; // set per build from the report options
   const PORTRAIT_W = 9026, LANDSCAPE_W = 13958; // A4 text width with 1" margins (DXA)
   let PAGE_W = PORTRAIT_W; // set per build from the page orientation
+  let ITALIC_P = false; // APA / AMA / NEJM: the P of P values in italics
+
+  // text runs of a paragraph; with ITALIC_P the letter P of "P = 0.01", "p < .001" or a "P" heading is set in italics
+  function runs(text, o = {}) {
+    const { TextRun } = D();
+    const mk = (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || 24, font: BODY_FONT, color: o.color });
+    if (!ITALIC_P || !text) return [mk(text || '')];
+    if (/^[pP]( value| Value)?$/.test(text)) return [mk(text[0], true), ...(text.length > 1 ? [mk(text.slice(1))] : [])];
+    const out = [], re = /(?<![A-Za-z])[pP](?=\s?(?:value\s?)?[=<>≤])/g;
+    let last = 0, m;
+    while ((m = re.exec(text))) { if (m.index > last) out.push(mk(text.slice(last, m.index))); out.push(mk(m[0], true)); last = m.index + 1; }
+    if (last < text.length) out.push(mk(text.slice(last)));
+    return out;
+  }
 
   const dataUrlToBytes = url => {
     const b = atob(url.split(',')[1]), u = new Uint8Array(b.length);
@@ -23601,8 +23893,8 @@ const Report = (() => {
     return new Paragraph({
       alignment: o.align || AlignmentType.JUSTIFIED,
       spacing: { after: o.after ?? 160, line: o.line ?? 360, before: o.before ?? 0 },
-      keepNext: o.keepNext,
-      children: [new TextRun({ text, bold: o.bold, italics: o.italic, size: o.size || 24, font: BODY_FONT, color: o.color })]
+      keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
+      children: [...runs(text, o), ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, bold: false, size: o.noteSize || o.size }) : [])]
     });
   }
   function heading(text, brand) {
@@ -23612,16 +23904,22 @@ const Report = (() => {
       children: [new TextRun({ text, bold: true, size: 30, font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
     });
   }
-  function subheading(text, brand) {
+  function subheading(text, brand, pageBreakBefore) {
     const { Paragraph, TextRun, HeadingLevel } = D();
     return new Paragraph({
-      heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, keepNext: true,
+      heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, keepNext: true, pageBreakBefore,
       children: [new TextRun({ text, bold: true, size: 26, font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
     });
   }
-  function caption(text) {
+  function caption(text, o = {}) {
     const { AlignmentType } = D();
-    return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true });
+    return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true, ...o });
+  }
+  // APA: the number in bold on its own line, the title in italics below it, both left-aligned
+  function apaCaption(label, title, o = {}) {
+    const { AlignmentType } = D();
+    return [para(label, { bold: true, align: AlignmentType.LEFT, after: 0, line: 276, keepNext: true, pageBreakBefore: o.pageBreakBefore }),
+      para(title, { italic: true, align: AlignmentType.LEFT, after: 120, line: 276, keepNext: true })];
   }
   function image(dataUrl, srcW, srcH, widthPx = 600) {
     const { Paragraph, ImageRun, AlignmentType } = D();
@@ -23638,12 +23936,13 @@ const Report = (() => {
     const nCols = headCells.reduce((s, h) => s + (h.span || 1), 0);
     // relative column weights: first label columns wider, effect column widest
     const weights = [];
+    const isP = name => /^(p value|p|p-value)$/i.test(name);
     headCells.forEach((h, i) => {
       for (let s = 0; s < (h.span || 1); s++) {
         const name = h.t || '';
         // very wide tables (e.g. ROC) need roomier label and P value columns
         const wide = nCols > 7;
-        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : /^(P value|P|p-value)$/.test(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
+        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : isP(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
       }
     });
     const tot = weights.reduce((a, b) => a + b, 0);
@@ -23669,7 +23968,7 @@ const Report = (() => {
         shading: isHead && !apa ? { type: ShadingType.CLEAR, color: 'auto', fill: brand ? 'EBDDF6' : 'D9D9D9' } : undefined,
         children: lines.map(l => new Paragraph({
           alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240 },
-          children: [new TextRun({ text: String(l), bold: isHead || cell.b, size: cell.small ? 17 : 20, font: BODY_FONT })]
+          children: runs(String(l), { bold: isHead || cell.b, size: cell.small ? 17 : 20 })
         }))
       });
     };
@@ -23708,7 +24007,10 @@ const Report = (() => {
     for (let i = 0; i < figs.length; i += 2) {
       rows.push(new TableRow({ cantSplit: true, children: [figs[i], figs[i + 1]].map(f => new TableCell({
         width: { size: half, type: WidthType.DXA }, borders,
-        children: f ? [image(f.url, f.w, f.h, w), para(f.label, { bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160 })] : [new Paragraph('')]
+        children: f ? (f.apa
+          ? [para(f.num, { bold: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 0 }), para(f.caption, { italic: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 60 }),
+            image(f.url, f.w, f.h, w), ...(f.note ? [para('Note. ' + f.note, { align: D().AlignmentType.LEFT, size: 18, line: 240, after: 160 })] : [])]
+          : [image(f.url, f.w, f.h, w), para(f.label, { bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160, note: f.note, noteSize: 18 })]) : [new Paragraph('')]
       })) }));
     }
     return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: [half, PAGE_W - half], rows,
@@ -23716,7 +24018,7 @@ const Report = (() => {
   }
 
   // "Figure 1:" (default), "Figure 1." or "Fig. 1."
-  const figLabel = (n, style) => style === 'period' ? `Figure ${n}.` : style === 'fig' ? `Fig. ${n}.` : `Figure ${n}:`;
+  const figLabel = (n, style) => style === 'period' ? `Figure ${n}.` : style === 'fig' ? `Fig. ${n}.` : style === 'apa' ? `Figure ${n}` : `Figure ${n}:`;
   // figures placed after their table (null), or all together at the end, optionally grouped by chart type
   const TYPE_ORDER = ['bar', 'line', 'box', 'dot', 'stacked', 'pie', 'scatter', 'roc', 'km', 'ba'];
   function arrangeFigures(sections, placement) {
@@ -23733,6 +24035,7 @@ const Report = (() => {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
     BODY_FONT = opts.font || DEFAULT_FONT;
+    ITALIC_P = !!opts.italicP;
     const landscape = opts.orientation === 'landscape';
     PAGE_W = landscape ? LANDSCAPE_W : PORTRAIT_W;
     const children = [];
@@ -23751,25 +24054,38 @@ const Report = (() => {
     let fig = 1, tab = 1;
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
-      children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600));
-      children.push(caption(`${figLabel(pre + fig++, opts.captionStyle)} ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
+      const fl = figLabel(pre + fig++, opts.captionStyle), ft = model.flowCaption || 'CONSORT flowchart of the enrolled patients';
+      if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600));
+      else children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600), caption(`${fl} ${ft}`));
     } else if (opts.paper && model.intro) children.push(para(model.intro));
     if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => t.trim() && children.push(para(t.trim())));
     const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
     const placeFigures = list => {
-      const figs = list.filter(f => f.url).map(f => ({ ...f, label: `${figLabel(pre + fig++, opts.captionStyle)} ${f.caption}` }));
+      const apa = opts.captionStyle === 'apa';
+      const figs = list.filter(f => f.url).map(f => { const num = figLabel(pre + fig++, opts.captionStyle); return { ...f, apa, num, label: `${num} ${f.caption}` }; });
       if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
       else for (const f of figs) {
-        children.push(image(f.url, f.w, f.h, w1));
-        children.push(caption(f.label));
+        // APA places the number and title above the figure and the explanation below it as a note
+        if (apa) {
+          children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, w1));
+          if (f.note) children.push(para('Note. ' + f.note, { size: 20, line: 240, after: 200, align: AlignmentType.LEFT }));
+        } else {
+          children.push(image(f.url, f.w, f.h, w1));
+          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}));
+        }
       }
     };
     const atEnd = arrangeFigures(model.sections, opts.figPlacement);
     for (const s of model.sections) {
       if (s.tableOn !== false) {
-        if (opts.sectionHeads) children.push(subheading(s.title, brand));
-        if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment));
-        children.push(caption(`Table ${pre}${tab++}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`));
+        // thesis: each table starts on a new page (from its subheading, comment or caption, whichever comes first)
+        let brk = !!opts.tableNewPage;
+        const first = () => { const b = brk; brk = false; return b; };
+        if (opts.sectionHeads) children.push(subheading(s.title, brand, first()));
+        if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment, { pageBreakBefore: first() }));
+        const num = `Table ${pre}${tab++}`;
+        if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
+        else children.push(caption(`${num}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`, { pageBreakBefore: first() }));
         children.push(table(s.head, s.rows, brand, opts.tableStyle));
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));
@@ -24081,6 +24397,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
     pctDecimals: 1, meanStyle: 'pm', iqrStyle: 'dash', secondRow: 'auto', pDigits: 3, pHead: 'P value', sigSym: '*', showStat: false, missingNote: false,
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
+    pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -24096,13 +24413,14 @@ if (typeof module !== 'undefined') module.exports = Examples;
     figPlacement: ['optFigPlacement'], captionStyle: ['optCaptionStyle'], chartTitle: ['optChartTitle', true],
     pctDecimals: ['optPctDec'], meanStyle: ['optMeanStyle'], iqrStyle: ['optIqrStyle'], secondRow: ['optSecondRow'], pDigits: ['optPDigits'], pHead: ['optPHead'],
     sigSym: ['optSigSym'], showStat: ['optShowStat', true], missingNote: ['optMissingNote', true], orientation: ['optOrientation'], tableCaption: ['optTableCaption'],
-    pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true]
+    pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
+    pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
   const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
-    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean });
+    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -24176,8 +24494,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
 
   /* ---------- software statement presets (first sentence of Statistical Analysis) ---------- */
   const SOFTWARE = [
-    ['Prof MSE Easy Stat', 'Statistical analysis was done by Prof MSE Easy Stat v1.0.'],
     ['IBM SPSS Statistics', 'Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA).'],
+    ['Prof MSE Easy Stat', 'Statistical analysis was done by Prof MSE Easy Stat v1.0.'],
     ['R', 'Statistical analysis was performed using R software, version 4.4 (R Foundation for Statistical Computing, Vienna, Austria).'],
     ['Stata', 'Statistical analysis was performed using Stata, version 18 (StataCorp LLC, College Station, TX, USA).'],
     ['GraphPad Prism', 'Statistical analysis was performed using GraphPad Prism, version 10 (GraphPad Software, Boston, MA, USA).'],
@@ -24192,6 +24510,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     ['Excel + SPSS', 'Data were collected and coded in Microsoft Excel (Microsoft Corp., Redmond, WA, USA) and analyzed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA).']
   ];
   $('#softwarePreset').innerHTML = '<option value="">— choose a template —</option>' + SOFTWARE.map(([n], i) => `<option value="${i}">${esc(n)}</option>`).join('');
+  $('#software').value = SOFTWARE[0][1]; $('#softwarePreset').value = '0';
   $('#softwarePreset').onchange = e => {
     if (e.target.value === '') return;
     $('#software').value = SOFTWARE[+e.target.value][1];
@@ -24260,11 +24579,21 @@ if (typeof module !== 'undefined') module.exports = Examples;
   $('#to2').onclick = () => go(2);
 
   /* ---------- data grid: preview options, editing and rearranging the sheet ---------- */
-  state.grid = { page: 0, per: 10, q: '', onlyMissing: false, hlMissing: true, summary: false, edit: false, sort: null };
+  state.grid = { page: 0, per: 10, q: '', onlyMissing: false, hlMissing: true, summary: false, edit: false, sort: null, density: 'normal', hidden: [], types: true, wrap: false, freeze: false, stripes: false };
   const isMissing = v => v === null || v === undefined || String(v).trim() === '';
   const parseCell = t => { t = t.replace(/\u00a0/g, ' ').trim(); if (t === '') return null; const n = Number(t.replace(',', '.')); return isFinite(n) && /^[-+]?[\d.,]+(e[-+]?\d+)?$/i.test(t) ? n : t; };
   function renderGrid() {
-    const g = state.grid, { headers, rows } = state.data;
+    const g = state.grid, { headers: allHeaders, rows } = state.data;
+    const kinds = Object.fromEntries(allHeaders.map(h => [h, columnInfo(rows, h).numeric ? 'num' : 'text']));
+    g.hidden = g.hidden.filter(h => allHeaders.includes(h));
+    const headers = allHeaders.filter(h => !g.hidden.includes(h));
+    $('#gridCols').innerHTML = allHeaders.map(h => `<label><input type="checkbox" data-gcol="${esc(h)}"${g.hidden.includes(h) ? '' : ' checked'}>${esc(h)} <span class="legend-note">${kinds[h] === 'num' ? 'numeric' : 'text'}</span></label>`).join('');
+    $('#gridColCount').textContent = g.hidden.length ? `(${headers.length} of ${allHeaders.length})` : '';
+    const tbl = $('#preview');
+    ['compact', 'comfy'].forEach(d => tbl.classList.toggle(d, g.density === d));
+    tbl.classList.toggle('wrap', g.wrap); tbl.classList.toggle('freeze', g.freeze); tbl.classList.toggle('stripes', g.stripes);
+    const cc = (h, ci) => [kinds[h] === 'num' ? 'num' : '', ci === 0 ? 'c1' : ''].filter(Boolean).join(' ');
+    const typeTag = h => g.types ? `<span class="ty" title="${kinds[h] === 'num' ? 'Numeric' : 'Text / categories'}">${kinds[h] === 'num' ? '123' : 'abc'}</span>` : '';
     $('#dims').textContent = `${rows.length} rows × ${headers.length} columns`;
     const q = g.q.trim().toLowerCase();
     const idx = rows.map((_, i) => i).filter(i => (!q || headers.some(h => String(rows[i][h] ?? '').toLowerCase().includes(q))) && (!g.onlyMissing || headers.some(h => isMissing(rows[i][h]))));
@@ -24274,17 +24603,18 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const role = h => !cfg ? '' : h === cfg.groupCol ? '<span class="chip info">group</span>' : cfg.idCols.includes(h) ? '<span class="chip">ID</span>' : '';
     const sortMark = h => g.sort && g.sort.col === h ? (g.sort.dir > 0 ? ' ▲' : ' ▼') : '';
     const head = headers.map((h, ci) => g.edit
-      ? `<th><div class="gh"><input type="text" data-hname="${esc(h)}" value="${esc(h)}" title="Rename column">
+      ? `<th class="${cc(h, ci)}"><div class="gh"><input type="text" data-hname="${esc(h)}" value="${esc(h)}" title="Rename column">
           <span class="gh-btns"><button data-hmove="${ci},-1" title="Move left" type="button">◀</button><button data-hmove="${ci},1" title="Move right" type="button">▶</button><button data-hsort="${esc(h)}" title="Sort rows" type="button">⇅</button><button data-hdel="${esc(h)}" title="Delete column" type="button">✕</button></span></div>${role(h)}</th>`
-      : `<th data-hsort="${esc(h)}" class="sortable" title="Click to sort the rows (Undo in edit mode restores the order)">${esc(h)}${sortMark(h)} ${role(h)}</th>`).join('');
+      : `<th data-hsort="${esc(h)}" class="sortable ${cc(h, ci)}" title="Click to sort the rows (Undo in edit mode restores the order)">${esc(h)}${typeTag(h)}${sortMark(h)} ${role(h)}</th>`).join('');
     let summary = '';
-    if (g.summary) summary = `<tr class="gsum"><td>Summary</td>${headers.map(h => {
+    if (g.summary) summary = `<tr class="gsum"><td class="rn">Summary</td>${headers.map((h, ci) => {
       const info = columnInfo(rows, h), miss = rows.length - info.n, nums = rows.map(r => Analysis.toNum(r[h])).filter(isFinite);
       const desc = info.numeric && nums.length ? `num · ${Analysis.fmt(Math.min(...nums), 2)}–${Analysis.fmt(Math.max(...nums), 2)}` : `text · ${info.distinct.length} values`;
-      return `<td>${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
+      return `<td class="${ci === 0 ? 'c1' : ''}">${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
     const body = shown.map(i => `<tr><td class="rn">${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
-      headers.map(h => `<td class="${g.hlMissing && isMissing(rows[i][h]) ? 'miss' : ''}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`).join('')}</tr>`).join('');
+      headers.map((h, ci) => `<td class="${cc(h, ci)}${g.hlMissing && isMissing(rows[i][h]) ? ' miss' : ''}" title="${esc(rows[i][h] ?? '')}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`).join('')}</tr>`).join('');
     $('#preview').innerHTML = `<thead><tr><th class="rn">#</th>${head}</tr></thead><tbody>${summary}${body || `<tr><td colspan="${headers.length + 1}" class="legend-note">No rows match.</td></tr>`}</tbody>`;
+    const rn = tbl.querySelector('th.rn'); if (rn) tbl.style.setProperty('--rnw', rn.getBoundingClientRect().width + 'px');
     $('#gridInfo').textContent = idx.length ? `Rows ${g.page * per + 1}–${Math.min(idx.length, g.page * per + per)} of ${idx.length}${idx.length < rows.length ? ` (filtered from ${rows.length})` : ''}` : '0 rows';
     $('#gridPrev').disabled = g.page === 0; $('#gridNext').disabled = g.page >= pages - 1;
     $('#gridEditBar').style.display = g.edit ? '' : 'none';
@@ -24377,6 +24707,11 @@ if (typeof module !== 'undefined') module.exports = Examples;
     if (b.id === 'gridPrev') { g.page--; renderGrid(); }
     else if (b.id === 'gridNext') { g.page++; renderGrid(); }
     else if (b.id === 'gridEdit') { g.edit = !g.edit; renderGrid(); }
+    else if (d.gcols) {
+      const hs = state.data.headers, isNum = h => columnInfo(state.data.rows, h).numeric;
+      g.hidden = d.gcols === 'all' ? [] : d.gcols === 'none' ? [...hs] : hs.filter(h => d.gcols === 'num' ? !isNum(h) : isNum(h));
+      renderGrid();
+    }
     else if (b.id === 'gridUndo') {
       const snap = state.undo.pop(); if (!snap) return;
       const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg; renderGrid(); renderStepper(); toast('Undone');
@@ -24437,6 +24772,12 @@ if (typeof module !== 'undefined') module.exports = Examples;
     else if (t.id === 'gridOnlyMissing') { g.onlyMissing = t.checked; g.page = 0; }
     else if (t.id === 'gridHl') g.hlMissing = t.checked;
     else if (t.id === 'gridSummary') g.summary = t.checked;
+    else if (t.id === 'gridDensity') g.density = t.value;
+    else if (t.id === 'gridTypes') g.types = t.checked;
+    else if (t.id === 'gridWrapText') g.wrap = t.checked;
+    else if (t.id === 'gridFreeze') g.freeze = t.checked;
+    else if (t.id === 'gridStripes') g.stripes = t.checked;
+    else if (t.dataset.gcol !== undefined) g.hidden = t.checked ? g.hidden.filter(h => h !== t.dataset.gcol) : [...g.hidden, t.dataset.gcol];
     else return;
     renderGrid();
   });
@@ -24837,7 +25178,18 @@ if (typeof module !== 'undefined') module.exports = Examples;
       out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
     if (t === 'linear') out.push(`<div>${box('vif', 'Collinearity (VIF)')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('hl', 'Hosmer-Lemeshow goodness of fit')}</div>`);
-    if (t === 'roc') out.push(`<div><label class="f">Optimal cut-off</label>${sel('cutoff', [['youden', 'Youden index'], ['closest', 'Closest to top-left corner']], a.cutoff)}</div>`);
+    if (t === 'logistic') out.push(`<div>${box('classTable', 'Classification table (sensitivity / specificity)')}</div>`);
+    if (t === 'linear' || t === 'logistic') out.push(`<div>${box('constant', 'Show the constant')}</div>`);
+    if (t === 'roc') {
+      out.push(`<div><label class="f">Optimal cut-off</label>${sel('cutoff', [['youden', 'Youden index'], ['closest', 'Closest to top-left corner'],
+        ['sens80', 'Sensitivity ≥ 80% (best specificity)'], ['sens90', 'Sensitivity ≥ 90% (best specificity)'], ['sens95', 'Sensitivity ≥ 95% (best specificity)'],
+        ['spec80', 'Specificity ≥ 80% (best sensitivity)'], ['spec90', 'Specificity ≥ 90% (best sensitivity)'], ['spec95', 'Specificity ≥ 95% (best sensitivity)'],
+        ['manual', 'My own cut-off value']], a.cutoff)}</div>`);
+      if (a.cutoff === 'manual') out.push(`<div><label class="f">Cut-off value (positive when ≥, or ≤ for lower values)</label><input type="text" data-af="manualCut" value="${esc(a.manualCut || '')}" placeholder="e.g. 2.5"></div>`);
+      out.push(`<div><label class="f">Positive test direction</label>${sel('direction', [['auto', 'Automatic (from the AUC)'], ['higher', 'Higher values positive'], ['lower', 'Lower values positive']], a.direction)}</div>`);
+      out.push(`<div>${box('ci', '95% CI of sensitivity and specificity')}</div>`, `<div>${box('lr', 'Likelihood ratios (LR+, LR−)')}</div>`, `<div>${box('youdenCol', 'Youden index column')}</div>`,
+        `<div>${box('showCut', 'Mark the cut-off on the curve')}</div>`, `<div>${box('compare', 'Compare the AUCs (DeLong test)')}</div>`, `<div>${box('combined', 'Combined model of all tests (logistic)')}</div>`);
+    }
     return out.join('');
   }
   function readAdvanced() {
@@ -24859,6 +25211,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   });
   $('#advList').addEventListener('change', e => {
     const f = e.target.dataset.af;
+    if (f === 'cutoff') { readUiIntoCfg(); renderAdvanced(); return; }
     if (f !== 'outcome' && f !== 'event' && f !== 'second') return;
     readUiIntoCfg();
     const a = state.cfg.advanced[+e.target.closest('[data-adv]').dataset.adv];
@@ -25050,7 +25403,22 @@ if (typeof module !== 'undefined') module.exports = Examples;
   }
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true };
+  const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false };
+  // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
+  const JOURNAL_STYLES = {
+    none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
+    vancouver: { name: 'Vancouver / ICMJE (medical journals)', note: 'P = 0.013, P < 0.001; mean ± SD; median (IQR) as 25–30; “Table 1.” and “Figure 1.”',
+      o: { pWord: 'P', pHead: 'P value', pLead: 1, meanStyle: 'pm', iqrStyle: 'endash', tableCaption: 'period', captionStyle: 'period' } },
+    apa: { name: 'APA 7th edition', note: 'p = .013 (italic p, no leading zero); M (SD); three-line tables; “Table 1” in bold with the title in italics below; “Figure 1” above the figure.',
+      o: { pWord: 'p', pHead: 'p', pLead: 0, meanStyle: 'paren', tableStyle: 'apa', tableCaption: 'apa', captionStyle: 'apa', italicP: true } },
+    ama: { name: 'AMA 11th edition (JAMA)', note: 'P = .01, P < .001 (italic P, no leading zero); mean (SD); “Table 1.” and “Figure 1.”',
+      o: { pWord: 'P', pHead: 'P value', pLead: 0, meanStyle: 'paren', iqrStyle: 'endash', tableCaption: 'period', captionStyle: 'period', italicP: true } },
+    nejm: { name: 'NEJM', note: 'P = 0.01 (italic P); mean ±SD; “Table 1.” and “Figure 1.”',
+      o: { pWord: 'P', pHead: 'P Value', pLead: 1, meanStyle: 'pm', iqrStyle: 'endash', tableCaption: 'period', captionStyle: 'period', italicP: true } },
+    lancet: { name: 'The Lancet', note: 'p=0·013 with the mid-line decimal point (0·5); mean (SD); IQR as 25–30.',
+      o: { pWord: 'p', pHead: 'p value', pLead: 1, meanStyle: 'paren', iqrStyle: 'endash', tableCaption: 'colon', captionStyle: 'colon', midDot: true } }
+  };
+  $('#fmtStyle').innerHTML = Object.entries(JOURNAL_STYLES).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
   // the format adjusts a copy of the options; the options of steps 4–9 are never changed
   const FORMAT_PRESETS = {
     custom: {},
@@ -25060,7 +25428,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   };
   const report = () => (state.cfg.report = { ...DEFAULT_REPORT, ...(state.cfg.report || {}) });
   function effOptions() {
-    const o = { ...state.cfg.options, ...FORMAT_PRESETS[report().format] };
+    const o = { ...state.cfg.options, ...FORMAT_PRESETS[report().format], ...(JOURNAL_STYLES[report().style] || JOURNAL_STYLES.none).o };
     if (report().format === 'thesis' && o.commentPlace === 'none') o.commentPlace = 'after';
     return o;
   }
@@ -25070,6 +25438,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     $('#fmtThesis').style.display = r.format === 'thesis' ? '' : 'none';
     $('#fmtPaper').style.display = r.format === 'paper' ? '' : 'none';
     $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
+    $('#fmtNewPage').checked = r.newPage; $('#fmtNonSig').checked = r.nonSig;
+    $('#fmtStyle').value = JOURNAL_STYLES[r.style] ? r.style : 'none'; $('#fmtStyleNote').textContent = (JOURNAL_STYLES[r.style] || JOURNAL_STYLES.none).note;
   }
   $('#fmtBar').addEventListener('click', e => {
     const b = e.target.closest('[data-format]'); if (!b) return;
@@ -25081,6 +25451,10 @@ if (typeof module !== 'undefined') module.exports = Examples;
     else if (e.target.id === 'fmtHeads') r.sectionHeads = e.target.checked;
     else if (e.target.id === 'fmtMaxFigs') r.maxFigs = +e.target.value;
     else if (e.target.id === 'fmtAbstract') r.abstract = e.target.checked;
+    else if (e.target.id === 'fmtNewPage') { r.newPage = e.target.checked; return; }
+    else if (e.target.id === 'fmtNonSig') r.nonSig = e.target.checked;
+    // the journal style changes number formats: run the analysis again
+    else if (e.target.id === 'fmtStyle') { r.style = e.target.value; syncEdits(); runAnalysis(); return; }
     else return;
     syncEdits(); state.result.narrativeEdited = false; renderReport();
   });
@@ -25093,7 +25467,16 @@ if (typeof module !== 'undefined') module.exports = Examples;
         syncAssessed(ensureConsort());
         const cfg = { ...state.cfg, options: effOptions() };
         const res = Analysis.run(state.data, cfg);
-        res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => { f.key = f.caption; renderFigure(f, cfg.options); }); });
+        // a journal style's P wording also goes into the table footnotes
+        if (report().style !== 'none' && cfg.options.pWord !== 'P value') res.sections.forEach(s => { s.footnote = s.footnote.replace(/\bP value\b/g, cfg.options.pWord); });
+        // P values without the leading zero: also the significance level in the footnotes
+        if (+cfg.options.pLead === 0) res.sections.forEach(s => { s.footnote = s.footnote.replace(/(P value|\bP|\bp) ([≤<]) 0\./g, '$1 $2 .'); });
+        if (cfg.options.midDot) midDots(res);
+        res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
+          f.key = f.caption; renderFigure(f, cfg.options);
+          f.note = cfg.options.figNotes ? figNote(f.spec, cfg.options) : '';
+          if (cfg.options.midDot) f.note = dot(f.note);
+        }); });
         const pal = chartPalette(cfg.options);
         const gl = res.groups;
         if (cfg.consort.enabled) {
@@ -25107,6 +25490,46 @@ if (typeof module !== 'undefined') module.exports = Examples;
     }, 30);
   }
 
+  // The Lancet's mid-line decimal point (0·5) in every text of the report
+  const dot = t => typeof t === 'string' ? t.replace(/(\d)\.(\d)/g, '$1·$2') : t;
+  function midDots(res) {
+    ['methods', 'intro', 'summary', 'flowCaption'].forEach(k => { res[k] = dot(res[k]); });
+    res.sections.forEach(s => {
+      ['title', 'comment', 'footnote', 'brief'].forEach(k => { s[k] = dot(s[k]); });
+      s.head = s.head.map(h => typeof h === 'string' ? dot(h) : h && { ...h, t: dot(h.t) });
+      s.rows.forEach(r => r.forEach(c => { c.t = (c.t || []).map(dot); }));
+      s.figures.forEach(f => { f.caption = dot(f.caption); });
+    });
+  }
+  // the caption's explanation of what the chart shows: bars, error bars, boxes, markers and significance stars
+  function figNote(spec, o) {
+    const P = o.pWord === 'p' ? 'p' : 'P', out = [], series = spec.series || [];
+    const err = { sem: 'the standard error of the mean (SEM)', ci: 'the 95% CI of the mean' }[o.errorBar] || '±1 standard deviation (SD)';
+    if ((spec.type === 'bar' || spec.type === 'line') && !spec.percent && !spec.integer) {
+      const what = spec.type === 'bar' ? 'Bars' : 'Points';
+      if (series.some(s => s.err && s.err.some(v => v !== null && v !== undefined))) out.push(`${what} show the mean; error bars show ${err}.`);
+      else if (series.some(s => s.lo)) out.push(`${what} show the median; error bars show the interquartile range (IQR).`);
+    }
+    if (spec.type === 'box') {
+      out.push('Boxes show the median and interquartile range (IQR); whiskers extend to the most extreme values within 1.5 × IQR, and points beyond them are outliers.');
+      if (o.boxMean) out.push('◆ marks the mean.');
+      if (spec.points) out.push('Each dot is one patient.');
+    }
+    if (spec.type === 'dot') out.push(`Each dot is one patient; the line and whiskers show the ${spec.median ? 'median and IQR' : 'mean ± SD'}.`);
+    if (spec.type === 'roc') out.push(`The dashed diagonal is the line of no discrimination (AUC = 0.5).${series.some(s => s.cut) ? ' Circles mark the chosen cut-off values.' : ''}`);
+    if (spec.type === 'km') out.push('Vertical ticks mark censored patients.');
+    if (spec.type === 'ba') out.push('The middle line shows the mean difference (bias) and the dashed lines the 95% limits of agreement (mean ± 1.96 SD).');
+    if (['bar', 'line', 'box', 'dot'].includes(spec.type)) {
+      const ps = [...(spec.sig || []).map(q => q.p), ...(spec.sigCat || [])].filter(p => p <= spec.alpha);
+      if (ps.length) {
+        const lv = [`*${P} ≤ ${+o.pLead === 0 ? String(spec.alpha).replace(/^0\./, '.') : spec.alpha}`];
+        if (ps.some(p => p <= 0.01)) lv.push(`**${P} ≤ 0.01`);
+        if (ps.some(p => p <= 0.001)) lv.push(`***${P} ≤ 0.001`);
+        out.push(`${lv.join(', ')} (${spec.sig ? 'brackets: comparison between the groups' : 'difference between the groups at that time'}).`);
+      }
+    }
+    return out.join(' ');
+  }
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
   function renderFigure(f, o) {
     const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, chartPalette(o), chartStyle(o));
@@ -25125,6 +25548,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     if ($('#edIntro')) r.intro = $('#edIntro').value;
     document.querySelectorAll('[data-comment]').forEach(t => { r.sections[+t.dataset.comment].comment = t.value; });
     document.querySelectorAll('[data-fcap]').forEach(t => { const [si, fi] = t.dataset.fcap.split(':').map(Number); r.sections[si].figures[fi].caption = t.value; });
+    document.querySelectorAll('[data-fnote]').forEach(t => { const [si, fi] = t.dataset.fnote.split(':').map(Number); r.sections[si].figures[fi].note = t.value; });
     document.querySelectorAll('[data-ttl]').forEach(t => { r.sections[+t.dataset.ttl].title = t.value; });
     if ($('#edSummary')) r.summary = $('#edSummary').value;
     if ($('#edNarrative') && $('#edNarrative').value !== r.narrative) { r.narrative = $('#edNarrative').value; r.narrativeEdited = true; }
@@ -25139,7 +25563,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       // the paper keeps a few figures: repeated outcomes before single variables
       const kindOf = f => r.sections.find(s => s.figures.includes(f)).kind;
       // only figures of significant results; the limit is a maximum
-      const ranked = figs.filter(f => f.sig !== false).map((f, i) => ({ f, i, k: kindOf(f) === 'repeated' ? 0 : 1 })).sort((a, b) => a.k - b.k || a.i - b.i);
+      const ranked = figs.filter(f => rep.nonSig || f.sig !== false).map((f, i) => ({ f, i, k: kindOf(f) === 'repeated' ? 0 : 1 })).sort((a, b) => a.k - b.k || a.i - b.i);
       const keep = new Set(ranked.slice(0, rep.maxFigs).map(x => x.f));
       figs = figs.filter(f => keep.has(f));
     }
@@ -25198,13 +25622,14 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const atEnd = o.figPlacement === 'end' || o.figPlacement === 'endType';
     const figHtml = f => {
       const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f);
-      const label = isOut(fk) ? 'Not exported:' : plan.kept.has(f) ? lab(plan.figNum.get(f)) : (f.sig === false ? 'Not in the paper (not significant):' : `Not in the paper (limit ${plan.rep.maxFigs}):`);
-      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption"></figcaption>${exBox(fk, 'Figure')}</figure>`;
+      const label = isOut(fk) ? 'Not exported:' : plan.kept.has(f) ? lab(plan.figNum.get(f)) : (f.sig === false && !plan.rep.nonSig ? 'Not in the paper (not significant):' : `Not in the paper (limit ${plan.rep.maxFigs}):`);
+      const note = f.note !== undefined && (f.note || o.figNotes) ? `<input type="text" class="fcap fnote" data-fnote="${si}:${fi}" value="${esc(f.note)}" title="Explanation of the symbols (printed after the caption)" placeholder="Explanation of the symbols">` : '';
+      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption">${note}</figcaption>${exBox(fk, 'Figure')}</figure>`;
     };
     r.sections.forEach((s, i) => {
       const tk = exKey.table(s), tOut = isOut(tk), place = o.commentPlace || 'after';
       const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
-      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
+      html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
         ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
         <div class="foot">${esc(s.footnote)}</div>
         ${place !== 'before' ? comment : ''}</div>
@@ -25258,7 +25683,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
       const r = exportModel(state.result);
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
-      const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper', title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+      const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
+        tableNewPage: rp.format === 'thesis' && rp.newPage, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

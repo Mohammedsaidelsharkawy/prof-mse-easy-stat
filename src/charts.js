@@ -5,7 +5,8 @@ const Charts = (() => {
     classic: ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47'],
     gray: ['#333333', '#777777', '#AAAAAA', '#555555', '#999999', '#CCCCCC']
   };
-  const FONT = '"Segoe UI", Arial, sans-serif';
+  const FONTS = { sans: '"Segoe UI", Arial, sans-serif', arial: 'Arial, Helvetica, sans-serif', times: '"Times New Roman", Times, serif', calibri: 'Calibri, Carlito, Arial, sans-serif' };
+  let FONT = FONTS.sans; // chart text font, set per chart from the style
   // figure shapes (logical canvas size before the resolution multiplier)
   const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300] };
   const TEXT = { normal: 1, large: 1.25, xlarge: 1.5 };
@@ -132,6 +133,7 @@ const Charts = (() => {
 
   // public entry: draws the chart, then adds the optional title band above it
   function draw(spec, paletteName = 'brand', style = {}) {
+    FONT = FONTS[style.font] || FONTS.sans;
     const c = drawChart(spec, paletteName, style);
     return spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
   }
@@ -482,6 +484,24 @@ const Charts = (() => {
       ctx.beginPath(); pts.forEach((q, k) => k ? ctx.lineTo(X(q.fpr), Y(q.tpr)) : ctx.moveTo(X(q.fpr), Y(q.tpr))); ctx.stroke();
     });
     ctx.setLineDash([]);
+    // optional cut-off point on each curve, labelled with its value (labels moved down until they do not overlap)
+    const placed = [];
+    spec.series.forEach((s, i) => {
+      if (!s.cut) return;
+      const x = X(s.cut.fpr), y = Y(s.cut.tpr);
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = items[i].color; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(x, y, 11, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = items[i].color; ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+      if (!s.cut.label) return;
+      ctx.font = F(700, 24); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      const w = ctx.measureText(s.cut.label).width + 8, h = 30;
+      let lx = Math.min(x + 16, L + pw - w), ly = y + 8;
+      const hit = () => placed.some(b => lx < b.x + b.w && lx + w > b.x && ly < b.y + b.h && ly + h > b.y);
+      for (let k = 0; k < 12 && hit(); k++) ly += h;
+      placed.push({ x: lx, y: ly, w, h });
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(lx - 4, ly - 2, w, h);
+      ctx.fillStyle = items[i].color; ctx.fillText(s.cut.label, lx, ly);
+    });
     // the inside legend sits bottom-right, where ROC curves leave space
     if (lm.pos === 'inside') drawLegend(ctx, items, 'line', st, lm, { W, H, L, T: T + ph - lm.h - 24, pw, ph, ts });
     else drawLegend(ctx, items, 'line', st, lm, { W, H, L, T, pw, ph, ts });
@@ -569,6 +589,7 @@ const Charts = (() => {
   /* ---------- CONSORT 2010 flow diagram ---------- */
   // Flow diagrams: CONSORT 2010 (default), STROBE and STARD 2015 share this layout; 'simple' is a chain of steps
   function consort(c, groupLabels, palName = 'brand') {
+    FONT = FONTS.sans;
     if (c.type === 'simple') return simpleFlow(c, groupLabels, palName);
     const pal = palette(palName), type = c.type || 'consort';
     const branches = type === 'stard' ? stardBranches(c) : null;

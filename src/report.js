@@ -5,6 +5,20 @@ const Report = (() => {
   let BODY_FONT = DEFAULT_FONT; // set per build from the report options
   const PORTRAIT_W = 9026, LANDSCAPE_W = 13958; // A4 text width with 1" margins (DXA)
   let PAGE_W = PORTRAIT_W; // set per build from the page orientation
+  let ITALIC_P = false; // APA / AMA / NEJM: the P of P values in italics
+
+  // text runs of a paragraph; with ITALIC_P the letter P of "P = 0.01", "p < .001" or a "P" heading is set in italics
+  function runs(text, o = {}) {
+    const { TextRun } = D();
+    const mk = (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || 24, font: BODY_FONT, color: o.color });
+    if (!ITALIC_P || !text) return [mk(text || '')];
+    if (/^[pP]( value| Value)?$/.test(text)) return [mk(text[0], true), ...(text.length > 1 ? [mk(text.slice(1))] : [])];
+    const out = [], re = /(?<![A-Za-z])[pP](?=\s?(?:value\s?)?[=<>≤])/g;
+    let last = 0, m;
+    while ((m = re.exec(text))) { if (m.index > last) out.push(mk(text.slice(last, m.index))); out.push(mk(m[0], true)); last = m.index + 1; }
+    if (last < text.length) out.push(mk(text.slice(last)));
+    return out;
+  }
 
   const dataUrlToBytes = url => {
     const b = atob(url.split(',')[1]), u = new Uint8Array(b.length);
@@ -17,8 +31,8 @@ const Report = (() => {
     return new Paragraph({
       alignment: o.align || AlignmentType.JUSTIFIED,
       spacing: { after: o.after ?? 160, line: o.line ?? 360, before: o.before ?? 0 },
-      keepNext: o.keepNext,
-      children: [new TextRun({ text, bold: o.bold, italics: o.italic, size: o.size || 24, font: BODY_FONT, color: o.color })]
+      keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
+      children: [...runs(text, o), ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, bold: false, size: o.noteSize || o.size }) : [])]
     });
   }
   function heading(text, brand) {
@@ -28,16 +42,22 @@ const Report = (() => {
       children: [new TextRun({ text, bold: true, size: 30, font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
     });
   }
-  function subheading(text, brand) {
+  function subheading(text, brand, pageBreakBefore) {
     const { Paragraph, TextRun, HeadingLevel } = D();
     return new Paragraph({
-      heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, keepNext: true,
+      heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, keepNext: true, pageBreakBefore,
       children: [new TextRun({ text, bold: true, size: 26, font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
     });
   }
-  function caption(text) {
+  function caption(text, o = {}) {
     const { AlignmentType } = D();
-    return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true });
+    return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true, ...o });
+  }
+  // APA: the number in bold on its own line, the title in italics below it, both left-aligned
+  function apaCaption(label, title, o = {}) {
+    const { AlignmentType } = D();
+    return [para(label, { bold: true, align: AlignmentType.LEFT, after: 0, line: 276, keepNext: true, pageBreakBefore: o.pageBreakBefore }),
+      para(title, { italic: true, align: AlignmentType.LEFT, after: 120, line: 276, keepNext: true })];
   }
   function image(dataUrl, srcW, srcH, widthPx = 600) {
     const { Paragraph, ImageRun, AlignmentType } = D();
@@ -54,12 +74,13 @@ const Report = (() => {
     const nCols = headCells.reduce((s, h) => s + (h.span || 1), 0);
     // relative column weights: first label columns wider, effect column widest
     const weights = [];
+    const isP = name => /^(p value|p|p-value)$/i.test(name);
     headCells.forEach((h, i) => {
       for (let s = 0; s < (h.span || 1); s++) {
         const name = h.t || '';
         // very wide tables (e.g. ROC) need roomier label and P value columns
         const wide = nCols > 7;
-        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : /^(P value|P|p-value)$/.test(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
+        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : isP(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
       }
     });
     const tot = weights.reduce((a, b) => a + b, 0);
@@ -85,7 +106,7 @@ const Report = (() => {
         shading: isHead && !apa ? { type: ShadingType.CLEAR, color: 'auto', fill: brand ? 'EBDDF6' : 'D9D9D9' } : undefined,
         children: lines.map(l => new Paragraph({
           alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240 },
-          children: [new TextRun({ text: String(l), bold: isHead || cell.b, size: cell.small ? 17 : 20, font: BODY_FONT })]
+          children: runs(String(l), { bold: isHead || cell.b, size: cell.small ? 17 : 20 })
         }))
       });
     };
@@ -124,7 +145,10 @@ const Report = (() => {
     for (let i = 0; i < figs.length; i += 2) {
       rows.push(new TableRow({ cantSplit: true, children: [figs[i], figs[i + 1]].map(f => new TableCell({
         width: { size: half, type: WidthType.DXA }, borders,
-        children: f ? [image(f.url, f.w, f.h, w), para(f.label, { bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160 })] : [new Paragraph('')]
+        children: f ? (f.apa
+          ? [para(f.num, { bold: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 0 }), para(f.caption, { italic: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 60 }),
+            image(f.url, f.w, f.h, w), ...(f.note ? [para('Note. ' + f.note, { align: D().AlignmentType.LEFT, size: 18, line: 240, after: 160 })] : [])]
+          : [image(f.url, f.w, f.h, w), para(f.label, { bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160, note: f.note, noteSize: 18 })]) : [new Paragraph('')]
       })) }));
     }
     return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: [half, PAGE_W - half], rows,
@@ -132,7 +156,7 @@ const Report = (() => {
   }
 
   // "Figure 1:" (default), "Figure 1." or "Fig. 1."
-  const figLabel = (n, style) => style === 'period' ? `Figure ${n}.` : style === 'fig' ? `Fig. ${n}.` : `Figure ${n}:`;
+  const figLabel = (n, style) => style === 'period' ? `Figure ${n}.` : style === 'fig' ? `Fig. ${n}.` : style === 'apa' ? `Figure ${n}` : `Figure ${n}:`;
   // figures placed after their table (null), or all together at the end, optionally grouped by chart type
   const TYPE_ORDER = ['bar', 'line', 'box', 'dot', 'stacked', 'pie', 'scatter', 'roc', 'km', 'ba'];
   function arrangeFigures(sections, placement) {
@@ -149,6 +173,7 @@ const Report = (() => {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
     BODY_FONT = opts.font || DEFAULT_FONT;
+    ITALIC_P = !!opts.italicP;
     const landscape = opts.orientation === 'landscape';
     PAGE_W = landscape ? LANDSCAPE_W : PORTRAIT_W;
     const children = [];
@@ -167,25 +192,38 @@ const Report = (() => {
     let fig = 1, tab = 1;
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
-      children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600));
-      children.push(caption(`${figLabel(pre + fig++, opts.captionStyle)} ${model.flowCaption || 'CONSORT flowchart of the enrolled patients'}`));
+      const fl = figLabel(pre + fig++, opts.captionStyle), ft = model.flowCaption || 'CONSORT flowchart of the enrolled patients';
+      if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600));
+      else children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600), caption(`${fl} ${ft}`));
     } else if (opts.paper && model.intro) children.push(para(model.intro));
     if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => t.trim() && children.push(para(t.trim())));
     const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
     const placeFigures = list => {
-      const figs = list.filter(f => f.url).map(f => ({ ...f, label: `${figLabel(pre + fig++, opts.captionStyle)} ${f.caption}` }));
+      const apa = opts.captionStyle === 'apa';
+      const figs = list.filter(f => f.url).map(f => { const num = figLabel(pre + fig++, opts.captionStyle); return { ...f, apa, num, label: `${num} ${f.caption}` }; });
       if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
       else for (const f of figs) {
-        children.push(image(f.url, f.w, f.h, w1));
-        children.push(caption(f.label));
+        // APA places the number and title above the figure and the explanation below it as a note
+        if (apa) {
+          children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, w1));
+          if (f.note) children.push(para('Note. ' + f.note, { size: 20, line: 240, after: 200, align: AlignmentType.LEFT }));
+        } else {
+          children.push(image(f.url, f.w, f.h, w1));
+          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}));
+        }
       }
     };
     const atEnd = arrangeFigures(model.sections, opts.figPlacement);
     for (const s of model.sections) {
       if (s.tableOn !== false) {
-        if (opts.sectionHeads) children.push(subheading(s.title, brand));
-        if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment));
-        children.push(caption(`Table ${pre}${tab++}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`));
+        // thesis: each table starts on a new page (from its subheading, comment or caption, whichever comes first)
+        let brk = !!opts.tableNewPage;
+        const first = () => { const b = brk; brk = false; return b; };
+        if (opts.sectionHeads) children.push(subheading(s.title, brand, first()));
+        if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment, { pageBreakBefore: first() }));
+        const num = `Table ${pre}${tab++}`;
+        if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
+        else children.push(caption(`${num}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`, { pageBreakBefore: first() }));
         children.push(table(s.head, s.rows, brand, opts.tableStyle));
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));

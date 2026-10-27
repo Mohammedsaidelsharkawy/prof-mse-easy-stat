@@ -717,9 +717,12 @@ const Stats = (() => {
   /* ---------- ROC curve ---------- */
   // values: test results; pos: booleans (true = condition present). Higher values are taken as positive;
   // when the AUC is below 0.5 the direction is flipped (lower values positive) and reported.
-  // cutoff: 'youden' (max sensitivity + specificity − 1) or 'closest' (nearest to the top-left corner)
-  function roc(values, pos, cutoff = 'youden') {
-    let higher = true;
+  // cutoff: 'youden' (max sensitivity + specificity − 1), 'closest' (nearest to the top-left corner),
+  // 'sens80' / 'sens90' / 'sens95' (best specificity with at least that sensitivity), 'spec80' / 'spec90' / 'spec95',
+  // or 'manual' with o.manual (positive when ≥ the value, or ≤ for lower values).
+  // o.direction: 'auto' (default), 'higher' or 'lower' values positive
+  function roc(values, pos, cutoff = 'youden', o = {}) {
+    let higher = o.direction !== 'lower';
     const run = (vals) => {
       const P = vals.filter((_, i) => pos[i]), N = vals.filter((_, i) => !pos[i]), n1 = P.length, n0 = N.length;
       const psi = (a, b) => a > b ? 1 : a === b ? 0.5 : 0;
@@ -728,8 +731,8 @@ const Stats = (() => {
       const se = Math.sqrt((n1 > 1 ? variance(V10) / n1 : 0) + (n0 > 1 ? variance(V01) / n0 : 0)); // DeLong
       return { auc, se, n1, n0, P, N };
     };
-    let r = run(values);
-    if (r.auc < 0.5) { higher = false; r = run(values.map(v => -v)); }
+    let r = run(higher ? values : values.map(v => -v));
+    if (!o.direction || o.direction === 'auto') if (r.auc < 0.5) { higher = false; r = run(values.map(v => -v)); }
     const { auc, se, n1, n0 } = r;
     const p = mannWhitney(values.filter((_, i) => pos[i]), values.filter((_, i) => !pos[i])).p;
     // curve and Youden-optimal cut-off at midpoints between observed values
@@ -740,12 +743,41 @@ const Stats = (() => {
       return { cut: c, sens: tp / n1, spec: 1 - fp / n0, tp, fp, fn: n1 - tp, tn: n0 - fp };
     });
     const score = cutoff === 'closest' ? q => -((1 - q.sens) ** 2 + (1 - q.spec) ** 2) : q => q.sens + q.spec;
-    const best = points.slice(1, -1).reduce((b, q) => (score(q) > score(b) ? q : b), points[1] || points[0]);
+    let best = points.slice(1, -1).reduce((b, q) => (score(q) > score(b) ? q : b), points[1] || points[0]);
+    const target = /^(sens|spec)(\d+)$/.exec(cutoff);
+    if (target) {
+      // the best of the other measure among cut-offs reaching the target (ties: the better target measure)
+      const [, m, x] = target, other = m === 'sens' ? 'spec' : 'sens', lim = +x / 100 - 1e-12;
+      const ok = points.filter(q => q[m] >= lim && q[other] > 0); // a cut-off missing every case (or every non-case) is no cut-off
+      if (ok.length) best = ok.reduce((b, q) => (q[other] > b[other] || (q[other] === b[other] && q[m] > b[m]) ? q : b));
+      else best = { ...best, fallback: true }; // target not reached by any cut-off: Youden index
+    } else if (cutoff === 'manual' && isFinite(o.manual)) {
+      const c = +o.manual, isPos = v => higher ? v >= c : v <= c;
+      const tp = values.filter((v, i) => pos[i] && isPos(v)).length, fp = values.filter((v, i) => !pos[i] && isPos(v)).length;
+      best = { cut: c, sens: tp / n1, spec: 1 - fp / n0, tp, fp, fn: n1 - tp, tn: n0 - fp, inclusive: true };
+    }
+    const [sLo, sHi] = clopperPearson(best.tp, n1), [cLo, cHi] = clopperPearson(best.tn, n0);
     return {
       auc, se, lo: Math.max(0, auc - 1.959964 * se), hi: Math.min(1, auc + 1.959964 * se), p, n1, n0, higher,
       points: points.map(q => ({ fpr: 1 - q.spec, tpr: q.sens })),
-      cutoff: { ...best, ppv: best.tp / (best.tp + best.fp), npv: best.tn / (best.tn + best.fn), accuracy: (best.tp + best.tn) / (n1 + n0) }
+      cutoff: { ...best, ppv: best.tp / (best.tp + best.fp), npv: best.tn / (best.tn + best.fn), accuracy: (best.tp + best.tn) / (n1 + n0),
+        sensLo: sLo, sensHi: sHi, specLo: cLo, specHi: cHi, youden: best.sens + best.spec - 1,
+        lrPos: best.spec < 1 ? best.sens / (1 - best.spec) : Infinity, lrNeg: best.spec > 0 ? (1 - best.sens) / best.spec : Infinity }
     };
+  }
+  // DeLong test comparing two correlated AUCs (same patients); each test keeps its own direction
+  function rocCompare(xa, xb, pos, higherA = true, higherB = true) {
+    const comp = (x, h) => {
+      const v = h ? x : x.map(t => -t), P = v.filter((_, i) => pos[i]), N = v.filter((_, i) => !pos[i]);
+      const psi = (a, b) => a > b ? 1 : a === b ? 0.5 : 0;
+      return { V10: P.map(a => mean(N.map(b => psi(a, b)))), V01: N.map(b => mean(P.map(a => psi(a, b)))) };
+    };
+    const A = comp(xa, higherA), B = comp(xb, higherB), n1 = A.V10.length, n0 = A.V01.length;
+    const cov = (u, w) => { const mu = mean(u), mw = mean(w); return sum(u.map((x, i) => (x - mu) * (w[i] - mw))) / (u.length - 1); };
+    const aucA = mean(A.V10), aucB = mean(B.V10), diff = aucA - aucB;
+    const v = (cov(A.V10, A.V10) + cov(B.V10, B.V10) - 2 * cov(A.V10, B.V10)) / n1 + (cov(A.V01, A.V01) + cov(B.V01, B.V01) - 2 * cov(A.V01, B.V01)) / n0;
+    const se = Math.sqrt(Math.max(v, 0)), z = se > 0 ? diff / se : 0;
+    return { aucA, aucB, diff, se, z, lo: diff - 1.959964 * se, hi: diff + 1.959964 * se, p: se > 0 ? 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1)) : 1 };
   }
 
   function rmAnova(Y) {
@@ -776,7 +808,7 @@ const Stats = (() => {
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
     pairedT, wilcoxonSigned, pearson, spearman, bonferroni,
-    invert, linearRegression, logisticRegression, hosmerLemeshow, roc,
+    invert, linearRegression, logisticRegression, hosmerLemeshow, roc, rocCompare,
     welchAnova, gamesHowell, dunn, chiSquarePairwise, mixedAnova, kaplanMeier, logRank, ancova,
     lilliefors, oddsRatio, mcnemar, cohenKappa, icc, blandAltman, cronbach, clopperPearson, diagnostic2x2, coxRegression
   };
