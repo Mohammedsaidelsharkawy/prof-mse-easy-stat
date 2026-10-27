@@ -292,8 +292,10 @@ footer b{color:var(--purple)}
   <section class="panel" id="p2">
     <div class="card">
       <h2>2 · Groups</h2>
-      <p class="hint">Choose the column that defines the study groups. Labels are used in tables, figures and comments.</p>
-      <div class="grid g3"><div><label class="f">Group column</label><select id="groupCol"></select></div></div>
+      <p class="hint">Choose the column that defines the study groups, or analyse all patients as one group. Labels are used in tables, figures and comments.</p>
+      <div class="grid g3"><div><label class="f">Study design</label><select id="groupMode"><option value="groups">Compare groups (a group column)</option><option value="one">One group — all patients together</option></select></div>
+        <div id="groupColBox"><label class="f">Group column</label><select id="groupCol"></select></div></div>
+      <p class="legend-note">One group: tables describe all patients; repeated measures are compared over time within the same patients (paired t-test / Wilcoxon, repeated-measures ANOVA / Friedman).</p>
       <div class="tbl-wrap" style="margin-top:12px"><table class="t" id="groupsTbl"></table></div>
       <p class="legend-note">Use ↑/↓ to set the column order of groups in tables.</p>
     </div>

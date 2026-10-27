@@ -226,7 +226,7 @@
     const per = g.per === 'all' ? Math.max(1, idx.length) : +g.per, pages = Math.max(1, Math.ceil(idx.length / per));
     g.page = Math.min(g.page, pages - 1);
     const shown = idx.slice(g.page * per, g.page * per + per), cfg = state.cfg;
-    const role = h => !cfg ? '' : h === cfg.groupCol ? '<span class="chip info">group</span>' : cfg.idCols.includes(h) ? '<span class="chip">ID</span>' : '';
+    const role = h => !cfg ? '' : h === cfg.groupCol && !cfg.noGroups ? '<span class="chip info">group</span>' : cfg.idCols.includes(h) ? '<span class="chip">ID</span>' : '';
     const sortMark = h => g.sort && g.sort.col === h ? (g.sort.dir > 0 ? ' ▲' : ' ▼') : '';
     const head = headers.map((h, ci) => g.edit
       ? `<th class="${cc(h, ci)}"><div class="gh"><input type="text" data-hname="${esc(h)}" value="${esc(h)}" title="Rename column">
@@ -257,9 +257,9 @@
   }
   function refreshGroups() {
     const cfg = state.cfg; if (!cfg) return;
-    const cur = []; state.data.rows.forEach(r => { const g = Analysis.toCat(r[cfg.groupCol]); if (g !== null && !cur.includes(g)) cur.push(g); });
+    const cur = []; state.data.rows.forEach(r => { const g = Analysis.groupOf(cfg, r); if (g !== null && !cur.includes(g)) cur.push(g); });
     const before = cfg.groupOrder.join('|');
-    cur.forEach(g => { if (!cfg.groupOrder.includes(g)) { cfg.groupOrder.push(g); cfg.groupLabels[g] = /group/i.test(g) ? g : `${g} group`; cfg.groupInclude[g] = true; } });
+    cur.forEach(g => { if (!cfg.groupOrder.includes(g)) { cfg.groupOrder.push(g); cfg.groupLabels[g] = groupName(g); cfg.groupInclude[g] = true; } });
     cfg.groupOrder = cfg.groupOrder.filter(g => cur.includes(g));
     if (cfg.groupOrder.join('|') !== before) cfg.consort = null;
   }
@@ -282,7 +282,7 @@
   }
   function deleteColumn(col) {
     const cfg = state.cfg;
-    if (cfg && col === cfg.groupCol) { toast('This is the group column — choose another group column in step 2 first'); return; }
+    if (cfg && col === cfg.groupCol && !cfg.noGroups) { toast('This is the group column — choose another group column in step 2 first'); return; }
     if (!confirm(`Delete column “${col}” from the sheet?`)) return;
     editSheet(() => {
       state.data.headers = state.data.headers.filter(h => h !== col);
@@ -479,30 +479,37 @@
     const nums = distinct.every(v => isFinite(+v));
     return [...distinct].sort((a, b) => nums ? a - b : a.localeCompare(b));
   }
+  // default label of a group value; one-group studies have a single group of all patients
+  const groupName = g => g === Analysis.ALL_GROUP ? 'All patients' : /group/i.test(g) ? g : `${g} group`;
   function setGroups(cfg) {
     const seen = [];
-    state.data.rows.forEach(r => { const g = Analysis.toCat(r[cfg.groupCol]); if (g !== null && !seen.includes(g)) seen.push(g); });
+    state.data.rows.forEach(r => { const g = Analysis.groupOf(cfg, r); if (g !== null && !seen.includes(g)) seen.push(g); });
     cfg.groupOrder = seen;
-    cfg.groupLabels = Object.fromEntries(seen.map(g => [g, /group/i.test(g) ? g : `${g} group`]));
+    cfg.groupLabels = Object.fromEntries(seen.map(g => [g, groupName(g)]));
     cfg.groupInclude = Object.fromEntries(seen.map(g => [g, true]));
     cfg.consort = null;
   }
   const activeGroups = () => state.cfg.groupOrder.filter(g => state.cfg.groupInclude[g] !== false);
-  const groupN = g => state.data.rows.filter(r => Analysis.toCat(r[state.cfg.groupCol]) === g).length;
+  const groupN = g => state.data.rows.filter(r => Analysis.groupOf(state.cfg, r) === g).length;
 
   /* ---------- step 2: variables ---------- */
   function renderVariables() {
     const cfg = state.cfg, { headers } = state.data;
     $('#groupCol').innerHTML = headers.map(h => `<option ${h === cfg.groupCol ? 'selected' : ''}>${esc(h)}</option>`).join('');
+    // study design: compare the groups of a column, or analyse every patient as one group
+    $('#groupMode').value = cfg.noGroups ? 'one' : 'groups';
+    $('#groupColBox').style.display = cfg.noGroups ? 'none' : '';
+    $('#groupMode').onchange = e => { readUiIntoCfg(); cfg.noGroups = e.target.value === 'one'; setGroups(cfg); renderVariables(); renderStepper();
+      toast(cfg.noGroups ? 'All patients are analysed as one group: descriptive tables and changes over time' : 'Groups are compared again'); };
     $('#groupCol').onchange = e => { readUiIntoCfg(); cfg.groupCol = e.target.value; cfg.variables.forEach(v => { if (v.cols[0].col === cfg.groupCol) v.include = false; }); setGroups(cfg); renderVariables(); };
     $('#groupsTbl').innerHTML = `<thead><tr><th>Use</th><th>Value in Excel</th><th>Label in report</th><th>n</th><th>Order</th></tr></thead><tbody>${
-      cfg.groupOrder.map((g, i) => `<tr><td><input type="checkbox" data-ginc="${esc(g)}" ${cfg.groupInclude[g] !== false ? 'checked' : ''}></td><td class="mono">${esc(g)}</td>
+      cfg.groupOrder.map((g, i) => `<tr><td><input type="checkbox" data-ginc="${esc(g)}" ${cfg.groupInclude[g] !== false ? 'checked' : ''} ${cfg.noGroups ? 'disabled' : ''}></td><td class="mono">${g === Analysis.ALL_GROUP ? '(every row)' : esc(g)}</td>
       <td><input type="text" data-glabel="${esc(g)}" value="${esc(cfg.groupLabels[g])}"></td><td>${groupN(g)}</td>
       <td><button class="btn ghost small" data-gmove="${i},-1">↑</button> <button class="btn ghost small" data-gmove="${i},1">↓</button></td></tr>`).join('')}</tbody>`;
-    if (cfg.groupOrder.length > 6) toast('The group column has many values — is it the right column?');
+    if (cfg.groupOrder.length > 6 && !cfg.noGroups) toast('The group column has many values — is it the right column?');
 
     const groups = activeGroups();
-    const byGroup = groups.map(g => state.data.rows.filter(r => Analysis.toCat(r[cfg.groupCol]) === g));
+    const byGroup = groups.map(g => state.data.rows.filter(r => Analysis.groupOf(cfg, r) === g));
     const swChip = v => {
       if (v.type !== 'numeric') return '<span class="chip info">categorical</span>';
       let total = 0, fail = 0;
@@ -745,7 +752,7 @@
   const ADV_TYPES = { linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
     cox: 'Cox regression (hazard ratios)', mcnemar: 'McNemar test (paired categorical)', kappa: "Cohen's kappa (agreement, categorical)",
     agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)" };
-  const analysedRows = () => { const g = activeGroups(); return state.data.rows.filter(r => g.includes(Analysis.toCat(r[state.cfg.groupCol]))); };
+  const analysedRows = () => { const g = activeGroups(); return state.data.rows.filter(r => g.includes(Analysis.groupOf(state.cfg, r))); };
   function advColumns() {
     const cfg = state.cfg, rows = analysedRows();
     return state.data.headers.filter(h => !cfg.idCols.includes(h)).map(h => ({ col: h, label: Analysis.columnLabel(cfg, h), kind: Analysis.columnKind(cfg, rows, h) }));
@@ -870,7 +877,7 @@
     if (!cfg.consort || cfg.consort.groups.length !== groups.length) {
       const prev = cfg.consort;
       cfg.consort = {
-        enabled: prev ? prev.enabled : true, type: prev ? prev.type : 'consort', assessed: total,
+        enabled: prev ? prev.enabled : true, type: prev ? prev.type : cfg.noGroups ? 'strobe' : 'consort', assessed: total,
         excluded: [{ text: 'Not meeting inclusion criteria', n: 0 }, { text: 'Declined to participate', n: 0 }],
         groups: groups.map((g, i) => ({ allocated: ns[i], description: '', lost: 0, lostReason: '', excludedAnalysis: 0, excludedReason: '', analysed: ns[i] }))
       };
@@ -1026,7 +1033,7 @@
   }
   function readVariables() {
     const cfg = state.cfg;
-    document.querySelectorAll('[data-glabel]').forEach(el => cfg.groupLabels[el.dataset.glabel] = el.value.trim() || el.dataset.glabel);
+    document.querySelectorAll('[data-glabel]').forEach(el => cfg.groupLabels[el.dataset.glabel] = el.value.trim() || (el.dataset.glabel === Analysis.ALL_GROUP ? 'All patients' : el.dataset.glabel));
     document.querySelectorAll('[data-ginc]').forEach(el => cfg.groupInclude[el.dataset.ginc] = el.checked);
     document.querySelectorAll('#varsTbl tr[data-vid]').forEach(tr => {
       const v = cfg.variables.find(x => x.id === tr.dataset.vid); if (!v) return;
@@ -1177,7 +1184,7 @@
         const lv = [`*${P} ≤ ${+o.pLead === 0 ? String(spec.alpha).replace(/^0\./, '.') : spec.alpha}`];
         if (ps.some(p => p <= 0.01)) lv.push(`**${P} ≤ 0.01`);
         if (ps.some(p => p <= 0.001)) lv.push(`***${P} ≤ 0.001`);
-        out.push(`${lv.join(', ')} (${spec.sig ? 'brackets: comparison between the groups' : 'difference between the groups at that time'}).`);
+        out.push(`${lv.join(', ')} (${spec.sig ? 'brackets: comparison between the groups' : spec.sigWhat ? `compared with ${spec.sigWhat}` : 'difference between the groups at that time'}).`);
       }
     }
     return out.filter(Boolean).join(' ');
@@ -1238,7 +1245,7 @@
       const ref = [`Table ${plan.tabNum.get(s)}`, ...figs].join('; ');
       const what = s.title.replace(/ of the studied groups$/, '').replace(/^./, c => c.toLowerCase());
       const b = briefOf(s);
-      if (i === 0 && s.kind === 'single' && !b.sig) out.push(`Baseline characteristics were comparable between the groups (${ref}).`);
+      if (i === 0 && s.kind === 'single' && !b.sig && r.k > 1) out.push(`Baseline characteristics were comparable between the groups (${ref}).`);
       else if (b.text) out.push(b.text.replace(/\.$/, ` (${ref}).`));
       else out.push(`No significant differences were found in ${what} (${ref}).`);
     });
@@ -1470,8 +1477,8 @@
     state.cfg = saved;
     $('#studyTitle').value = saved.study.title || ''; $('#software').value = saved.study.software;
     // keep any new group values found in this file
-    const cur = []; state.data.rows.forEach(r => { const g = Analysis.toCat(r[saved.groupCol]); if (g !== null && !cur.includes(g)) cur.push(g); });
-    cur.forEach(g => { if (!saved.groupOrder.includes(g)) { saved.groupOrder.push(g); saved.groupLabels[g] = g + ' group'; saved.groupInclude[g] = true; } });
+    const cur = []; state.data.rows.forEach(r => { const g = Analysis.groupOf(saved, r); if (g !== null && !cur.includes(g)) cur.push(g); });
+    cur.forEach(g => { if (!saved.groupOrder.includes(g)) { saved.groupOrder.push(g); saved.groupLabels[g] = groupName(g); saved.groupInclude[g] = true; } });
     saved.groupOrder = saved.groupOrder.filter(g => cur.includes(g));
     state.pendingCfg = null;
   }

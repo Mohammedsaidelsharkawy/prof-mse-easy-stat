@@ -134,7 +134,8 @@ const Charts = (() => {
   // public entry: draws the chart, then adds the optional title band above it
   function draw(spec, paletteName = 'brand', style = {}) {
     FONT = FONTS[style.font] || FONTS.sans;
-    const c = drawChart(spec, paletteName, style);
+    // a chart of one series (one-group studies) needs no legend
+    const c = drawChart(spec, paletteName, spec.legend === false ? { ...style, legend: 'none' } : style);
     return spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
   }
   function withTitle(src, title, st) {
