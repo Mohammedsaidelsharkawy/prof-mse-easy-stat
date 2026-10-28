@@ -29,7 +29,8 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 .brand h1{margin:0;font-size:22px;letter-spacing:.3px}
 .brand h1 span{color:#C9A2EC}
 .brand p{margin:0;font-size:12.5px;opacity:.75}
-.top-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.top-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;min-width:0;flex:1 1 auto}
+.brand{flex-shrink:0}
 .pulse{height:4px;background:linear-gradient(90deg,var(--purple),#C9A2EC,var(--purple));background-size:200% 100%;animation:pulse 6s linear infinite}
 @keyframes pulse{to{background-position:-200% 0}}
 
@@ -97,6 +98,12 @@ table.t td select{min-width:120px}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
 .preset-bar{gap:10px;margin:0 0 14px;padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;align-items:center}
+.pal-wrap{margin:12px 0 0;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.pal-wrap summary{cursor:pointer}
+.pal-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:10px}
+.pal-card{border:2px solid var(--line);border-radius:10px;padding:8px;background:var(--card);cursor:pointer;text-align:left;font:inherit;color:inherit}.pal-card:hover{border-color:var(--lav2)}.pal-card.on{border-color:var(--purple);box-shadow:0 0 0 2px var(--lav2)}
+.pal-card img{width:100%;display:block;border-radius:6px;margin:6px 0 4px;background:#fff}.pal-sw{display:flex;gap:3px}.pal-sw span{flex:1;height:12px;border-radius:3px}
+.xp-item .row{gap:10px}.xp-body{display:flex;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap}.xp-fig{width:420px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+.xp-tables{flex:1;min-width:320px}.xp-tbl h4{margin:6px 0 4px;font-size:13.5px}table.xp{font-size:12.5px}table.xp td,table.xp th{padding:4px 8px;white-space:nowrap}table.xp td.b{font-weight:600}table.xp td.sig{color:var(--bad);font-weight:700}table.xp td.used{color:var(--ok,#2E9E8F);font-weight:700;text-align:center}
 .fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
 .fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
@@ -199,7 +206,7 @@ footer b{color:var(--purple)}
     <div class="top-actions">
       <button class="btn light small" id="btnNew" title="Start a new project (clears the current data and settings)">＋ New</button>
       <label class="btn light small" title="Open a saved project: data, settings and edited text">📂 Open project<input type="file" id="projFile" accept=".json,.easystat" hidden></label>
-      <button class="btn light small" id="btnSaveProj" title="Save everything — the data, all settings and the text edited in step 10 — in one file">💾 Save project</button>
+      <button class="btn light small" id="btnSaveProj" title="Save everything — the data, all settings and the text edited in step 11 — in one file">💾 Save project</button>
       <button class="btn light small" id="btnTheme" title="Switch light / dark theme">◐ Theme</button>
       <button class="btn light small" id="btnSaveCfg" title="Save your column setup to reuse later">Save setup</button>
       <label class="btn light small" title="Load a saved setup">Load setup<input type="file" id="cfgFile" accept=".json" hidden></label>
@@ -215,7 +222,7 @@ footer b{color:var(--purple)}
     <select id="presetSel" style="width:auto;max-width:320px"></select>
     <button class="btn primary small" id="presetApply" type="button">Apply</button>
     <span class="legend-note" id="presetNote" style="flex:1;min-width:200px"></span>
-    <button class="btn ghost small" id="presetSave" type="button" title="Save the current settings of steps 4–10 as your own preset">＋ Save current as preset</button>
+    <button class="btn ghost small" id="presetSave" type="button" title="Save the current settings of steps 4–11 as your own preset">＋ Save current as preset</button>
     <button class="btn ghost small" id="presetDel" type="button" title="Delete the selected preset of your own">✕ Delete</button>
     <button class="btn ghost small" id="presetExport" type="button" title="Download your presets to use on another computer">⬇ Export</button>
     <label class="btn ghost small" style="margin:0" title="Load presets from a file">⬆ Import<input type="file" id="presetFile" accept=".json" hidden></label>
@@ -403,7 +410,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
       </div>
       <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand"><span><b>Prof MSE branding</b> in the Word header</span></label></div>
-      <p class="legend-note">Table titles can be edited in the report preview (step 10).</p>
+      <p class="legend-note">Table titles can be edited in the report preview (step 11).</p>
     </div>
     <div class="nav"><button class="btn ghost" data-go="4">← Back</button><button class="btn primary" data-go="6">Next: Comments →</button></div>
   </section>
@@ -424,7 +431,7 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optSummary"><span><b>Summary of key findings</b> — a closing paragraph listing every significant result</span></label>
         </div>
       </div>
-      <p class="legend-note">Every comment can still be edited by hand in the report preview (step 10).</p>
+      <p class="legend-note">Every comment can still be edited by hand in the report preview (step 11).</p>
     </div>
     <div class="nav"><button class="btn ghost" data-go="5">← Back</button><button class="btn primary" data-go="7">Next: Figures →</button></div>
   </section>
@@ -436,13 +443,14 @@ footer b{color:var(--purple)}
       <div class="grid g4">
         <div><label class="f">Figures to include</label><select id="optFigures"><option value="all" selected>All results</option><option value="sig">Significant results only</option><option value="none">None (tables only)</option></select></div>
         <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
-        <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option><option value="custom">Custom colours…</option></select></div>
+        <div><label class="f">Chart colours</label><select id="optPal"></select></div>
         <div><label class="f">Error bars (mean charts)</label><select id="optErrorBar"><option value="sd" selected>Standard deviation (SD)</option><option value="sem">Standard error (SEM)</option><option value="ci">95% confidence interval</option></select></div>
         <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option></select></div>
         <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
         <div><label class="f">Figure placement (classify)</label><select id="optFigPlacement"><option value="after" selected>After each table</option><option value="end">All at the end (Figures section)</option><option value="endType">At the end, grouped by chart type</option></select></div>
         <div><label class="f">Caption style</label><select id="optCaptionStyle"><option value="colon" selected>Figure 1: …</option><option value="period">Figure 1. …</option><option value="fig">Fig. 1. …</option></select></div>
       </div>
+      <details class="pal-wrap" id="palWrap"><summary><b>Colour themes</b> — preview and choose</summary><div class="pal-gallery" id="palGallery"></div></details>
       <div id="customBox" style="display:none;margin-top:12px">
         <label class="f">Custom colours (group 1, 2, 3 …)</label>
         <div class="row"><span id="customColors" class="row" style="gap:6px"></span><button class="btn ghost small" id="customReset" type="button">Reset</button></div>
@@ -556,14 +564,28 @@ footer b{color:var(--purple)}
         <div><canvas id="consortCanvas" class="consort-prev"></canvas></div>
       </div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Run analysis →</button></div>
+    <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Next: Results by variable →</button></div>
   </section>
 
   <!-- STEP 10 -->
+  <!-- STEP 10 -->
   <section class="panel" id="p10">
     <div class="card">
+      <div class="row"><h2>10 · Results by variable</h2><span class="spacer"></span>
+        <select id="xpVar" style="width:auto;max-width:360px"></select>
+        <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
+        <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button></div>
+      <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4.</p>
+      <div id="explore"></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="9">← Back</button><button class="btn primary" data-go="11">Run report →</button></div>
+  </section>
+
+  <!-- STEP 11 -->
+  <section class="panel" id="p11">
+    <div class="card">
       <div class="row">
-        <h2>10 · Report</h2><span class="spacer"></span>
+        <h2>11 · Report</h2><span class="spacer"></span>
         <button class="btn ghost" id="btnRerun">↻ Re-run</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
@@ -594,7 +616,7 @@ footer b{color:var(--purple)}
       <p class="hint" style="margin-top:12px">Review everything below. You can edit the text boxes — your edits go into the Word file. The format changes only this report; your settings in steps 4–9 stay as they are.</p>
       <div id="report"></div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="9">← Back</button><span></span></div>
+    <div class="nav"><button class="btn ghost" data-go="10">← Back</button><span></span></div>
   </section>
 </main>
 <footer>© <b>Prof MSE</b> – Medical Research · Easy Stat v1.0 · runs fully offline in your browser</footer>
@@ -22443,6 +22465,129 @@ const Analysis = (() => {
     return { kind: 'cronbach', title: `Reliability (internal consistency) of the ${res.k} items`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { res } };
   }
 
+  /* ---------- results by variable: every descriptive statistic and every candidate test, for checking (not for the report) ---------- */
+  // returns { groups, k, items: [{ id, label, kind, tables: [{ title, head, rows, note }], spec, summary }] }; cells are plain strings
+  function explore(data, cfg) {
+    const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
+    normality = normalityTest(opts.normality);
+    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0 };
+    const groups = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false), gl = groups.map(g => cfg.groupLabels[g] || g), k = groups.length;
+    const rows = data.rows.filter(r => groups.includes(groupOf(cfg, r))), byGroup = groups.map(g => rows.filter(r => groupOf(cfg, r) === g));
+    const nName = opts.normality === 'ks' ? 'Kolmogorov-Smirnov' : 'Shapiro-Wilk';
+    const F = (x, dd = d) => x === null || x === undefined || !isFinite(x) ? '—' : fmt(x, dd), P = p => fmtP(p, alpha);
+    const ci = (a, b, dd = d) => isFinite(a) && isFinite(b) ? `${fmt(a, dd)} to ${fmt(b, dd)}` : '—';
+    const used = new Set(), yes = '✓';
+    const descHead = ['', 'n', 'Missing', 'Mean', 'SD', 'SE', '95% CI of the mean', 'Median', 'IQR', 'Min', 'Max', `${nName} P`];
+    const descRow = (name, vals, miss) => {
+      const dd = S.describe(vals), nt = vals.length >= 3 ? normality(vals) : null, se = dd.n > 1 ? dd.sd / Math.sqrt(dd.n) : NaN;
+      const h = dd.n > 1 ? jStat.studentt.inv(0.975, dd.n - 1) * se : NaN;
+      return [name, String(dd.n || 0), String(miss), F(dd.mean), F(dd.sd), F(se), ci(dd.mean - h, dd.mean + h), F(dd.median), dd.n ? `${F(dd.q1)} - ${F(dd.q3)}` : '—', F(dd.min), F(dd.max),
+        nt ? `${P(nt.p)}${nt.p > 0.05 ? ' (normal)' : ' (non-normal)'}` : '—'];
+    };
+    // the between-group tests of one numeric measurement, the one used in the report marked ✓
+    const numericTests = (gv, dist) => {
+      const ok = gv.filter(x => x.length >= 2).length === k;
+      if (k < 2 || !ok) return null;
+      const chosen = analyzeNumeric(gv, dist, used, opts).test, out = [];
+      out.push(["Levene's test (equal variances)", '', '', P(S.levene(gv)), '', '']);
+      if (k === 2) {
+        const t = S.tTest(gv[0], gv[1], true), w = S.tTest(gv[0], gv[1], false), m = S.mannWhitney(gv[0], gv[1]), hl = S.hodgesLehmann(gv[0], gv[1]);
+        out.push(["Student's t-test", `t = ${F(t.t, 2)}`, F(t.df, 0), P(t.p), `MD = ${F(t.diff)} (${ci(t.lo, t.hi)})`, chosen === 't-test' ? yes : '']);
+        out.push(["Welch's t-test", `t = ${F(w.t, 2)}`, F(w.df, 1), P(w.p), `MD = ${F(w.diff)} (${ci(w.lo, w.hi)})`, chosen === 'Welch t-test' ? yes : '']);
+        out.push(['Mann-Whitney U test', `U = ${F(m.U, 1)}, z = ${F(m.z, 2)}`, '', P(m.p), `HL median difference = ${F(hl.diff)} (${ci(hl.lo, hl.hi)}), r = ${F(m.r, 2)}`, chosen === 'Mann-Whitney' ? yes : '']);
+      } else {
+        const an = S.anova(gv), wa = S.welchAnova(gv), kw = S.kruskalWallis(gv);
+        out.push(['One-way ANOVA', `F = ${F(an.F, 2)}`, `${an.df1}, ${an.df2}`, P(an.p), `η² = ${F(an.etaSq, 3)}`, chosen === 'ANOVA' ? yes : '']);
+        out.push(["Welch's ANOVA", `F = ${F(wa.F, 2)}`, `${F(wa.df1, 0)}, ${F(wa.df2, 1)}`, P(wa.p), '', chosen === 'Welch ANOVA' ? yes : '']);
+        out.push(['Kruskal-Wallis test', `H = ${F(kw.H, 2)}`, String(kw.df), P(kw.p), `ε² = ${F(kw.etaSq, 3)}`, chosen === 'Kruskal-Wallis' ? yes : '']);
+      }
+      return { title: 'Comparison between the groups', head: ['Test', 'Statistic', 'df', 'P value', 'Effect size (95% CI)', 'In the report'], rows: out };
+    };
+    const pairTable = gv => {
+      if (k < 3 || gv.some(x => x.length < 2)) return null;
+      const tk = S.tukey(gv), gh = S.gamesHowell(gv), dn = S.dunn(gv);
+      return { title: 'Pairwise comparisons', head: ['Pair', 'Tukey P', 'Mean difference (95% CI)', 'Games-Howell P', 'Dunn P (Bonferroni)', 'Mann-Whitney P (unadjusted)'],
+        rows: pairs(k).map(([i, j], q) => [`${gl[i]} vs ${gl[j]}`, P(tk[q].p), `${F(tk[q].diff)} (${ci(tk[q].lo, tk[q].hi)})`, P(gh[q].p), P(dn[q].p), P(S.mannWhitney(gv[i], gv[j]).p)]) };
+    };
+    const items = [];
+    for (const v of effectiveVariables(cfg)) {
+      const it = { id: v.id, label: v.label, kind: v.kind === 'repeated' ? 'repeated' : v.type, tables: [], spec: null, summary: '' };
+      if (v.kind !== 'repeated' && v.type === 'numeric') {
+        const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toNum(r[col])).filter(isFinite)), miss = byGroup.map(rs => rs.filter(r => !isFinite(toNum(r[col]))).length);
+        it.tables.push({ title: 'Descriptive statistics', head: descHead, rows: [...gv.map((x, g) => descRow(gl[g], x, miss[g])), ...(k > 1 ? [descRow('All patients', gv.flat(), S.sum(miss))] : [])] });
+        const t = numericTests(gv, v.dist); if (t) it.tables.push(t);
+        const pt = pairTable(gv); if (pt) it.tables.push(pt);
+        it.spec = { type: 'box', perGroup: true, points: true, categories: gl, yLabel: v.label, series: [{ name: v.label, data: gv }] };
+        const used2 = new Set(), res = k > 1 && gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts) : null;
+        it.summary = res ? `Report: ${res.param ? 'parametric' : 'non-parametric'} (${v.dist === 'auto' ? 'from the normality test' : 'set by you'}), ${TEST_NAME[res.test] || res.test}, P ${pTxt(res.p)}.` : `Distribution: ${gv.flat().length >= 3 && normality(gv.flat()) && normality(gv.flat()).p <= 0.05 ? 'non-normal' : 'normal'} by ${nName}.`;
+      } else if (v.kind !== 'repeated') {
+        const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toCat(r[col])).filter(x => x !== null));
+        const present = [...new Set(gv.flat())], levels = (v.levels && v.levels.length ? v.levels.filter(l => present.includes(l)) : []);
+        present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
+        const tab = levels.map(l => gv.map(x => x.filter(y => y === l).length)), ns = gv.map(x => x.length), N = S.sum(ns);
+        const cell = (c, n) => `${c} (${pctTxt(n ? 100 * c / n : 0)}%)`;
+        it.tables.push({ title: 'Frequencies', head: ['', ...gl.map((g, i) => `${g} (n=${ns[i]})`), ...(k > 1 ? [`Total (n=${N})`] : [])],
+          rows: [...levels.map((l, li) => [l, ...tab[li].map((c, g) => cell(c, ns[g])), ...(k > 1 ? [cell(S.sum(tab[li]), N)] : [])]),
+            ['Missing', ...byGroup.map(rs => String(rs.filter(r => toCat(r[col]) === null).length)), ...(k > 1 ? [String(byGroup.flat().filter(r => toCat(r[col]) === null).length)] : [])]] });
+        const nonEmpty = tab.filter(r => S.sum(r) > 0);
+        if (k > 1 && nonEmpty.length >= 2) {
+          const cs = S.chiSquare(nonEmpty), chosen = analyzeCategorical(gv, levels, used, opts).test, out = [];
+          out.push(['Chi-square test', `χ² = ${F(cs.chi, 2)}`, String(cs.df), P(cs.p), `smallest expected count ${F(cs.minE, 1)}; ${F(100 * cs.pctSmall, 0)}% of cells < 5`, chosen === 'Chi-square' ? yes : '']);
+          if (nonEmpty.length === 2 && k === 2) out.push(["Fisher's exact test", '', '', P(S.fisher2x2(nonEmpty).p), '', chosen === "Fisher's exact" ? yes : '']);
+          it.tables.push({ title: 'Comparison between the groups', head: ['Test', 'Statistic', 'df', 'P value', 'Note', 'In the report'], rows: out });
+          if (levels.length === 2) {
+            const eff = pairs(k).map(([i, j]) => { const rr = S.relativeRisk(tab, 0, i, j), or = S.oddsRatio(tab, 0, i, j);
+              return [`${gl[i]} vs ${gl[j]}`, rr ? `${F(rr.rr, 2)} (${ci(rr.lo, rr.hi, 2)})` : '—', or ? `${F(or.or, 2)} (${ci(or.lo, or.hi, 2)})` : '—']; });
+            it.tables.push({ title: `Effect of “${levels[0]}”`, head: ['Pair', 'Relative risk (95% CI)', 'Odds ratio (95% CI)'], rows: eff });
+          }
+          if (k > 2) {
+            const pw = S.chiSquarePairwise(tab, opts.fisher);
+            it.tables.push({ title: 'Pairwise comparisons (Bonferroni)', head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
+          }
+        }
+        it.spec = { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the patients', series: levels.map((l, li) => ({ name: l, values: tab[li].map((c, g) => ns[g] ? 100 * c / ns[g] : 0) })) };
+      } else {
+        const tps = v.cols.map(c => c.label || cfg.tpLabels[c.tp] || c.tp), T = tps.length;
+        const per = v.cols.map(c => byGroup.map(rs => rs.map(r => toNum(r[c.col])).filter(isFinite)));
+        const missAt = (c, g) => byGroup[g].filter(r => !isFinite(toNum(r[c.col]))).length;
+        it.tables.push({ title: 'Descriptive statistics', head: ['Timepoint', ...descHead.slice(0)], rows: v.cols.flatMap((c, t) => gl.map((g, gi) => [tps[t], ...descRow(g, per[t][gi], missAt(c, gi))])) });
+        if (k > 1) {
+          const out = per.map((gv, t) => {
+            if (gv.some(x => x.length < 2)) return [tps[t], '—', '—', '—'];
+            const par = k === 2 ? S.tTest(gv[0], gv[1], true) : S.anova(gv), non = k === 2 ? S.mannWhitney(gv[0], gv[1]) : S.kruskalWallis(gv);
+            return [tps[t], P(par.p), P(non.p), k === 2 ? `${F(par.diff)} (${ci(par.lo, par.hi)})` : `η² = ${F(par.etaSq, 3)}`];
+          });
+          it.tables.push({ title: 'Between the groups at each timepoint', head: ['Timepoint', k === 2 ? "Student's t-test P" : 'ANOVA P', k === 2 ? 'Mann-Whitney P' : 'Kruskal-Wallis P', k === 2 ? 'Mean difference (95% CI)' : 'Effect size'], rows: out });
+        }
+        const mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
+        const within = mats.map((Y, g) => {
+          if (Y.length < 3) return [gl[g], String(Y.length), '—', '—', '—'];
+          const col = j => Y.map(r => r[j]);
+          if (T === 2) { const pt = S.pairedT(col(1), col(0)), w = S.wilcoxonSigned(col(1), col(0));
+            return [gl[g], String(Y.length), `t = ${F(pt.t, 2)}, P ${pTxt(pt.p)}`, `z = ${F(w.z, 2)}, P ${pTxt(w.p)}`, `${F(pt.diff)} (${ci(pt.lo, pt.hi)})`]; }
+          const ra = S.rmAnova(Y), fr = S.friedman(Y);
+          return [gl[g], String(Y.length), `F = ${F(ra.F, 2)}, ε = ${F(ra.eps, 3)}, P ${pTxt(ra.p)}`, `χ² = ${F(fr.chi, 2)}, P ${pTxt(fr.p)}`, ''];
+        });
+        it.tables.push({ title: 'Change over time within each group (patients with every measurement)', head: ['Group', 'n', T === 2 ? 'Paired t-test' : 'Repeated-measures ANOVA (Greenhouse-Geisser)', T === 2 ? 'Wilcoxon signed-rank' : 'Friedman test', T === 2 ? `Change ${tps[1]} − ${tps[0]} (95% CI)` : ''], rows: within });
+        if (T > 2) {
+          const post = [];
+          mats.forEach((Y, g) => { if (Y.length < 3) return; const col = j => Y.map(r => r[j]);
+            for (let t = 1; t < T; t++) post.push([gl[g], `${tps[t]} vs ${tps[0]}`, P(S.bonferroni(S.pairedT(col(t), col(0)).p, T - 1)), P(S.bonferroni(S.wilcoxonSigned(col(t), col(0)).p, T - 1))]); });
+          it.tables.push({ title: 'Each timepoint against the first (Bonferroni-adjusted)', head: ['Group', 'Comparison', 'Paired t-test P', 'Wilcoxon P'], rows: post });
+        }
+        if (k > 1 && mats.every(Y => Y.length >= 2)) {
+          const mx = S.mixedAnova(mats);
+          it.tables.push({ title: 'Mixed (split-plot) ANOVA', head: ['Effect', 'F', 'df', 'P value'], rows: [['Group', F(mx.group.F, 2), `${mx.group.df1}, ${mx.group.df2}`, P(mx.group.p)],
+            ['Time (Greenhouse-Geisser)', F(mx.time.F, 2), `${mx.time.df1}, ${mx.time.df2}`, P(mx.time.p)], ['Group × time', F(mx.interaction.F, 2), `${mx.interaction.df1}, ${mx.interaction.df2}`, P(mx.interaction.p)]] });
+        }
+        it.spec = { type: 'line', categories: tps, yLabel: v.label, xLabel: 'Time', ...(k < 2 ? { legend: false } : {}),
+          series: gl.map((g, gi) => ({ name: g, values: per.map(gv => S.mean(gv[gi])), err: per.map(gv => gv[gi].length > 1 ? S.sd(gv[gi]) : null) })) };
+      }
+      items.push(it);
+    }
+    return { groups: gl, k, items };
+  }
+
   /* ---------- main ---------- */
   function run(data, cfg) {
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
@@ -23383,7 +23528,7 @@ const Analysis = (() => {
     return t;
   }
 
-  return { run, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { run, explore, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();
 
 /* Prof MSE Easy Stat — canvas charts (bar ± error, line, box plot, CONSORT) */
@@ -23391,8 +23536,24 @@ const Charts = (() => {
   const PALETTES = {
     brand: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B'],
     classic: ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47'],
-    gray: ['#333333', '#777777', '#AAAAAA', '#555555', '#999999', '#CCCCCC']
+    gray: ['#333333', '#777777', '#AAAAAA', '#555555', '#999999', '#CCCCCC'],
+    // journal-style and colour-blind-safe themes
+    nejm: ['#BC3C29', '#0072B5', '#E18727', '#20854E', '#7876B1', '#6F99AD'],
+    lancet: ['#00468B', '#ED0000', '#42B540', '#0099B4', '#925E9F', '#FDAF91'],
+    nature: ['#E64B35', '#4DBBD5', '#00A087', '#3C5488', '#F39B7F', '#8491B4'],
+    jama: ['#374E55', '#DF8F44', '#00A1D5', '#B24745', '#79AF97', '#6A6599'],
+    okabe: ['#E69F00', '#56B4E9', '#009E73', '#0072B2', '#D55E00', '#CC79A7'],
+    viridis: ['#440154', '#3B528B', '#21918C', '#5EC962', '#B8DE29', '#2C728E'],
+    pastel: ['#8DA0CB', '#FC8D62', '#66C2A5', '#E78AC3', '#A6D854', '#E5C494'],
+    ocean: ['#023E8A', '#0096C7', '#48CAE4', '#03045E', '#00B4D8', '#90E0EF'],
+    sunset: ['#F94144', '#F8961E', '#577590', '#F9C74F', '#90BE6D', '#43AA8B'],
+    forest: ['#1B4332', '#40916C', '#95D5B2', '#2D6A4F', '#74C69D', '#52B788'],
+    earth: ['#264653', '#E76F51', '#2A9D8F', '#F4A261', '#E9C46A', '#8AB17D'],
+    berry: ['#7B2CBF', '#C9184A', '#FF8FA3', '#5A189A', '#FF4D6D', '#9D4EDD'],
+    blues: ['#08306B', '#2171B5', '#6BAED6', '#08519C', '#4292C6', '#9ECAE1']
   };
+  const PALETTE_NAMES = { brand: 'Prof MSE (purple / navy)', classic: 'Classic Office', gray: 'Grayscale (journal print)', nejm: 'NEJM', lancet: 'Lancet', nature: 'Nature',
+    jama: 'JAMA', okabe: 'Colour-blind safe (Okabe-Ito)', viridis: 'Viridis', pastel: 'Pastel', ocean: 'Ocean blues', sunset: 'Sunset', forest: 'Forest greens', earth: 'Earth tones', berry: 'Berry', blues: 'Monochrome blue' };
   const FONTS = { sans: '"Segoe UI", Arial, sans-serif', arial: 'Arial, Helvetica, sans-serif', times: '"Times New Roman", Times, serif', calibri: 'Calibri, Carlito, Arial, sans-serif' };
   let FONT = FONTS.sans; // chart text font, set per chart from the style
   // figure shapes (logical canvas size before the resolution multiplier)
@@ -24262,7 +24423,7 @@ const Charts = (() => {
     return cv;
   }
 
-  return { draw, consort, PALETTES, DEFAULT_STYLE, FLOW_LABELS };
+  return { draw, consort, PALETTES, PALETTE_NAMES, DEFAULT_STYLE, FLOW_LABELS };
 })();
 
 /* Prof MSE Easy Stat — Word (.docx) export using docx.js */
@@ -24809,7 +24970,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const STEPS = [['Upload', 'Excel file'], ['Variables', 'Groups & roles'], ['Timepoints', 'Per outcome'], ['Tests', 'Statistics'], ['Tables', 'Layout & numbers'],
-    ['Comments', 'Text'], ['Figures', 'Charts'], ['Advanced', 'Regression, ROC …'], ['Flowchart', 'CONSORT / STROBE …'], ['Report', 'Preview & Word']];
+    ['Comments', 'Text'], ['Figures', 'Charts'], ['Advanced', 'Regression, ROC …'], ['Flowchart', 'CONSORT / STROBE …'], ['Results', 'Each variable'], ['Report', 'Preview & Word']];
   const TP_RE = /^(baseline|base|bl|pre|post|preop|postop|before|after|final|end|(t|v|visit|day|d|week|wk|w|month|mo|m|h|hr|y|yr|session)\d+(\.\d+)?|\d+(\.\d+)?(h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks|m|mo|mon|month|months|y|yr|yrs|year|years|min|mins))$/i;
   const UNIT_RE = /^(\d+(\.\d+)?-\d+(\.\d+)?|years?|yrs|months?|days?|weeks?|hours?|deg|degrees?|kg|g|cm|mm|m2|kg\/m2|mmhg|bpm|percent|pct|%|min|mins|sec|ml|mg|mg\/dl|mmol\/l|iu|u\/l|ng|pg|ug|mcg|µg|mmol|umol|µmol|meq|x?10e\d+)$/i;
   // a unit followed by one of these reads as "per": mg_L → mg/L, kg_m2 → kg/m2
@@ -24895,7 +25056,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     if (n === 7) renderFigureTable();
     if (n === 8) renderAdvanced();
     if (n === 9) renderConsortForm();
-    if (n === 10) runAnalysis();
+    if (n === 10) renderExplore();
+    if (n === 11) runAnalysis();
     $('#presetBar').style.display = n >= 4 ? '' : 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -25537,6 +25699,13 @@ if (typeof module !== 'undefined') module.exports = Examples;
     if (t === 'sum' || t === 'mean') f += `<div style="grid-column:span 3"><label class="f">Columns (a patient with any of them missing gets no value)</label><div class="predlist">${nums.map(h => `<label><input type="checkbox" data-calccol="${esc(h)}" ${(calc.cols || []).includes(h) ? 'checked' : ''}>${esc(h)}</label>`).join('')}</div></div>`;
     if (t === 'formula') f += `<div style="grid-column:span 3"><label class="f">Formula — column names in [brackets]; + − × / ^ ( ), ln, log10, sqrt, abs, exp, round, min, max</label><input type="text" data-calc="expr" value="${esc(calc.expr || '')}" placeholder="e.g. [Weight_kg] / ([Height_cm] / 100) ^ 2"></div>`;
     f += `<div><label class="f">New column name</label><input type="text" data-calc="name" value="${esc(calc.name || '')}" placeholder="${esc(calcDefaultName())}"></div>`;
+    // where the new column goes in the sheet, and which report table shows it
+    const heads = state.data.headers, where = calc.where || 'source';
+    f += `<div><label class="f">Place in the sheet</label><select data-calc="where"><option value="source" ${where === 'source' ? 'selected' : ''}>After its source column</option><option value="end" ${where === 'end' ? 'selected' : ''}>At the end of the sheet</option><option value="start" ${where === 'start' ? 'selected' : ''}>At the start of the sheet</option>
+      <optgroup label="After column…">${heads.map(h => `<option value="after:${esc(h)}" ${where === 'after:' + h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</optgroup></select></div>`;
+    const tables = [...new Set([...state.cfg.variables.filter(v => v.kind === 'single' && v.table).map(v => v.table), 'Other outcomes'])];
+    if (!(t === 'bmi' && String(calc.a || '').startsWith('rep:')))
+      f += `<div><label class="f">Table in the report</label><input type="text" data-calc="table" list="calcTables" value="${esc(calc.table || '')}" placeholder="same as its source column"><datalist id="calcTables">${tables.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>`;
     $('#calcForm').innerHTML = f;
     const done = state.cfg.computed || [];
     $('#calcList').innerHTML = done.length ? `<table class="t"><thead><tr><th>Column</th><th>Calculation</th><th></th></tr></thead><tbody>${done.map((c, i) =>
@@ -25628,24 +25797,31 @@ if (typeof module !== 'undefined') module.exports = Examples;
   function applyCalc(plan, existing) {
     const { headers } = state.data, cfg = state.cfg;
     editSheet(() => {
+      // new columns go after their (last) source column, at the start or end, or after a chosen column
+      const where = calc.where || 'source';
+      let at = where === 'end' ? headers.length : where === 'start' ? 0
+        : where.startsWith('after:') && headers.includes(where.slice(6)) ? headers.indexOf(where.slice(6)) + 1
+        : Math.max(...plan.items.flatMap(it => it.src.map(c => headers.indexOf(c)))) + 1;
       plan.items.forEach(it => {
-        if (!headers.includes(it.name)) headers.push(it.name);
+        if (!headers.includes(it.name)) headers.splice(Math.min(at++, headers.length), 0, it.name);
         state.data.rows.forEach(r => { r[it.name] = calcValue(it, r, plan.text); });
       });
+      const uid = () => 'calc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       if (existing) return;
       // new variables: one repeated measure (BMI at every timepoint) or one single variable in the table of its first source column
       if (plan.repeated) {
         const pos = headers.indexOf(plan.items[0].name), from = plan.repeated.from;
-        cfg.variables.push({ ...from, id: 'v' + pos, pos, label: plan.repeated.label, cols: plan.items.map(it => ({ col: it.name, tp: it.tp, ...(it.label ? { label: it.label } : {}) })),
+        cfg.variables.push({ ...from, id: uid(), pos, label: plan.repeated.label, cols: plan.items.map(it => ({ col: it.name, tp: it.tp, ...(it.label ? { label: it.label } : {}) })),
           chart: undefined, caption: undefined, ylabel: undefined, include: true });
       } else {
         const it = plan.items[0], pos = headers.indexOf(it.name);
         const src = cfg.variables.find(v => v.kind === 'single' && v.cols[0].col === it.src[0]);
-        const v = singleVariable(state.data.rows, it.name, pos, src ? src.table : 'Other outcomes');
+        const v = { ...singleVariable(state.data.rows, it.name, pos, String(calc.table || '').trim() || (src ? src.table : 'Other outcomes')), id: uid() };
         if (plan.levels) { v.type = 'categorical'; v.levels = plan.levels.filter(l => state.data.rows.some(r => r[it.name] === l)); }
         if (!cfg.variables.some(x => x.cols.some(c => c.col === it.name))) cfg.variables.push(v);
       }
       cfg.computed = [...(cfg.computed || []), { names: plan.items.map(i => i.name), desc: plan.desc, calc: JSON.parse(JSON.stringify(calc)) }];
+      syncPositions(); // the variables follow the new column order
     });
   }
   $('#calcCard').addEventListener('input', e => {
@@ -25700,6 +25876,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   function drawFigurePreview() {
     if (!isActive(7)) return;
     readUiIntoCfg();
+    renderPalGallery();
     const cfg = state.cfg, v = cfg.variables.find(x => x.id === $('#figPrevVar').value), cv = $('#figPrevCanvas');
     if (!v) { cv.width = cv.height = 0; $('#figPrevNote').textContent = 'No variable selected.'; return; }
     try {
@@ -25844,7 +26021,28 @@ if (typeof module !== 'undefined') module.exports = Examples;
     renderAdvanced();
   });
 
-  $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; });
+  // colour themes: the menu and a gallery with a sample chart in each theme
+  $('#optPal').innerHTML = Object.entries(Charts.PALETTE_NAMES).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('') + '<option value="custom">Custom colours…</option>';
+  const SAMPLE = { type: 'bar', categories: ['Baseline', 'Week 4', 'Week 12'], yLabel: 'Score', series: ['A group', 'B group', 'C group'].map((g, i) => ({ name: g, values: [62 - i * 2, 50 - i * 6, 44 - i * 9], err: [7, 8, 8] })) };
+  let palCache = {}, palKey = '';
+  function renderPalGallery() {
+    if (!state.cfg || !$('#palWrap').open) return;
+    const o = state.cfg.options, st = { ...chartStyle(o), res: 1, legend: 'bottom' }, key = JSON.stringify([st, o.customColors]);
+    if (key !== palKey) { palCache = {}; palKey = key; } // the samples follow the chart appearance options
+    const cur = $('#optPal').value;
+    const card = (k, name, cols) => {
+      if (!palCache[k]) palCache[k] = Charts.draw(SAMPLE, k === 'custom' ? cols : k, st).toDataURL('image/png');
+      return `<button type="button" class="pal-card${cur === k ? ' on' : ''}" data-pal="${k}"><b>${esc(name)}</b><img src="${palCache[k]}" alt=""><div class="pal-sw">${cols.map(c => `<span style="background:${c}"></span>`).join('')}</div></button>`;
+    };
+    $('#palGallery').innerHTML = Object.entries(Charts.PALETTE_NAMES).map(([k, n]) => card(k, n, Charts.PALETTES[k])).join('') + card('custom', 'Custom colours', o.customColors);
+  }
+  $('#palWrap').addEventListener('toggle', () => { readUiIntoCfg(); renderPalGallery(); });
+  $('#palGallery').addEventListener('click', e => {
+    const b = e.target.closest('[data-pal]'); if (!b) return;
+    const sel = $('#optPal'); sel.value = b.dataset.pal; sel.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelectorAll('.pal-card').forEach(x => x.classList.toggle('on', x === b));
+  });
+  $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; document.querySelectorAll('.pal-card').forEach(x => x.classList.toggle('on', x.dataset.pal === e.target.value)); });
   $('#customReset').onclick = () => { readUiIntoCfg(); state.cfg.options.customColors = defaultOptions().customColors; renderTimepoints(); };
 
   /* ---------- step 4: flowchart (CONSORT, STROBE, STARD or simple) ---------- */
@@ -26040,6 +26238,39 @@ if (typeof module !== 'undefined') module.exports = Examples;
     return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''}" style="font-family:'${esc(o.font)}',serif"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${
       rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
+
+  /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
+  const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
+    t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+  function renderExplore() {
+    const box = $('#explore'); if (!state.cfg) return;
+    let x;
+    try { x = Analysis.explore(state.data, state.cfg); } catch (err) { console.error(err); box.innerHTML = `<p style="color:var(--bad)">${esc(err.message)}</p>`; return; }
+    state.explore = x;
+    const sel = $('#xpVar'), cur = sel.value, kinds = { numeric: 'numeric', categorical: 'categorical', repeated: 'repeated' };
+    sel.innerHTML = `<option value="">All variables (${x.items.length})</option>` + x.items.map(it => `<option value="${esc(it.id)}">${esc(it.label)} — ${kinds[it.kind]}</option>`).join('');
+    if (x.items.some(it => it.id === cur)) sel.value = cur;
+    drawExplore();
+  }
+  function drawExplore() {
+    const x = state.explore; if (!x) return;
+    const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items, o = state.cfg.options, figs = $('#xpFigs').checked;
+    $('#explore').innerHTML = list.length ? list.map(it => {
+      let img = '';
+      if (figs && it.spec) { try { img = `<img class="xp-fig" src="${Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png')}" alt="">`; } catch (e) { /* no figure */ } }
+      return `<div class="report-sec xp-item"><div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>
+        <div class="xp-body">${img}<div class="xp-tables">${it.tables.map(tblHtml).join('')}</div></div></div>`;
+    }).join('') : '<p class="legend-note">No variables are ticked in step 2.</p>';
+  }
+  $('#xpVar').onchange = drawExplore;
+  $('#xpFigs').onchange = drawExplore;
+  $('#xpCopy').onclick = async () => {
+    // all tables as tab-separated text, ready to paste into Excel or Word
+    const x = state.explore; if (!x) return;
+    const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items;
+    const txt = list.map(it => [it.label, ...it.tables.map(t => [t.title, t.head.join('\t'), ...t.rows.map(r => r.join('\t'))].join('\n'))].join('\n\n')).join('\n\n\n');
+    try { await navigator.clipboard.writeText(txt); toast('Tables copied — paste them into Excel or Word'); } catch (e) { toast('Copying is blocked in this browser'); }
+  };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
   const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
@@ -26397,7 +26628,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     renderOptions();
     if (state.step === 7) renderFigureTable();
     if (state.step === 9) renderConsortForm();
-    if (state.step === 10) runAnalysis();
+    if (state.step === 10) renderExplore();
+    if (state.step === 11) runAnalysis();
     toast(`Preset applied: ${p.name}`);
   };
   $('#presetSave').onclick = () => {
@@ -26436,7 +26668,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   renderPresets();
 
   /* ---------- projects: the data, every setting and the edited report text in one file ---------- */
-  // text edited in step 10, keyed like the export choices so it finds its table or figure again after the analysis is re-run
+  // text edited in step 11, keyed like the export choices so it finds its table or figure again after the analysis is re-run
   function reportEdits() {
     const r = state.result; if (!r) return null;
     syncEdits();
@@ -26480,7 +26712,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       $('#to2').disabled = false; renderGrid();
       // leave no step active, so the controls of the old project are not read into the opened one
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      go(Math.min(10, Math.max(2, +j.step || 2)));
+      go(Math.min(STEPS.length, Math.max(2, +j.step || 2)));
       toast(`Project opened: ${state.data.rows.length} patients, saved ${String(j.saved || '').slice(0, 10)}`);
     } catch (err) { toast('Could not open the project: ' + err.message); }
   };

@@ -3,7 +3,7 @@
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const STEPS = [['Upload', 'Excel file'], ['Variables', 'Groups & roles'], ['Timepoints', 'Per outcome'], ['Tests', 'Statistics'], ['Tables', 'Layout & numbers'],
-    ['Comments', 'Text'], ['Figures', 'Charts'], ['Advanced', 'Regression, ROC …'], ['Flowchart', 'CONSORT / STROBE …'], ['Report', 'Preview & Word']];
+    ['Comments', 'Text'], ['Figures', 'Charts'], ['Advanced', 'Regression, ROC …'], ['Flowchart', 'CONSORT / STROBE …'], ['Results', 'Each variable'], ['Report', 'Preview & Word']];
   const TP_RE = /^(baseline|base|bl|pre|post|preop|postop|before|after|final|end|(t|v|visit|day|d|week|wk|w|month|mo|m|h|hr|y|yr|session)\d+(\.\d+)?|\d+(\.\d+)?(h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks|m|mo|mon|month|months|y|yr|yrs|year|years|min|mins))$/i;
   const UNIT_RE = /^(\d+(\.\d+)?-\d+(\.\d+)?|years?|yrs|months?|days?|weeks?|hours?|deg|degrees?|kg|g|cm|mm|m2|kg\/m2|mmhg|bpm|percent|pct|%|min|mins|sec|ml|mg|mg\/dl|mmol\/l|iu|u\/l|ng|pg|ug|mcg|µg|mmol|umol|µmol|meq|x?10e\d+)$/i;
   // a unit followed by one of these reads as "per": mg_L → mg/L, kg_m2 → kg/m2
@@ -89,7 +89,8 @@
     if (n === 7) renderFigureTable();
     if (n === 8) renderAdvanced();
     if (n === 9) renderConsortForm();
-    if (n === 10) runAnalysis();
+    if (n === 10) renderExplore();
+    if (n === 11) runAnalysis();
     $('#presetBar').style.display = n >= 4 ? '' : 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -731,6 +732,13 @@
     if (t === 'sum' || t === 'mean') f += `<div style="grid-column:span 3"><label class="f">Columns (a patient with any of them missing gets no value)</label><div class="predlist">${nums.map(h => `<label><input type="checkbox" data-calccol="${esc(h)}" ${(calc.cols || []).includes(h) ? 'checked' : ''}>${esc(h)}</label>`).join('')}</div></div>`;
     if (t === 'formula') f += `<div style="grid-column:span 3"><label class="f">Formula — column names in [brackets]; + − × / ^ ( ), ln, log10, sqrt, abs, exp, round, min, max</label><input type="text" data-calc="expr" value="${esc(calc.expr || '')}" placeholder="e.g. [Weight_kg] / ([Height_cm] / 100) ^ 2"></div>`;
     f += `<div><label class="f">New column name</label><input type="text" data-calc="name" value="${esc(calc.name || '')}" placeholder="${esc(calcDefaultName())}"></div>`;
+    // where the new column goes in the sheet, and which report table shows it
+    const heads = state.data.headers, where = calc.where || 'source';
+    f += `<div><label class="f">Place in the sheet</label><select data-calc="where"><option value="source" ${where === 'source' ? 'selected' : ''}>After its source column</option><option value="end" ${where === 'end' ? 'selected' : ''}>At the end of the sheet</option><option value="start" ${where === 'start' ? 'selected' : ''}>At the start of the sheet</option>
+      <optgroup label="After column…">${heads.map(h => `<option value="after:${esc(h)}" ${where === 'after:' + h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</optgroup></select></div>`;
+    const tables = [...new Set([...state.cfg.variables.filter(v => v.kind === 'single' && v.table).map(v => v.table), 'Other outcomes'])];
+    if (!(t === 'bmi' && String(calc.a || '').startsWith('rep:')))
+      f += `<div><label class="f">Table in the report</label><input type="text" data-calc="table" list="calcTables" value="${esc(calc.table || '')}" placeholder="same as its source column"><datalist id="calcTables">${tables.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>`;
     $('#calcForm').innerHTML = f;
     const done = state.cfg.computed || [];
     $('#calcList').innerHTML = done.length ? `<table class="t"><thead><tr><th>Column</th><th>Calculation</th><th></th></tr></thead><tbody>${done.map((c, i) =>
@@ -822,24 +830,31 @@
   function applyCalc(plan, existing) {
     const { headers } = state.data, cfg = state.cfg;
     editSheet(() => {
+      // new columns go after their (last) source column, at the start or end, or after a chosen column
+      const where = calc.where || 'source';
+      let at = where === 'end' ? headers.length : where === 'start' ? 0
+        : where.startsWith('after:') && headers.includes(where.slice(6)) ? headers.indexOf(where.slice(6)) + 1
+        : Math.max(...plan.items.flatMap(it => it.src.map(c => headers.indexOf(c)))) + 1;
       plan.items.forEach(it => {
-        if (!headers.includes(it.name)) headers.push(it.name);
+        if (!headers.includes(it.name)) headers.splice(Math.min(at++, headers.length), 0, it.name);
         state.data.rows.forEach(r => { r[it.name] = calcValue(it, r, plan.text); });
       });
+      const uid = () => 'calc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       if (existing) return;
       // new variables: one repeated measure (BMI at every timepoint) or one single variable in the table of its first source column
       if (plan.repeated) {
         const pos = headers.indexOf(plan.items[0].name), from = plan.repeated.from;
-        cfg.variables.push({ ...from, id: 'v' + pos, pos, label: plan.repeated.label, cols: plan.items.map(it => ({ col: it.name, tp: it.tp, ...(it.label ? { label: it.label } : {}) })),
+        cfg.variables.push({ ...from, id: uid(), pos, label: plan.repeated.label, cols: plan.items.map(it => ({ col: it.name, tp: it.tp, ...(it.label ? { label: it.label } : {}) })),
           chart: undefined, caption: undefined, ylabel: undefined, include: true });
       } else {
         const it = plan.items[0], pos = headers.indexOf(it.name);
         const src = cfg.variables.find(v => v.kind === 'single' && v.cols[0].col === it.src[0]);
-        const v = singleVariable(state.data.rows, it.name, pos, src ? src.table : 'Other outcomes');
+        const v = { ...singleVariable(state.data.rows, it.name, pos, String(calc.table || '').trim() || (src ? src.table : 'Other outcomes')), id: uid() };
         if (plan.levels) { v.type = 'categorical'; v.levels = plan.levels.filter(l => state.data.rows.some(r => r[it.name] === l)); }
         if (!cfg.variables.some(x => x.cols.some(c => c.col === it.name))) cfg.variables.push(v);
       }
       cfg.computed = [...(cfg.computed || []), { names: plan.items.map(i => i.name), desc: plan.desc, calc: JSON.parse(JSON.stringify(calc)) }];
+      syncPositions(); // the variables follow the new column order
     });
   }
   $('#calcCard').addEventListener('input', e => {
@@ -894,6 +909,7 @@
   function drawFigurePreview() {
     if (!isActive(7)) return;
     readUiIntoCfg();
+    renderPalGallery();
     const cfg = state.cfg, v = cfg.variables.find(x => x.id === $('#figPrevVar').value), cv = $('#figPrevCanvas');
     if (!v) { cv.width = cv.height = 0; $('#figPrevNote').textContent = 'No variable selected.'; return; }
     try {
@@ -1038,7 +1054,28 @@
     renderAdvanced();
   });
 
-  $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; });
+  // colour themes: the menu and a gallery with a sample chart in each theme
+  $('#optPal').innerHTML = Object.entries(Charts.PALETTE_NAMES).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('') + '<option value="custom">Custom colours…</option>';
+  const SAMPLE = { type: 'bar', categories: ['Baseline', 'Week 4', 'Week 12'], yLabel: 'Score', series: ['A group', 'B group', 'C group'].map((g, i) => ({ name: g, values: [62 - i * 2, 50 - i * 6, 44 - i * 9], err: [7, 8, 8] })) };
+  let palCache = {}, palKey = '';
+  function renderPalGallery() {
+    if (!state.cfg || !$('#palWrap').open) return;
+    const o = state.cfg.options, st = { ...chartStyle(o), res: 1, legend: 'bottom' }, key = JSON.stringify([st, o.customColors]);
+    if (key !== palKey) { palCache = {}; palKey = key; } // the samples follow the chart appearance options
+    const cur = $('#optPal').value;
+    const card = (k, name, cols) => {
+      if (!palCache[k]) palCache[k] = Charts.draw(SAMPLE, k === 'custom' ? cols : k, st).toDataURL('image/png');
+      return `<button type="button" class="pal-card${cur === k ? ' on' : ''}" data-pal="${k}"><b>${esc(name)}</b><img src="${palCache[k]}" alt=""><div class="pal-sw">${cols.map(c => `<span style="background:${c}"></span>`).join('')}</div></button>`;
+    };
+    $('#palGallery').innerHTML = Object.entries(Charts.PALETTE_NAMES).map(([k, n]) => card(k, n, Charts.PALETTES[k])).join('') + card('custom', 'Custom colours', o.customColors);
+  }
+  $('#palWrap').addEventListener('toggle', () => { readUiIntoCfg(); renderPalGallery(); });
+  $('#palGallery').addEventListener('click', e => {
+    const b = e.target.closest('[data-pal]'); if (!b) return;
+    const sel = $('#optPal'); sel.value = b.dataset.pal; sel.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelectorAll('.pal-card').forEach(x => x.classList.toggle('on', x === b));
+  });
+  $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; document.querySelectorAll('.pal-card').forEach(x => x.classList.toggle('on', x.dataset.pal === e.target.value)); });
   $('#customReset').onclick = () => { readUiIntoCfg(); state.cfg.options.customColors = defaultOptions().customColors; renderTimepoints(); };
 
   /* ---------- step 4: flowchart (CONSORT, STROBE, STARD or simple) ---------- */
@@ -1234,6 +1271,39 @@
     return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''}" style="font-family:'${esc(o.font)}',serif"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${
       rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
+
+  /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
+  const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
+    t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+  function renderExplore() {
+    const box = $('#explore'); if (!state.cfg) return;
+    let x;
+    try { x = Analysis.explore(state.data, state.cfg); } catch (err) { console.error(err); box.innerHTML = `<p style="color:var(--bad)">${esc(err.message)}</p>`; return; }
+    state.explore = x;
+    const sel = $('#xpVar'), cur = sel.value, kinds = { numeric: 'numeric', categorical: 'categorical', repeated: 'repeated' };
+    sel.innerHTML = `<option value="">All variables (${x.items.length})</option>` + x.items.map(it => `<option value="${esc(it.id)}">${esc(it.label)} — ${kinds[it.kind]}</option>`).join('');
+    if (x.items.some(it => it.id === cur)) sel.value = cur;
+    drawExplore();
+  }
+  function drawExplore() {
+    const x = state.explore; if (!x) return;
+    const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items, o = state.cfg.options, figs = $('#xpFigs').checked;
+    $('#explore').innerHTML = list.length ? list.map(it => {
+      let img = '';
+      if (figs && it.spec) { try { img = `<img class="xp-fig" src="${Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png')}" alt="">`; } catch (e) { /* no figure */ } }
+      return `<div class="report-sec xp-item"><div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>
+        <div class="xp-body">${img}<div class="xp-tables">${it.tables.map(tblHtml).join('')}</div></div></div>`;
+    }).join('') : '<p class="legend-note">No variables are ticked in step 2.</p>';
+  }
+  $('#xpVar').onchange = drawExplore;
+  $('#xpFigs').onchange = drawExplore;
+  $('#xpCopy').onclick = async () => {
+    // all tables as tab-separated text, ready to paste into Excel or Word
+    const x = state.explore; if (!x) return;
+    const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items;
+    const txt = list.map(it => [it.label, ...it.tables.map(t => [t.title, t.head.join('\t'), ...t.rows.map(r => r.join('\t'))].join('\n'))].join('\n\n')).join('\n\n\n');
+    try { await navigator.clipboard.writeText(txt); toast('Tables copied — paste them into Excel or Word'); } catch (e) { toast('Copying is blocked in this browser'); }
+  };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
   const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
@@ -1591,7 +1661,8 @@
     renderOptions();
     if (state.step === 7) renderFigureTable();
     if (state.step === 9) renderConsortForm();
-    if (state.step === 10) runAnalysis();
+    if (state.step === 10) renderExplore();
+    if (state.step === 11) runAnalysis();
     toast(`Preset applied: ${p.name}`);
   };
   $('#presetSave').onclick = () => {
@@ -1630,7 +1701,7 @@
   renderPresets();
 
   /* ---------- projects: the data, every setting and the edited report text in one file ---------- */
-  // text edited in step 10, keyed like the export choices so it finds its table or figure again after the analysis is re-run
+  // text edited in step 11, keyed like the export choices so it finds its table or figure again after the analysis is re-run
   function reportEdits() {
     const r = state.result; if (!r) return null;
     syncEdits();
@@ -1674,7 +1745,7 @@
       $('#to2').disabled = false; renderGrid();
       // leave no step active, so the controls of the old project are not read into the opened one
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      go(Math.min(10, Math.max(2, +j.step || 2)));
+      go(Math.min(STEPS.length, Math.max(2, +j.step || 2)));
       toast(`Project opened: ${state.data.rows.length} patients, saved ${String(j.saved || '').slice(0, 10)}`);
     } catch (err) { toast('Could not open the project: ' + err.message); }
   };

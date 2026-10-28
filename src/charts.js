@@ -3,8 +3,24 @@ const Charts = (() => {
   const PALETTES = {
     brand: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B'],
     classic: ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47'],
-    gray: ['#333333', '#777777', '#AAAAAA', '#555555', '#999999', '#CCCCCC']
+    gray: ['#333333', '#777777', '#AAAAAA', '#555555', '#999999', '#CCCCCC'],
+    // journal-style and colour-blind-safe themes
+    nejm: ['#BC3C29', '#0072B5', '#E18727', '#20854E', '#7876B1', '#6F99AD'],
+    lancet: ['#00468B', '#ED0000', '#42B540', '#0099B4', '#925E9F', '#FDAF91'],
+    nature: ['#E64B35', '#4DBBD5', '#00A087', '#3C5488', '#F39B7F', '#8491B4'],
+    jama: ['#374E55', '#DF8F44', '#00A1D5', '#B24745', '#79AF97', '#6A6599'],
+    okabe: ['#E69F00', '#56B4E9', '#009E73', '#0072B2', '#D55E00', '#CC79A7'],
+    viridis: ['#440154', '#3B528B', '#21918C', '#5EC962', '#B8DE29', '#2C728E'],
+    pastel: ['#8DA0CB', '#FC8D62', '#66C2A5', '#E78AC3', '#A6D854', '#E5C494'],
+    ocean: ['#023E8A', '#0096C7', '#48CAE4', '#03045E', '#00B4D8', '#90E0EF'],
+    sunset: ['#F94144', '#F8961E', '#577590', '#F9C74F', '#90BE6D', '#43AA8B'],
+    forest: ['#1B4332', '#40916C', '#95D5B2', '#2D6A4F', '#74C69D', '#52B788'],
+    earth: ['#264653', '#E76F51', '#2A9D8F', '#F4A261', '#E9C46A', '#8AB17D'],
+    berry: ['#7B2CBF', '#C9184A', '#FF8FA3', '#5A189A', '#FF4D6D', '#9D4EDD'],
+    blues: ['#08306B', '#2171B5', '#6BAED6', '#08519C', '#4292C6', '#9ECAE1']
   };
+  const PALETTE_NAMES = { brand: 'Prof MSE (purple / navy)', classic: 'Classic Office', gray: 'Grayscale (journal print)', nejm: 'NEJM', lancet: 'Lancet', nature: 'Nature',
+    jama: 'JAMA', okabe: 'Colour-blind safe (Okabe-Ito)', viridis: 'Viridis', pastel: 'Pastel', ocean: 'Ocean blues', sunset: 'Sunset', forest: 'Forest greens', earth: 'Earth tones', berry: 'Berry', blues: 'Monochrome blue' };
   const FONTS = { sans: '"Segoe UI", Arial, sans-serif', arial: 'Arial, Helvetica, sans-serif', times: '"Times New Roman", Times, serif', calibri: 'Calibri, Carlito, Arial, sans-serif' };
   let FONT = FONTS.sans; // chart text font, set per chart from the style
   // figure shapes (logical canvas size before the resolution multiplier)
@@ -874,5 +890,5 @@ const Charts = (() => {
     return cv;
   }
 
-  return { draw, consort, PALETTES, DEFAULT_STYLE, FLOW_LABELS };
+  return { draw, consort, PALETTES, PALETTE_NAMES, DEFAULT_STYLE, FLOW_LABELS };
 })();

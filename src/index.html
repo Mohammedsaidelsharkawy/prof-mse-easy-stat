@@ -29,7 +29,8 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 .brand h1{margin:0;font-size:22px;letter-spacing:.3px}
 .brand h1 span{color:#C9A2EC}
 .brand p{margin:0;font-size:12.5px;opacity:.75}
-.top-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.top-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;min-width:0;flex:1 1 auto}
+.brand{flex-shrink:0}
 .pulse{height:4px;background:linear-gradient(90deg,var(--purple),#C9A2EC,var(--purple));background-size:200% 100%;animation:pulse 6s linear infinite}
 @keyframes pulse{to{background-position:-200% 0}}
 
@@ -97,6 +98,12 @@ table.t td select{min-width:120px}
 .predlist input{accent-color:var(--purple)}
 .off{opacity:.38}
 .preset-bar{gap:10px;margin:0 0 14px;padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;align-items:center}
+.pal-wrap{margin:12px 0 0;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.pal-wrap summary{cursor:pointer}
+.pal-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:10px}
+.pal-card{border:2px solid var(--line);border-radius:10px;padding:8px;background:var(--card);cursor:pointer;text-align:left;font:inherit;color:inherit}.pal-card:hover{border-color:var(--lav2)}.pal-card.on{border-color:var(--purple);box-shadow:0 0 0 2px var(--lav2)}
+.pal-card img{width:100%;display:block;border-radius:6px;margin:6px 0 4px;background:#fff}.pal-sw{display:flex;gap:3px}.pal-sw span{flex:1;height:12px;border-radius:3px}
+.xp-item .row{gap:10px}.xp-body{display:flex;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap}.xp-fig{width:420px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+.xp-tables{flex:1;min-width:320px}.xp-tbl h4{margin:6px 0 4px;font-size:13.5px}table.xp{font-size:12.5px}table.xp td,table.xp th{padding:4px 8px;white-space:nowrap}table.xp td.b{font-weight:600}table.xp td.sig{color:var(--bad);font-weight:700}table.xp td.used{color:var(--ok,#2E9E8F);font-weight:700;text-align:center}
 .fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
 .fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
@@ -199,7 +206,7 @@ footer b{color:var(--purple)}
     <div class="top-actions">
       <button class="btn light small" id="btnNew" title="Start a new project (clears the current data and settings)">＋ New</button>
       <label class="btn light small" title="Open a saved project: data, settings and edited text">📂 Open project<input type="file" id="projFile" accept=".json,.easystat" hidden></label>
-      <button class="btn light small" id="btnSaveProj" title="Save everything — the data, all settings and the text edited in step 10 — in one file">💾 Save project</button>
+      <button class="btn light small" id="btnSaveProj" title="Save everything — the data, all settings and the text edited in step 11 — in one file">💾 Save project</button>
       <button class="btn light small" id="btnTheme" title="Switch light / dark theme">◐ Theme</button>
       <button class="btn light small" id="btnSaveCfg" title="Save your column setup to reuse later">Save setup</button>
       <label class="btn light small" title="Load a saved setup">Load setup<input type="file" id="cfgFile" accept=".json" hidden></label>
@@ -215,7 +222,7 @@ footer b{color:var(--purple)}
     <select id="presetSel" style="width:auto;max-width:320px"></select>
     <button class="btn primary small" id="presetApply" type="button">Apply</button>
     <span class="legend-note" id="presetNote" style="flex:1;min-width:200px"></span>
-    <button class="btn ghost small" id="presetSave" type="button" title="Save the current settings of steps 4–10 as your own preset">＋ Save current as preset</button>
+    <button class="btn ghost small" id="presetSave" type="button" title="Save the current settings of steps 4–11 as your own preset">＋ Save current as preset</button>
     <button class="btn ghost small" id="presetDel" type="button" title="Delete the selected preset of your own">✕ Delete</button>
     <button class="btn ghost small" id="presetExport" type="button" title="Download your presets to use on another computer">⬇ Export</button>
     <label class="btn ghost small" style="margin:0" title="Load presets from a file">⬆ Import<input type="file" id="presetFile" accept=".json" hidden></label>
@@ -403,7 +410,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
       </div>
       <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand"><span><b>Prof MSE branding</b> in the Word header</span></label></div>
-      <p class="legend-note">Table titles can be edited in the report preview (step 10).</p>
+      <p class="legend-note">Table titles can be edited in the report preview (step 11).</p>
     </div>
     <div class="nav"><button class="btn ghost" data-go="4">← Back</button><button class="btn primary" data-go="6">Next: Comments →</button></div>
   </section>
@@ -424,7 +431,7 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optSummary"><span><b>Summary of key findings</b> — a closing paragraph listing every significant result</span></label>
         </div>
       </div>
-      <p class="legend-note">Every comment can still be edited by hand in the report preview (step 10).</p>
+      <p class="legend-note">Every comment can still be edited by hand in the report preview (step 11).</p>
     </div>
     <div class="nav"><button class="btn ghost" data-go="5">← Back</button><button class="btn primary" data-go="7">Next: Figures →</button></div>
   </section>
@@ -436,13 +443,14 @@ footer b{color:var(--purple)}
       <div class="grid g4">
         <div><label class="f">Figures to include</label><select id="optFigures"><option value="all" selected>All results</option><option value="sig">Significant results only</option><option value="none">None (tables only)</option></select></div>
         <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
-        <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option><option value="custom">Custom colours…</option></select></div>
+        <div><label class="f">Chart colours</label><select id="optPal"></select></div>
         <div><label class="f">Error bars (mean charts)</label><select id="optErrorBar"><option value="sd" selected>Standard deviation (SD)</option><option value="sem">Standard error (SEM)</option><option value="ci">95% confidence interval</option></select></div>
         <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option></select></div>
         <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
         <div><label class="f">Figure placement (classify)</label><select id="optFigPlacement"><option value="after" selected>After each table</option><option value="end">All at the end (Figures section)</option><option value="endType">At the end, grouped by chart type</option></select></div>
         <div><label class="f">Caption style</label><select id="optCaptionStyle"><option value="colon" selected>Figure 1: …</option><option value="period">Figure 1. …</option><option value="fig">Fig. 1. …</option></select></div>
       </div>
+      <details class="pal-wrap" id="palWrap"><summary><b>Colour themes</b> — preview and choose</summary><div class="pal-gallery" id="palGallery"></div></details>
       <div id="customBox" style="display:none;margin-top:12px">
         <label class="f">Custom colours (group 1, 2, 3 …)</label>
         <div class="row"><span id="customColors" class="row" style="gap:6px"></span><button class="btn ghost small" id="customReset" type="button">Reset</button></div>
@@ -556,14 +564,28 @@ footer b{color:var(--purple)}
         <div><canvas id="consortCanvas" class="consort-prev"></canvas></div>
       </div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Run analysis →</button></div>
+    <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Next: Results by variable →</button></div>
   </section>
 
   <!-- STEP 10 -->
+  <!-- STEP 10 -->
   <section class="panel" id="p10">
     <div class="card">
+      <div class="row"><h2>10 · Results by variable</h2><span class="spacer"></span>
+        <select id="xpVar" style="width:auto;max-width:360px"></select>
+        <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
+        <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button></div>
+      <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4.</p>
+      <div id="explore"></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="9">← Back</button><button class="btn primary" data-go="11">Run report →</button></div>
+  </section>
+
+  <!-- STEP 11 -->
+  <section class="panel" id="p11">
+    <div class="card">
       <div class="row">
-        <h2>10 · Report</h2><span class="spacer"></span>
+        <h2>11 · Report</h2><span class="spacer"></span>
         <button class="btn ghost" id="btnRerun">↻ Re-run</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
@@ -594,7 +616,7 @@ footer b{color:var(--purple)}
       <p class="hint" style="margin-top:12px">Review everything below. You can edit the text boxes — your edits go into the Word file. The format changes only this report; your settings in steps 4–9 stay as they are.</p>
       <div id="report"></div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="9">← Back</button><span></span></div>
+    <div class="nav"><button class="btn ghost" data-go="10">← Back</button><span></span></div>
   </section>
 </main>
 <footer>© <b>Prof MSE</b> – Medical Research · Easy Stat v1.0 · runs fully offline in your browser</footer>
