@@ -99,11 +99,23 @@ table.t td select{min-width:120px}
 .off{opacity:.38}
 .preset-bar{gap:10px;margin:0 0 14px;padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;align-items:center}
 .pal-wrap{margin:12px 0 0;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.pal-wrap summary{cursor:pointer}
-.pal-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:10px}
-.pal-card{border:2px solid var(--line);border-radius:10px;padding:8px;background:var(--card);cursor:pointer;text-align:left;font:inherit;color:inherit}.pal-card:hover{border-color:var(--lav2)}.pal-card.on{border-color:var(--purple);box-shadow:0 0 0 2px var(--lav2)}
-.pal-card img{width:100%;display:block;border-radius:6px;margin:6px 0 4px;background:#fff}.pal-sw{display:flex;gap:3px}.pal-sw span{flex:1;height:12px;border-radius:3px}
 .xp-item .row{gap:10px}.xp-body{display:flex;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap}.xp-fig{width:420px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
 .xp-tables{flex:1;min-width:320px}.xp-tbl h4{margin:6px 0 4px;font-size:13.5px}table.xp{font-size:12.5px}table.xp td,table.xp th{padding:4px 8px;white-space:nowrap}table.xp td.b{font-weight:600}table.xp td.sig{color:var(--bad);font-weight:700}table.xp td.used{color:var(--ok,#2E9E8F);font-weight:700;text-align:center}
+.pal-gallery{display:flex;gap:16px;margin-top:10px;align-items:flex-start;flex-wrap:wrap}
+.pal-list{flex:0 1 380px;max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px;background:var(--card)}
+.pal-head{font-weight:700;font-size:13px;margin:8px 6px 4px}
+.pal-row{display:flex;align-items:center;gap:14px;width:100%;border:2px solid transparent;border-radius:8px;background:none;padding:5px 8px;cursor:pointer;font:inherit;color:inherit;text-align:left}
+.pal-row:hover{background:var(--hover)}.pal-row.on{border-color:var(--purple)}
+.pal-sw{display:inline-flex;flex-shrink:0}.pal-sw span{width:26px;height:20px;border:1px solid rgba(0,0,0,.12)}
+.pal-row .pal-sw span{width:30px;height:22px}
+.pal-prev{flex:1 1 360px;display:flex;flex-direction:column;gap:6px}.pal-prev img{width:100%;max-width:620px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.xp-data{margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:6px 10px}.xp-data summary{cursor:pointer;font-weight:600;font-size:13px}
+.xp-groups{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}.xp-group{border:1px solid var(--line);border-radius:8px;max-height:340px;overflow:auto}
+.xp-group h5{margin:0;padding:6px 8px;background:var(--lav);font-size:12.5px;position:sticky;top:0;z-index:2}
+table.xd{font-size:12px}table.xd th{top:28px;padding:4px 8px}table.xd td{padding:2px 8px;text-align:right;font-variant-numeric:tabular-nums}table.xd td.rn{color:var(--muted);text-align:left}
+table.xd td[contenteditable]{cursor:text;outline:none}table.xd td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
+table.xd td.out{background:rgba(224,138,46,.22);font-weight:600}table.xd td.miss{background:rgba(192,57,43,.12)}table.xd td.chg{box-shadow:inset 3px 0 0 var(--purple)}
+.xp-legend{font-size:12px;color:var(--muted);margin-top:6px}
 .fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
 .fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
@@ -450,7 +462,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Figure placement (classify)</label><select id="optFigPlacement"><option value="after" selected>After each table</option><option value="end">All at the end (Figures section)</option><option value="endType">At the end, grouped by chart type</option></select></div>
         <div><label class="f">Caption style</label><select id="optCaptionStyle"><option value="colon" selected>Figure 1: …</option><option value="period">Figure 1. …</option><option value="fig">Fig. 1. …</option></select></div>
       </div>
-      <details class="pal-wrap" id="palWrap"><summary><b>Colour themes</b> — preview and choose</summary><div class="pal-gallery" id="palGallery"></div></details>
+      <details class="pal-wrap" id="palWrap"><summary><b>Colour themes</b> — all colours, with a preview</summary><div class="pal-gallery" id="palGallery"></div></details>
       <div id="customBox" style="display:none;margin-top:12px">
         <label class="f">Custom colours (group 1, 2, 3 …)</label>
         <div class="row"><span id="customColors" class="row" style="gap:6px"></span><button class="btn ghost small" id="customReset" type="button">Reset</button></div>
@@ -574,8 +586,10 @@ footer b{color:var(--purple)}
       <div class="row"><h2>10 · Results by variable</h2><span class="spacer"></span>
         <select id="xpVar" style="width:auto;max-width:360px"></select>
         <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
-        <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button></div>
-      <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4.</p>
+        <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button>
+        <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>
+        <button class="btn primary small" id="xpWord" type="button">⬇ Word</button></div>
+      <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>
       <div id="explore"></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="9">← Back</button><button class="btn primary" data-go="11">Run report →</button></div>

@@ -17,10 +17,40 @@ const Charts = (() => {
     forest: ['#1B4332', '#40916C', '#95D5B2', '#2D6A4F', '#74C69D', '#52B788'],
     earth: ['#264653', '#E76F51', '#2A9D8F', '#F4A261', '#E9C46A', '#8AB17D'],
     berry: ['#7B2CBF', '#C9184A', '#FF8FA3', '#5A189A', '#FF4D6D', '#9D4EDD'],
-    blues: ['#08306B', '#2171B5', '#6BAED6', '#08519C', '#4292C6', '#9ECAE1']
+    blues: ['#08306B', '#2171B5', '#6BAED6', '#08519C', '#4292C6', '#9ECAE1'],
+    // Office-style colour sets (the six accent colours)
+    office: ['#156082', '#E97132', '#196B24', '#0F9ED5', '#A02B93', '#4EA72E'],
+    office2013: ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47'],
+    office2007: ['#4F81BD', '#C0504D', '#9BBB59', '#8064A2', '#4BACC6', '#F79646'],
+    blueWarm: ['#4A66AC', '#629DD1', '#297FD5', '#7F8FA9', '#5AA2AE', '#9D90A0'],
+    blue: ['#0F6FC6', '#009DD9', '#0BD0D9', '#10CF9B', '#7CCA62', '#A5C249'],
+    blue2: ['#1CADE4', '#2683C6', '#27CED7', '#42BA97', '#3E8853', '#62A39F'],
+    blueGreen: ['#3494BA', '#58B6C0', '#75BDA7', '#7A8C8E', '#84ACB6', '#2683C6'],
+    green: ['#549E39', '#8AB833', '#C0CF3A', '#029676', '#4AB5C4', '#0989B1'],
+    greenYellow: ['#99CB38', '#63A537', '#37A76F', '#44C1A3', '#4EB3CF', '#51C3F9'],
+    yellow: ['#FFCA08', '#F8931D', '#CE8D3E', '#EC7016', '#E64823', '#9C6A6A'],
+    yellowOrange: ['#F0A22E', '#A5644E', '#B58B80', '#C3986D', '#A19574', '#C17529'],
+    orange: ['#E48312', '#BD582C', '#865640', '#9B8357', '#C2BC80', '#94A088'],
+    orangeRed: ['#D34817', '#9B2D1F', '#A28E6A', '#956251', '#918485', '#855D5D'],
+    redOrange: ['#E84C22', '#FFBD47', '#B64926', '#FF8427', '#CC9900', '#B22600'],
+    red: ['#A5300F', '#D55816', '#E19825', '#B19C7D', '#7F5F52', '#B27D49'],
+    redViolet: ['#E32D91', '#C830CC', '#4EA6DC', '#4775E7', '#8971E1', '#D54773'],
+    violet: ['#AD84C6', '#8784C7', '#5D739A', '#6997AF', '#84ACB6', '#6F8183'],
+    violet2: ['#92278F', '#9B57D3', '#755DD9', '#665EB8', '#45A5ED', '#5982DB'],
+    median: ['#94B6D2', '#DD8047', '#A5AB81', '#D8B25C', '#7BA79D', '#968C8C'],
+    paper: ['#A5B592', '#F3A447', '#E7BC29', '#D092A7', '#9C85C0', '#809EC2'],
+    marquee: ['#418AB3', '#A6B727', '#F69200', '#838383', '#FEC306', '#DF5327'],
+    slipstream: ['#4E67C8', '#5ECCF3', '#A7EA52', '#5DCEAF', '#FF8021', '#F14124'],
+    aspect: ['#F07F09', '#9F2936', '#1B587C', '#4E8542', '#604878', '#C19859']
   };
   const PALETTE_NAMES = { brand: 'Prof MSE (purple / navy)', classic: 'Classic Office', gray: 'Grayscale (journal print)', nejm: 'NEJM', lancet: 'Lancet', nature: 'Nature',
-    jama: 'JAMA', okabe: 'Colour-blind safe (Okabe-Ito)', viridis: 'Viridis', pastel: 'Pastel', ocean: 'Ocean blues', sunset: 'Sunset', forest: 'Forest greens', earth: 'Earth tones', berry: 'Berry', blues: 'Monochrome blue' };
+    jama: 'JAMA', okabe: 'Colour-blind safe (Okabe-Ito)', viridis: 'Viridis', pastel: 'Pastel', ocean: 'Ocean blues', sunset: 'Sunset', forest: 'Forest greens', earth: 'Earth tones', berry: 'Berry', blues: 'Monochrome blue',
+    office: 'Office', office2013: 'Office 2013 - 2022', office2007: 'Office 2007 - 2010', blueWarm: 'Blue Warm', blue: 'Blue', blue2: 'Blue II', blueGreen: 'Blue Green',
+    green: 'Green', greenYellow: 'Green Yellow', yellow: 'Yellow', yellowOrange: 'Yellow Orange', orange: 'Orange', orangeRed: 'Orange Red', redOrange: 'Red Orange', red: 'Red',
+    redViolet: 'Red Violet', violet: 'Violet', violet2: 'Violet II', median: 'Median', paper: 'Paper', marquee: 'Marquee', slipstream: 'Slipstream', aspect: 'Aspect' };
+  // groups of the theme menu
+  const PALETTE_GROUPS = [['Scientific', ['brand', 'gray', 'nejm', 'lancet', 'nature', 'jama', 'okabe', 'viridis', 'pastel', 'ocean', 'sunset', 'forest', 'earth', 'berry', 'blues', 'classic']],
+    ['Office-style colours', ['office', 'office2013', 'office2007', 'blueWarm', 'blue', 'blue2', 'blueGreen', 'green', 'greenYellow', 'yellow', 'yellowOrange', 'orange', 'orangeRed', 'redOrange', 'red', 'redViolet', 'violet', 'violet2', 'median', 'paper', 'marquee', 'slipstream', 'aspect']]];
   const FONTS = { sans: '"Segoe UI", Arial, sans-serif', arial: 'Arial, Helvetica, sans-serif', times: '"Times New Roman", Times, serif', calibri: 'Calibri, Carlito, Arial, sans-serif' };
   let FONT = FONTS.sans; // chart text font, set per chart from the style
   // figure shapes (logical canvas size before the resolution multiplier)
@@ -890,5 +920,5 @@ const Charts = (() => {
     return cv;
   }
 
-  return { draw, consort, PALETTES, PALETTE_NAMES, DEFAULT_STYLE, FLOW_LABELS };
+  return { draw, consort, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
 })();

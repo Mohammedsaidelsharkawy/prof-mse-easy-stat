@@ -1054,28 +1054,35 @@
     renderAdvanced();
   });
 
-  // colour themes: the menu and a gallery with a sample chart in each theme
-  $('#optPal').innerHTML = Object.entries(Charts.PALETTE_NAMES).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('') + '<option value="custom">Custom colours…</option>';
-  const SAMPLE = { type: 'bar', categories: ['Baseline', 'Week 4', 'Week 12'], yLabel: 'Score', series: ['A group', 'B group', 'C group'].map((g, i) => ({ name: g, values: [62 - i * 2, 50 - i * 6, 44 - i * 9], err: [7, 8, 8] })) };
-  let palCache = {}, palKey = '';
+  // colour themes: a list of swatch strips (as in Office's colour menu) with a sample chart of the theme under the pointer
+  $('#optPal').innerHTML = Charts.PALETTE_GROUPS.map(([g, keys]) => `<optgroup label="${esc(g)}">${keys.map(k => `<option value="${k}">${esc(Charts.PALETTE_NAMES[k])}</option>`).join('')}</optgroup>`).join('')
+    + '<option value="custom">Custom colours…</option>';
+  const SAMPLE = { type: 'bar', categories: ['Baseline', 'Week 4', 'Week 12'], yLabel: 'Score', series: ['A group', 'B group', 'C group', 'D group'].map((g, i) => ({ name: g, values: [62 - i * 2, 50 - i * 5, 44 - i * 7], err: [7, 8, 8] })) };
+  const swatches = cols => `<span class="pal-sw">${cols.map(c => `<span style="background:${c}"></span>`).join('')}</span>`;
   function renderPalGallery() {
     if (!state.cfg || !$('#palWrap').open) return;
-    const o = state.cfg.options, st = { ...chartStyle(o), res: 1, legend: 'bottom' }, key = JSON.stringify([st, o.customColors]);
-    if (key !== palKey) { palCache = {}; palKey = key; } // the samples follow the chart appearance options
-    const cur = $('#optPal').value;
-    const card = (k, name, cols) => {
-      if (!palCache[k]) palCache[k] = Charts.draw(SAMPLE, k === 'custom' ? cols : k, st).toDataURL('image/png');
-      return `<button type="button" class="pal-card${cur === k ? ' on' : ''}" data-pal="${k}"><b>${esc(name)}</b><img src="${palCache[k]}" alt=""><div class="pal-sw">${cols.map(c => `<span style="background:${c}"></span>`).join('')}</div></button>`;
-    };
-    $('#palGallery').innerHTML = Object.entries(Charts.PALETTE_NAMES).map(([k, n]) => card(k, n, Charts.PALETTES[k])).join('') + card('custom', 'Custom colours', o.customColors);
+    const o = state.cfg.options, cur = $('#optPal').value;
+    const row = (k, name, cols) => `<button type="button" class="pal-row${cur === k ? ' on' : ''}" data-pal="${k}">${swatches(cols)}<span>${esc(name)}</span></button>`;
+    $('#palGallery').innerHTML = `<div class="pal-list">${Charts.PALETTE_GROUPS.map(([g, keys]) => `<div class="pal-head">${esc(g)}</div>${keys.map(k => row(k, Charts.PALETTE_NAMES[k], Charts.PALETTES[k])).join('')}`).join('')}
+      <div class="pal-head">Your own</div>${row('custom', 'Custom colours', o.customColors)}</div>
+      <div class="pal-prev"><b id="palPrevName"></b><img id="palPrevImg" alt=""><span class="legend-note">Point at a theme to preview it; click to use it.</span></div>`;
+    palPreview(cur);
+  }
+  // the sample chart in a theme, drawn with the current chart appearance options
+  function palPreview(k) {
+    const o = state.cfg.options, img = $('#palPrevImg'); if (!img) return;
+    img.src = Charts.draw(SAMPLE, k === 'custom' ? o.customColors : k, { ...chartStyle(o), res: 1 }).toDataURL('image/png');
+    $('#palPrevName').textContent = k === 'custom' ? 'Custom colours' : Charts.PALETTE_NAMES[k] || k;
   }
   $('#palWrap').addEventListener('toggle', () => { readUiIntoCfg(); renderPalGallery(); });
+  $('#palGallery').addEventListener('mouseover', e => { const b = e.target.closest('[data-pal]'); if (b) palPreview(b.dataset.pal); });
+  $('#palGallery').addEventListener('mouseleave', () => palPreview($('#optPal').value));
   $('#palGallery').addEventListener('click', e => {
     const b = e.target.closest('[data-pal]'); if (!b) return;
     const sel = $('#optPal'); sel.value = b.dataset.pal; sel.dispatchEvent(new Event('change', { bubbles: true }));
-    document.querySelectorAll('.pal-card').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('.pal-row').forEach(x => x.classList.toggle('on', x === b));
   });
-  $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; document.querySelectorAll('.pal-card').forEach(x => x.classList.toggle('on', x.dataset.pal === e.target.value)); });
+  $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; document.querySelectorAll('.pal-row').forEach(x => x.classList.toggle('on', x.dataset.pal === e.target.value)); });
   $('#customReset').onclick = () => { readUiIntoCfg(); state.cfg.options.customColors = defaultOptions().customColors; renderTimepoints(); };
 
   /* ---------- step 4: flowchart (CONSORT, STROBE, STARD or simple) ---------- */
@@ -1285,6 +1292,25 @@
     if (x.items.some(it => it.id === cur)) sel.value = cur;
     drawExplore();
   }
+  // every patient's value in each group, editable; outliers (beyond 1.5 × IQR in the group) and missing values marked
+  state.xpOpen = new Set(); state.xpChanged = new Set();
+  function dataHtml(it) {
+    const cfg = state.cfg, idc = cfg.idCols[0], rows = state.data.rows, num = it.kind !== 'categorical';
+    return `<div class="xp-groups">${activeGroups().map(g => {
+      const idx = rows.map((r, i) => i).filter(i => Analysis.groupOf(cfg, rows[i]) === g);
+      const fence = it.cols.map(c => {
+        const v = idx.map(i => Analysis.toNum(rows[i][c.col])).filter(isFinite); if (!num || v.length < 4) return null;
+        const q1 = Stats.quantile(v, 0.25), q3 = Stats.quantile(v, 0.75), d = 1.5 * (q3 - q1); return [q1 - d, q3 + d];
+      });
+      const cls = (val, ci, i, col) => {
+        const miss = val === null || val === undefined || String(val).trim() === '', n = Analysis.toNum(val), f = fence[ci];
+        return [miss ? 'miss' : f && isFinite(n) && (n < f[0] || n > f[1]) ? 'out' : '', state.xpChanged.has(i + '|' + col) ? 'chg' : ''].filter(Boolean).join(' ');
+      };
+      return `<div class="xp-group"><h5>${esc(cfg.groupLabels[g] || g)} (n=${idx.length})</h5><table class="t xd"><thead><tr><th>#</th>${idc ? `<th>${esc(idc)}</th>` : ''}${it.cols.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${
+        idx.map(i => `<tr><td class="rn">${i + 1}</td>${idc ? `<td class="rn">${esc(rows[i][idc] ?? '')}</td>` : ''}${it.cols.map((c, ci) =>
+          `<td class="${cls(rows[i][c.col], ci, i, c.col)}" contenteditable="true" data-xr="${i}" data-xc="${esc(c.col)}">${esc(rows[i][c.col] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    }).join('')}</div><div class="xp-legend">Orange: outlier (beyond 1.5 × IQR of its group) · red: missing · purple edge: changed here. Click a value to change it; Enter to confirm, Esc to cancel.</div>`;
+  }
   function drawExplore() {
     const x = state.explore; if (!x) return;
     const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items, o = state.cfg.options, figs = $('#xpFigs').checked;
@@ -1292,9 +1318,58 @@
       let img = '';
       if (figs && it.spec) { try { img = `<img class="xp-fig" src="${Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png')}" alt="">`; } catch (e) { /* no figure */ } }
       return `<div class="report-sec xp-item"><div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>
-        <div class="xp-body">${img}<div class="xp-tables">${it.tables.map(tblHtml).join('')}</div></div></div>`;
+        <div class="xp-body">${img}<div class="xp-tables">${it.tables.map(tblHtml).join('')}</div></div>
+        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
     }).join('') : '<p class="legend-note">No variables are ticked in step 2.</p>';
+    $('#xpUndo').disabled = !state.undo || !state.undo.length;
   }
+  // the data panel is filled when opened, and stays open when the results are redrawn
+  $('#explore').addEventListener('toggle', e => {
+    const d = e.target.closest && e.target.closest('[data-xpdata]'); if (!d || d !== e.target) return;
+    const id = d.dataset.xpdata;
+    if (d.open) { state.xpOpen.add(id); if (!d.querySelector('.xp-groups')) d.insertAdjacentHTML('beforeend', dataHtml(state.explore.items.find(it => it.id === id))); }
+    else state.xpOpen.delete(id);
+  }, true);
+  // a changed value goes into the sheet (undoable) and every result is recalculated
+  $('#explore').addEventListener('focusout', e => {
+    const td = e.target.closest('[data-xr]'); if (!td) return;
+    const i = +td.dataset.xr, col = td.dataset.xc, old = state.data.rows[i][col], v = parseCell(td.textContent);
+    if ((old ?? null) === v || String(old ?? '') === String(v ?? '')) return;
+    state.undo.push(JSON.stringify({ data: state.data, cfg: state.cfg }));
+    if (state.undo.length > 30) state.undo.shift();
+    state.data.rows[i][col] = v; state.xpChanged.add(i + '|' + col);
+    if (col === state.cfg.groupCol && !state.cfg.noGroups) refreshGroups();
+    const y = window.scrollY; renderExplore(); renderGrid(); window.scrollTo(0, y);
+    toast(`Value changed: ${col}, row ${i + 1} — results updated`);
+  });
+  $('#explore').addEventListener('keydown', e => {
+    const td = e.target.closest('[data-xr]'); if (!td) return;
+    if (e.key === 'Enter') { e.preventDefault(); td.blur(); }
+    if (e.key === 'Escape') { td.textContent = state.data.rows[+td.dataset.xr][td.dataset.xc] ?? ''; td.blur(); }
+  });
+  $('#xpUndo').onclick = () => {
+    const snap = state.undo.pop(); if (!snap) return;
+    const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg;
+    const y = window.scrollY; renderExplore(); renderGrid(); window.scrollTo(0, y); toast('Undone');
+  };
+  $('#xpWord').onclick = async () => {
+    const x = state.explore; if (!x) return;
+    busy(true);
+    try {
+      const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items, o = state.cfg.options, figs = $('#xpFigs').checked;
+      const items = list.map(it => {
+        const out = { label: it.label, summary: it.summary, tables: it.tables };
+        if (figs && it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), chartStyle(o)); Object.assign(out, { url: c.toDataURL('image/png'), w: c.width, h: c.height }); } catch (e) { /* no figure */ } }
+        return out;
+      });
+      const blob = await Report.buildResults({ items }, { title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - Results by variable.docx';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast('Results by variable downloaded');
+    } catch (err) { console.error(err); toast('Word export failed: ' + err.message); }
+    finally { busy(false); }
+  };
   $('#xpVar').onchange = drawExplore;
   $('#xpFigs').onchange = drawExplore;
   $('#xpCopy').onclick = async () => {

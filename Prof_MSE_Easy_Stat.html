@@ -99,11 +99,23 @@ table.t td select{min-width:120px}
 .off{opacity:.38}
 .preset-bar{gap:10px;margin:0 0 14px;padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;align-items:center}
 .pal-wrap{margin:12px 0 0;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.pal-wrap summary{cursor:pointer}
-.pal-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-top:10px}
-.pal-card{border:2px solid var(--line);border-radius:10px;padding:8px;background:var(--card);cursor:pointer;text-align:left;font:inherit;color:inherit}.pal-card:hover{border-color:var(--lav2)}.pal-card.on{border-color:var(--purple);box-shadow:0 0 0 2px var(--lav2)}
-.pal-card img{width:100%;display:block;border-radius:6px;margin:6px 0 4px;background:#fff}.pal-sw{display:flex;gap:3px}.pal-sw span{flex:1;height:12px;border-radius:3px}
 .xp-item .row{gap:10px}.xp-body{display:flex;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap}.xp-fig{width:420px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
 .xp-tables{flex:1;min-width:320px}.xp-tbl h4{margin:6px 0 4px;font-size:13.5px}table.xp{font-size:12.5px}table.xp td,table.xp th{padding:4px 8px;white-space:nowrap}table.xp td.b{font-weight:600}table.xp td.sig{color:var(--bad);font-weight:700}table.xp td.used{color:var(--ok,#2E9E8F);font-weight:700;text-align:center}
+.pal-gallery{display:flex;gap:16px;margin-top:10px;align-items:flex-start;flex-wrap:wrap}
+.pal-list{flex:0 1 380px;max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px;background:var(--card)}
+.pal-head{font-weight:700;font-size:13px;margin:8px 6px 4px}
+.pal-row{display:flex;align-items:center;gap:14px;width:100%;border:2px solid transparent;border-radius:8px;background:none;padding:5px 8px;cursor:pointer;font:inherit;color:inherit;text-align:left}
+.pal-row:hover{background:var(--hover)}.pal-row.on{border-color:var(--purple)}
+.pal-sw{display:inline-flex;flex-shrink:0}.pal-sw span{width:26px;height:20px;border:1px solid rgba(0,0,0,.12)}
+.pal-row .pal-sw span{width:30px;height:22px}
+.pal-prev{flex:1 1 360px;display:flex;flex-direction:column;gap:6px}.pal-prev img{width:100%;max-width:620px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.xp-data{margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:6px 10px}.xp-data summary{cursor:pointer;font-weight:600;font-size:13px}
+.xp-groups{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}.xp-group{border:1px solid var(--line);border-radius:8px;max-height:340px;overflow:auto}
+.xp-group h5{margin:0;padding:6px 8px;background:var(--lav);font-size:12.5px;position:sticky;top:0;z-index:2}
+table.xd{font-size:12px}table.xd th{top:28px;padding:4px 8px}table.xd td{padding:2px 8px;text-align:right;font-variant-numeric:tabular-nums}table.xd td.rn{color:var(--muted);text-align:left}
+table.xd td[contenteditable]{cursor:text;outline:none}table.xd td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
+table.xd td.out{background:rgba(224,138,46,.22);font-weight:600}table.xd td.miss{background:rgba(192,57,43,.12)}table.xd td.chg{box-shadow:inset 3px 0 0 var(--purple)}
+.xp-legend{font-size:12px;color:var(--muted);margin-top:6px}
 .fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
 .fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
@@ -450,7 +462,7 @@ footer b{color:var(--purple)}
         <div><label class="f">Figure placement (classify)</label><select id="optFigPlacement"><option value="after" selected>After each table</option><option value="end">All at the end (Figures section)</option><option value="endType">At the end, grouped by chart type</option></select></div>
         <div><label class="f">Caption style</label><select id="optCaptionStyle"><option value="colon" selected>Figure 1: …</option><option value="period">Figure 1. …</option><option value="fig">Fig. 1. …</option></select></div>
       </div>
-      <details class="pal-wrap" id="palWrap"><summary><b>Colour themes</b> — preview and choose</summary><div class="pal-gallery" id="palGallery"></div></details>
+      <details class="pal-wrap" id="palWrap"><summary><b>Colour themes</b> — all colours, with a preview</summary><div class="pal-gallery" id="palGallery"></div></details>
       <div id="customBox" style="display:none;margin-top:12px">
         <label class="f">Custom colours (group 1, 2, 3 …)</label>
         <div class="row"><span id="customColors" class="row" style="gap:6px"></span><button class="btn ghost small" id="customReset" type="button">Reset</button></div>
@@ -574,8 +586,10 @@ footer b{color:var(--purple)}
       <div class="row"><h2>10 · Results by variable</h2><span class="spacer"></span>
         <select id="xpVar" style="width:auto;max-width:360px"></select>
         <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
-        <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button></div>
-      <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4.</p>
+        <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button>
+        <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>
+        <button class="btn primary small" id="xpWord" type="button">⬇ Word</button></div>
+      <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>
       <div id="explore"></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="9">← Back</button><button class="btn primary" data-go="11">Run report →</button></div>
@@ -22511,7 +22525,8 @@ const Analysis = (() => {
     };
     const items = [];
     for (const v of effectiveVariables(cfg)) {
-      const it = { id: v.id, label: v.label, kind: v.kind === 'repeated' ? 'repeated' : v.type, tables: [], spec: null, summary: '' };
+      const it = { id: v.id, label: v.label, kind: v.kind === 'repeated' ? 'repeated' : v.type, tables: [], spec: null, summary: '',
+        cols: v.cols.map(c => ({ col: c.col, label: v.kind === 'repeated' ? (c.label || cfg.tpLabels[c.tp] || c.tp) : v.label })) };
       if (v.kind !== 'repeated' && v.type === 'numeric') {
         const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toNum(r[col])).filter(isFinite)), miss = byGroup.map(rs => rs.filter(r => !isFinite(toNum(r[col]))).length);
         it.tables.push({ title: 'Descriptive statistics', head: descHead, rows: [...gv.map((x, g) => descRow(gl[g], x, miss[g])), ...(k > 1 ? [descRow('All patients', gv.flat(), S.sum(miss))] : [])] });
@@ -23550,10 +23565,40 @@ const Charts = (() => {
     forest: ['#1B4332', '#40916C', '#95D5B2', '#2D6A4F', '#74C69D', '#52B788'],
     earth: ['#264653', '#E76F51', '#2A9D8F', '#F4A261', '#E9C46A', '#8AB17D'],
     berry: ['#7B2CBF', '#C9184A', '#FF8FA3', '#5A189A', '#FF4D6D', '#9D4EDD'],
-    blues: ['#08306B', '#2171B5', '#6BAED6', '#08519C', '#4292C6', '#9ECAE1']
+    blues: ['#08306B', '#2171B5', '#6BAED6', '#08519C', '#4292C6', '#9ECAE1'],
+    // Office-style colour sets (the six accent colours)
+    office: ['#156082', '#E97132', '#196B24', '#0F9ED5', '#A02B93', '#4EA72E'],
+    office2013: ['#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47'],
+    office2007: ['#4F81BD', '#C0504D', '#9BBB59', '#8064A2', '#4BACC6', '#F79646'],
+    blueWarm: ['#4A66AC', '#629DD1', '#297FD5', '#7F8FA9', '#5AA2AE', '#9D90A0'],
+    blue: ['#0F6FC6', '#009DD9', '#0BD0D9', '#10CF9B', '#7CCA62', '#A5C249'],
+    blue2: ['#1CADE4', '#2683C6', '#27CED7', '#42BA97', '#3E8853', '#62A39F'],
+    blueGreen: ['#3494BA', '#58B6C0', '#75BDA7', '#7A8C8E', '#84ACB6', '#2683C6'],
+    green: ['#549E39', '#8AB833', '#C0CF3A', '#029676', '#4AB5C4', '#0989B1'],
+    greenYellow: ['#99CB38', '#63A537', '#37A76F', '#44C1A3', '#4EB3CF', '#51C3F9'],
+    yellow: ['#FFCA08', '#F8931D', '#CE8D3E', '#EC7016', '#E64823', '#9C6A6A'],
+    yellowOrange: ['#F0A22E', '#A5644E', '#B58B80', '#C3986D', '#A19574', '#C17529'],
+    orange: ['#E48312', '#BD582C', '#865640', '#9B8357', '#C2BC80', '#94A088'],
+    orangeRed: ['#D34817', '#9B2D1F', '#A28E6A', '#956251', '#918485', '#855D5D'],
+    redOrange: ['#E84C22', '#FFBD47', '#B64926', '#FF8427', '#CC9900', '#B22600'],
+    red: ['#A5300F', '#D55816', '#E19825', '#B19C7D', '#7F5F52', '#B27D49'],
+    redViolet: ['#E32D91', '#C830CC', '#4EA6DC', '#4775E7', '#8971E1', '#D54773'],
+    violet: ['#AD84C6', '#8784C7', '#5D739A', '#6997AF', '#84ACB6', '#6F8183'],
+    violet2: ['#92278F', '#9B57D3', '#755DD9', '#665EB8', '#45A5ED', '#5982DB'],
+    median: ['#94B6D2', '#DD8047', '#A5AB81', '#D8B25C', '#7BA79D', '#968C8C'],
+    paper: ['#A5B592', '#F3A447', '#E7BC29', '#D092A7', '#9C85C0', '#809EC2'],
+    marquee: ['#418AB3', '#A6B727', '#F69200', '#838383', '#FEC306', '#DF5327'],
+    slipstream: ['#4E67C8', '#5ECCF3', '#A7EA52', '#5DCEAF', '#FF8021', '#F14124'],
+    aspect: ['#F07F09', '#9F2936', '#1B587C', '#4E8542', '#604878', '#C19859']
   };
   const PALETTE_NAMES = { brand: 'Prof MSE (purple / navy)', classic: 'Classic Office', gray: 'Grayscale (journal print)', nejm: 'NEJM', lancet: 'Lancet', nature: 'Nature',
-    jama: 'JAMA', okabe: 'Colour-blind safe (Okabe-Ito)', viridis: 'Viridis', pastel: 'Pastel', ocean: 'Ocean blues', sunset: 'Sunset', forest: 'Forest greens', earth: 'Earth tones', berry: 'Berry', blues: 'Monochrome blue' };
+    jama: 'JAMA', okabe: 'Colour-blind safe (Okabe-Ito)', viridis: 'Viridis', pastel: 'Pastel', ocean: 'Ocean blues', sunset: 'Sunset', forest: 'Forest greens', earth: 'Earth tones', berry: 'Berry', blues: 'Monochrome blue',
+    office: 'Office', office2013: 'Office 2013 - 2022', office2007: 'Office 2007 - 2010', blueWarm: 'Blue Warm', blue: 'Blue', blue2: 'Blue II', blueGreen: 'Blue Green',
+    green: 'Green', greenYellow: 'Green Yellow', yellow: 'Yellow', yellowOrange: 'Yellow Orange', orange: 'Orange', orangeRed: 'Orange Red', redOrange: 'Red Orange', red: 'Red',
+    redViolet: 'Red Violet', violet: 'Violet', violet2: 'Violet II', median: 'Median', paper: 'Paper', marquee: 'Marquee', slipstream: 'Slipstream', aspect: 'Aspect' };
+  // groups of the theme menu
+  const PALETTE_GROUPS = [['Scientific', ['brand', 'gray', 'nejm', 'lancet', 'nature', 'jama', 'okabe', 'viridis', 'pastel', 'ocean', 'sunset', 'forest', 'earth', 'berry', 'blues', 'classic']],
+    ['Office-style colours', ['office', 'office2013', 'office2007', 'blueWarm', 'blue', 'blue2', 'blueGreen', 'green', 'greenYellow', 'yellow', 'yellowOrange', 'orange', 'orangeRed', 'redOrange', 'red', 'redViolet', 'violet', 'violet2', 'median', 'paper', 'marquee', 'slipstream', 'aspect']]];
   const FONTS = { sans: '"Segoe UI", Arial, sans-serif', arial: 'Arial, Helvetica, sans-serif', times: '"Times New Roman", Times, serif', calibri: 'Calibri, Carlito, Arial, sans-serif' };
   let FONT = FONTS.sans; // chart text font, set per chart from the style
   // figure shapes (logical canvas size before the resolution multiplier)
@@ -24423,7 +24468,7 @@ const Charts = (() => {
     return cv;
   }
 
-  return { draw, consort, PALETTES, PALETTE_NAMES, DEFAULT_STYLE, FLOW_LABELS };
+  return { draw, consort, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
 })();
 
 /* Prof MSE Easy Stat — Word (.docx) export using docx.js */
@@ -24699,7 +24744,36 @@ const Report = (() => {
     return Packer.toBlob(doc);
   }
 
-  return { build, figLabel, arrangeFigures };
+  // results by variable: every table of each variable, with its figure, in a landscape document
+  async function buildResults(model, opts) {
+    const { Document, Packer, Paragraph, TextRun, Footer, AlignmentType, PageNumber, PageOrientation } = D();
+    BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false;
+    PAGE_W = LANDSCAPE_W;
+    const children = [para(opts.title || 'Results by variable', { bold: true, size: 32, align: AlignmentType.CENTER, after: 120 })];
+    if (opts.subtitle) children.push(para(opts.subtitle, { align: AlignmentType.CENTER, size: 20, after: 240 }));
+    model.items.forEach((it, i) => {
+      children.push(new Paragraph({ heading: D().HeadingLevel.HEADING_1, pageBreakBefore: i > 0, spacing: { after: 120 },
+        children: [new TextRun({ text: `${i + 1}. ${it.label}`, bold: true, size: 28, font: BODY_FONT })] }));
+      if (it.summary) children.push(para(it.summary, { size: 20, line: 260, after: 120, italic: true }));
+      if (it.url) children.push(image(it.url, it.w, it.h, 430));
+      it.tables.forEach(t => {
+        children.push(para(t.title, { bold: true, size: 22, line: 260, after: 60, before: 160, keepNext: true, align: AlignmentType.LEFT }));
+        children.push(table(t.head.map(h => ({ t: h })), t.rows.map(r => r.map(c => ({ t: [c] }))), false, 'grid'));
+      });
+    });
+    const doc = new Document({
+      creator: 'Prof MSE Easy Stat', title: opts.title || 'Results by variable',
+      styles: { default: { document: { run: { font: BODY_FONT, size: 20 } } } },
+      sections: [{
+        properties: { page: { size: { width: 11906, height: 16838, orientation: PageOrientation.LANDSCAPE }, margin: { top: 1134, bottom: 1134, left: 1440, right: 1440 } } },
+        footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ children: [PageNumber.CURRENT], size: 18, font: BODY_FONT })] })] }) },
+        children
+      }]
+    });
+    return Packer.toBlob(doc);
+  }
+
+  return { build, buildResults, figLabel, arrangeFigures };
 })();
 
 /* Prof MSE Easy Stat — built-in example datasets (simulated, reproducible) */
@@ -26021,28 +26095,35 @@ if (typeof module !== 'undefined') module.exports = Examples;
     renderAdvanced();
   });
 
-  // colour themes: the menu and a gallery with a sample chart in each theme
-  $('#optPal').innerHTML = Object.entries(Charts.PALETTE_NAMES).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('') + '<option value="custom">Custom colours…</option>';
-  const SAMPLE = { type: 'bar', categories: ['Baseline', 'Week 4', 'Week 12'], yLabel: 'Score', series: ['A group', 'B group', 'C group'].map((g, i) => ({ name: g, values: [62 - i * 2, 50 - i * 6, 44 - i * 9], err: [7, 8, 8] })) };
-  let palCache = {}, palKey = '';
+  // colour themes: a list of swatch strips (as in Office's colour menu) with a sample chart of the theme under the pointer
+  $('#optPal').innerHTML = Charts.PALETTE_GROUPS.map(([g, keys]) => `<optgroup label="${esc(g)}">${keys.map(k => `<option value="${k}">${esc(Charts.PALETTE_NAMES[k])}</option>`).join('')}</optgroup>`).join('')
+    + '<option value="custom">Custom colours…</option>';
+  const SAMPLE = { type: 'bar', categories: ['Baseline', 'Week 4', 'Week 12'], yLabel: 'Score', series: ['A group', 'B group', 'C group', 'D group'].map((g, i) => ({ name: g, values: [62 - i * 2, 50 - i * 5, 44 - i * 7], err: [7, 8, 8] })) };
+  const swatches = cols => `<span class="pal-sw">${cols.map(c => `<span style="background:${c}"></span>`).join('')}</span>`;
   function renderPalGallery() {
     if (!state.cfg || !$('#palWrap').open) return;
-    const o = state.cfg.options, st = { ...chartStyle(o), res: 1, legend: 'bottom' }, key = JSON.stringify([st, o.customColors]);
-    if (key !== palKey) { palCache = {}; palKey = key; } // the samples follow the chart appearance options
-    const cur = $('#optPal').value;
-    const card = (k, name, cols) => {
-      if (!palCache[k]) palCache[k] = Charts.draw(SAMPLE, k === 'custom' ? cols : k, st).toDataURL('image/png');
-      return `<button type="button" class="pal-card${cur === k ? ' on' : ''}" data-pal="${k}"><b>${esc(name)}</b><img src="${palCache[k]}" alt=""><div class="pal-sw">${cols.map(c => `<span style="background:${c}"></span>`).join('')}</div></button>`;
-    };
-    $('#palGallery').innerHTML = Object.entries(Charts.PALETTE_NAMES).map(([k, n]) => card(k, n, Charts.PALETTES[k])).join('') + card('custom', 'Custom colours', o.customColors);
+    const o = state.cfg.options, cur = $('#optPal').value;
+    const row = (k, name, cols) => `<button type="button" class="pal-row${cur === k ? ' on' : ''}" data-pal="${k}">${swatches(cols)}<span>${esc(name)}</span></button>`;
+    $('#palGallery').innerHTML = `<div class="pal-list">${Charts.PALETTE_GROUPS.map(([g, keys]) => `<div class="pal-head">${esc(g)}</div>${keys.map(k => row(k, Charts.PALETTE_NAMES[k], Charts.PALETTES[k])).join('')}`).join('')}
+      <div class="pal-head">Your own</div>${row('custom', 'Custom colours', o.customColors)}</div>
+      <div class="pal-prev"><b id="palPrevName"></b><img id="palPrevImg" alt=""><span class="legend-note">Point at a theme to preview it; click to use it.</span></div>`;
+    palPreview(cur);
+  }
+  // the sample chart in a theme, drawn with the current chart appearance options
+  function palPreview(k) {
+    const o = state.cfg.options, img = $('#palPrevImg'); if (!img) return;
+    img.src = Charts.draw(SAMPLE, k === 'custom' ? o.customColors : k, { ...chartStyle(o), res: 1 }).toDataURL('image/png');
+    $('#palPrevName').textContent = k === 'custom' ? 'Custom colours' : Charts.PALETTE_NAMES[k] || k;
   }
   $('#palWrap').addEventListener('toggle', () => { readUiIntoCfg(); renderPalGallery(); });
+  $('#palGallery').addEventListener('mouseover', e => { const b = e.target.closest('[data-pal]'); if (b) palPreview(b.dataset.pal); });
+  $('#palGallery').addEventListener('mouseleave', () => palPreview($('#optPal').value));
   $('#palGallery').addEventListener('click', e => {
     const b = e.target.closest('[data-pal]'); if (!b) return;
     const sel = $('#optPal'); sel.value = b.dataset.pal; sel.dispatchEvent(new Event('change', { bubbles: true }));
-    document.querySelectorAll('.pal-card').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('.pal-row').forEach(x => x.classList.toggle('on', x === b));
   });
-  $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; document.querySelectorAll('.pal-card').forEach(x => x.classList.toggle('on', x.dataset.pal === e.target.value)); });
+  $('#optPal').addEventListener('change', e => { $('#customBox').style.display = e.target.value === 'custom' ? '' : 'none'; document.querySelectorAll('.pal-row').forEach(x => x.classList.toggle('on', x.dataset.pal === e.target.value)); });
   $('#customReset').onclick = () => { readUiIntoCfg(); state.cfg.options.customColors = defaultOptions().customColors; renderTimepoints(); };
 
   /* ---------- step 4: flowchart (CONSORT, STROBE, STARD or simple) ---------- */
@@ -26252,6 +26333,25 @@ if (typeof module !== 'undefined') module.exports = Examples;
     if (x.items.some(it => it.id === cur)) sel.value = cur;
     drawExplore();
   }
+  // every patient's value in each group, editable; outliers (beyond 1.5 × IQR in the group) and missing values marked
+  state.xpOpen = new Set(); state.xpChanged = new Set();
+  function dataHtml(it) {
+    const cfg = state.cfg, idc = cfg.idCols[0], rows = state.data.rows, num = it.kind !== 'categorical';
+    return `<div class="xp-groups">${activeGroups().map(g => {
+      const idx = rows.map((r, i) => i).filter(i => Analysis.groupOf(cfg, rows[i]) === g);
+      const fence = it.cols.map(c => {
+        const v = idx.map(i => Analysis.toNum(rows[i][c.col])).filter(isFinite); if (!num || v.length < 4) return null;
+        const q1 = Stats.quantile(v, 0.25), q3 = Stats.quantile(v, 0.75), d = 1.5 * (q3 - q1); return [q1 - d, q3 + d];
+      });
+      const cls = (val, ci, i, col) => {
+        const miss = val === null || val === undefined || String(val).trim() === '', n = Analysis.toNum(val), f = fence[ci];
+        return [miss ? 'miss' : f && isFinite(n) && (n < f[0] || n > f[1]) ? 'out' : '', state.xpChanged.has(i + '|' + col) ? 'chg' : ''].filter(Boolean).join(' ');
+      };
+      return `<div class="xp-group"><h5>${esc(cfg.groupLabels[g] || g)} (n=${idx.length})</h5><table class="t xd"><thead><tr><th>#</th>${idc ? `<th>${esc(idc)}</th>` : ''}${it.cols.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${
+        idx.map(i => `<tr><td class="rn">${i + 1}</td>${idc ? `<td class="rn">${esc(rows[i][idc] ?? '')}</td>` : ''}${it.cols.map((c, ci) =>
+          `<td class="${cls(rows[i][c.col], ci, i, c.col)}" contenteditable="true" data-xr="${i}" data-xc="${esc(c.col)}">${esc(rows[i][c.col] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    }).join('')}</div><div class="xp-legend">Orange: outlier (beyond 1.5 × IQR of its group) · red: missing · purple edge: changed here. Click a value to change it; Enter to confirm, Esc to cancel.</div>`;
+  }
   function drawExplore() {
     const x = state.explore; if (!x) return;
     const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items, o = state.cfg.options, figs = $('#xpFigs').checked;
@@ -26259,9 +26359,58 @@ if (typeof module !== 'undefined') module.exports = Examples;
       let img = '';
       if (figs && it.spec) { try { img = `<img class="xp-fig" src="${Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png')}" alt="">`; } catch (e) { /* no figure */ } }
       return `<div class="report-sec xp-item"><div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>
-        <div class="xp-body">${img}<div class="xp-tables">${it.tables.map(tblHtml).join('')}</div></div></div>`;
+        <div class="xp-body">${img}<div class="xp-tables">${it.tables.map(tblHtml).join('')}</div></div>
+        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
     }).join('') : '<p class="legend-note">No variables are ticked in step 2.</p>';
+    $('#xpUndo').disabled = !state.undo || !state.undo.length;
   }
+  // the data panel is filled when opened, and stays open when the results are redrawn
+  $('#explore').addEventListener('toggle', e => {
+    const d = e.target.closest && e.target.closest('[data-xpdata]'); if (!d || d !== e.target) return;
+    const id = d.dataset.xpdata;
+    if (d.open) { state.xpOpen.add(id); if (!d.querySelector('.xp-groups')) d.insertAdjacentHTML('beforeend', dataHtml(state.explore.items.find(it => it.id === id))); }
+    else state.xpOpen.delete(id);
+  }, true);
+  // a changed value goes into the sheet (undoable) and every result is recalculated
+  $('#explore').addEventListener('focusout', e => {
+    const td = e.target.closest('[data-xr]'); if (!td) return;
+    const i = +td.dataset.xr, col = td.dataset.xc, old = state.data.rows[i][col], v = parseCell(td.textContent);
+    if ((old ?? null) === v || String(old ?? '') === String(v ?? '')) return;
+    state.undo.push(JSON.stringify({ data: state.data, cfg: state.cfg }));
+    if (state.undo.length > 30) state.undo.shift();
+    state.data.rows[i][col] = v; state.xpChanged.add(i + '|' + col);
+    if (col === state.cfg.groupCol && !state.cfg.noGroups) refreshGroups();
+    const y = window.scrollY; renderExplore(); renderGrid(); window.scrollTo(0, y);
+    toast(`Value changed: ${col}, row ${i + 1} — results updated`);
+  });
+  $('#explore').addEventListener('keydown', e => {
+    const td = e.target.closest('[data-xr]'); if (!td) return;
+    if (e.key === 'Enter') { e.preventDefault(); td.blur(); }
+    if (e.key === 'Escape') { td.textContent = state.data.rows[+td.dataset.xr][td.dataset.xc] ?? ''; td.blur(); }
+  });
+  $('#xpUndo').onclick = () => {
+    const snap = state.undo.pop(); if (!snap) return;
+    const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg;
+    const y = window.scrollY; renderExplore(); renderGrid(); window.scrollTo(0, y); toast('Undone');
+  };
+  $('#xpWord').onclick = async () => {
+    const x = state.explore; if (!x) return;
+    busy(true);
+    try {
+      const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items, o = state.cfg.options, figs = $('#xpFigs').checked;
+      const items = list.map(it => {
+        const out = { label: it.label, summary: it.summary, tables: it.tables };
+        if (figs && it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), chartStyle(o)); Object.assign(out, { url: c.toDataURL('image/png'), w: c.width, h: c.height }); } catch (e) { /* no figure */ } }
+        return out;
+      });
+      const blob = await Report.buildResults({ items }, { title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - Results by variable.docx';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast('Results by variable downloaded');
+    } catch (err) { console.error(err); toast('Word export failed: ' + err.message); }
+    finally { busy(false); }
+  };
   $('#xpVar').onchange = drawExplore;
   $('#xpFigs').onchange = drawExplore;
   $('#xpCopy').onclick = async () => {

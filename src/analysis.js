@@ -926,7 +926,8 @@ const Analysis = (() => {
     };
     const items = [];
     for (const v of effectiveVariables(cfg)) {
-      const it = { id: v.id, label: v.label, kind: v.kind === 'repeated' ? 'repeated' : v.type, tables: [], spec: null, summary: '' };
+      const it = { id: v.id, label: v.label, kind: v.kind === 'repeated' ? 'repeated' : v.type, tables: [], spec: null, summary: '',
+        cols: v.cols.map(c => ({ col: c.col, label: v.kind === 'repeated' ? (c.label || cfg.tpLabels[c.tp] || c.tp) : v.label })) };
       if (v.kind !== 'repeated' && v.type === 'numeric') {
         const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toNum(r[col])).filter(isFinite)), miss = byGroup.map(rs => rs.filter(r => !isFinite(toNum(r[col]))).length);
         it.tables.push({ title: 'Descriptive statistics', head: descHead, rows: [...gv.map((x, g) => descRow(gl[g], x, miss[g])), ...(k > 1 ? [descRow('All patients', gv.flat(), S.sum(miss))] : [])] });

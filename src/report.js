@@ -271,5 +271,34 @@ const Report = (() => {
     return Packer.toBlob(doc);
   }
 
-  return { build, figLabel, arrangeFigures };
+  // results by variable: every table of each variable, with its figure, in a landscape document
+  async function buildResults(model, opts) {
+    const { Document, Packer, Paragraph, TextRun, Footer, AlignmentType, PageNumber, PageOrientation } = D();
+    BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false;
+    PAGE_W = LANDSCAPE_W;
+    const children = [para(opts.title || 'Results by variable', { bold: true, size: 32, align: AlignmentType.CENTER, after: 120 })];
+    if (opts.subtitle) children.push(para(opts.subtitle, { align: AlignmentType.CENTER, size: 20, after: 240 }));
+    model.items.forEach((it, i) => {
+      children.push(new Paragraph({ heading: D().HeadingLevel.HEADING_1, pageBreakBefore: i > 0, spacing: { after: 120 },
+        children: [new TextRun({ text: `${i + 1}. ${it.label}`, bold: true, size: 28, font: BODY_FONT })] }));
+      if (it.summary) children.push(para(it.summary, { size: 20, line: 260, after: 120, italic: true }));
+      if (it.url) children.push(image(it.url, it.w, it.h, 430));
+      it.tables.forEach(t => {
+        children.push(para(t.title, { bold: true, size: 22, line: 260, after: 60, before: 160, keepNext: true, align: AlignmentType.LEFT }));
+        children.push(table(t.head.map(h => ({ t: h })), t.rows.map(r => r.map(c => ({ t: [c] }))), false, 'grid'));
+      });
+    });
+    const doc = new Document({
+      creator: 'Prof MSE Easy Stat', title: opts.title || 'Results by variable',
+      styles: { default: { document: { run: { font: BODY_FONT, size: 20 } } } },
+      sections: [{
+        properties: { page: { size: { width: 11906, height: 16838, orientation: PageOrientation.LANDSCAPE }, margin: { top: 1134, bottom: 1134, left: 1440, right: 1440 } } },
+        footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ children: [PageNumber.CURRENT], size: 18, font: BODY_FONT })] })] }) },
+        children
+      }]
+    });
+    return Packer.toBlob(doc);
+  }
+
+  return { build, buildResults, figLabel, arrangeFigures };
 })();
