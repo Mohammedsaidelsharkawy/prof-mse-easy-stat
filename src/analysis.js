@@ -1071,6 +1071,7 @@ const Analysis = (() => {
     return { skew, ses, kurt, sek };
   }
   function explore(data, cfg, xo = {}) {
+    [data, cfg] = withValueLabels(data, cfg);
     const opts = cfg.options, alpha = opts.alpha, d = xo.dec !== undefined && xo.dec !== '' ? +xo.dec : opts.decimals;
     setRO(opts);
     normality = normalityTest(opts.normality);
@@ -1238,8 +1239,41 @@ const Analysis = (() => {
     return { groups: gl, k, items };
   }
 
+  /* ---------- value labels (1 = Male, 2 = Female) ---------- */
+  // "1=Male, 2=Female" or "1: Male; 2: Female" → { 1: 'Male', 2: 'Female' }
+  function parseValueLabels(t) {
+    const m = {};
+    String(t || '').split(/[,;\n]+/).forEach(p => { const x = p.match(/^\s*([^=:]+?)\s*[=:]\s*(.*?)\s*$/); if (x && x[2] !== '') m[x[1]] = x[2]; });
+    return m;
+  }
+  // the analysis sees the labels in place of the codes; the sheet keeps its codes
+  function withValueLabels(data, cfg) {
+    const maps = {};
+    (cfg.variables || []).forEach(v => {
+      if (v.type !== 'categorical' || !v.valueLabels) return;
+      const m = parseValueLabels(v.valueLabels);
+      if (Object.keys(m).length) v.cols.forEach(c => { if (!isGroupCol(cfg, c.col)) maps[c.col] = m; });
+    });
+    const cols = Object.keys(maps);
+    if (!cols.length) return [data, cfg];
+    const lab = (col, x) => { const c = toCat(x); return c !== null && maps[col] && Object.prototype.hasOwnProperty.call(maps[col], c) ? maps[col][c] : x; };
+    const rows = data.rows.map(r => { const o = { ...r }; cols.forEach(c => { if (c in o) o[c] = lab(c, o[c]); }); return o; });
+    const variables = cfg.variables.map(v => {
+      const m = v.cols.length && maps[v.cols[0].col];
+      return m && v.levels ? { ...v, levels: [...new Set(v.levels.map(l => lab(v.cols[0].col, l)))] } : v;
+    });
+    const advanced = (cfg.advanced || []).map(a => {
+      const b = { ...a };
+      if (a.positive) b.positive = lab(['survival', 'cox'].includes(a.type) ? a.event : a.outcome, a.positive);
+      if (a.eventPositive) b.eventPositive = lab(a.event, a.eventPositive);
+      return b;
+    });
+    return [{ ...data, rows }, { ...cfg, variables, advanced }];
+  }
+
   /* ---------- main ---------- */
   function run(data, cfg) {
+    [data, cfg] = withValueLabels(data, cfg);
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
     setRO(opts);
     // descriptive: the detailed comment plus the test used, effect sizes, values of every group and an overview of each table
@@ -2297,5 +2331,5 @@ const Analysis = (() => {
     return t;
   }
 
-  return { run, explore, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { run, explore, parseValueLabels, withValueLabels, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();

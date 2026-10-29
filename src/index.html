@@ -217,6 +217,15 @@ footer b{color:var(--purple)}
 .busy{position:fixed;inset:0;background:rgba(28,22,72,.35);display:none;place-items:center;z-index:60}
 .busy.show{display:grid}
 .busy div{background:var(--card);padding:22px 30px;border-radius:14px;font-weight:700;color:var(--title)}
+/* figure export dialog */
+dialog#figDlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);box-shadow:0 20px 60px rgba(28,22,72,.25)}
+dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
+#figDlg h3{margin:0 0 4px;color:var(--title)}
+#fxList{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px;margin:8px 0;background:var(--soft)}
+#fxList .check{margin:4px 0}
+#figDlg .fx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
+#figDlg .fx-grid select,#figDlg .fx-grid input{width:100%}
+#fxInfo{min-height:1.4em}
 </style>
 </head>
 <body>
@@ -562,7 +571,7 @@ footer b{color:var(--purple)}
         <div class="tbl-wrap" style="max-height:560px"><table class="t" id="figTbl"></table></div>
         <div>
           <div class="row"><label class="f" style="margin:0">Preview</label><select id="figPrevVar" style="flex:1"></select></div>
-          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevPng" type="button">⬇ This figure (PNG)</button></div></div>
+          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevPng" type="button">⬇ Export this figure…</button></div></div>
         </div>
       </div>
     </div>
@@ -635,7 +644,7 @@ footer b{color:var(--purple)}
       <p class="hint" id="cHint"></p>
       <div class="grid g2">
         <div id="cForm"></div>
-        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="flowPng" type="button">⬇ Flowchart (PNG)</button></div></div>
+        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button></div></div>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Next: Results by variable →</button></div>
@@ -686,7 +695,7 @@ footer b{color:var(--purple)}
         <h2>11 · Report</h2><span class="spacer"></span>
         <button class="btn ghost" id="btnRerun">↻ Re-run</button>
         <button class="btn ghost" id="btnXlsx" title="Every exported table in an Excel file, one sheet per table">⬇ Tables (Excel)</button>
-        <button class="btn ghost" id="btnPngs" title="Every exported figure as a PNG image">⬇ Figures (PNG)</button>
+        <button class="btn ghost" id="btnPngs" title="Export one, several or all figures as PNG, JPEG or TIFF, up to 1200 dpi, in colour or greyscale">⬇ Figures (PNG · JPG · TIFF)</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
       <div id="fmtBar">
@@ -720,6 +729,23 @@ footer b{color:var(--purple)}
   </section>
 </main>
 <footer>© <b>Prof MSE</b> – Medical Research · Easy Stat v1.0 · runs fully offline in your browser</footer>
+<dialog id="figDlg">
+  <form method="dialog" id="fxForm">
+    <h3>Export figures</h3>
+    <p class="legend-note" style="margin:0">Each figure is redrawn at the chosen size, so text and lines stay sharp at any resolution.</p>
+    <div class="row" style="margin-top:10px"><b id="fxCount"></b><span class="spacer"></span><button type="button" class="btn ghost small" id="fxAll">Select all</button> <button type="button" class="btn ghost small" id="fxNone">Clear</button></div>
+    <div id="fxList"></div>
+    <div class="fx-grid">
+      <div><label class="f">Format</label><select id="fxFormat"><option value="png">PNG (lossless)</option><option value="jpg">JPEG</option><option value="tiff">TIFF (journal submission)</option></select></div>
+      <div><label class="f">Resolution</label><select id="fxDpi"><option value="96">96 dpi (screen)</option><option value="150">150 dpi</option><option value="300" selected>300 dpi (print)</option><option value="600">600 dpi</option><option value="900">900 dpi</option><option value="1200">1200 dpi (line art)</option></select></div>
+      <div><label class="f">Width</label><select id="fxWidth"><option value="report">As in the Word report</option><option value="8.5">8.5 cm (single column)</option><option value="12">12 cm (1.5 column)</option><option value="17.4">17.4 cm (double column)</option></select></div>
+      <div><label class="f">Colour</label><select id="fxColor"><option value="color">Colour</option><option value="grey">Greyscale</option></select></div>
+      <div id="fxZipBox"><label class="f">Several figures</label><select id="fxZip"><option value="zip">One ZIP file</option><option value="files">Separate files</option></select></div>
+    </div>
+    <p class="legend-note" id="fxInfo"></p>
+    <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="fxCancel">Cancel</button> <button type="button" class="btn primary" id="fxGo">⬇ Export</button></div>
+  </form>
+</dialog>
 <div class="toast" id="toast"></div>
 <div class="busy" id="busy"><div>Working…</div></div>
 

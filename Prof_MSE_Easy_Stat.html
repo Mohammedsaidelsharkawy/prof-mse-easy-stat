@@ -217,6 +217,15 @@ footer b{color:var(--purple)}
 .busy{position:fixed;inset:0;background:rgba(28,22,72,.35);display:none;place-items:center;z-index:60}
 .busy.show{display:grid}
 .busy div{background:var(--card);padding:22px 30px;border-radius:14px;font-weight:700;color:var(--title)}
+/* figure export dialog */
+dialog#figDlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);box-shadow:0 20px 60px rgba(28,22,72,.25)}
+dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
+#figDlg h3{margin:0 0 4px;color:var(--title)}
+#fxList{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px;margin:8px 0;background:var(--soft)}
+#fxList .check{margin:4px 0}
+#figDlg .fx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
+#figDlg .fx-grid select,#figDlg .fx-grid input{width:100%}
+#fxInfo{min-height:1.4em}
 </style>
 </head>
 <body>
@@ -562,7 +571,7 @@ footer b{color:var(--purple)}
         <div class="tbl-wrap" style="max-height:560px"><table class="t" id="figTbl"></table></div>
         <div>
           <div class="row"><label class="f" style="margin:0">Preview</label><select id="figPrevVar" style="flex:1"></select></div>
-          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevPng" type="button">⬇ This figure (PNG)</button></div></div>
+          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevPng" type="button">⬇ Export this figure…</button></div></div>
         </div>
       </div>
     </div>
@@ -635,7 +644,7 @@ footer b{color:var(--purple)}
       <p class="hint" id="cHint"></p>
       <div class="grid g2">
         <div id="cForm"></div>
-        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="flowPng" type="button">⬇ Flowchart (PNG)</button></div></div>
+        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button></div></div>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Next: Results by variable →</button></div>
@@ -686,7 +695,7 @@ footer b{color:var(--purple)}
         <h2>11 · Report</h2><span class="spacer"></span>
         <button class="btn ghost" id="btnRerun">↻ Re-run</button>
         <button class="btn ghost" id="btnXlsx" title="Every exported table in an Excel file, one sheet per table">⬇ Tables (Excel)</button>
-        <button class="btn ghost" id="btnPngs" title="Every exported figure as a PNG image">⬇ Figures (PNG)</button>
+        <button class="btn ghost" id="btnPngs" title="Export one, several or all figures as PNG, JPEG or TIFF, up to 1200 dpi, in colour or greyscale">⬇ Figures (PNG · JPG · TIFF)</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
       <div id="fmtBar">
@@ -720,6 +729,23 @@ footer b{color:var(--purple)}
   </section>
 </main>
 <footer>© <b>Prof MSE</b> – Medical Research · Easy Stat v1.0 · runs fully offline in your browser</footer>
+<dialog id="figDlg">
+  <form method="dialog" id="fxForm">
+    <h3>Export figures</h3>
+    <p class="legend-note" style="margin:0">Each figure is redrawn at the chosen size, so text and lines stay sharp at any resolution.</p>
+    <div class="row" style="margin-top:10px"><b id="fxCount"></b><span class="spacer"></span><button type="button" class="btn ghost small" id="fxAll">Select all</button> <button type="button" class="btn ghost small" id="fxNone">Clear</button></div>
+    <div id="fxList"></div>
+    <div class="fx-grid">
+      <div><label class="f">Format</label><select id="fxFormat"><option value="png">PNG (lossless)</option><option value="jpg">JPEG</option><option value="tiff">TIFF (journal submission)</option></select></div>
+      <div><label class="f">Resolution</label><select id="fxDpi"><option value="96">96 dpi (screen)</option><option value="150">150 dpi</option><option value="300" selected>300 dpi (print)</option><option value="600">600 dpi</option><option value="900">900 dpi</option><option value="1200">1200 dpi (line art)</option></select></div>
+      <div><label class="f">Width</label><select id="fxWidth"><option value="report">As in the Word report</option><option value="8.5">8.5 cm (single column)</option><option value="12">12 cm (1.5 column)</option><option value="17.4">17.4 cm (double column)</option></select></div>
+      <div><label class="f">Colour</label><select id="fxColor"><option value="color">Colour</option><option value="grey">Greyscale</option></select></div>
+      <div id="fxZipBox"><label class="f">Several figures</label><select id="fxZip"><option value="zip">One ZIP file</option><option value="files">Separate files</option></select></div>
+    </div>
+    <p class="legend-note" id="fxInfo"></p>
+    <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="fxCancel">Cancel</button> <button type="button" class="btn primary" id="fxGo">⬇ Export</button></div>
+  </form>
+</dialog>
 <div class="toast" id="toast"></div>
 <div class="busy" id="busy"><div>Working…</div></div>
 
@@ -22812,6 +22838,7 @@ const Analysis = (() => {
     return { skew, ses, kurt, sek };
   }
   function explore(data, cfg, xo = {}) {
+    [data, cfg] = withValueLabels(data, cfg);
     const opts = cfg.options, alpha = opts.alpha, d = xo.dec !== undefined && xo.dec !== '' ? +xo.dec : opts.decimals;
     setRO(opts);
     normality = normalityTest(opts.normality);
@@ -22979,8 +23006,41 @@ const Analysis = (() => {
     return { groups: gl, k, items };
   }
 
+  /* ---------- value labels (1 = Male, 2 = Female) ---------- */
+  // "1=Male, 2=Female" or "1: Male; 2: Female" → { 1: 'Male', 2: 'Female' }
+  function parseValueLabels(t) {
+    const m = {};
+    String(t || '').split(/[,;\n]+/).forEach(p => { const x = p.match(/^\s*([^=:]+?)\s*[=:]\s*(.*?)\s*$/); if (x && x[2] !== '') m[x[1]] = x[2]; });
+    return m;
+  }
+  // the analysis sees the labels in place of the codes; the sheet keeps its codes
+  function withValueLabels(data, cfg) {
+    const maps = {};
+    (cfg.variables || []).forEach(v => {
+      if (v.type !== 'categorical' || !v.valueLabels) return;
+      const m = parseValueLabels(v.valueLabels);
+      if (Object.keys(m).length) v.cols.forEach(c => { if (!isGroupCol(cfg, c.col)) maps[c.col] = m; });
+    });
+    const cols = Object.keys(maps);
+    if (!cols.length) return [data, cfg];
+    const lab = (col, x) => { const c = toCat(x); return c !== null && maps[col] && Object.prototype.hasOwnProperty.call(maps[col], c) ? maps[col][c] : x; };
+    const rows = data.rows.map(r => { const o = { ...r }; cols.forEach(c => { if (c in o) o[c] = lab(c, o[c]); }); return o; });
+    const variables = cfg.variables.map(v => {
+      const m = v.cols.length && maps[v.cols[0].col];
+      return m && v.levels ? { ...v, levels: [...new Set(v.levels.map(l => lab(v.cols[0].col, l)))] } : v;
+    });
+    const advanced = (cfg.advanced || []).map(a => {
+      const b = { ...a };
+      if (a.positive) b.positive = lab(['survival', 'cox'].includes(a.type) ? a.event : a.outcome, a.positive);
+      if (a.eventPositive) b.eventPositive = lab(a.event, a.eventPositive);
+      return b;
+    });
+    return [{ ...data, rows }, { ...cfg, variables, advanced }];
+  }
+
   /* ---------- main ---------- */
   function run(data, cfg) {
+    [data, cfg] = withValueLabels(data, cfg);
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
     setRO(opts);
     // descriptive: the detailed comment plus the test used, effect sizes, values of every group and an overview of each table
@@ -24038,7 +24098,7 @@ const Analysis = (() => {
     return t;
   }
 
-  return { run, explore, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { run, explore, parseValueLabels, withValueLabels, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();
 
 /* Prof MSE Easy Stat — canvas charts (bar ± error, line, box plot, CONSORT) */
@@ -24920,8 +24980,9 @@ const Charts = (() => {
     if (S.radius) { ctx.beginPath(); ctx.roundRect(x, y, w, h, S.radius); ctx.stroke(); } else ctx.strokeRect(x, y, w, h);
     ctx.fillStyle = S.text(role);
   }
-  function consort(c, groupLabels, palName = 'brand') {
+  function consort(c, groupLabels, palName = 'brand', res) {
     const S = flowStyle(c, palette(palName));
+    if (res) S.res = res; // export at a chosen resolution
     FONT = S.font;
     if (c.type === 'simple') return simpleFlow(c, groupLabels, palName, S);
     const pal = palette(palName), type = c.type || 'consort';
@@ -25090,7 +25151,88 @@ const Charts = (() => {
     return cv;
   }
 
-  return { draw, consort, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
+  /* ---------- image export: PNG, JPEG or TIFF at a set dpi, in colour or greyscale ---------- */
+  const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = (b, s, e) => { let c = 0xFFFFFFFF; for (let i = s; i < e; i++) c = CRC_T[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  // the pixels on white (JPEG and TIFF have no transparency), optionally as luminance grey
+  function flatten(src, grey) {
+    const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(src, 0, 0);
+    if (grey) {
+      const step = Math.max(1, Math.floor(4e6 / c.width)); // in bands, to keep memory low on large images
+      for (let y = 0; y < c.height; y += step) {
+        const h = Math.min(step, c.height - y), d = x.getImageData(0, y, c.width, h), p = d.data;
+        for (let i = 0; i < p.length; i += 4) { const g = Math.round(0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]); p[i] = p[i + 1] = p[i + 2] = g; }
+        x.putImageData(d, 0, y);
+      }
+    }
+    return c;
+  }
+  const toBlob = (c, type, q) => new Promise((ok, no) => c.toBlob(b => b ? ok(b) : no(new Error('The image is too large for this browser — choose a lower resolution')), type, q));
+  // PNG: a pHYs chunk (pixels per metre) after IHDR
+  function pngDpi(b, dpi) {
+    const ppm = Math.round(dpi / 0.0254), ch = new Uint8Array(21), v = new DataView(ch.buffer);
+    v.setUint32(0, 9); ch.set([112, 72, 89, 115], 4); v.setUint32(8, ppm); v.setUint32(12, ppm); ch[16] = 1; v.setUint32(17, crc32(ch, 4, 17));
+    const out = new Uint8Array(b.length + 21); out.set(b.subarray(0, 33)); out.set(ch, 33); out.set(b.subarray(33), 54);
+    return out;
+  }
+  // JPEG: the JFIF density fields in dots per inch (an APP0 segment is added when the encoder wrote none)
+  function jpegDpi(b, dpi) {
+    if (b[2] === 0xFF && b[3] === 0xE0 && String.fromCharCode(...b.subarray(6, 10)) === 'JFIF') { b[13] = 1; b[14] = dpi >> 8; b[15] = dpi & 255; b[16] = dpi >> 8; b[17] = dpi & 255; return b; }
+    const app = new Uint8Array([0xFF, 0xE0, 0, 16, 74, 70, 73, 70, 0, 1, 1, 1, dpi >> 8, dpi & 255, dpi >> 8, dpi & 255, 0, 0]);
+    const out = new Uint8Array(b.length + app.length); out.set(b.subarray(0, 2)); out.set(app, 2); out.set(b.subarray(2), 2 + app.length);
+    return out;
+  }
+  // PackBits run-length coding of one row
+  function packBits(src) {
+    const out = [], n = src.length; let i = 0;
+    while (i < n) {
+      let r = 1; while (i + r < n && r < 128 && src[i + r] === src[i]) r++;
+      if (r > 1) { out.push(257 - r, src[i]); i += r; continue; }
+      let j = i + 1; while (j < n && j - i < 128 && !(j + 1 < n && src[j] === src[j + 1])) j++;
+      out.push(j - i - 1); for (let k = i; k < j; k++) out.push(src[k]); i = j;
+    }
+    return Uint8Array.from(out);
+  }
+  // baseline TIFF, PackBits-compressed, RGB or 8-bit grey, with the resolution in dpi
+  function tiff(c, dpi, grey) {
+    const W = c.width, H = c.height, spp = grey ? 1 : 3, x = c.getContext('2d'), rps = 32, strips = [];
+    for (let y = 0; y < H; y += rps) {
+      const h = Math.min(rps, H - y), p = x.getImageData(0, y, W, h).data, rows = [];
+      for (let r = 0; r < h; r++) {
+        const row = new Uint8Array(W * spp);
+        for (let i = 0, o = r * W * 4; i < W; i++, o += 4) { if (grey) row[i] = p[o]; else { row[i * 3] = p[o]; row[i * 3 + 1] = p[o + 1]; row[i * 3 + 2] = p[o + 2]; } }
+        rows.push(packBits(row));
+      }
+      const len = rows.reduce((a, r) => a + r.length, 0), strip = new Uint8Array(len); let o = 0;
+      rows.forEach(r => { strip.set(r, o); o += r.length; }); strips.push(strip);
+    }
+    const n = strips.length, tags = 13, ifdLen = 2 + tags * 12 + 4;
+    let off = 8 + strips.reduce((a, s) => a + s.length, 0); off += off & 1;
+    const ifd = off, extra = ifd + ifdLen, bps = extra, xres = bps + 8, yres = xres + 8, so = yres + 8, sc = so + 4 * n, end = sc + 4 * n;
+    const head = new Uint8Array(8), hv = new DataView(head.buffer); head.set([73, 73]); hv.setUint16(2, 42, true); hv.setUint32(4, ifd, true);
+    const tail = new Uint8Array(end - ifd), v = new DataView(tail.buffer), at = a => a - ifd;
+    v.setUint16(0, tags, true);
+    const T = [[256, 4, 1, W], [257, 4, 1, H], [258, 3, spp, spp === 1 ? 8 : bps], [259, 3, 1, 32773], [262, 3, 1, grey ? 1 : 2], [273, 4, n, n === 1 ? 8 : so],
+      [277, 3, 1, spp], [278, 4, 1, rps], [279, 4, n, n === 1 ? strips[0].length : sc], [282, 5, 1, xres], [283, 5, 1, yres], [284, 3, 1, 1], [296, 3, 1, 2]];
+    T.forEach(([tag, type, count, val], i) => { const q = 2 + i * 12; v.setUint16(q, tag, true); v.setUint16(q + 2, type, true); v.setUint32(q + 4, count, true);
+      if (type === 3 && count === 1) v.setUint16(q + 8, val, true); else v.setUint32(q + 8, val, true); });
+    v.setUint32(2 + tags * 12, 0, true);
+    [0, 2, 4].forEach(k => v.setUint16(at(bps) + k, 8, true));
+    [xres, yres].forEach(a => { v.setUint32(at(a), dpi, true); v.setUint32(at(a) + 4, 1, true); });
+    let p = 8; strips.forEach((s, i) => { v.setUint32(at(so) + 4 * i, p, true); v.setUint32(at(sc) + 4 * i, s.length, true); p += s.length; });
+    const parts = [head, ...strips]; if ((8 + strips.reduce((a, s) => a + s.length, 0)) & 1) parts.push(new Uint8Array(1));
+    return new Blob([...parts, tail], { type: 'image/tiff' });
+  }
+  // canvas → Blob in the chosen format; the file says its resolution so Word and journals size it right
+  async function exportImage(src, { format = 'png', dpi = 300, grey = false, quality = 0.95 } = {}) {
+    const c = flatten(src, grey);
+    if (format === 'tiff') return tiff(c, dpi, grey);
+    const jpg = format === 'jpg' || format === 'jpeg', b = new Uint8Array(await (await toBlob(c, jpg ? 'image/jpeg' : 'image/png', quality)).arrayBuffer());
+    return new Blob([jpg ? jpegDpi(b, dpi) : pngDpi(b, dpi)], { type: jpg ? 'image/jpeg' : 'image/png' });
+  }
+
+  return { draw, consort, exportImage, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
 })();
 
 /* Prof MSE Easy Stat — Word (.docx) export using docx.js */
@@ -26311,7 +26453,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       if (nonNormal) return `<span class="chip warn" ${tip}>non-normal (${fail}/${total})</span>`;
       return fail ? `<span class="chip ok" ${tip}>normal (${fail}/${total} failed)</span>` : '<span class="chip ok">normal</span>';
     };
-    $('#varsTbl').innerHTML = `<thead><tr><th>Use</th><th>Label</th><th>Column(s)</th><th>Type</th><th>Distribution</th><th>Table</th><th>Levels (categories)</th><th>Footnote (abbreviations)</th></tr></thead><tbody>${
+    $('#varsTbl').innerHTML = `<thead><tr><th>Use</th><th>Label</th><th>Column(s)</th><th>Type</th><th>Distribution</th><th>Table</th><th>Levels (categories)</th><th title="Labels for coded values, e.g. 1=Male, 2=Female. The report shows the labels; the sheet keeps its codes.">Value labels</th><th>Footnote (abbreviations)</th></tr></thead><tbody>${
       cfg.variables.map(v => `<tr data-vid="${v.id}">
         <td><input type="checkbox" data-k="include" ${v.include ? 'checked' : ''}></td>
         <td><input type="text" data-k="label" value="${esc(v.label)}"></td>
@@ -26321,6 +26463,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
         <td>${v.type === 'numeric' ? `<select data-k="dist"><option value="auto" ${v.dist === 'auto' ? 'selected' : ''}>Auto</option><option value="param" ${v.dist === 'param' ? 'selected' : ''}>Parametric</option><option value="nonparam" ${v.dist === 'nonparam' ? 'selected' : ''}>Non-parametric</option></select><div style="margin-top:4px">${swChip(v)}</div>` : swChip(v)}</td>
         <td>${v.kind === 'repeated' ? (v.split ? `<input type="text" data-k="splitTable" value="${esc(v.splitTable || 'Other outcomes')}">` : '<span class="legend-note">own table</span>') : `<input type="text" data-k="table" value="${esc(v.table)}">`}</td>
         <td>${v.type === 'categorical' ? `<input type="text" data-k="levels" value="${esc(v.levels.join(', '))}">` : '<span class="legend-note">—</span>'}</td>
+        <td>${v.type === 'categorical' ? `<input type="text" data-k="valueLabels" value="${esc(v.valueLabels || '')}" placeholder="${esc(v.levels.slice(0, 3).map(l => `${l}=…`).join(', ') || 'e.g. 1=Male, 2=Female')}" title="Code=label pairs separated by commas, e.g. 1=Male, 2=Female">` : '<span class="legend-note" title="Set the type to categorical to label coded values">—</span>'}</td>
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
       </tr>`).join('')}</tbody>`;
     renderRepeated();
@@ -26702,7 +26845,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     } catch (err) { console.error(err); $('#figPrevNote').textContent = 'Preview failed: ' + err.message; }
   }
   $('#p7').addEventListener('input', schedulePreview);
-  $('#figPrevPng').onclick = () => { const f = state.prevFig; if (!f) return; const a = document.createElement('a'); a.href = f.url; a.download = String(f.caption).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80) + '.png'; document.body.appendChild(a); a.click(); a.remove(); };
+  $('#figPrevPng').onclick = () => { const f = state.prevFig; if (f) openFigExport([chartItem(f, String(f.caption), state.cfg.options)]); };
   $('#p7').addEventListener('change', schedulePreview);
   $('#figTbl').addEventListener('click', e => { const b = e.target.closest('[data-fprev]'); if (b) { $('#figPrevVar').value = b.dataset.fprev; schedulePreview(); } });
 
@@ -26723,9 +26866,15 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const cfg = state.cfg, rows = analysedRows();
     return state.data.headers.filter(h => !cfg.idCols.includes(h)).map(h => ({ col: h, label: Analysis.columnLabel(cfg, h), kind: Analysis.columnKind(cfg, rows, h) }));
   }
+  // the label of a coded value from the variable's value labels (1 → Male), else the value itself
+  function valueLabel(col, l) {
+    const v = state.cfg.variables.find(x => x.type === 'categorical' && x.valueLabels && x.cols.some(c => c.col === col));
+    const m = v ? Analysis.parseValueLabels(v.valueLabels) : {};
+    return Object.prototype.hasOwnProperty.call(m, l) ? m[l] : l;
+  }
   function defaultPositive(col) {
     const lv = Analysis.levelsOf(state.cfg, analysedRows(), col);
-    return lv.find(l => Analysis.POSITIVE.test(l) || /^(dead|death|died|event|relapse|recurrence)$/i.test(l)) || lv[lv.length - 1] || '';
+    return lv.find(l => [l, valueLabel(col, l)].some(t => Analysis.POSITIVE.test(t) || /^(dead|death|died|event|relapse|recurrence)$/i.test(t))) || lv[lv.length - 1] || '';
   }
   function renderAdvanced() {
     const cfg = state.cfg, cols = advColumns(), rows = analysedRows();
@@ -26733,7 +26882,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const select = (key, label, list, value) => `<div><label class="f">${label}</label><select data-af="${key}"><option value="">— choose —</option>${
       list.map(c => `<option value="${esc(c.col)}" ${c.col === value ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></div>`;
     const levelSelect = (label, col, value, key = 'positive') => `<div><label class="f">${label}</label><select data-af="${key}">${
-      (col ? Analysis.levelsOf(cfg, rows, col) : []).map(l => `<option ${l === value ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+      (col ? Analysis.levelsOf(cfg, rows, col) : []).map(l => { const t = valueLabel(col, l); return `<option value="${esc(l)}" ${l === value || t === value ? 'selected' : ''}>${esc(t === l ? l : `${t} (${l})`)}</option>`; }).join('')}</select></div>`;
     $('#advList').innerHTML = cfg.advanced.length ? cfg.advanced.map((a, ai) => {
       const t = a.type, num = cols.filter(c => c.kind === 'numeric');
       let fields = '', predLabel = '', preds = [];
@@ -27547,18 +27696,88 @@ if (typeof module !== 'undefined') module.exports = Examples;
     XLSX.writeFile(wb, `${baseName()} - Tables.xlsx`);
     toast(`${wb.SheetNames.length} sheet${wb.SheetNames.length > 1 ? 's' : ''} saved to Excel`);
   };
-  // every exported figure (and the flowchart) as PNG files named by their number
-  $('#btnPngs').onclick = async () => {
+  /* ---------- figure export: one, several or all figures as PNG, JPEG or TIFF, at a set dpi, in colour or greyscale ---------- */
+  // width of a figure in the Word file, in 96-dpi pixels as docx.js sizes images (as in report.js), and of the flowchart
+  const FIG_PT = { small: [380, 200], medium: [470, 250], full: [560, 295] };
+  const flowPt = () => report().format === 'paper' ? 470 : 600;
+  // an export item: its file name, its size at res 1, its width in the report and how to draw it at a resolution
+  const chartItem = (f, name, o) => {
+    const res1 = +o.chartRes || 1, w = (f.w || 1500 * res1) / res1, h = (f.h || 820 * res1) / res1;
+    return { name, w, h, pt: (FIG_PT[o.figWidth] || FIG_PT.full)[o.figPerRow === 2 || +o.figPerRow === 2 ? 1 : 0],
+      draw: res => Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, chartPalette(o), { ...chartStyle(o), res }) };
+  };
+  const flowItem = (c, gl, name) => {
+    const pal = chartPalette(state.cfg.options), cv = Charts.consort(c, gl, pal, 1);
+    return { name, w: cv.width, h: cv.height, pt: flowPt(), draw: res => Charts.consort(c, gl, pal, res) };
+  };
+  let fxItems = [];
+  function openFigExport(items, preselect) {
+    if (!items.length) { toast('No figure to export'); return; }
+    fxItems = items;
+    $('#fxList').innerHTML = items.map((it, i) => `<label class="check"><input type="checkbox" data-fx="${i}" ${!preselect || preselect.includes(i) ? 'checked' : ''}><span>${esc(it.name)}</span></label>`).join('');
+    $('#fxList').style.display = items.length > 1 ? '' : 'none';
+    $('#fxAll').style.display = $('#fxNone').style.display = items.length > 1 ? '' : 'none';
+    try { const p = JSON.parse(localStorage.getItem('easystat.figExport') || '{}'); ['Format', 'Dpi', 'Width', 'Color', 'Zip'].forEach(k => { if (p[k] && $('#fx' + k).querySelector(`option[value="${p[k]}"]`)) $('#fx' + k).value = p[k]; }); } catch (e) { /* defaults */ }
+    fxUpdate();
+    $('#figDlg').showModal();
+  }
+  const fxChosen = () => [...document.querySelectorAll('[data-fx]:checked')].map(el => fxItems[+el.dataset.fx]);
+  // the drawing scale for an item: its print width × dpi, kept within what browsers can draw (16 000 px a side, 120 Mpx)
+  function fxScale(it) {
+    const dpi = +$('#fxDpi').value, wv = $('#fxWidth').value, inch = wv === 'report' ? it.pt / 96 : +wv / 2.54;
+    const want = inch * dpi / it.w, cap = Math.min(16000 / it.w, 16000 / it.h, Math.sqrt(120e6 / (it.w * it.h)));
+    const res = Math.min(want, cap);
+    return { res, px: [Math.round(it.w * res), Math.round(it.h * res)], dpi: Math.max(1, Math.round(res === want ? dpi : res * it.w / inch)), capped: res < want };
+  }
+  function fxUpdate() {
+    const ch = fxChosen(), n = ch.length;
+    $('#fxCount').textContent = fxItems.length > 1 ? `${n} of ${fxItems.length} figures selected` : fxItems[0].name;
+    $('#fxZipBox').style.display = n > 1 ? '' : 'none';
+    $('#fxGo').disabled = !n;
+    if (!n) { $('#fxInfo').textContent = 'Select at least one figure.'; return; }
+    const s = fxScale(ch[0]), fmt = $('#fxFormat').value;
+    $('#fxInfo').textContent = `${n > 1 ? 'First figure: ' : ''}${s.px[0]} × ${s.px[1]} pixels at ${s.dpi} dpi (${(s.px[0] / s.dpi * 2.54).toFixed(1)} × ${(s.px[1] / s.dpi * 2.54).toFixed(1)} cm)`
+      + (s.capped ? ' — reduced to the largest size the browser can draw' : '')
+      + (fmt === 'tiff' && s.px[0] * s.px[1] > 2e7 ? '. Large TIFF files can take a few seconds each.' : '.');
+  }
+  $('#fxForm').addEventListener('change', fxUpdate);
+  $('#fxAll').onclick = () => { document.querySelectorAll('[data-fx]').forEach(el => { el.checked = true; }); fxUpdate(); };
+  $('#fxNone').onclick = () => { document.querySelectorAll('[data-fx]').forEach(el => { el.checked = false; }); fxUpdate(); };
+  $('#fxCancel').onclick = () => $('#figDlg').close();
+  $('#fxGo').onclick = async () => {
+    const ch = fxChosen(); if (!ch.length) return;
+    const fmt = $('#fxFormat').value, grey = $('#fxColor').value === 'grey', zip = ch.length > 1 && $('#fxZip').value === 'zip', ext = { png: 'png', jpg: 'jpg', tiff: 'tif' }[fmt];
+    try { localStorage.setItem('easystat.figExport', JSON.stringify(Object.fromEntries(['Format', 'Dpi', 'Width', 'Color', 'Zip'].map(k => [k, $('#fx' + k).value])))); } catch (e) { /* not kept */ }
+    $('#figDlg').close(); busy(true);
+    await new Promise(r => setTimeout(r, 30));
+    try {
+      const z = zip ? XLSX.CFB.utils.cfb_new() : null, used = new Set();
+      for (const it of ch) {
+        const s = fxScale(it), blob = await Charts.exportImage(it.draw(s.res), { format: fmt, dpi: s.dpi, grey });
+        let name = safeName(it.name) + (grey ? ' (greyscale)' : ''), k = 2; while (used.has(name)) name = `${safeName(it.name)} (${k++})`; used.add(name);
+        if (z) XLSX.CFB.utils.cfb_add(z, `${name}.${ext}`, new Uint8Array(await blob.arrayBuffer()));
+        else { const url = URL.createObjectURL(blob); saveUrl(url, `${name}.${ext}`); setTimeout(() => URL.revokeObjectURL(url), 60000); await new Promise(r => setTimeout(r, 300)); }
+      }
+      if (z) {
+        const out = XLSX.CFB.write(z, { fileType: 'zip', type: 'array', compression: fmt === 'tiff' });
+        const url = URL.createObjectURL(new Blob([out], { type: 'application/zip' }));
+        saveUrl(url, `${baseName()} - Figures (${ext.toUpperCase()}, ${$('#fxDpi').value} dpi${grey ? ', greyscale' : ''}).zip`); setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+      toast(`${ch.length} figure${ch.length > 1 ? 's' : ''} exported as ${ext.toUpperCase()}${zip ? ' in one ZIP file' : ''}${ch.length > 1 && !zip ? ' (allow multiple downloads if the browser asks)' : ''}`);
+    } catch (err) { console.error(err); toast('Export failed: ' + err.message); }
+    busy(false);
+  };
+  // step 11: every exported figure (and the flowchart), named by their number
+  $('#btnPngs').onclick = () => {
     if (!state.result) return;
     syncEdits();
-    const r = state.result, plan = exportPlan(r), files = [];
-    if (plan.consortOn && r.consort) files.push([r.consort.url, `Figure ${plan.consortNum} - ${r.flowCaption}`]);
-    plan.order.forEach(f => files.push([f.url, `Figure ${plan.figNum.get(f)} - ${f.caption}`]));
-    if (!files.length) { toast('No figure is selected for export'); return; }
-    for (const [url, name] of files) { saveUrl(url, safeName(name) + '.png'); await new Promise(res => setTimeout(res, 250)); }
-    toast(`${files.length} figure${files.length > 1 ? 's' : ''} downloaded (allow multiple downloads if the browser asks)`);
+    const r = state.result, plan = exportPlan(r), o = effOptions(), items = [];
+    if (plan.consortOn && r.consort) items.push(flowItem(state.cfg.consort, r.groups, `Figure ${plan.consortNum} - ${r.flowCaption}`));
+    plan.order.forEach(f => items.push(chartItem(f, `Figure ${plan.figNum.get(f)} - ${f.caption}`, o)));
+    if (!items.length) { toast('No figure is selected for export'); return; }
+    openFigExport(items);
   };
-  $('#flowPng').onclick = () => { readConsort(); const c = state.cfg.consort; const cv = Charts.consort(c, activeGroups().map(g => state.cfg.groupLabels[g]), chartPalette(state.cfg.options)); saveUrl(cv.toDataURL('image/png'), `${baseName()} - Flowchart.png`); };
+  $('#flowPng').onclick = () => { readConsort(); openFigExport([flowItem(state.cfg.consort, activeGroups().map(g => state.cfg.groupLabels[g]), `${baseName()} - Flowchart`)]); };
 
   $('#btnDocx').onclick = async () => {
     if (!state.result) return;

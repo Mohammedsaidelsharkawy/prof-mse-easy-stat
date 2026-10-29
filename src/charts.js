@@ -877,8 +877,9 @@ const Charts = (() => {
     if (S.radius) { ctx.beginPath(); ctx.roundRect(x, y, w, h, S.radius); ctx.stroke(); } else ctx.strokeRect(x, y, w, h);
     ctx.fillStyle = S.text(role);
   }
-  function consort(c, groupLabels, palName = 'brand') {
+  function consort(c, groupLabels, palName = 'brand', res) {
     const S = flowStyle(c, palette(palName));
+    if (res) S.res = res; // export at a chosen resolution
     FONT = S.font;
     if (c.type === 'simple') return simpleFlow(c, groupLabels, palName, S);
     const pal = palette(palName), type = c.type || 'consort';
@@ -1047,5 +1048,86 @@ const Charts = (() => {
     return cv;
   }
 
-  return { draw, consort, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
+  /* ---------- image export: PNG, JPEG or TIFF at a set dpi, in colour or greyscale ---------- */
+  const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = (b, s, e) => { let c = 0xFFFFFFFF; for (let i = s; i < e; i++) c = CRC_T[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  // the pixels on white (JPEG and TIFF have no transparency), optionally as luminance grey
+  function flatten(src, grey) {
+    const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(src, 0, 0);
+    if (grey) {
+      const step = Math.max(1, Math.floor(4e6 / c.width)); // in bands, to keep memory low on large images
+      for (let y = 0; y < c.height; y += step) {
+        const h = Math.min(step, c.height - y), d = x.getImageData(0, y, c.width, h), p = d.data;
+        for (let i = 0; i < p.length; i += 4) { const g = Math.round(0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]); p[i] = p[i + 1] = p[i + 2] = g; }
+        x.putImageData(d, 0, y);
+      }
+    }
+    return c;
+  }
+  const toBlob = (c, type, q) => new Promise((ok, no) => c.toBlob(b => b ? ok(b) : no(new Error('The image is too large for this browser — choose a lower resolution')), type, q));
+  // PNG: a pHYs chunk (pixels per metre) after IHDR
+  function pngDpi(b, dpi) {
+    const ppm = Math.round(dpi / 0.0254), ch = new Uint8Array(21), v = new DataView(ch.buffer);
+    v.setUint32(0, 9); ch.set([112, 72, 89, 115], 4); v.setUint32(8, ppm); v.setUint32(12, ppm); ch[16] = 1; v.setUint32(17, crc32(ch, 4, 17));
+    const out = new Uint8Array(b.length + 21); out.set(b.subarray(0, 33)); out.set(ch, 33); out.set(b.subarray(33), 54);
+    return out;
+  }
+  // JPEG: the JFIF density fields in dots per inch (an APP0 segment is added when the encoder wrote none)
+  function jpegDpi(b, dpi) {
+    if (b[2] === 0xFF && b[3] === 0xE0 && String.fromCharCode(...b.subarray(6, 10)) === 'JFIF') { b[13] = 1; b[14] = dpi >> 8; b[15] = dpi & 255; b[16] = dpi >> 8; b[17] = dpi & 255; return b; }
+    const app = new Uint8Array([0xFF, 0xE0, 0, 16, 74, 70, 73, 70, 0, 1, 1, 1, dpi >> 8, dpi & 255, dpi >> 8, dpi & 255, 0, 0]);
+    const out = new Uint8Array(b.length + app.length); out.set(b.subarray(0, 2)); out.set(app, 2); out.set(b.subarray(2), 2 + app.length);
+    return out;
+  }
+  // PackBits run-length coding of one row
+  function packBits(src) {
+    const out = [], n = src.length; let i = 0;
+    while (i < n) {
+      let r = 1; while (i + r < n && r < 128 && src[i + r] === src[i]) r++;
+      if (r > 1) { out.push(257 - r, src[i]); i += r; continue; }
+      let j = i + 1; while (j < n && j - i < 128 && !(j + 1 < n && src[j] === src[j + 1])) j++;
+      out.push(j - i - 1); for (let k = i; k < j; k++) out.push(src[k]); i = j;
+    }
+    return Uint8Array.from(out);
+  }
+  // baseline TIFF, PackBits-compressed, RGB or 8-bit grey, with the resolution in dpi
+  function tiff(c, dpi, grey) {
+    const W = c.width, H = c.height, spp = grey ? 1 : 3, x = c.getContext('2d'), rps = 32, strips = [];
+    for (let y = 0; y < H; y += rps) {
+      const h = Math.min(rps, H - y), p = x.getImageData(0, y, W, h).data, rows = [];
+      for (let r = 0; r < h; r++) {
+        const row = new Uint8Array(W * spp);
+        for (let i = 0, o = r * W * 4; i < W; i++, o += 4) { if (grey) row[i] = p[o]; else { row[i * 3] = p[o]; row[i * 3 + 1] = p[o + 1]; row[i * 3 + 2] = p[o + 2]; } }
+        rows.push(packBits(row));
+      }
+      const len = rows.reduce((a, r) => a + r.length, 0), strip = new Uint8Array(len); let o = 0;
+      rows.forEach(r => { strip.set(r, o); o += r.length; }); strips.push(strip);
+    }
+    const n = strips.length, tags = 13, ifdLen = 2 + tags * 12 + 4;
+    let off = 8 + strips.reduce((a, s) => a + s.length, 0); off += off & 1;
+    const ifd = off, extra = ifd + ifdLen, bps = extra, xres = bps + 8, yres = xres + 8, so = yres + 8, sc = so + 4 * n, end = sc + 4 * n;
+    const head = new Uint8Array(8), hv = new DataView(head.buffer); head.set([73, 73]); hv.setUint16(2, 42, true); hv.setUint32(4, ifd, true);
+    const tail = new Uint8Array(end - ifd), v = new DataView(tail.buffer), at = a => a - ifd;
+    v.setUint16(0, tags, true);
+    const T = [[256, 4, 1, W], [257, 4, 1, H], [258, 3, spp, spp === 1 ? 8 : bps], [259, 3, 1, 32773], [262, 3, 1, grey ? 1 : 2], [273, 4, n, n === 1 ? 8 : so],
+      [277, 3, 1, spp], [278, 4, 1, rps], [279, 4, n, n === 1 ? strips[0].length : sc], [282, 5, 1, xres], [283, 5, 1, yres], [284, 3, 1, 1], [296, 3, 1, 2]];
+    T.forEach(([tag, type, count, val], i) => { const q = 2 + i * 12; v.setUint16(q, tag, true); v.setUint16(q + 2, type, true); v.setUint32(q + 4, count, true);
+      if (type === 3 && count === 1) v.setUint16(q + 8, val, true); else v.setUint32(q + 8, val, true); });
+    v.setUint32(2 + tags * 12, 0, true);
+    [0, 2, 4].forEach(k => v.setUint16(at(bps) + k, 8, true));
+    [xres, yres].forEach(a => { v.setUint32(at(a), dpi, true); v.setUint32(at(a) + 4, 1, true); });
+    let p = 8; strips.forEach((s, i) => { v.setUint32(at(so) + 4 * i, p, true); v.setUint32(at(sc) + 4 * i, s.length, true); p += s.length; });
+    const parts = [head, ...strips]; if ((8 + strips.reduce((a, s) => a + s.length, 0)) & 1) parts.push(new Uint8Array(1));
+    return new Blob([...parts, tail], { type: 'image/tiff' });
+  }
+  // canvas → Blob in the chosen format; the file says its resolution so Word and journals size it right
+  async function exportImage(src, { format = 'png', dpi = 300, grey = false, quality = 0.95 } = {}) {
+    const c = flatten(src, grey);
+    if (format === 'tiff') return tiff(c, dpi, grey);
+    const jpg = format === 'jpg' || format === 'jpeg', b = new Uint8Array(await (await toBlob(c, jpg ? 'image/jpeg' : 'image/png', quality)).arrayBuffer());
+    return new Blob([jpg ? jpegDpi(b, dpi) : pngDpi(b, dpi)], { type: jpg ? 'image/jpeg' : 'image/png' });
+  }
+
+  return { draw, consort, exportImage, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
 })();
