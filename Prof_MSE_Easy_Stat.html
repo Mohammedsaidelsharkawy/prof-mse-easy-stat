@@ -223,6 +223,20 @@ footer b{color:var(--purple)}
 .busy{position:fixed;inset:0;background:rgba(28,22,72,.35);display:none;place-items:center;z-index:60}
 .busy.show{display:grid}
 .busy div{background:var(--card);padding:22px 30px;border-radius:14px;font-weight:700;color:var(--title)}
+/* step 1: data preparation */
+.ov-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
+.ov-chips .chip{font-size:12px}
+details.prep{margin:10px 0;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--soft)}
+details.prep summary{cursor:pointer}
+.prep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:10px}
+.prep-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card)}
+.prep-card.wide{grid-column:1/-1}
+.prep-card h4{margin:0 0 6px;color:var(--title)}
+.flt{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.flt select,.flt input[type=text]{width:auto}
+dialog.app-dlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(720px,calc(100vw - 32px));box-shadow:0 20px 60px rgba(28,22,72,.25)}
+dialog.app-dlg::backdrop{background:rgba(20,17,34,.45)}
+dialog.app-dlg h3{margin:0 0 4px;color:var(--title)}
 /* figure export dialog */
 dialog#figDlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);box-shadow:0 20px 60px rgba(28,22,72,.25)}
 dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
@@ -277,12 +291,55 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div class="legend-note">.xlsx, .xls or .csv</div>
         <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
       </div>
+      <div class="row" style="margin-top:10px;gap:8px">
+        <button class="btn ghost small" id="btnPaste" type="button" title="Copy the cells in Excel (with the header row) and paste them here">📋 Paste from Excel</button>
+        <button class="btn ghost small" id="btnTemplate" type="button" title="An empty Excel sheet laid out the way the app reads it, with a guide">⬇ Blank template</button>
+        <span class="legend-note">Copy your cells in Excel, Google Sheets or SPSS and paste them, or start from a template.</span>
+      </div>
       <div id="sheetBox" style="display:none;margin-top:16px">
         <div class="grid g3">
           <div><label class="f">File</label><div id="fileName" class="mono"></div></div>
           <div><label class="f">Sheet</label><select id="sheetSel"></select></div>
           <div><label class="f">Rows / columns</label><div id="dims" class="mono"></div></div>
         </div>
+        <div id="dataOverview" class="ov-chips"></div>
+        <details class="prep" id="prepBox">
+          <summary><b>Prepare the data</b> — header rows, missing-value codes, which patients to analyse, and data from another file</summary>
+          <div class="prep-grid">
+            <div class="prep-card">
+              <h4>Header</h4>
+              <div class="row" style="gap:10px;align-items:flex-end">
+                <div><label class="f">Column names are in row</label><select id="hdrRow" style="width:auto"></select></div>
+                <label class="check" style="margin:0 0 8px"><input type="checkbox" id="hdrTwo"><span>Two header rows (e.g. “VAS” above “Baseline”, “W1” …)</span></label>
+              </div>
+              <p class="legend-note">Use this when the sheet starts with a title or notes above the column names. Two header rows are joined as “VAS_Baseline”.</p>
+            </div>
+            <div class="prep-card">
+              <h4>Missing-value codes</h4>
+              <div class="row" style="gap:8px;align-items:flex-end">
+                <div style="flex:1"><label class="f">Codes that mean “missing”</label><input type="text" id="missCodes" placeholder="e.g. 999, -99, NA, N/A, ., -"></div>
+                <button class="btn ghost small" id="missApply" type="button" style="margin-bottom:6px">Blank them</button>
+              </div>
+              <p class="legend-note" id="missInfo">Cells with exactly these values become empty (Undo in edit mode restores them).</p>
+            </div>
+            <div class="prep-card wide">
+              <h4>Analyse only some patients</h4>
+              <div id="filterList"></div>
+              <div class="row" style="gap:8px"><button class="btn ghost small" id="filterAdd" type="button">+ Condition</button><span class="legend-note" id="filterInfo"></span></div>
+              <p class="legend-note">The sheet keeps every row; the tables, figures and comments use only the patients who meet all the conditions (e.g. Age ≥ 18 and Centre = A). The Statistical Analysis section says so.</p>
+            </div>
+            <div class="prep-card wide">
+              <h4>Data from another file</h4>
+              <div class="row" style="gap:8px;align-items:flex-end">
+                <div><label class="f">How to combine</label><select id="mergeMode" style="width:auto"><option value="rows">Add patients (rows) — columns matched by name</option><option value="cols">Add variables (columns) — patients matched by ID</option></select></div>
+                <div id="mergeKeyBox" style="display:none"><label class="f">ID column</label><select id="mergeKey" style="width:auto"></select></div>
+                <button class="btn ghost small" id="mergeBtn" type="button" style="margin-bottom:6px">Choose file…</button>
+                <input type="file" id="mergeFile" accept=".xlsx,.xls,.csv" hidden>
+              </div>
+              <p class="legend-note">For data from several centres, or follow-up visits kept in a separate file. The first sheet of the other file is used.</p>
+            </div>
+          </div>
+        </details>
         <div id="gridWrap">
           <div class="row grid-bar">
             <h3 style="margin:0">Data</h3>
@@ -764,6 +821,15 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     </div>
     <p class="legend-note" id="fxInfo"></p>
     <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="fxCancel">Cancel</button> <button type="button" class="btn primary" id="fxGo">⬇ Export</button></div>
+  </form>
+</dialog>
+<dialog id="pasteDlg" class="app-dlg">
+  <form method="dialog">
+    <h3>Paste from Excel</h3>
+    <p class="legend-note" style="margin:0 0 8px">Select the cells in Excel (including the header row), copy them (Ctrl+C) and paste here (Ctrl+V). Tab- or comma-separated text also works.</p>
+    <textarea id="pasteText" rows="12" style="width:100%;font-family:monospace" placeholder="ID&#9;Group&#9;Age&#9;Sex&#10;1&#9;A&#9;54&#9;Male"></textarea>
+    <p class="legend-note" id="pasteInfo"></p>
+    <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="pasteCancel">Cancel</button> <button type="button" class="btn primary" id="pasteGo">Load</button></div>
   </form>
 </dialog>
 <div class="toast" id="toast"></div>
@@ -23037,7 +23103,26 @@ const Analysis = (() => {
     return m;
   }
   // the analysis sees the labels in place of the codes; the sheet keeps its codes
+  /* ---------- row filter: analyse only the rows that meet every condition (e.g. Age ≥ 18, Centre = A) ---------- */
+  const FILTER_OPS = { eq: '=', ne: '≠', gt: '>', ge: '≥', lt: '<', le: '≤', blank: 'is blank', notblank: 'is not blank', has: 'contains' };
+  function rowPasses(r, f) {
+    const v = r[f.col], c = toCat(v), want = String(f.val ?? '').trim();
+    if (f.op === 'blank') return c === null;
+    if (f.op === 'notblank') return c !== null;
+    if (c === null) return false;
+    if (f.op === 'has') return c.toLowerCase().includes(want.toLowerCase());
+    const a = toNum(v), b = toNum(want), num = isFinite(a) && isFinite(b);
+    if (f.op === 'eq') return num ? a === b : c.toLowerCase() === want.toLowerCase();
+    if (f.op === 'ne') return num ? a !== b : c.toLowerCase() !== want.toLowerCase();
+    if (!num) return false;
+    return f.op === 'gt' ? a > b : f.op === 'ge' ? a >= b : f.op === 'lt' ? a < b : a <= b;
+  }
+  const activeFilters = cfg => (cfg.rowFilter || []).filter(f => f && f.on !== false && f.col && f.op && (['blank', 'notblank'].includes(f.op) || String(f.val ?? '').trim() !== ''));
+  function filterRows(cfg, rows) { const fs = activeFilters(cfg); return fs.length ? rows.filter(r => fs.every(f => rowPasses(r, f))) : rows; }
+  const filterText = cfg => activeFilters(cfg).map(f => `${columnLabel(cfg, f.col)} ${FILTER_OPS[f.op]}${['blank', 'notblank'].includes(f.op) ? '' : ' ' + f.val}`).join(' and ');
+
   function withValueLabels(data, cfg) {
+    if (activeFilters(cfg).length) data = { ...data, rows: filterRows(cfg, data.rows) };
     const maps = {};
     (cfg.variables || []).forEach(v => {
       if (v.type !== 'categorical' || !v.valueLabels) return;
@@ -23723,7 +23808,7 @@ const Analysis = (() => {
       if (opts.shadeSig) shadeSigRows(sec, opts.pHead || 'P value', alpha);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
     });
-    return { sections, used, groups: gl, gN, k, methods: opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
+    return { sections, used, groups: gl, gN, k, methods: (opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? ` The analysis included only patients with ${filterText(cfg)}.` : ''), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
@@ -24121,7 +24206,7 @@ const Analysis = (() => {
     return t;
   }
 
-  return { run, explore, parseValueLabels, withValueLabels, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { run, explore, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();
 
 /* Prof MSE Easy Stat — canvas charts (bar ± error, line, box plot, CONSORT) */
@@ -26016,16 +26101,48 @@ if (typeof module !== 'undefined') module.exports = Examples;
     try {
       busy(true);
       const buf = await f.arrayBuffer();
-      state.wb = XLSX.read(buf, { type: 'array' });
-      state.file = f.name;
-      $('#fileName').textContent = f.name;
-      $('#sheetSel').innerHTML = state.wb.SheetNames.map(s => `<option>${esc(s)}</option>`).join('');
-      $('#sheetBox').style.display = '';
-      selectSheet(state.wb.SheetNames[0]);
+      openWorkbook(XLSX.read(buf, { type: 'array' }), f.name);
     } catch (err) { console.error(err); toast('Could not read this file: ' + err.message); }
     finally { busy(false); }
   }
-  $('#sheetSel').onchange = e => selectSheet(e.target.value);
+  function openWorkbook(wb, name) {
+    state.wb = wb; state.file = name; state.hdr = { row: 1, two: false, auto: true };
+    $('#fileName').textContent = name;
+    $('#sheetSel').innerHTML = wb.SheetNames.map(s => `<option>${esc(s)}</option>`).join('');
+    $('#sheetBox').style.display = '';
+    selectSheet(wb.SheetNames[0]);
+  }
+  // paste cells copied from Excel (tab-separated) or comma-separated text
+  $('#btnPaste').onclick = () => { $('#pasteText').value = ''; $('#pasteInfo').textContent = ''; $('#pasteDlg').showModal(); $('#pasteText').focus(); };
+  $('#pasteCancel').onclick = () => $('#pasteDlg').close();
+  $('#pasteText').oninput = () => { const t = $('#pasteText').value.trim(); const lines = t ? t.split(/\r?\n/).filter(l => l.trim()) : [];
+    $('#pasteInfo').textContent = lines.length ? `${lines.length - 1} rows × ${lines[0].split(lines[0].includes('\t') ? '\t' : ',').length} columns` : ''; };
+  $('#pasteGo').onclick = () => {
+    const t = $('#pasteText').value.replace(/\r/g, '').trim(); if (!t) return;
+    if (state.data && !confirm('Replace the current data with the pasted cells?')) return;
+    const sep = t.split('\n')[0].includes('\t') ? '\t' : t.split('\n')[0].includes(';') && !t.split('\n')[0].includes(',') ? ';' : ',';
+    const aoa = t.split('\n').filter(l => l.trim()).map(l => l.split(sep).map(c => { c = c.trim().replace(/^"(.*)"$/, '$1'); return c === '' ? null : parseCell(c); }));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Pasted');
+    state.pendingCfg = null; $('#pasteDlg').close();
+    openWorkbook(wb, 'Pasted data');
+  };
+  // an empty sheet laid out the way the app reads it, with a guide
+  $('#btnTemplate').onclick = () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['ID', 'Group', 'Age', 'Sex', 'BMI', 'Diabetes', 'VAS_Baseline', 'VAS_W1', 'VAS_M3', 'VAS_M6', 'Complications']]), 'Data');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['How to fill the Data sheet'], [],
+      ['1', 'One row per patient, one column per variable. Keep the column names in the first row.'],
+      ['2', 'Group: the study arm of each patient (e.g. A / B, or Drug / Placebo). Leave it out for a one-group study.'],
+      ['3', 'Numbers as numbers (54, not "54 years"); use a dot or a comma for decimals.'],
+      ['4', 'Categories as words (Male / Female, Yes / No) or codes (1 / 2) — codes can be labelled in step 2 (1=Male, 2=Female).'],
+      ['5', 'Repeated measures: one column per timepoint with the timepoint in the name, e.g. VAS_Baseline, VAS_W1, VAS_M3.'],
+      ['6', 'Leave missing values empty (or use one code such as 999 and blank it in step 1 → Prepare the data).'],
+      ['7', 'No merged cells, totals or notes below the data. Rename, add or delete columns as you need.']]), 'Guide');
+    XLSX.writeFile(wb, 'Easy Stat template.xlsx');
+  };
+  $('#sheetSel').onchange = e => { state.hdr = { row: 1, two: false, auto: true }; selectSheet(e.target.value); };
+  $('#hdrRow').onchange = e => { if (!state.wb) return; state.hdr.row = +e.target.value; state.pendingCfg = null; selectSheet(state.sheet); };
+  $('#hdrTwo').onchange = e => { if (!state.wb) { e.target.checked = false; toast('Open the Excel file again to change its header rows'); return; } state.hdr.two = e.target.checked; state.pendingCfg = null; selectSheet(state.sheet); };
 
   /* ---------- software statement presets (first sentence of Statistical Analysis) ---------- */
   const SOFTWARE = [
@@ -26062,7 +26179,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     if (d) { const ex = Examples.get(d.dataset.exsave); XLSX.writeFile(exampleBook(ex), ex.id + '.xlsx'); return; }
     if (!o) return;
     const ex = Examples.get(o.dataset.exopen);
-    state.wb = exampleBook(ex); state.file = ex.id + '.xlsx'; state.pendingCfg = null;
+    state.wb = exampleBook(ex); state.file = ex.id + '.xlsx'; state.pendingCfg = null; state.hdr = { row: 1, two: false, auto: true };
     $('#fileName').textContent = state.file + ' (example)';
     $('#sheetSel').innerHTML = '<option>Data</option>'; $('#sheetBox').style.display = '';
     $('#studyTitle').value = ex.title;
@@ -26096,20 +26213,47 @@ if (typeof module !== 'undefined') module.exports = Examples;
 
   function selectSheet(name) {
     const ws = state.wb.Sheets[name];
-    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: false });
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: true });
+    let lead = 0; // empty rows above the data
+    while (aoa.length && !aoa[0].some(v => v !== null && String(v).trim() !== '')) { aoa.shift(); lead++; }
     if (!aoa.length) { toast('This sheet is empty'); return; }
-    const headers = aoa[0].map((h, i) => h === null || h === '' ? `Column_${i + 1}` : String(h).trim());
-    const rows = aoa.slice(1).filter(r => r.some(v => v !== null && String(v).trim() !== ''))
+    // the header: the chosen row (title rows above it are skipped), optionally joined with a second row ("VAS" above "Baseline" → VAS_Baseline)
+    const hdr = state.hdr || (state.hdr = { row: 1, two: false, auto: true });
+    const r0 = XLSX.utils.decode_range(ws['!ref'] || 'A1').s, filled = r => r.filter(v => v !== null && String(v).trim() !== '').length;
+    if (hdr.auto) {
+      // found by itself: the first row filled across most of the columns (title and note rows above it are skipped),
+      // and two header rows when that row has a title merged across columns ("VAS" over Baseline / W1 / M3)
+      const wmax = Math.max(...aoa.slice(0, 30).map(filled));
+      hdr.row = 1 + Math.max(0, aoa.slice(0, 20).findIndex(r => filled(r) >= Math.max(2, 0.6 * wmax)));
+      hdr.two = (ws['!merges'] || []).some(m => m.s.r === r0.r + lead + hdr.row - 1 && m.e.c > m.s.c && m.e.r === m.s.r) && !!aoa[hdr.row];
+      hdr.auto = false;
+      if (hdr.row > 1 || hdr.two) setTimeout(() => toast(`Column names found in row ${hdr.row}${hdr.two ? ` and ${hdr.row + 1} (two header rows)` : ''} — change it in “Prepare the data” if needed`), 600);
+    }
+    const hr = Math.min(hdr.row, aoa.length) - 1;
+    $('#hdrRow').innerHTML = Array.from({ length: Math.min(20, aoa.length) }, (_, i) => `<option value="${i + 1}" ${i === hr ? 'selected' : ''}>${i + 1}${i ? '' : ' (first row)'}</option>`).join('');
+    $('#hdrTwo').checked = hdr.two;
+    const cell = v => v === null || v === undefined ? '' : String(v).trim();
+    const width = Math.max(...aoa.map(r => r.length));
+    let names = Array.from({ length: width }, (_, i) => cell(aoa[hr][i]));
+    if (hdr.two && aoa[hr + 1]) {
+      // a title merged across several columns names each of them (from the sheet's merged cells)
+      const top = [...names];
+      (ws['!merges'] || []).forEach(m => { if (m.s.r === r0.r + lead + hr) for (let c = m.s.c + 1; c <= m.e.c; c++) if (!top[c - r0.c]) top[c - r0.c] = top[m.s.c - r0.c]; });
+      names = names.map((_, i) => { const a = top[i], b = cell(aoa[hr + 1][i]); return a && b && a !== b ? `${a}_${b}` : a || b; });
+    }
+    const seen = {};
+    const headers = names.map((h, i) => { let n = h || `Column_${i + 1}`; if (seen[n]) n = `${n}_${++seen[n]}`; else seen[n] = 1; return n; });
+    const rows = aoa.slice(hr + (hdr.two ? 2 : 1)).filter(r => r.some(v => v !== null && String(v).trim() !== ''))
       .map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? null])));
     state.sheet = name;
     state.data = { headers, rows };
     state.undo = []; state.grid.page = 0; state.grid.sort = null;
-    renderGrid();
     const prevCfg = state.pendingCfg;
     state.cfg = detect(state.data);
     if (prevCfg) applySavedCfg(prevCfg);
+    renderGrid();
     $('#to2').disabled = false;
-    renderStepper();
+    renderStepper(); renderPrep();
     toast(`Loaded ${rows.length} patients · ${state.cfg.variables.length} variables detected`);
   }
   $('#to2').onclick = () => go(2);
@@ -26157,7 +26301,110 @@ if (typeof module !== 'undefined') module.exports = Examples;
     $('#gridUndo').disabled = !state.undo.length;
     $('#gridEdit').classList.toggle('primary', g.edit); $('#gridEdit').classList.toggle('ghost', !g.edit);
     $('#gridEdit').textContent = g.edit ? '✓ Done editing' : '✎ Edit sheet';
+    renderOverview(kinds);
   }
+  // a line of facts about the sheet: patients, column types, missing cells, duplicate IDs, empty or constant columns, the filter
+  function renderOverview(kinds) {
+    const { headers, rows } = state.data, cfg = state.cfg, nNum = headers.filter(h => kinds[h] === 'num').length;
+    const miss = rows.reduce((a, r) => a + headers.filter(h => isMissing(r[h])).length, 0), cells = rows.length * headers.length;
+    const empty = headers.filter(h => rows.every(r => isMissing(r[h]))), constant = headers.filter(h => { const d = new Set(rows.map(r => r[h]).filter(v => !isMissing(v)).map(String)); return d.size === 1 && rows.length > 1; });
+    const id = cfg && cfg.idCols[0], ids = id ? rows.map(r => r[id]).filter(v => !isMissing(v)).map(String) : [], dup = ids.length - new Set(ids).size;
+    const kept = cfg ? Analysis.filterRows(cfg, rows).length : rows.length;
+    const chip = (cls, t, tip = '') => `<span class="chip ${cls}" ${tip ? `title="${esc(tip)}"` : ''}>${t}</span>`;
+    $('#dataOverview').innerHTML = [chip('info', `${rows.length} patients`), chip('info', `${nNum} numeric · ${headers.length - nNum} text columns`),
+      chip(miss ? 'warn' : 'ok', cells ? `${(100 * miss / cells).toFixed(1)}% cells missing` : 'no cells'),
+      id ? chip(dup ? 'warn' : 'ok', dup ? `${dup} duplicate ${esc(id)}` : `${esc(id)} unique`) : '',
+      empty.length ? chip('warn', `${empty.length} empty column${empty.length > 1 ? 's' : ''}`, empty.join(', ')) : '',
+      constant.length ? chip('warn', `${constant.length} column${constant.length > 1 ? 's' : ''} with one value`, constant.join(', ')) : '',
+      kept < rows.length ? chip('warn', `Filter: ${kept} of ${rows.length} analysed`) : ''].join('');
+  }
+  /* ---------- step 1: prepare the data (missing codes, row filter, combining files) ---------- */
+  function renderPrep() {
+    const cfg = state.cfg, h = state.data.headers;
+    $('#mergeKey').innerHTML = h.map(c => `<option ${cfg && cfg.idCols[0] === c ? 'selected' : ''}>${esc(c)}</option>`).join('');
+    renderFilters();
+  }
+  function renderFilters() {
+    const cfg = state.cfg; if (!cfg) return;
+    cfg.rowFilter = cfg.rowFilter || [];
+    const h = state.data.headers, ops = Object.entries(Analysis.FILTER_OPS);
+    $('#filterList').innerHTML = cfg.rowFilter.map((f, i) => `<div class="flt" data-fi="${i}">
+      <input type="checkbox" data-ff="on" ${f.on !== false ? 'checked' : ''} title="Use this condition">
+      <select data-ff="col">${h.map(c => `<option ${c === f.col ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+      <select data-ff="op">${ops.map(([k, t]) => `<option value="${k}" ${k === f.op ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <input type="text" data-ff="val" value="${esc(f.val ?? '')}" list="fltVals${i}" style="width:140px;${['blank', 'notblank'].includes(f.op) ? 'display:none' : ''}" placeholder="value">
+      <datalist id="fltVals${i}">${columnInfo(state.data.rows, f.col).distinct.slice(0, 50).map(v => `<option value="${esc(v)}">`).join('')}</datalist>
+      <button class="btn ghost small" data-fdel="${i}" type="button" title="Remove">✕</button></div>`).join('');
+    const n = state.data.rows.length, kept = Analysis.filterRows(cfg, state.data.rows).length;
+    $('#filterInfo').textContent = cfg.rowFilter.length ? `${kept} of ${n} patients meet ${cfg.rowFilter.length > 1 ? 'all the conditions' : 'the condition'}` : 'All patients are analysed.';
+  }
+  $('#filterAdd').onclick = () => { const cfg = state.cfg; if (!cfg) return; cfg.rowFilter = cfg.rowFilter || [];
+    cfg.rowFilter.push({ col: state.data.headers.find(h => h !== cfg.groupCol && !cfg.idCols.includes(h)) || state.data.headers[0], op: 'eq', val: '', on: true }); renderFilters(); };
+  $('#filterList').addEventListener('click', e => { const b = e.target.closest('[data-fdel]'); if (!b) return; state.cfg.rowFilter.splice(+b.dataset.fdel, 1); afterFilter(true); });
+  $('#filterList').addEventListener('change', e => {
+    const el = e.target.closest('[data-ff]'); if (!el) return;
+    const f = state.cfg.rowFilter[+el.closest('[data-fi]').dataset.fi], k = el.dataset.ff;
+    f[k] = k === 'on' ? el.checked : el.value;
+    afterFilter(k !== 'val');
+  });
+  $('#filterList').addEventListener('input', e => { const el = e.target.closest('[data-ff="val"]'); if (!el) return; state.cfg.rowFilter[+el.closest('[data-fi]').dataset.fi].val = el.value; afterFilter(false); });
+  function afterFilter(redraw) {
+    state.cfg.consort = null; state.result = null;
+    if (redraw) renderFilters();
+    else { const n = state.data.rows.length, kept = Analysis.filterRows(state.cfg, state.data.rows).length; $('#filterInfo').textContent = `${kept} of ${n} patients meet ${state.cfg.rowFilter.length > 1 ? 'all the conditions' : 'the condition'}`; }
+    renderGrid();
+  }
+  // missing-value codes (999, NA, "."): blank the matching cells
+  $('#missApply').onclick = () => {
+    const codes = $('#missCodes').value.split(/[,;]+/).map(c => c.trim()).filter(Boolean); if (!codes.length || !state.data) { toast('Type the codes first, e.g. 999, NA'); return; }
+    const low = codes.map(c => c.toLowerCase()), nums = codes.map(c => Number(c)).filter(isFinite);
+    const hit = (v, h) => !isMissing(v) && h !== state.cfg.groupCol && (low.includes(String(v).trim().toLowerCase()) || (typeof v === 'number' && nums.includes(v)));
+    const { headers, rows } = state.data, per = {};
+    rows.forEach(r => headers.forEach(h => { if (hit(r[h], h)) per[h] = (per[h] || 0) + 1; }));
+    const n = Object.values(per).reduce((a, b) => a + b, 0);
+    if (!n) { $('#missInfo').textContent = 'No cell has these values.'; return; }
+    editSheet(() => { rows.forEach(r => headers.forEach(h => { if (hit(r[h], h)) r[h] = null; }));
+      state.cfg.variables.forEach(v => { if (v.type === 'categorical' && per[v.cols[0].col]) v.levels = v.levels.filter(l => !low.includes(String(l).toLowerCase())); }); refreshGroups(); });
+    $('#missInfo').textContent = `${n} cell${n > 1 ? 's' : ''} blanked: ${Object.entries(per).map(([h, k]) => `${h} (${k})`).join(', ')}.`;
+    toast(`${n} missing-value code${n > 1 ? 's' : ''} blanked`);
+  };
+  // another file: more patients (rows matched by column name) or more variables (columns matched by ID)
+  $('#mergeMode').onchange = e => { $('#mergeKeyBox').style.display = e.target.value === 'cols' ? '' : 'none'; };
+  $('#mergeBtn').onclick = () => $('#mergeFile').click();
+  $('#mergeFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f || !state.data) return;
+    try {
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }), ws = wb.Sheets[wb.SheetNames[0]];
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: false });
+      if (aoa.length < 2) { toast('The other file has no data rows'); return; }
+      const oh = aoa[0].map((h, i) => h === null || h === '' ? `Column_${i + 1}` : String(h).trim());
+      const orows = aoa.slice(1).filter(r => r.some(v => !isMissing(v))).map(r => Object.fromEntries(oh.map((h, i) => [h, r[i] ?? null])));
+      const { headers, rows } = state.data, cfg = state.cfg, added = [];
+      const addVars = () => added.forEach(h => cfg.variables.push({ ...singleVariable(state.data.rows, h, state.data.headers.indexOf(h), 'Other outcomes'), id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }));
+      if ($('#mergeMode').value === 'rows') {
+        const common = oh.filter(h => headers.includes(h));
+        if (!common.length) { toast('No column name is shared with the current sheet'); return; }
+        editSheet(() => {
+          oh.forEach(h => { if (!headers.includes(h)) { headers.push(h); rows.forEach(r => { r[h] = null; }); added.push(h); } });
+          orows.forEach(o => rows.push(Object.fromEntries(headers.map(h => [h, o[h] ?? null]))));
+          addVars(); refreshGroups();
+        });
+        toast(`${orows.length} patients added from ${f.name}${added.length ? ` with ${added.length} new column${added.length > 1 ? 's' : ''}` : ''}${oh.length > common.length ? '' : ' (all columns matched)'}`);
+      } else {
+        const key = $('#mergeKey').value, okey = oh.includes(key) ? key : oh[0];
+        const byId = new Map(orows.map(o => [String(o[okey] ?? '').trim(), o]));
+        let matched = 0;
+        editSheet(() => {
+          const names = oh.filter(h => h !== okey).map(h => { let n = h, k = 2; while (headers.includes(n) || added.includes(n)) n = `${h}_${k++}`; added.push(n); return [h, n]; });
+          headers.push(...names.map(x => x[1]));
+          rows.forEach(r => { const o = byId.get(String(r[key] ?? '').trim()); if (o) matched++; names.forEach(([h, n]) => { r[n] = o ? o[h] ?? null : null; }); });
+          addVars();
+        });
+        toast(`${added.length} column${added.length > 1 ? 's' : ''} added from ${f.name}: ${matched} of ${rows.length} patients matched by ${key}${byId.size > matched ? `, ${byId.size - matched} rows of the other file had no match` : ''}`);
+      }
+      renderPrep();
+    } catch (err) { console.error(err); toast('Could not read the other file: ' + err.message); }
+  };
   // every change to the sheet goes through here: snapshot for undo, apply, keep the setup in step, redraw
   function editSheet(fn) {
     state.undo.push(JSON.stringify({ data: state.data, cfg: state.cfg }));
@@ -26250,7 +26497,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     }
     else if (b.id === 'gridUndo') {
       const snap = state.undo.pop(); if (!snap) return;
-      const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg; renderGrid(); renderStepper(); toast('Undone');
+      const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg; renderGrid(); renderPrep(); renderStepper(); toast('Undone');
     }
     else if (b.id === 'gridAddRow') { editSheet(() => { state.data.rows.push(Object.fromEntries(state.data.headers.map(h => [h, null]))); }); g.page = 1e9; renderGrid(); }
     else if (b.id === 'gridAddCol') {
@@ -26264,7 +26511,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     }
     else if (b.id === 'gridRedetect') {
       if (!confirm('Detect the group, ID, variables and repeated measures again from the edited sheet? Your variable setup in steps 2–8 will be replaced.')) return;
-      editSheet(() => { state.cfg = detect(state.data); });
+      editSheet(() => { state.cfg = detect(state.data); }); renderPrep();
       toast(`Re-detected: ${state.cfg.variables.length} variables`);
     }
     else if (b.id === 'gridSave') {
@@ -26502,7 +26749,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     cfg.consort = null;
   }
   const activeGroups = () => state.cfg.groupOrder.filter(g => state.cfg.groupInclude[g] !== false);
-  const groupN = g => state.data.rows.filter(r => Analysis.groupOf(state.cfg, r) === g).length;
+  const groupN = g => Analysis.filterRows(state.cfg, state.data.rows).filter(r => Analysis.groupOf(state.cfg, r) === g).length;
 
   /* ---------- step 2: variables ---------- */
   function renderVariables() {
@@ -26943,7 +27190,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   const ADV_TYPES = { paired: 'Paired comparison (two measurements)', correlation: 'Correlation (Pearson / Spearman)', linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
     cox: 'Cox regression (hazard ratios)', mcnemar: 'McNemar test (paired categorical)', kappa: "Cohen's kappa (agreement, categorical)",
     agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)" };
-  const analysedRows = () => { const g = activeGroups(); return state.data.rows.filter(r => g.includes(Analysis.groupOf(state.cfg, r))); };
+  const analysedRows = () => { const g = activeGroups(); return Analysis.filterRows(state.cfg, state.data.rows).filter(r => g.includes(Analysis.groupOf(state.cfg, r))); };
   function advColumns() {
     const cfg = state.cfg, rows = analysedRows();
     return state.data.headers.filter(h => !cfg.idCols.includes(h)).map(h => ({ col: h, label: Analysis.columnLabel(cfg, h), kind: Analysis.columnKind(cfg, rows, h) }));
@@ -28028,7 +28275,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       state.undo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
       $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option>${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
       $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value;
-      $('#to2').disabled = false; renderGrid();
+      $('#to2').disabled = false; renderGrid(); renderPrep(); $('#hdrRow').innerHTML = '<option>1</option>';
       // leave no step active, so the controls of the old project are not read into the opened one
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       go(Math.min(STEPS.length, Math.max(2, +j.step || 2)));

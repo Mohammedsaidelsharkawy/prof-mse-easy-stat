@@ -223,6 +223,20 @@ footer b{color:var(--purple)}
 .busy{position:fixed;inset:0;background:rgba(28,22,72,.35);display:none;place-items:center;z-index:60}
 .busy.show{display:grid}
 .busy div{background:var(--card);padding:22px 30px;border-radius:14px;font-weight:700;color:var(--title)}
+/* step 1: data preparation */
+.ov-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
+.ov-chips .chip{font-size:12px}
+details.prep{margin:10px 0;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--soft)}
+details.prep summary{cursor:pointer}
+.prep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:10px}
+.prep-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card)}
+.prep-card.wide{grid-column:1/-1}
+.prep-card h4{margin:0 0 6px;color:var(--title)}
+.flt{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.flt select,.flt input[type=text]{width:auto}
+dialog.app-dlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(720px,calc(100vw - 32px));box-shadow:0 20px 60px rgba(28,22,72,.25)}
+dialog.app-dlg::backdrop{background:rgba(20,17,34,.45)}
+dialog.app-dlg h3{margin:0 0 4px;color:var(--title)}
 /* figure export dialog */
 dialog#figDlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);box-shadow:0 20px 60px rgba(28,22,72,.25)}
 dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
@@ -277,12 +291,55 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div class="legend-note">.xlsx, .xls or .csv</div>
         <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
       </div>
+      <div class="row" style="margin-top:10px;gap:8px">
+        <button class="btn ghost small" id="btnPaste" type="button" title="Copy the cells in Excel (with the header row) and paste them here">📋 Paste from Excel</button>
+        <button class="btn ghost small" id="btnTemplate" type="button" title="An empty Excel sheet laid out the way the app reads it, with a guide">⬇ Blank template</button>
+        <span class="legend-note">Copy your cells in Excel, Google Sheets or SPSS and paste them, or start from a template.</span>
+      </div>
       <div id="sheetBox" style="display:none;margin-top:16px">
         <div class="grid g3">
           <div><label class="f">File</label><div id="fileName" class="mono"></div></div>
           <div><label class="f">Sheet</label><select id="sheetSel"></select></div>
           <div><label class="f">Rows / columns</label><div id="dims" class="mono"></div></div>
         </div>
+        <div id="dataOverview" class="ov-chips"></div>
+        <details class="prep" id="prepBox">
+          <summary><b>Prepare the data</b> — header rows, missing-value codes, which patients to analyse, and data from another file</summary>
+          <div class="prep-grid">
+            <div class="prep-card">
+              <h4>Header</h4>
+              <div class="row" style="gap:10px;align-items:flex-end">
+                <div><label class="f">Column names are in row</label><select id="hdrRow" style="width:auto"></select></div>
+                <label class="check" style="margin:0 0 8px"><input type="checkbox" id="hdrTwo"><span>Two header rows (e.g. “VAS” above “Baseline”, “W1” …)</span></label>
+              </div>
+              <p class="legend-note">Use this when the sheet starts with a title or notes above the column names. Two header rows are joined as “VAS_Baseline”.</p>
+            </div>
+            <div class="prep-card">
+              <h4>Missing-value codes</h4>
+              <div class="row" style="gap:8px;align-items:flex-end">
+                <div style="flex:1"><label class="f">Codes that mean “missing”</label><input type="text" id="missCodes" placeholder="e.g. 999, -99, NA, N/A, ., -"></div>
+                <button class="btn ghost small" id="missApply" type="button" style="margin-bottom:6px">Blank them</button>
+              </div>
+              <p class="legend-note" id="missInfo">Cells with exactly these values become empty (Undo in edit mode restores them).</p>
+            </div>
+            <div class="prep-card wide">
+              <h4>Analyse only some patients</h4>
+              <div id="filterList"></div>
+              <div class="row" style="gap:8px"><button class="btn ghost small" id="filterAdd" type="button">+ Condition</button><span class="legend-note" id="filterInfo"></span></div>
+              <p class="legend-note">The sheet keeps every row; the tables, figures and comments use only the patients who meet all the conditions (e.g. Age ≥ 18 and Centre = A). The Statistical Analysis section says so.</p>
+            </div>
+            <div class="prep-card wide">
+              <h4>Data from another file</h4>
+              <div class="row" style="gap:8px;align-items:flex-end">
+                <div><label class="f">How to combine</label><select id="mergeMode" style="width:auto"><option value="rows">Add patients (rows) — columns matched by name</option><option value="cols">Add variables (columns) — patients matched by ID</option></select></div>
+                <div id="mergeKeyBox" style="display:none"><label class="f">ID column</label><select id="mergeKey" style="width:auto"></select></div>
+                <button class="btn ghost small" id="mergeBtn" type="button" style="margin-bottom:6px">Choose file…</button>
+                <input type="file" id="mergeFile" accept=".xlsx,.xls,.csv" hidden>
+              </div>
+              <p class="legend-note">For data from several centres, or follow-up visits kept in a separate file. The first sheet of the other file is used.</p>
+            </div>
+          </div>
+        </details>
         <div id="gridWrap">
           <div class="row grid-bar">
             <h3 style="margin:0">Data</h3>
@@ -764,6 +821,15 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     </div>
     <p class="legend-note" id="fxInfo"></p>
     <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="fxCancel">Cancel</button> <button type="button" class="btn primary" id="fxGo">⬇ Export</button></div>
+  </form>
+</dialog>
+<dialog id="pasteDlg" class="app-dlg">
+  <form method="dialog">
+    <h3>Paste from Excel</h3>
+    <p class="legend-note" style="margin:0 0 8px">Select the cells in Excel (including the header row), copy them (Ctrl+C) and paste here (Ctrl+V). Tab- or comma-separated text also works.</p>
+    <textarea id="pasteText" rows="12" style="width:100%;font-family:monospace" placeholder="ID&#9;Group&#9;Age&#9;Sex&#10;1&#9;A&#9;54&#9;Male"></textarea>
+    <p class="legend-note" id="pasteInfo"></p>
+    <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="pasteCancel">Cancel</button> <button type="button" class="btn primary" id="pasteGo">Load</button></div>
   </form>
 </dialog>
 <div class="toast" id="toast"></div>

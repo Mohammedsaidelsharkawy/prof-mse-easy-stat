@@ -1250,7 +1250,26 @@ const Analysis = (() => {
     return m;
   }
   // the analysis sees the labels in place of the codes; the sheet keeps its codes
+  /* ---------- row filter: analyse only the rows that meet every condition (e.g. Age ≥ 18, Centre = A) ---------- */
+  const FILTER_OPS = { eq: '=', ne: '≠', gt: '>', ge: '≥', lt: '<', le: '≤', blank: 'is blank', notblank: 'is not blank', has: 'contains' };
+  function rowPasses(r, f) {
+    const v = r[f.col], c = toCat(v), want = String(f.val ?? '').trim();
+    if (f.op === 'blank') return c === null;
+    if (f.op === 'notblank') return c !== null;
+    if (c === null) return false;
+    if (f.op === 'has') return c.toLowerCase().includes(want.toLowerCase());
+    const a = toNum(v), b = toNum(want), num = isFinite(a) && isFinite(b);
+    if (f.op === 'eq') return num ? a === b : c.toLowerCase() === want.toLowerCase();
+    if (f.op === 'ne') return num ? a !== b : c.toLowerCase() !== want.toLowerCase();
+    if (!num) return false;
+    return f.op === 'gt' ? a > b : f.op === 'ge' ? a >= b : f.op === 'lt' ? a < b : a <= b;
+  }
+  const activeFilters = cfg => (cfg.rowFilter || []).filter(f => f && f.on !== false && f.col && f.op && (['blank', 'notblank'].includes(f.op) || String(f.val ?? '').trim() !== ''));
+  function filterRows(cfg, rows) { const fs = activeFilters(cfg); return fs.length ? rows.filter(r => fs.every(f => rowPasses(r, f))) : rows; }
+  const filterText = cfg => activeFilters(cfg).map(f => `${columnLabel(cfg, f.col)} ${FILTER_OPS[f.op]}${['blank', 'notblank'].includes(f.op) ? '' : ' ' + f.val}`).join(' and ');
+
   function withValueLabels(data, cfg) {
+    if (activeFilters(cfg).length) data = { ...data, rows: filterRows(cfg, data.rows) };
     const maps = {};
     (cfg.variables || []).forEach(v => {
       if (v.type !== 'categorical' || !v.valueLabels) return;
@@ -1936,7 +1955,7 @@ const Analysis = (() => {
       if (opts.shadeSig) shadeSigRows(sec, opts.pHead || 'P value', alpha);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
     });
-    return { sections, used, groups: gl, gN, k, methods: opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
+    return { sections, used, groups: gl, gN, k, methods: (opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? ` The analysis included only patients with ${filterText(cfg)}.` : ''), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
@@ -2334,5 +2353,5 @@ const Analysis = (() => {
     return t;
   }
 
-  return { run, explore, parseValueLabels, withValueLabels, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { run, explore, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();
