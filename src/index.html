@@ -254,6 +254,13 @@ footer b{color:var(--purple)}
 /* step 10: data half / summary half */
 .xp-half{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:10px;align-items:start}
 .xp-half .xp-side-data{max-height:720px}
+.xp-half-data{max-height:720px;overflow:auto}
+.xw-title{font-family:"Times New Roman",serif;font-weight:700;font-size:15px;margin:2px 0 4px;color:var(--ink)}
+table.rt.xw{font-size:13.5px;margin:0 0 6px}table.rt.xw th{background:#D9D9D9;font-weight:700}table.rt.xw td{background:#fff}
+table.rt.xw.small{font-size:12px}table.rt.xw.small th,table.rt.xw.small td{padding:3px 5px}
+table.rt.xw td.out{background:rgba(224,138,46,.28);font-weight:600}table.rt.xw td.miss{background:rgba(192,57,43,.14)}table.rt.xw td.chg{box-shadow:inset 3px 0 0 var(--purple)}
+
+table.rt.xw td[contenteditable]:focus{outline:2px solid var(--purple);outline-offset:-2px}
 .xp-half .xp-fig{width:100%;margin-top:10px}
 .xp-sum-note{font-size:12.5px;color:var(--muted);margin-top:4px}
 @media (max-width:900px){.xp-half{grid-template-columns:1fr}}

@@ -1792,7 +1792,7 @@
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   // options of the stage, saved with the setup / project
-  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'standard', overview: true };
+  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true };
   const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
   function renderXpOpts() {
     const o = xpo();
@@ -1868,6 +1868,24 @@
     return { title: 'Summary', head: ['', 'n', 'Mean ± SD', 'Median (IQR)', 'P value', 'Effect size'], rows,
       note: used ? `${used[0]}${used[1] ? ` (${used[1]}${used[2] ? `, df ${used[2]}` : ''})` : ''}.` : it.test };
   }
+  // the half view drawn as the Word file: titled grid tables (grey header, report font), the groups' patients side by side, values still editable
+  const wordTbl = (title, head, body, cls = '') => `<div class="xw-title">${esc(title)}</div><table class="rt xw ${cls}" style="font-family:'${esc(state.cfg.options.font)}',serif"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+  function dataWordHtml(it) {
+    const cfg = state.cfg, idc = cfg.idCols[0], rows = state.data.rows, num = it.kind !== 'categorical', gs = activeGroups();
+    const idx = gs.map(g => rows.map((r, i) => i).filter(i => Analysis.groupOf(cfg, rows[i]) === g)), n = Math.max(0, ...idx.map(x => x.length));
+    const fence = idx.map(ix => it.cols.map(c => num ? Analysis.outFence(ix.map(i => Analysis.toNum(rows[i][c.col])).filter(isFinite), xpo().out) : null));
+    const cls = (val, f, i, col) => { const miss = val === null || val === undefined || String(val).trim() === '', v = Analysis.toNum(val);
+      return [miss ? 'miss' : f && isFinite(v) && (v < f[0] || v > f[1]) ? 'out' : '', state.xpChanged.has(i + '|' + col) ? 'chg' : ''].filter(Boolean).join(' '); };
+    const per = [idc || '#', ...it.cols.map(c => c.label)];
+    const head = gs.flatMap(g => per.map((h, j) => j === 0 ? `${cfg.groupLabels[g] || g}: ${h}` : h));
+    const body = Array.from({ length: n }, (_, r) => `<tr>${idx.map((ix, gi) => { const i = ix[r];
+      if (i === undefined) return per.map(() => '<td></td>').join('');
+      return `<td>${esc(idc ? rows[i][idc] ?? '' : i + 1)}</td>` + it.cols.map((c, ci) => `<td class="${cls(rows[i][c.col], fence[gi][ci], i, c.col)}" contenteditable="true" data-xr="${i}" data-xc="${esc(c.col)}">${esc(rows[i][c.col] ?? '')}</td>`).join(''); }).join('')}</tr>`).join('');
+    return wordTbl("Data of each group — every patient's value", head, body, 'small')
+      + `<div class="xp-legend">${Analysis.OUT_RULE[xpo().out] ? `Orange: outlier (${Analysis.OUT_RULE[xpo().out]} of its group) · ` : ''}red: missing · purple edge: changed here. Click a value to change it; Enter to confirm, Esc to cancel.</div>`;
+  }
+  const sumWordHtml = it => { const t = summaryTable(it); if (!t) return xpTables(it).map(tblHtml).join('');
+    return wordTbl(t.note ? `Summary — ${t.note}` : 'Summary', t.head, t.rows.map(r => `<tr>${r.map(c => `<td class="${/\*$/.test(c) ? 'sigp' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')); };
   const sumHtml = it => { const t = summaryTable(it); return t ? tblHtml(t) + (t.note ? `<div class="xp-sum-note">${esc(t.note)}</div>` : '') : xpTables(it).map(tblHtml).join(''); };
   // a card's lines: each group's mean ± SD or median (IQR), its frequencies, or the values at the first and last timepoint
   function keyLines(it) {
@@ -1911,7 +1929,7 @@
         ${img ? `<div class="xp-fig-below">${img}</div>` : ''}</div>`;
       // data of each group in the left half, the summary table (and the figure) in the right half
       if (view === 'half') return `<div class="report-sec xp-item">${headRow}
-        <div class="xp-half"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div>${sumHtml(it)}${img}</div></div></div>`;
+        <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div>${sumWordHtml(it)}${img}</div></div></div>`;
       if (view === 'stacked') return `<div class="report-sec xp-item xp-stacked">${headRow}${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
       if (view === 'tables') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div></div>`;
