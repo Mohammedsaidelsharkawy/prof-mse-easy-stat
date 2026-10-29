@@ -257,6 +257,113 @@ const Examples = (() => {
     }
   ];
 
-  return { LIST, get: id => LIST.find(e => e.id === id) };
+  /* ---------- messy datasets: real-life problems to find and fix in step 1, with a checklist ----------
+     book(XLSX) builds the workbook as a clinic would send it; each task's done(data, cfg, A) is checked live */
+  const H = (data, re) => data.headers.find(h => re.test(h));
+  const vals = (data, h) => h ? data.rows.map(r => r[h]).filter(v => v !== null && v !== undefined && String(v).trim() !== '') : [];
+  const distinct = (data, h) => new Set(vals(data, h).map(v => String(v).trim())).size;
+  const allNum = (data, h, A) => !!h && vals(data, h).every(v => typeof v === 'number' || isFinite(A.toNum(v)) && /^\s*-?[\d.,]+\s*$/.test(String(v)));
+  const uniqueIds = (data, h) => { const v = vals(data, h).map(String); return !!h && v.length === new Set(v).size; };
+  const sheet = (XLSX, aoa, merges) => { const ws = XLSX.utils.aoa_to_sheet(aoa); if (merges) ws['!merges'] = merges.map(m => XLSX.utils.decode_range(m)); return ws; };
+  const MESSY = [
+    {
+      id: 'messy-htn', level: 'Beginner', name: 'Messy 1 — Hypertension clinic list',
+      description: 'A clinic export with a title above the table, categories typed in many ways, units inside numbers, 999 for missing, a duplicated patient and an empty Notes column.',
+      book(XLSX) {
+        const R = rng(901), rows = [['Hypertension clinic – patient list (exported 03/2026)'], ['Prepared by the outpatient clinic'], [],
+          ['Patient No', 'Treatment', 'Age', 'Sex', 'Weight (kg)', 'SBP baseline', 'SBP 3 months', 'Smoker', 'Notes']];
+        for (let i = 1; i <= 50; i++) {
+          const drug = i % 2 === 1, age = Math.round(R.n(56, 9)), w = r1(R.n(84, 12)), s0 = Math.round(R.n(156, 10));
+          rows.push([i, drug ? R.pick(['Amlodipine', 'Amlodipine', 'Amlodipine', 'amlodipine ', 'AMLODIPINE']) : R.pick(['Placebo', 'Placebo', 'Placebo', 'placebo']),
+            i % 11 === 3 ? `${age} years` : i % 13 === 5 ? `${age}y` : age, R.pick(['Male', 'Male', 'male', 'M', 'Male ', 'Female', 'Female', 'female', 'F']),
+            i % 9 === 4 ? `${w} kg` : i % 10 === 7 ? String(w).replace('.', ',') : w, s0, i % 8 === 6 ? 999 : Math.round(s0 - (drug ? 16 : 4) + R.n(0, 8)),
+            R.pick(['Yes', 'No', 'No', 'yes', 'Y', 'N']), null]);
+          if (i === 17) rows.push([...rows[rows.length - 1]]);
+        }
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, sheet(XLSX, rows), 'Sheet1'); return wb;
+      },
+      tasks: [
+        { text: 'Column names read from row 4 (the title rows skipped)', hint: 'Found by itself; see Prepare the data → Header.', done: d => !!H(d, /^patient no/i) },
+        { text: 'Treatment written one way (Amlodipine / Placebo)', hint: '🩺 Check data → Fix (spelling), or 🏷 Recode values.', done: d => distinct(d, H(d, /treat/i)) === 2 },
+        { text: 'Sex has two categories (M → Male, F → Female)', hint: '🏷 Recode values: give M and male the same new value.', done: d => distinct(d, H(d, /^sex/i)) === 2 },
+        { text: 'Smoker has two categories (Y → Yes, N → No)', hint: '🏷 Recode values on Smoker.', done: d => distinct(d, H(d, /smok/i)) === 2 },
+        { text: 'Age and Weight are plain numbers (no “years”, “kg”)', hint: '🩺 Check data → Fix (numbers with units).', done: (d, c, A) => allNum(d, H(d, /^age/i), A) && allNum(d, H(d, /weight/i), A) },
+        { text: '999 is blank, not a blood pressure', hint: 'Prepare the data → Missing-value codes: 999.', done: d => !d.rows.some(r => d.headers.some(h => /sbp/i.test(h) && +r[h] === 999)) },
+        { text: 'The duplicated patient removed', hint: '🩺 Check data → Remove duplicate rows.', done: d => uniqueIds(d, H(d, /^patient no/i)) },
+        { text: 'The empty Notes column deleted', hint: '🩺 Check data → Delete (empty column).', done: d => !H(d, /^notes$/i) }
+      ]
+    },
+    {
+      id: 'messy-asthma', level: 'Intermediate', name: 'Messy 2 — Asthma trial with two header rows',
+      description: 'Merged titles over the timepoints, units typed into cells, “-” and “.” for missing, typing errors (24.1 instead of 2.41) and mixed spellings.',
+      book(XLSX) {
+        const R = rng(902), rows = [['Inhaled therapy trial — FEV1 and asthma control'],
+          ['ID', 'Arm', 'Age', 'Gender', 'FEV1 (L)', null, null, 'ACT score', null, null, 'Exacerbation'],
+          [null, null, null, null, 'Baseline', 'Month 3', 'Month 6', 'Baseline', 'Month 3', 'Month 6', null]];
+        for (let i = 1; i <= 44; i++) {
+          const a = i % 2, f0 = R.n(2.4, 0.45), act0 = clamp(Math.round(R.n(15, 3)), 5, 25);
+          const f = [f0, f0 + (a ? 0.28 : 0.08) + R.n(0, 0.2), f0 + (a ? 0.36 : 0.1) + R.n(0, 0.25)].map(v => Math.round(v * 100) / 100);
+          const fc = f.map((v, k) => i === 9 && k === 1 ? Math.round(v * 1000) / 100 : i % 10 === 3 && k === 2 ? R.pick(['-', '.']) : i % 7 === 2 && k === 0 ? `${v} L` : v);
+          const act = [act0, clamp(act0 + (a ? 4 : 1) + Math.round(R.n(0, 2)), 5, 25), clamp(act0 + (a ? 5 : 1) + Math.round(R.n(0, 2)), 5, 25)];
+          rows.push([i, a ? 'Budesonide-formoterol' : 'Salbutamol', i === 30 ? '-' : Math.round(R.n(41, 12)), R.pick(['Female', 'Female', 'F', 'Male', 'male']),
+            ...fc, ...act.map((v, k) => i % 12 === 5 && k === 2 ? '.' : v), R.pick(a ? ['No', 'No', 'No', 'Yes', 'yes'] : ['No', 'Yes', 'Yes', 'no'])]);
+        }
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, sheet(XLSX, rows, ['E2:G2', 'H2:J2']), 'Trial'); return wb;
+      },
+      tasks: [
+        { text: 'The two header rows joined (FEV1 (L)_Baseline …)', hint: 'Found by itself; see Prepare the data → Two header rows.', done: d => !!H(d, /fev1.*baseline/i) },
+        { text: '“-” and “.” are blank cells', hint: 'Prepare the data → Missing-value codes: -, .', done: d => !d.rows.some(r => d.headers.some(h => ['-', '.'].includes(String(r[h] ?? '').trim()))) },
+        { text: 'FEV1 cells are plain numbers (no “L”)', hint: '🩺 Check data → Fix (numbers with units).', done: (d, c, A) => d.headers.filter(h => /fev1/i.test(h)).every(h => allNum(d, h, A)) },
+        { text: 'The typing error in FEV1 (a value above 10 L) corrected', hint: '🩺 Check data → Show, then ✎ Edit sheet and type 2.41 (or blank it).', done: (d, c, A) => d.headers.filter(h => /fev1/i.test(h)).every(h => vals(d, h).every(v => !(A.toNum(v) > 10))) },
+        { text: 'Gender has two categories', hint: '🏷 Recode values on Gender.', done: d => distinct(d, H(d, /gender/i)) === 2 },
+        { text: 'Exacerbation has two categories', hint: '🩺 Check data → Fix (spelling).', done: d => distinct(d, H(d, /exacerb/i)) === 2 },
+        { text: 'FEV1 and ACT found as repeated measures in step 2', hint: 'Open step 2 after cleaning (⟳ Re-detect variables if needed).', done: (d, c) => !!c && ['FEV1', 'ACT'].every(k => c.variables.some(v => v.kind === 'repeated' && v.cols.some(x => x.col.includes(k)))) }
+      ]
+    },
+    {
+      id: 'messy-diabetes-long', level: 'Advanced', name: 'Messy 3 — Diabetes visits in long format',
+      description: 'One row per visit instead of one row per patient, visit names typed differently, and the patients’ age and sex kept on a second sheet.',
+      book(XLSX) {
+        const R = rng(903), visits = [['ID', 'Group', 'Visit', 'HbA1c', 'Weight']], pts = [['ID', 'Age', 'Sex', 'Diabetes duration (years)']];
+        const names = [['Baseline', 'baseline', 'Baseline'], ['Month 3', 'M3', '3 months', 'Month 3'], ['Month 6', 'Month 6', '6 months']];
+        for (let i = 1; i <= 36; i++) {
+          const g = i % 2 ? 'Empagliflozin' : 'Sitagliptin', h0 = R.n(8.6, 0.9), w0 = R.n(91, 13), d = g === 'Empagliflozin' ? 1 : 0.6;
+          pts.push([i, Math.round(R.n(55, 9)), R.pick(['Female', 'Male']), Math.max(1, Math.round(R.n(8, 4)))]);
+          [0, 1, 2].forEach(k => { if (k === 2 && i % 9 === 4) return; visits.push([i, g, R.pick(names[k]), r1(h0 - d * [0, 0.8, 1.1][k] + R.n(0, 0.3)), r1(w0 - d * [0, 2, 3.2][k] + R.n(0, 1))]); });
+        }
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, sheet(XLSX, visits), 'Visits'); XLSX.utils.book_append_sheet(wb, sheet(XLSX, pts), 'Patients'); return wb;
+      },
+      tasks: [
+        { text: 'Visit names written one way (Baseline, Month 3, Month 6)', hint: '🏷 Recode values on Visit: give M3 and 3 months the value Month 3, and so on.', done: d => H(d, /^visit$/i) ? distinct(d, H(d, /^visit$/i)) === 3 : !!H(d, /hba1c_month 3/i) },
+        { text: 'One row per patient (HbA1c_Baseline, HbA1c_Month 3 …)', hint: '⇄ Long to wide: ID = ID, time = Visit, values = HbA1c and Weight.', done: d => uniqueIds(d, H(d, /^id$/i)) && !!H(d, /^hba1c_/i) },
+        { text: 'Age and sex added from the Patients sheet', hint: 'Prepare the data → Data from another file: Add variables, from the sheet Patients, matched by ID.', done: d => !!H(d, /^age$/i) && !!H(d, /^sex$/i) },
+        { text: 'HbA1c found as a repeated measure in step 2', hint: 'Open step 2 (⟳ Re-detect variables if needed).', done: (d, c) => !!c && c.variables.some(v => v.kind === 'repeated' && v.cols.some(x => /hba1c/i.test(x.col))) }
+      ]
+    },
+    {
+      id: 'messy-coded', level: 'Intermediate', name: 'Messy 4 — Coded data with a codebook (SPSS style)',
+      description: 'Numbers instead of words (1 = male, 2 = female), 9 and -9 for missing, and a codebook on a second sheet: learn value labels and missing-value codes.',
+      book(XLSX) {
+        const R = rng(904), rows = [['id', 'group', 'age', 'sex', 'dm', 'sbp', 'ldl', 'mace']];
+        for (let i = 1; i <= 80; i++) {
+          const g = i % 2 ? 1 : 2;
+          rows.push([i, g, Math.round(R.n(61, 9)), i % 17 === 6 ? 9 : R.pick([1, 2], [55, 45]), i % 23 === 11 ? 9 : R.pick([0, 1], [62, 38]),
+            i % 14 === 3 ? -9 : Math.round(R.n(g === 1 ? 128 : 138, 13)), i % 19 === 8 ? -9 : r1(R.n(g === 1 ? 2.2 : 2.9, 0.6)), R.pick([0, 1], g === 1 ? [88, 12] : [74, 26])]);
+        }
+        const book = [['Variable', 'Meaning', 'Codes'], ['group', 'Treatment group', '1 = High-intensity statin, 2 = Standard care'], ['age', 'Age (years)', ''],
+          ['sex', 'Sex', '1 = Male, 2 = Female, 9 = not recorded'], ['dm', 'Diabetes mellitus', '0 = No, 1 = Yes, 9 = not recorded'], ['sbp', 'Systolic BP (mmHg)', '-9 = not measured'],
+          ['ldl', 'LDL cholesterol (mmol/L)', '-9 = not measured'], ['mace', 'Major adverse cardiac event at 1 year', '0 = No, 1 = Yes']];
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, sheet(XLSX, rows), 'Data'); XLSX.utils.book_append_sheet(wb, sheet(XLSX, book), 'Codebook'); return wb;
+      },
+      tasks: [
+        { text: 'Missing codes blanked (9 in sex and dm, -9 in sbp and ldl)', hint: '🩺 Check data → Fix on each “probably a code for missing”, or 🏷 Recode values → tick blank for 9 in sex and dm.', done: d => !d.rows.some(r => +r.sbp === -9 || +r.ldl === -9 || +r.sex === 9 || +r.dm === 9) },
+        { text: 'Group names in place of 1 and 2', hint: 'Step 2 → Label in report: High-intensity statin, Standard care.', done: (d, c) => !!c && ['1', '2'].every(g => c.groupLabels[g] && !/^\s*[12]( group)?\s*$/i.test(c.groupLabels[g])) },
+        { text: 'Value labels for sex (1=Male, 2=Female)', hint: 'Step 2 → Value labels on sex.', done: (d, c) => !!c && c.variables.some(v => /^sex$/i.test(v.cols[0].col) && /1\s*[=:]/.test(v.valueLabels || '')) },
+        { text: 'Value labels for dm and mace (0=No, 1=Yes)', hint: 'Step 2 → Value labels on dm and mace.', done: (d, c) => !!c && ['dm', 'mace'].every(k => c.variables.some(v => v.cols[0].col === k && /0\s*[=:]/.test(v.valueLabels || ''))) }
+      ]
+    }
+  ];
+
+  return { LIST, MESSY, get: id => LIST.find(e => e.id === id), getMessy: id => MESSY.find(e => e.id === id) };
 })();
 if (typeof module !== 'undefined') module.exports = Examples;

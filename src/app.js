@@ -61,7 +61,11 @@
   /* ---------- helpers ---------- */
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600); }
   const busy = on => $('#busy').classList.toggle('show', on);
-  const tokens = name => String(name).trim().split(/[_\s.]+/).filter(Boolean);
+  // "Month 3", "Week 12", "6 months" stay one token, so they read as timepoints
+  const GLUED = new Map(); // glued token → how the sheet wrote it ("Month3" → "Month 3"), for its label
+  const glue = (m, a, b) => { GLUED.set(a + b, `${a} ${b}`); return a + b; };
+  const tokens = name => String(name).trim().replace(/(?<![A-Za-z])(month|mo|week|wk|day|visit|year|yr|hour|hr|session)\s+(\d+)(?![\d.])/gi, glue)
+    .replace(/(?<![\d.])(\d+)\s+(months?|weeks?|days?|years?|hours?|hrs?|mins?)(?![A-Za-z])/gi, glue).split(/[_\s.]+/).filter(Boolean);
   function labelFrom(toks) {
     const words = [], units = [];
     toks.forEach((t, i) => {
@@ -76,7 +80,8 @@
     if (units.length) s += ` (${units.join(', ')})`;
     return s || toks.join(' ');
   }
-  const tpLabel = tp => /^(baseline|base|bl)$/i.test(tp) ? 'Baseline' : /^(pre|post|before|after|final|end)$/i.test(tp) ? tp[0].toUpperCase() + tp.slice(1) : tp;
+  const tpLabel = tp => /^(baseline|base|bl)$/i.test(tp) ? 'Baseline' : /^(pre|post|before|after|final|end)$/i.test(tp) ? tp[0].toUpperCase() + tp.slice(1)
+    : GLUED.get(tp) || tp; // "Month 3" as the sheet wrote it
 
   /* ---------- stepper ---------- */
   function renderStepper() {
@@ -93,6 +98,7 @@
     document.querySelectorAll('.panel').forEach((p, i) => p.classList.toggle('active', i + 1 === n));
     renderStepper();
     if (n === 2) renderVariables();
+    if (n === 1) renderMessyTasks();
     if (n === 3) renderTimepoints();
     if (n >= 4 && n <= 8) renderOptions();
     if (n === 7) renderFigureTable();
@@ -117,7 +123,7 @@
     try {
       busy(true);
       const buf = await f.arrayBuffer();
-      openWorkbook(XLSX.read(buf, { type: 'array' }), f.name);
+      state.messy = null; openWorkbook(XLSX.read(buf, { type: 'array' }), f.name);
     } catch (err) { console.error(err); toast('Could not read this file: ' + err.message); }
     finally { busy(false); }
   }
@@ -139,7 +145,7 @@
     const sep = t.split('\n')[0].includes('\t') ? '\t' : t.split('\n')[0].includes(';') && !t.split('\n')[0].includes(',') ? ';' : ',';
     const aoa = t.split('\n').filter(l => l.trim()).map(l => l.split(sep).map(c => { c = c.trim().replace(/^"(.*)"$/, '$1'); return c === '' ? null : parseCell(c); }));
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Pasted');
-    state.pendingCfg = null; $('#pasteDlg').close();
+    state.pendingCfg = null; state.messy = null; $('#pasteDlg').close();
     openWorkbook(wb, 'Pasted data');
   };
   // an empty sheet laid out the way the app reads it, with a guide
@@ -190,12 +196,38 @@
   const exampleBook = ex => { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ex.rows()), 'Data'); return wb; };
   $('#examples').innerHTML = Examples.LIST.map(ex => `<div class="excard"><h4>${esc(ex.name)}</h4><p>${esc(ex.description)}</p>
     <div class="row"><button class="btn primary small" data-exopen="${ex.id}" type="button">Open example</button><button class="btn ghost small" data-exsave="${ex.id}" type="button">⬇ Excel file</button></div></div>`).join('');
+  // messy datasets: open one with its cleaning checklist, or download it as Excel
+  $('#messyList').innerHTML = Examples.MESSY.map(ex => `<div class="excard"><h4>${esc(ex.name)} <span class="chip ${ex.level === 'Beginner' ? 'ok' : ex.level === 'Advanced' ? 'warn' : 'info'}">${ex.level}</span></h4><p>${esc(ex.description)}</p>
+    <div class="row"><button class="btn primary small" data-mopen="${ex.id}" type="button">Open and clean</button><button class="btn ghost small" data-msave="${ex.id}" type="button">⬇ Excel file</button><span class="legend-note">${ex.tasks.length} tasks</span></div></div>`).join('');
+  $('#messyList').addEventListener('click', e => {
+    const o = e.target.closest('[data-mopen]'), d = e.target.closest('[data-msave]');
+    if (d) { const ex = Examples.getMessy(d.dataset.msave); XLSX.writeFile(ex.book(XLSX), ex.id + '.xlsx'); return; }
+    if (!o) return;
+    if (state.data && !confirm('Open this messy dataset? The current data and settings are replaced.')) return;
+    const ex = Examples.getMessy(o.dataset.mopen);
+    state.pendingCfg = null; $('#studyTitle').value = '';
+    openWorkbook(ex.book(XLSX), ex.id + '.xlsx');
+    state.messy = ex.id; $('#prepBox').open = true; renderMessyTasks();
+    $('#messyTasks').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  // the checklist of the open messy dataset, checked against the sheet and the setup each time they change
+  function renderMessyTasks() {
+    const box = $('#messyTasks'), ex = state.messy && Examples.getMessy(state.messy);
+    if (!ex || !state.data) { box.style.display = 'none'; return; }
+    const done = ex.tasks.map(t => { try { return !!t.done(state.data, state.cfg, Analysis); } catch (err) { return false; } }), n = done.filter(Boolean).length;
+    box.style.display = '';
+    box.innerHTML = `<div class="row"><b>🧹 ${esc(ex.name)}</b><span class="spacer"></span><progress max="${ex.tasks.length}" value="${n}"></progress> <b>${n} of ${ex.tasks.length}</b>
+      <button class="btn ghost small" id="messyClose" type="button" title="Hide the checklist">✕</button></div>
+      ${n === ex.tasks.length ? '<p style="margin:6px 0;color:var(--ok);font-weight:600">🎉 All clean! Continue to step 2 to set up the analysis.</p>' : ''}
+      ${ex.tasks.map((t, i) => `<div class="mt ${done[i] ? 'done' : ''}"><span class="${done[i] ? 'ok' : 'no'}">${done[i] ? '✓' : '○'}</span><span><span class="t">${esc(t.text)}</span>${done[i] ? '' : `<br><span class="h">How: ${esc(t.hint)}</span>`}</span></div>`).join('')}`;
+    $('#messyClose').onclick = () => { state.messy = null; renderMessyTasks(); };
+  }
   $('#examples').addEventListener('click', e => {
     const o = e.target.closest('[data-exopen]'), d = e.target.closest('[data-exsave]');
     if (d) { const ex = Examples.get(d.dataset.exsave); XLSX.writeFile(exampleBook(ex), ex.id + '.xlsx'); return; }
     if (!o) return;
     const ex = Examples.get(o.dataset.exopen);
-    state.wb = exampleBook(ex); state.file = ex.id + '.xlsx'; state.pendingCfg = null; state.hdr = { row: 1, two: false, auto: true };
+    state.wb = exampleBook(ex); state.file = ex.id + '.xlsx'; state.pendingCfg = null; state.messy = null; state.hdr = { row: 1, two: false, auto: true };
     $('#fileName').textContent = state.file + ' (example)';
     $('#sheetSel').innerHTML = '<option>Data</option>'; $('#sheetBox').style.display = '';
     $('#studyTitle').value = ex.title;
@@ -317,7 +349,7 @@
     $('#gridUndo').disabled = !state.undo.length;
     $('#gridEdit').classList.toggle('primary', g.edit); $('#gridEdit').classList.toggle('ghost', !g.edit);
     $('#gridEdit').textContent = g.edit ? '✓ Done editing' : '✎ Edit sheet';
-    renderOverview(kinds);
+    renderOverview(kinds); renderMessyTasks();
   }
   // a line of facts about the sheet: patients, column types, missing cells, duplicate IDs, empty or constant columns, the filter
   function renderOverview(kinds) {
@@ -338,6 +370,9 @@
   function renderPrep() {
     const cfg = state.cfg, h = state.data.headers;
     $('#mergeKey').innerHTML = h.map(c => `<option ${cfg && cfg.idCols[0] === c ? 'selected' : ''}>${esc(c)}</option>`).join('');
+    const others = state.wb ? state.wb.SheetNames.filter(n => n !== state.sheet) : [];
+    $('#mergeSheet').innerHTML = others.map(n => `<option>${esc(n)}</option>`).join('');
+    $('#mergeSheetBox').style.display = $('#mergeSheetGo').style.display = others.length ? '' : 'none';
     renderFilters();
   }
   function renderFilters() {
@@ -390,7 +425,13 @@
   $('#mergeFile').onchange = async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f || !state.data) return;
     try {
-      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }), ws = wb.Sheets[wb.SheetNames[0]];
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+      mergeSheet(wb.Sheets[wb.SheetNames[0]], f.name);
+    } catch (err) { console.error(err); toast('Could not read the other file: ' + err.message); }
+  };
+  $('#mergeSheetGo').onclick = () => { const n = $('#mergeSheet').value; if (state.wb && state.wb.Sheets[n]) mergeSheet(state.wb.Sheets[n], `sheet ${n}`); };
+  function mergeSheet(ws, src) {
+    {
       const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: false });
       if (aoa.length < 2) { toast('The other file has no data rows'); return; }
       const oh = aoa[0].map((h, i) => h === null || h === '' ? `Column_${i + 1}` : String(h).trim());
@@ -405,7 +446,7 @@
           orows.forEach(o => rows.push(Object.fromEntries(headers.map(h => [h, o[h] ?? null]))));
           addVars(); refreshGroups();
         });
-        toast(`${orows.length} patients added from ${f.name}${added.length ? ` with ${added.length} new column${added.length > 1 ? 's' : ''}` : ''}${oh.length > common.length ? '' : ' (all columns matched)'}`);
+        toast(`${orows.length} patients added from ${src}${added.length ? ` with ${added.length} new column${added.length > 1 ? 's' : ''}` : ''}${oh.length > common.length ? '' : ' (all columns matched)'}`);
       } else {
         const key = $('#mergeKey').value, okey = oh.includes(key) ? key : oh[0];
         const byId = new Map(orows.map(o => [String(o[okey] ?? '').trim(), o]));
@@ -416,11 +457,12 @@
           rows.forEach(r => { const o = byId.get(String(r[key] ?? '').trim()); if (o) matched++; names.forEach(([h, n]) => { r[n] = o ? o[h] ?? null : null; }); });
           addVars();
         });
-        toast(`${added.length} column${added.length > 1 ? 's' : ''} added from ${f.name}: ${matched} of ${rows.length} patients matched by ${key}${byId.size > matched ? `, ${byId.size - matched} rows of the other file had no match` : ''}`);
+        toast(`${added.length} column${added.length > 1 ? 's' : ''} added from ${src}: ${matched} of ${rows.length} patients matched by ${key}${byId.size > matched ? `, ${byId.size - matched} rows of the other file had no match` : ''}`);
       }
-      renderPrep();
-    } catch (err) { console.error(err); toast('Could not read the other file: ' + err.message); }
-  };
+      if (newRepeated()) toast('The added columns include repeated measures — see step 2');
+      renderPrep(); renderGrid();
+    }
+  }
   // every change to the sheet goes through here: snapshot for undo, apply, keep the setup in step, redraw
   function editSheet(fn) {
     state.undo.push(JSON.stringify({ data: state.data, cfg: state.cfg }));
@@ -594,8 +636,11 @@
   });
 
   /* ---------- step 1: find & replace, and a check of the sheet for common problems ---------- */
+  // one tool panel at a time under the grid bar
+  const TOOL_BOXES = ['findBox', 'checkBox', 'recodeBox', 'reshapeBox'];
+  function toggleTool(id) { const on = $('#' + id).style.display === 'none'; TOOL_BOXES.forEach(b => { $('#' + b).style.display = b === id && on ? '' : 'none'; }); return on; }
   $('#gridFind').onclick = () => {
-    const box = $('#findBox'), on = box.style.display === 'none'; box.style.display = on ? '' : 'none'; $('#checkBox').style.display = 'none';
+    const on = toggleTool('findBox');
     if (on) { $('#frCol').innerHTML = '<option value="">All columns</option>' + state.data.headers.map(h => `<option>${esc(h)}</option>`).join(''); $('#frFind').focus(); }
   };
   $('#frGo').onclick = () => {
@@ -622,13 +667,18 @@
       rows.forEach((r, i) => { const v = r[idc]; if (v === null || v === undefined || String(v).trim() === '') return; const k = String(v).trim(); if (seen[k] !== undefined) dup.push(`${k} (rows ${seen[k] + 1} and ${i + 1})`); else seen[k] = i; });
       if (dup.length) out.push({ ico: '⚠️', txt: `<b>Duplicate IDs in ${esc(idc)}:</b> ${esc(dup.slice(0, 8).join('; '))}${dup.length > 8 ? ` and ${dup.length - 8} more` : ''}`, q: dup[0].split(' ')[0] });
     }
+    // rows that repeat another row in every column
+    const seenRow = new Set(), dupRows = [];
+    rows.forEach((r, i) => { const k = JSON.stringify(headers.map(h => isMissing(r[h]) ? null : String(r[h]).trim())); if (seenRow.has(k)) dupRows.push(i + 1); else seenRow.add(k); });
+    if (dupRows.length) out.push({ ico: '⧉', txt: `<b>${dupRows.length} row${dupRows.length > 1 ? 's repeat' : ' repeats'} another row exactly</b> (row${dupRows.length > 1 ? 's' : ''} ${dupRows.slice(0, 8).join(', ')}) — the same patient entered twice?`, fix: { kind: 'dedupe' }, fixLabel: 'Remove duplicate rows' });
     headers.forEach(h => {
       const vals = rows.map(r => r[h]).filter(v => v !== null && v !== undefined && String(v).trim() !== '');
-      if (!vals.length) { out.push({ ico: '◻️', txt: `<b>${esc(h)}</b> is empty.` }); return; }
+      if (!vals.length) { out.push({ ico: '◻️', txt: `<b>${esc(h)}</b> is empty.`, fix: { col: h, kind: 'dropCol' }, fixLabel: 'Delete' }); return; }
       const nums = vals.map(Analysis.toNum), numShare = nums.filter(isFinite).length / vals.length;
       if (numShare >= 0.8 && numShare < 1) {
         const bad = [...new Set(vals.filter(v => !isFinite(Analysis.toNum(v))).map(v => String(v).trim()))];
-        out.push({ ico: '🔤', txt: `<b>${esc(h)}</b> is numeric but has text in ${vals.length - nums.filter(isFinite).length} cell(s): ${bad.slice(0, 6).map(v => `“${esc(v)}”`).join(', ')} — these count as missing.`, q: bad[0] });
+        const unit = bad.filter(v => unitNumber(v) !== null);
+        out.push({ ico: '🔤', txt: `<b>${esc(h)}</b> is numeric but has text in ${vals.length - nums.filter(isFinite).length} cell(s): ${bad.slice(0, 6).map(v => `“${esc(v)}”`).join(', ')} — these count as missing.${unit.length ? ` ${unit.length === bad.length ? 'All' : unit.length} can be read as numbers (“${esc(unit[0])}” → ${unitNumber(unit[0])}).` : ''}`, q: bad[0], ...(unit.length ? { fix: { col: h, kind: 'units' } } : {}) });
       }
       if (numShare < 0.8) {
         // the same category written in different ways ("male", "Male ", "MALE")
@@ -643,34 +693,130 @@
         const m = Stats.mean(nums), sd = Stats.sd(nums), ext = vals.filter((v, i) => sd > 0 && Math.abs((nums[i] - m) / sd) > 4);
         if (ext.length) out.push({ ico: '📍', txt: `<b>${esc(h)}</b> has extreme value(s) more than 4 SD from the mean: ${ext.slice(0, 6).map(v => esc(v)).join(', ')} — check for typing errors.`, q: String(ext[0]) });
       }
+      // words and codes that mean missing
+      const missWords = [...new Set(vals.filter(v => MISS_WORD.test(String(v).trim())).map(v => String(v).trim()))];
+      if (missWords.length) out.push({ ico: '∅', txt: `<b>${esc(h)}</b> uses ${missWords.map(v => `“${esc(v)}”`).join(', ')} for missing values (${vals.filter(v => MISS_WORD.test(String(v).trim())).length} cells) — blank cells are clearer.`, q: missWords[0], fix: { col: h, kind: 'missWords' } });
+      if (numShare >= 0.8) {
+        const ok = nums.filter(v => isFinite(v) && !MISS_CODES.includes(v)), lo = Math.min(...ok), hi = Math.max(...ok);
+        const codes = [...new Set(nums.filter(v => MISS_CODES.includes(v) && ok.length >= 5 && (v > Math.max(3 * hi, hi + 50) || (v < 0 && lo >= 0) || (new Set(ok).size <= 5 && v >= 7 && v > hi))))];
+        if (codes.length) out.push({ ico: '∅', txt: `<b>${esc(h)}</b> has ${codes.join(', ')} — far outside the other values (${Analysis.fmt(lo, 2)} to ${Analysis.fmt(hi, 2)}), probably a code for missing.`, q: String(codes[0]), fix: { col: h, kind: 'missCodes', codes } });
+        // values that cannot be right for what the column measures
+        const rule = RANGE_RULES.find(x => x.re.test(h));
+        if (rule) { const outR = ok.filter(v => v < rule.lo || v > rule.hi); if (outR.length) out.push({ ico: '🚫', txt: `<b>${esc(h)}</b> has value(s) outside ${rule.lo}–${rule.hi} ${rule.what}: ${[...new Set(outR)].slice(0, 6).map(v => Analysis.fmt(v, 2)).join(', ')} — check the source.`, q: String(outR[0]) }); }
+      }
       if (vals.some(v => typeof v === 'string' && v !== v.trim())) out.push({ ico: '␣', txt: `<b>${esc(h)}</b> has values with extra spaces at the start or end.`, fix: { col: h, kind: 'trim' } });
     });
     return out;
   }
+  // "54 years", "82 kg", "12,5 mg/dL" → the number; null when the cell is not a number with a unit
+  const unitNumber = v => { const m = String(v).trim().match(/^([-+]?\d+(?:[.,]\d+)?)\s*([a-zA-Zµμ%°/²³.]+[a-zA-Zµμ%°/²³. ]*)$/); return m ? Number(m[1].replace(',', '.')) : null; };
+  const MISS_WORD = /^(na|n\/a|n\.a\.|nan|null|none|missing|not recorded|not done|unknown|-+|\.|\?|—)$/i;
+  const MISS_CODES = [9, 99, 999, 9999, 99999, -9, -99, -999, -9999, 888, 8888, -1];
+  const RANGE_RULES = [{ re: /^age/i, lo: 0, hi: 120, what: 'years' }, { re: /bmi/i, lo: 10, hi: 80, what: 'kg/m²' }, { re: /(%|percent|pct|sat)/i, lo: 0, hi: 100, what: '%' },
+    { re: /^(sbp|dbp|systolic|diastolic)/i, lo: 30, hi: 300, what: 'mmHg' }, { re: /(heart.?rate|^hr\b|pulse)/i, lo: 20, hi: 250, what: 'beats/min' }, { re: /^(vas|nrs)/i, lo: 0, hi: 10, what: 'on a 0–10 scale' },
+    { re: /^fev1/i, lo: 0.2, hi: 8, what: 'L' }, { re: /hba1c/i, lo: 3, hi: 20, what: '%' }, { re: /(weight|wt)\b/i, lo: 1, hi: 350, what: 'kg' }, { re: /(height|ht)\b/i, lo: 40, hi: 250, what: 'cm' }];
   function renderCheck() {
     const issues = dataIssues();
-    $('#checkBox').innerHTML = `<div class="row"><b>Data check</b><span class="legend-note">${issues.length ? `${issues.length} thing${issues.length > 1 ? 's' : ''} to look at` : 'no problems found ✓'}</span><span class="spacer"></span>${issues.some(x => x.fix) ? '<button class="btn ghost small" data-chkfix="all" type="button">Fix all spelling and spaces</button>' : ''}</div>`
-      + issues.map((x, i) => `<div class="chk-item"><span class="ico">${x.ico}</span><span class="txt">${x.txt}</span>${x.q ? `<button class="btn ghost small" data-chkq="${esc(x.q)}" type="button">Show</button>` : ''}${x.fix ? `<button class="btn ghost small" data-chkfix="${i}" type="button">Fix</button>` : ''}</div>`).join('');
+    $('#checkBox').innerHTML = `<div class="row"><b>Data check</b><span class="legend-note">${issues.length ? `${issues.length} thing${issues.length > 1 ? 's' : ''} to look at` : 'no problems found ✓'}</span><span class="spacer"></span>${issues.some(x => x.fix) ? `<button class="btn ghost small" data-chkfix="all" type="button" title="Spelling, spaces, units, missing-value words and codes, duplicate rows and empty columns">Fix all (${issues.filter(x => x.fix).length})</button>` : ''}</div>`
+      + issues.map((x, i) => `<div class="chk-item"><span class="ico">${x.ico}</span><span class="txt">${x.txt}</span>${x.q ? `<button class="btn ghost small" data-chkq="${esc(x.q)}" type="button">Show</button>` : ''}${x.fix ? `<button class="btn ghost small" data-chkfix="${i}" type="button">${x.fixLabel || 'Fix'}</button>` : ''}</div>`).join('');
     state.checkIssues = issues;
   }
   // fixes: trim spaces; write each category the way most rows write it
   function applyFix(f) {
     const rows = state.data.rows;
     if (f.kind === 'trim') rows.forEach(r => { if (typeof r[f.col] === 'string') r[f.col] = parseCell(r[f.col]); });
+    if (f.kind === 'units') rows.forEach(r => { const v = r[f.col]; if (typeof v === 'string') { const n = unitNumber(v); r[f.col] = n !== null ? n : parseCell(v); } });
+    if (f.kind === 'missWords') rows.forEach(r => { if (!isMissing(r[f.col]) && MISS_WORD.test(String(r[f.col]).trim())) r[f.col] = null; });
+    if (f.kind === 'missCodes') rows.forEach(r => { if (f.codes.includes(Analysis.toNum(r[f.col]))) r[f.col] = null; });
+    if (f.kind === 'dedupe') { const seen = new Set(), h = state.data.headers; state.data.rows = rows.filter(r => { const k = JSON.stringify(h.map(x => isMissing(r[x]) ? null : String(r[x]).trim())); if (seen.has(k)) return false; seen.add(k); return true; }); }
+    if (f.kind === 'dropCol') { state.data.headers = state.data.headers.filter(h => h !== f.col); rows.forEach(r => delete r[f.col]); if (state.cfg) state.cfg.variables = state.cfg.variables.filter(v => !v.cols.some(c => c.col === f.col)); }
     if (f.kind === 'spelling') {
       const cnt = {}; rows.forEach(r => { const v = r[f.col]; if (v === null || v === undefined || String(v).trim() === '') return; const k = String(v).trim().toLowerCase().replace(/\s+/g, ' '); (cnt[k] = cnt[k] || {})[String(v).trim()] = ((cnt[k] || {})[String(v).trim()] || 0) + 1; });
       const best = Object.fromEntries(Object.entries(cnt).map(([k, g]) => [k, Object.entries(g).sort((a, b) => b[1] - a[1])[0][0]]));
       rows.forEach(r => { const v = r[f.col]; if (v === null || v === undefined || String(v).trim() === '') return; r[f.col] = best[String(v).trim().toLowerCase().replace(/\s+/g, ' ')]; });
     }
   }
-  $('#gridCheck').onclick = () => { const box = $('#checkBox'), on = box.style.display === 'none'; box.style.display = on ? '' : 'none'; $('#findBox').style.display = 'none'; if (on) renderCheck(); };
+  $('#gridCheck').onclick = () => { if (toggleTool('checkBox')) renderCheck(); };
+  /* ---------- recode values: rename, merge or blank the categories of a column ---------- */
+  function renderRecode() {
+    const h = state.data.headers, col = h.includes($('#rcCol').value) ? $('#rcCol').value : (state.data.headers.find(x => columnInfo(state.data.rows, x).distinct.length <= 20 && !columnInfo(state.data.rows, x).numeric) || h[0]);
+    $('#rcCol').innerHTML = h.map(x => `<option ${x === col ? 'selected' : ''}>${esc(x)}</option>`).join('');
+    const cnt = new Map(); state.data.rows.forEach(r => { const v = r[col]; if (isMissing(v)) return; const k = String(v); cnt.set(k, (cnt.get(k) || 0) + 1); });
+    const list = [...cnt.entries()].sort((a, b) => b[1] - a[1]);
+    $('#rcTbl').innerHTML = `<thead><tr><th>Value in the sheet</th><th>Rows</th><th>New value</th><th>Blank</th></tr></thead><tbody>${list.slice(0, 200).map(([v, n], i) =>
+      `<tr><td class="mono">“${esc(v)}”</td><td>${n}</td><td><input type="text" data-rcv="${i}" value="${esc(v)}"></td><td><input type="checkbox" data-rcb="${i}"></td></tr>`).join('')}</tbody>`;
+    state.rcList = list.map(x => x[0]);
+    $('#rcInfo').textContent = `${list.length} different value${list.length === 1 ? '' : 's'}${list.length > 200 ? ' (first 200 shown)' : ''}`;
+  }
+  $('#gridRecode').onclick = () => { if (toggleTool('recodeBox')) renderRecode(); };
+  $('#rcCol').onchange = renderRecode;
+  $('#rcTitle').onclick = () => document.querySelectorAll('[data-rcv]').forEach(el => { const t = el.value.trim(); if (/[a-z]/i.test(t) && !/\d/.test(t)) el.value = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase(); });
+  $('#rcGo').onclick = () => {
+    const col = $('#rcCol').value, map = new Map();
+    document.querySelectorAll('[data-rcv]').forEach(el => { const i = +el.dataset.rcv, old = state.rcList[i], blank = document.querySelector(`[data-rcb="${i}"]`).checked;
+      const nv = blank ? null : parseCell(el.value); if (blank || String(nv ?? '') !== old) map.set(old, nv); });
+    if (!map.size) { toast('Nothing to change — type new values or tick blank'); return; }
+    let n = 0;
+    editSheet(() => {
+      state.data.rows.forEach(r => { const v = r[col]; if (!isMissing(v) && map.has(String(v))) { r[col] = map.get(String(v)); n++; } });
+      if (state.cfg) { if (col === state.cfg.groupCol) refreshGroups();
+        state.cfg.variables.forEach(v => { if (v.type === 'categorical' && v.cols.some(c => c.col === col)) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); }
+    });
+    renderRecode(); toast(`${n} cell${n === 1 ? '' : 's'} recoded in ${col}`);
+  };
+  /* ---------- long to wide: one row per visit → one row per patient ---------- */
+  function renderReshape() {
+    const h = state.data.headers, rows = state.data.rows, cfg = state.cfg;
+    const repeats = x => new Set(rows.map(r => String(r[x] ?? ''))).size < rows.length;
+    const id = h.find(x => /^(id|patient|code|mrn|file)/i.test(x)) || (cfg && cfg.idCols[0]) || h[0];
+    const time = h.find(x => /visit|time|week|month|day|period|occasion/i.test(x) && x !== id) || h.find(x => x !== id && !columnInfo(rows, x).numeric && columnInfo(rows, x).distinct.length <= 12) || h[1];
+    $('#rsId').innerHTML = h.map(x => `<option ${x === id ? 'selected' : ''}>${esc(x)}</option>`).join('');
+    $('#rsTime').innerHTML = h.map(x => `<option ${x === time ? 'selected' : ''}>${esc(x)}</option>`).join('');
+    renderReshapeVals();
+    if (!repeats(id)) $('#rsInfo').textContent = `Each ${id} appears once — the sheet is already one row per patient.`;
+  }
+  // value columns: numeric columns that change within a patient
+  function renderReshapeVals() {
+    const id = $('#rsId').value, time = $('#rsTime').value, rows = state.data.rows, by = new Map();
+    rows.forEach(r => { const k = String(r[id] ?? ''); if (!by.has(k)) by.set(k, []); by.get(k).push(r); });
+    const varies = x => [...by.values()].some(rs => new Set(rs.map(r => String(r[x] ?? ''))).size > 1);
+    $('#rsVals').innerHTML = state.data.headers.filter(x => x !== id && x !== time).map(x => `<label class="check" style="margin:0"><input type="checkbox" data-rsv="${esc(x)}" ${varies(x) ? 'checked' : ''}><span>${esc(x)}</span></label>`).join('');
+    const times = [...new Set(rows.map(r => r[time]).filter(v => !isMissing(v)).map(String))];
+    $('#rsInfo').textContent = `${by.size} patients × ${times.length} visits (${times.slice(0, 8).join(', ')}${times.length > 8 ? ' …' : ''})${times.length > 8 ? ' — many visit names: recode them first?' : ''}`;
+  }
+  $('#gridReshape').onclick = () => { if (toggleTool('reshapeBox')) renderReshape(); };
+  $('#rsId').onchange = renderReshapeVals; $('#rsTime').onchange = renderReshapeVals;
+  $('#rsGo').onclick = () => {
+    const id = $('#rsId').value, time = $('#rsTime').value, vals = [...document.querySelectorAll('[data-rsv]:checked')].map(el => el.dataset.rsv);
+    if (id === time) { toast('Choose different ID and visit columns'); return; }
+    if (!vals.length) { toast('Tick the values measured at each visit'); return; }
+    const rows = state.data.rows, times = [...new Set(rows.map(r => r[time]).filter(v => !isMissing(v)).map(String))];
+    const keep = state.data.headers.filter(x => x !== time && !vals.includes(x)), by = new Map();
+    let clash = 0;
+    rows.forEach(r => { const k = String(r[id] ?? '').trim(); if (!k) return;
+      if (!by.has(k)) by.set(k, Object.fromEntries(keep.map(x => [x, r[x]])));
+      const o = by.get(k), t = String(r[time] ?? '');
+      keep.forEach(x => { if (isMissing(o[x]) && !isMissing(r[x])) o[x] = r[x]; });
+      if (t) vals.forEach(v => { const c = `${v}_${t}`; if (!isMissing(o[c]) && !isMissing(r[v])) clash++; if (!isMissing(r[v])) o[c] = r[v]; }); });
+    const headers = [...keep, ...vals.flatMap(v => times.map(t => `${v}_${t}`))];
+    editSheet(() => {
+      state.data = { headers, rows: [...by.values()].map(o => Object.fromEntries(headers.map(x => [x, o[x] ?? null]))) };
+      state.cfg = detect(state.data);
+    });
+    renderPrep(); toggleTool('reshapeBox');
+    toast(`${by.size} patients × ${times.length} visits → ${headers.length} columns${clash ? ` (${clash} repeated visit value${clash > 1 ? 's' : ''}: the later row was kept)` : ''}`);
+  };
   $('#checkBox').addEventListener('click', e => {
     const q = e.target.closest('[data-chkq]'), fx = e.target.closest('[data-chkfix]');
     if (q) { state.grid.q = q.dataset.chkq; $('#gridSearch').value = q.dataset.chkq; state.grid.page = 0; renderGrid(); }
     if (fx) {
       const list = fx.dataset.chkfix === 'all' ? state.checkIssues.filter(x => x.fix) : [state.checkIssues[+fx.dataset.chkfix]];
-      editSheet(() => { list.forEach(x => applyFix(x.fix)); if (state.cfg) { refreshGroups(); state.cfg.variables.forEach(v => { if (v.type === 'categorical' && list.some(x => v.cols.some(c => c.col === x.fix.col))) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); } });
-      renderCheck(); toast('Fixed — ↶ Undo in edit mode to go back');
+      editSheet(() => { list.forEach(x => applyFix(x.fix)); if (state.cfg) {
+        // a column that became numbers (units, missing codes removed) is analysed as numbers again
+        state.cfg.variables.forEach(v => { if (v.kind === 'single' && list.some(x => x.fix.col === v.cols[0].col && ['units', 'missWords', 'missCodes'].includes(x.fix.kind))) {
+          const t = singleVariable(state.data.rows, v.cols[0].col, v.pos, v.table); if (t.type !== v.type) { v.type = t.type; v.levels = t.levels; } } }); refreshGroups(); state.cfg.variables.forEach(v => { if (v.type === 'categorical' && list.some(x => v.cols.some(c => c.col === x.fix.col))) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); } });
+      const gained = state.cfg ? newRepeated() : 0;
+      renderCheck(); renderGrid(); toast(`Fixed${gained ? ` — ${gained} repeated measure${gained > 1 ? 's' : ''} found in the cleaned columns` : ''} — ↶ Undo in edit mode to go back`);
     }
   });
 
@@ -731,6 +877,21 @@
     };
     setGroups(cfg);
     return cfg;
+  }
+  // detect the variables again after cleaning (columns that became numbers can now form repeated measures),
+  // keeping the group settings, options and the labels already typed for the same columns
+  // re-detect only when the cleaned sheet has repeated measures the setup does not have yet
+  function newRepeated() {
+    const key = v => v.cols.map(c => c.col).join('|'), have = new Set(state.cfg.variables.filter(v => v.kind === 'repeated').map(key));
+    return detect(state.data).variables.some(v => v.kind === 'repeated' && !have.has(key(v))) ? Math.max(1, redetectVariables()) : 0;
+  }
+  function redetectVariables() {
+    const cfg = state.cfg, fresh = detect(state.data), old = new Map(cfg.variables.map(v => [v.cols.map(c => c.col).join('|'), v]));
+    fresh.variables.forEach(v => { const o = old.get(v.cols.map(c => c.col).join('|')); if (o) ['label', 'table', 'note', 'valueLabels', 'include', 'dist', 'chart', 'caption', 'ylabel', 'ymin', 'ymax', 'ref', 'refLabel'].forEach(k => { if (o[k] !== undefined && (o.type === v.type || !['dist'].includes(k))) v[k] = o[k]; }); });
+    const before = cfg.variables.filter(v => v.kind === 'repeated').length;
+    cfg.variables = fresh.variables; cfg.tpOrder = fresh.tpOrder; cfg.tpLabels = { ...fresh.tpLabels, ...Object.fromEntries(Object.entries(cfg.tpLabels || {}).filter(([k]) => fresh.tpOrder.includes(k))) };
+    cfg.idCols = cfg.idCols.filter(h => state.data.headers.includes(h)); if (!cfg.idCols.length) cfg.idCols = fresh.idCols;
+    return fresh.variables.filter(v => v.kind === 'repeated').length - before;
   }
   // a single (one-column) variable with the detected type and default levels
   function singleVariable(rows, h, pos, table, inf = columnInfo(rows, h)) {
