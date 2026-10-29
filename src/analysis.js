@@ -575,6 +575,15 @@ const Analysis = (() => {
       sent.push(logistic ? `The model was ${multi.pModel <= alpha ? 'statistically significant' : 'insignificant'} (P value ${pTxt(multi.pModel)}, Nagelkerke R² = ${fmt(multi.nagelkerke, 3)}).`
         : `The model was ${multi.pModel <= alpha ? 'statistically significant' : 'insignificant'} (P value ${pTxt(multi.pModel)}) and explained ${fmt(100 * multi.r2, 1)}% of the variance of ${lowerFirst(plain(outLabel))} (R² = ${fmt(multi.r2, 3)}).`);
     } else sent.push('The model could not be estimated: too few complete cases or perfectly collinear predictors.');
+    if (a.commentDetail === 'detailed' && multi) {
+      const ns = terms.filter(x => x.m && !(x.m.p <= alpha));
+      sigM.forEach(x => {
+        const per = / vs /.test(x.label) ? 'compared with the reference category' : 'for each one-unit increase';
+        sent.push(logistic ? `For ${lowerFirst(x.label)}, the odds of ${what} were ${fmt(Math.abs(x.t.or - 1) * 100, 0)}% ${x.t.or >= 1 ? 'higher' : 'lower'} ${per} (OR = ${fmt(x.t.or, 2)}).`
+          : `${per === 'for each one-unit increase' ? 'Each one-unit increase in' : 'Compared with the reference category,'} ${lowerFirst(x.label)} ${per === 'for each one-unit increase' ? 'was associated with a change of' : 'was associated with a difference of'} ${fmt(x.t.B, d)} in ${what} (95% CI ${fmt(x.t.lo, d)} to ${fmt(x.t.hi, d)}).`);
+      });
+      if (ns.length) sent.push(`${cap(listJoin(ns.map(x => `${lowerFirst(x.label)} (P value ${pTxt(x.m.p)})`)))} ${ns.length > 1 ? 'were' : 'was'} not significant in the multivariable model.`);
+    }
     if (uni && multi && preds.length > 1) {
       if (uSig.length) sent.unshift(`In univariable analysis, ${listJoin(uSig.map(x => lowerFirst(x.label)))} ${uSig.length > 1 ? 'were' : 'was'} significantly associated with ${what}.`);
     }
@@ -648,7 +657,9 @@ const Analysis = (() => {
       if (a.youdenCol) row.push({ t: [fmt(c.youden, 3)] });
       return row;
     });
-    const grade = auc => auc >= 0.9 ? 'excellent' : auc >= 0.8 ? 'good' : auc >= 0.7 ? 'fair' : auc >= 0.6 ? 'poor' : 'failed';
+    // AUC interpretation: the common scale (excellent ≥0.9 … failed <0.6) or Hosmer & Lemeshow (outstanding ≥0.9, excellent ≥0.8, acceptable ≥0.7, poor ≥0.6)
+    const grade = a.aucScale === 'hosmer' ? (auc => auc >= 0.9 ? 'outstanding' : auc >= 0.8 ? 'excellent' : auc >= 0.7 ? 'acceptable' : auc >= 0.6 ? 'poor' : 'no')
+      : (auc => auc >= 0.9 ? 'excellent' : auc >= 0.8 ? 'good' : auc >= 0.7 ? 'fair' : auc >= 0.6 ? 'poor' : 'failed');
     const what = eventName(cfg, a);
     const sent = res.filter(x => x.r).map(x => {
       const { label, r } = x, nm = x.combined ? 'The combined model of all test variables' : cap(plain(label));
@@ -661,7 +672,14 @@ const Analysis = (() => {
         : `${nm} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}, P value ${pTxt(r.p)}).`;
     });
     res.filter(x => !x.r).forEach(x => sent.push(`The ROC curve of ${lowerFirst(plain(x.label))} could not be estimated: fewer than two patients with or without ${what}.`));
-    const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', ROC_CUT[cutM][1]];
+    // detailed: every accuracy measure at the cut-off, and the tests ranked by AUC
+    if (a.commentDetail === 'detailed') {
+      res.filter(x => x.r && x.r.p <= alpha).forEach(x => { const c = x.r.cutoff, nm = x.combined ? 'the combined model' : lowerFirst(plain(x.label));
+        sent.push(`At this cut-off, ${nm} had a positive predictive value of ${pct(c.ppv)}, a negative predictive value of ${pct(c.npv)} and an accuracy of ${pct(c.accuracy)}; the positive and negative likelihood ratios were ${lrTxt(c.lrPos)} and ${lrTxt(c.lrNeg)} (Youden index ${fmt(c.youden, 3)}).`); });
+      const ranked = res.filter(x => x.r).sort((p1, p2) => p2.r.auc - p1.r.auc), nm = x => x.combined ? 'the combined model' : lowerFirst(plain(x.label));
+      if (ranked.length > 1) sent.push(`The highest AUC was for ${nm(ranked[0])} (${fmt(ranked[0].r.auc, 3)}), followed by ${listJoin(ranked.slice(1).map(x => `${nm(x)} (${fmt(x.r.auc, 3)})`))}.`);
+    }
+    const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', ROC_CUT[cutM][1], ...(a.aucScale === 'hosmer' ? ['AUC interpretation (Hosmer & Lemeshow): ≥0.9 outstanding, 0.8-0.9 excellent, 0.7-0.8 acceptable, 0.6-0.7 poor'] : [])];
     if (res.some(x => x.r && x.r.cutoff.fallback)) f.push(`${listJoin(res.filter(x => x.r && x.r.cutoff.fallback).map(x => x.combined ? 'combined model' : plain(x.label)))}: no cut-off reached the target, Youden index used`);
     if (ciAll) f.push(`95% CI in brackets: exact (Clopper-Pearson) for sensitivity, specificity, PPV, NPV and accuracy${a.lr ? ', log method for likelihood ratios' : ''}`);
     else if (a.ci) f.push('Sensitivity and specificity with exact (Clopper-Pearson) 95% CI');
@@ -763,6 +781,11 @@ const Analysis = (() => {
       if (k === 2) sent.push(`The adjusted mean was ${res.pairs[0].diff < 0 ? 'lower' : 'higher'} in ${gl[0]} than ${gl[1]} by ${fmt(Math.abs(res.pairs[0].diff), d)} (95% CI ${fmt(res.pairs[0].lo, d)} to ${fmt(res.pairs[0].hi, d)}).`);
       else if (sp.length) sent.push(`Adjusted means differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).`);
     }
+    if (a.commentDetail === 'detailed') {
+      const terms2 = covs.flatMap(e => e.terms).map((t, i) => ({ label: t.label, ...res.covTerms[i] })), sg = terms2.filter(t => t.p <= alpha);
+      sent.push(sg.length ? `Of the covariates, ${listJoin(sg.map(t => `${lowerFirst(t.label)} (B = ${fmt(t.B, d)}, P value ${pTxt(t.p)})`))} ${sg.length > 1 ? 'were' : 'was'} significantly associated with ${lowerFirst(lab)}.` : `None of the covariates was significantly associated with ${lowerFirst(lab)}.`);
+      sent.push(`The group explained a partial η² of ${fmt(res.partialEta2, 3)} of the variance after adjustment.`);
+    }
     if (slopes) sent.push(slopes.p > alpha ? `The regression slopes of the covariates were homogeneous across the groups (P value ${pTxt(slopes.p)}), supporting the ANCOVA assumption.`
       : `The regression slopes of the covariates differed between the groups (P value ${pTxt(slopes.p)}), so the adjusted comparison should be interpreted with caution.`);
     return { kind: 'ancova', title: `${outLabel} of the studied groups adjusted for covariates (ANCOVA)`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { res } };
@@ -796,6 +819,7 @@ const Analysis = (() => {
     const sent = [km.every(m => !isFinite(m.median)) ? `The median time to ${lowerFirst(plain(evLabel))} was not reached${one ? '' : ' in any group'}.`
       : `The median time to ${lowerFirst(plain(evLabel))} was ${listJoin(km.map((m, g) => `${med(m)}${isFinite(m.median) ? u : ''} in ${where(g)}`))}.`];
     if (!one) sent.push(`Survival was ${lr.p <= alpha ? 'significantly' : 'insignificantly'} different ${amongTxt(k)} (log-rank P value ${pTxt(lr.p)}).`);
+    if (a.commentDetail === 'detailed') sent.splice(1, 0, `${cap(lowerFirst(plain(evLabel)))} occurred in ${listJoin(km.map((m, g) => `${m.events} of ${m.n} patients (${fmt(100 * m.events / m.n, 1)}%) in ${where(g)}`))}.`);
     ats.forEach(tt => sent.push(`At ${fmt(tt, d)}${u}, the estimated survival was ${listJoin(km.map((m, g) => `${fmt(100 * survAt(m, tt), 1)}% in ${where(g)}`))}.`));
     // pairwise log-rank tests (three or more groups), Bonferroni-adjusted
     let pw = null;
@@ -873,6 +897,12 @@ const Analysis = (() => {
     if (multi) sent.push(sm.length ? `In ${preds.length > 1 ? 'multivariable ' : ''}Cox regression, ${listJoin(sm.map(phr))} ${sm.length > 1 ? 'were independent predictors' : 'was a significant predictor'} of ${what}.`
       : `None of the studied variables was a significant ${preds.length > 1 ? 'independent ' : ''}predictor of ${what} in Cox regression.`);
     else sent.push('The multivariable model could not be estimated: too few events or collinear predictors.');
+    if (a.commentDetail === 'detailed' && multi) {
+      sm.forEach(x => sent.push(`For ${lowerFirst(x.label)}, the hazard of ${what} was ${fmt(Math.abs(x.t.hr - 1) * 100, 0)}% ${x.t.hr >= 1 ? 'higher' : 'lower'} ${/ vs /.test(x.label) ? 'compared with the reference category' : 'for each one-unit increase'} (HR = ${fmt(x.t.hr, 2)}).`));
+      const ns = terms.filter(x => x.m && !(x.m.p <= alpha));
+      if (ns.length) sent.push(`${cap(listJoin(ns.map(x => `${lowerFirst(x.label)} (P value ${pTxt(x.m.p)})`)))} ${ns.length > 1 ? 'were' : 'was'} not significant.`);
+      sent.push(`The model included ${multi.n} patients with ${multi.events} events (likelihood ratio P value ${pTxt(multi.pModel)}).`);
+    }
     const fg = a.forest ? forestFigure(terms, 'cox', what, alpha, d) : null;
     return { kind: 'cox', title: `Cox regression analysis for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: fg ? [fg] : [], meta: { multi, uni } };
   }
@@ -1851,6 +1881,7 @@ const Analysis = (() => {
         [].concat(made).forEach((sec, si) => {
           if (si === 0 && a.title && a.title.trim()) sec.title = a.title.trim();
           if (sub.g !== null) sec.title += ` in ${cfg.groupLabels[sub.g] || sub.g}`;
+          if (a.commentDetail === 'brief' && sec.comment) sec.comment = (sec.comment.match(/^.*?\.(?=\s+[A-Z(]|$)/) || [sec.comment])[0];
           sec.comment = wording(sec.comment);
           sections.push(sec);
         });
@@ -1906,7 +1937,7 @@ const Analysis = (() => {
     const items = cols.map(c => ({ label: columnLabel(cfg, c), vals: rows.map(r => toNum(r[c])) }));
     const target = !!a.outcome && cols[0] === a.outcome;
     const title = target ? `Correlation of ${lowerFirst(plain(items[0].label))} with the studied variables (n=${rows.length})` : `Correlation between the studied variables (n=${rows.length})`;
-    const sec = corrTable(items, rows, cfg, alpha, d, { method: ['pearson', 'spearman', 'kendall'].includes(a.method) ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter ?? '2', ci: !!a.ci }, title);
+    const sec = corrTable(items, rows, cfg, alpha, d, { method: ['pearson', 'spearman', 'kendall'].includes(a.method) ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter ?? '2', ci: !!a.ci, detail: a.commentDetail }, title);
     if (sec.meta.pairs.some(q => q.method === 'pearson')) used.add('pearson');
     if (sec.meta.pairs.some(q => q.method === 'spearman')) used.add('spearman');
     if (sec.meta.pairs.some(q => q.method === 'kendall')) used.add('kendall');
@@ -1989,7 +2020,9 @@ const Analysis = (() => {
     const sig = pr.filter(q => q.sig);
     const sent = sig.map(q => `There was a significant ${strength(q.r)} ${q.r > 0 ? 'positive' : 'negative'} correlation between ${lowerFirst(plain(items[q.i].label))} and ${lowerFirst(plain(items[q.j].label))} (${coef(q)}, P value ${pTxt(q.p)}).`);
     if (!sig.length) sent.push('No significant correlations were found among the studied variables.');
-    else if (sig.length < pr.length) sent.push('The remaining correlations were insignificant.');
+    else if (sig.length < pr.length && o.detail !== 'detailed') sent.push('The remaining correlations were insignificant.');
+    if (o.detail === 'detailed') { const ns = pr.filter(q => !q.sig && isFinite(q.r));
+      if (ns.length) sent.push(`The correlations of ${listJoin(ns.map(q => `${lowerFirst(plain(items[q.i].label))} with ${lowerFirst(plain(items[q.j].label))} (${coef(q)}, P value ${pTxt(q.p)})`))} were insignificant.`); }
     const f = [];
     if (sig.length) f.push(`*: Significant as P value ≤ ${alpha}`);
     if (pr.some(q => q.method === 'pearson')) f.push('r: Pearson correlation coefficient');

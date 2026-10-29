@@ -126,6 +126,7 @@ table.xd td.out{background:rgba(224,138,46,.22);font-weight:600}table.xd td.miss
 .chk-item .ico{font-size:16px;line-height:1.3}.chk-item .txt{flex:1;font-size:13px}.chk-item .txt b{font-weight:600}
 .rt td.hl{background:#FFF2CC}
 table.xp-ov tbody tr{cursor:pointer}table.xp-ov tbody tr:hover td{background:var(--hover)}table.xp-ov td.sig{color:var(--bad);font-weight:700}
+input.mini{width:64px!important;min-width:0!important;padding:4px 6px}
 .fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
 .fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
@@ -404,7 +405,7 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
           <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — paired t / Wilcoxon for two timepoints; repeated-measures ANOVA (Greenhouse-Geisser) or Friedman for more, with Bonferroni post hoc versus the first timepoint</span></label>
           <label class="check"><input type="checkbox" id="optWelch"><span><b>Welch's ANOVA + Games-Howell</b> post hoc when variances are unequal (Levene P &lt; 0.05), 3+ groups</span></label>
-          <label class="check"><input type="checkbox" id="optDunn"><span><b>Dunn's test</b> (Bonferroni) as the post hoc after Kruskal-Wallis, instead of pairwise Mann-Whitney</span></label>
+          <label class="check"><input type="checkbox" id="optDunn" checked><span><b>Dunn's test</b> (Bonferroni) as the post hoc after Kruskal-Wallis, instead of pairwise Mann-Whitney</span></label>
         </div>
         <div>
           <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
@@ -549,6 +550,7 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
           <label class="check"><input type="checkbox" id="optBoxMean"><span><b>Mean marker</b> (◆) on box plots</span></label>
           <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
+          <label class="check"><input type="checkbox" id="optFigFrame"><span><b>Frame</b> around each figure</span></label>
           <label class="check"><input type="checkbox" id="optFigNotes" checked><span><b>Explain the symbols in the caption</b> — what *, **, ***, the bars, error bars, boxes and markers show</span></label>
         </div>
       </div>
@@ -560,7 +562,7 @@ footer b{color:var(--purple)}
         <div class="tbl-wrap" style="max-height:560px"><table class="t" id="figTbl"></table></div>
         <div>
           <div class="row"><label class="f" style="margin:0">Preview</label><select id="figPrevVar" style="flex:1"></select></div>
-          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div></div>
+          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevPng" type="button">⬇ This figure (PNG)</button></div></div>
         </div>
       </div>
     </div>
@@ -608,6 +610,12 @@ footer b{color:var(--purple)}
           <div><label class="f">Text size</label><select data-fs="textSize"><option value="small">Small</option><option value="normal">Normal</option><option value="large">Large</option></select></div>
           <div><label class="f">Font</label><select data-fs="font"><option value="sans">Segoe UI</option><option value="arial">Arial</option><option value="calibri">Calibri</option><option value="times">Times New Roman</option></select></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="shadow"><span>Box shadows</span></label></div>
+          <div><label class="f">Numbers</label><select data-fs="nFmt"><option value="tight">(n=30)</option><option value="spaced">(n = 30)</option><option value="upper">(N=30)</option></select></div>
+          <div><label class="f">Spacing</label><select data-fs="spacing"><option value="compact">Compact</option><option value="normal">Normal</option><option value="roomy">Roomy</option></select></div>
+          <div><label class="f">Exclusion box</label><select data-fs="exSide"><option value="right">Right of the main path</option><option value="left">Left of the main path</option></select></div>
+          <div><label class="f">Image resolution</label><select data-fs="res"><option value="1">Standard</option><option value="2">High (2×)</option><option value="3">Very high (3×)</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="pct"><span>Percentages beside the numbers</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="emph"><span>Highlight the final (analysed) boxes</span></label></div>
         </div>
         <div id="flLabels">
           <h3 style="margin:12px 0 4px">Section labels</h3>

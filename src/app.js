@@ -18,13 +18,13 @@
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
-    welch: false, dunn: false, chiPost: false, mixed: false, normality: 'sw', catEffect: 'rr',
+    welch: false, dunn: true, chiPost: false, mixed: false, normality: 'sw', catEffect: 'rr',
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
     pctDecimals: 1, meanStyle: 'pm', iqrStyle: 'dash', secondRow: 'auto', pDigits: 3, pHead: 'P value', sigSym: '*', showStat: false, missingNote: false,
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
     pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none', tableNewPage: false,
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
-    mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false,
+    mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -43,13 +43,13 @@
     pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
     pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote'], tableNewPage: ['optTableNewPage', true],
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
-    mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true]
+    mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
   const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
-    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont });
+    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont, frame: o.figFrame });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -988,11 +988,13 @@
   const chartKind = v => v.kind === 'repeated' ? 'repeated' : v.type;
   function renderFigureTable() {
     const vars = state.cfg.variables.filter(v => v.include);
-    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
+    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th>Y axis from – to</th><th>Reference line (value, label)</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
       <td><b>${esc(v.label)}</b><div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
       <td><select data-fv="${v.id}" data-fk="chart">${CHART_TYPES[chartKind(v)].map(([k, l]) => `<option value="${k}" ${(v.chart || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input type="text" data-fv="${v.id}" data-fk="caption" value="${esc(v.caption || '')}" placeholder="${esc(v.label)} of the studied groups"></td>
       <td><input type="text" data-fv="${v.id}" data-fk="ylabel" value="${esc(v.ylabel || '')}" placeholder="${esc(v.type === 'categorical' ? '% of the studied patients' : v.label)}"></td>
+      <td style="white-space:nowrap">${v.type === 'categorical' ? '<span class="legend-note">—</span>' : `<input type="text" class="mini" data-fv="${v.id}" data-fk="ymin" value="${esc(v.ymin || '')}" placeholder="auto"> – <input type="text" class="mini" data-fv="${v.id}" data-fk="ymax" value="${esc(v.ymax || '')}" placeholder="auto">`}</td>
+      <td style="white-space:nowrap">${v.type === 'categorical' ? '<span class="legend-note">—</span>' : `<input type="text" class="mini" data-fv="${v.id}" data-fk="ref" value="${esc(v.ref || '')}" placeholder="value"> <input type="text" data-fv="${v.id}" data-fk="refLabel" value="${esc(v.refLabel || '')}" placeholder="label, e.g. Normal limit" style="min-width:120px;width:140px">`}</td>
       <td><button class="btn ghost small" data-fprev="${v.id}" type="button" title="Preview this figure">👁</button></td></tr>`).join('')}</tbody>`;
     const cur = $('#figPrevVar').value;
     $('#figPrevVar').innerHTML = vars.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
@@ -1012,7 +1014,7 @@
       const res = Analysis.run(state.data, { ...cfg, variables: [{ ...v, include: true }], advanced: [], options: { ...cfg.options, correlation: false, figures: 'all' } });
       const f = res.sections.flatMap(x => x.figures)[0];
       if (!f) { cv.width = cv.height = 0; $('#figPrevNote').textContent = 'No figure for this variable (chart type “No figure”).'; return; }
-      renderFigure(f, cfg.options);
+      figVarProps(f); renderFigure(f, cfg.options); state.prevFig = f;
       const img = new Image();
       img.onload = () => { cv.width = img.width; cv.height = img.height; cv.getContext('2d').drawImage(img, 0, 0); };
       img.src = f.url;
@@ -1020,6 +1022,7 @@
     } catch (err) { console.error(err); $('#figPrevNote').textContent = 'Preview failed: ' + err.message; }
   }
   $('#p7').addEventListener('input', schedulePreview);
+  $('#figPrevPng').onclick = () => { const f = state.prevFig; if (!f) return; const a = document.createElement('a'); a.href = f.url; a.download = String(f.caption).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80) + '.png'; document.body.appendChild(a); a.click(); a.remove(); };
   $('#p7').addEventListener('change', schedulePreview);
   $('#figTbl').addEventListener('click', e => { const b = e.target.closest('[data-fprev]'); if (b) { $('#figPrevVar').value = b.dataset.fprev; schedulePreview(); } });
 
@@ -1090,7 +1093,8 @@
   function advOptions(a) {
     const t = a.type, sel = (key, opts, v) => `<select data-af="${key}">${opts.map(([k, l]) => `<option value="${esc(k)}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     const box = (key, label) => `<label class="check" style="margin-top:22px"><input type="checkbox" data-af="${key}" ${a[key] ? 'checked' : ''}><span>${label}</span></label>`;
-    const out = [`<div><label class="f">Title (optional)</label><input type="text" data-af="title" value="${esc(a.title || '')}" placeholder="automatic"></div>`];
+    const out = [`<div><label class="f">Title (optional)</label><input type="text" data-af="title" value="${esc(a.title || '')}" placeholder="automatic"></div>`,
+      `<div><label class="f">Comment</label>${sel('commentDetail', [['standard', 'Standard'], ['detailed', 'Detailed — more numbers and interpretation'], ['brief', 'Brief — one sentence']], a.commentDetail)}</div>`];
     if (!['ancova', 'survival', 'mcnemar'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
@@ -1120,6 +1124,7 @@
         ['spec80', 'Specificity ≥ 80% (best sensitivity)'], ['spec90', 'Specificity ≥ 90% (best sensitivity)'], ['spec95', 'Specificity ≥ 95% (best sensitivity)'],
         ['manual', 'My own cut-off value']], a.cutoff)}</div>`);
       if (a.cutoff === 'manual') out.push(`<div><label class="f">Cut-off value (positive when ≥, or ≤ for lower values)</label><input type="text" data-af="manualCut" value="${esc(a.manualCut || '')}" placeholder="e.g. 2.5"></div>`);
+      out.push(`<div><label class="f">AUC interpretation in the comment</label>${sel('aucScale', [['standard', 'Excellent ≥0.9, good ≥0.8, fair ≥0.7, poor ≥0.6'], ['hosmer', 'Hosmer & Lemeshow: outstanding ≥0.9, excellent ≥0.8, acceptable ≥0.7']], a.aucScale)}</div>`);
       out.push(`<div><label class="f">Positive test direction</label>${sel('direction', [['auto', 'Automatic (from the AUC)'], ['higher', 'Higher values positive'], ['lower', 'Lower values positive']], a.direction)}</div>`);
       out.push(`<div>${box('ci', '95% CI of sensitivity and specificity')}</div>`, `<div>${box('ciAll', '95% CI of every measure (PPV, NPV, accuracy, LRs)')}</div>`, `<div>${box('lr', 'Likelihood ratios (LR+, LR−)')}</div>`, `<div>${box('youdenCol', 'Youden index column')}</div>`,
         `<div>${box('compare', 'Compare the AUCs (DeLong test)')}</div>`, `<div>${box('combined', 'Combined model of all tests (logistic)')}</div>`);
@@ -1287,7 +1292,7 @@
     $('#cForm').innerHTML = html;
     drawConsortPreview();
   }
-  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {} };
+  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {}, nFmt: 'tight', spacing: 'normal', exSide: 'right', res: '1', pct: false, emph: false };
   function readConsort() {
     const c = state.cfg && state.cfg.consort; if (!c || !$('#cForm').innerHTML) return;
     c.enabled = $('#cEnabled').checked;
@@ -1296,7 +1301,8 @@
     const labels = { ...((c.style || {}).labels || {}) };
     if (c.type !== 'simple') labels[c.type] = [...document.querySelectorAll('#p9 [data-fsl]')].map(el => el.value);
     c.style = { theme: st.theme, color: st.colorMode === 'custom' ? st.color : '', corners: st.corners, lines: st.lines, textSize: st.textSize, font: st.font, pills: st.pills, shadow: st.shadow,
-      pillColor: st.pillMode === 'custom' ? st.pillColor : '', pillTextColor: st.pillTextColor, labels };
+      pillColor: st.pillMode === 'custom' ? st.pillColor : '', pillTextColor: st.pillTextColor, labels,
+      nFmt: st.nFmt, spacing: st.spacing, exSide: st.exSide, res: st.res, pct: st.pct, emph: st.emph };
     const val = el => el.type === 'checkbox' ? el.checked : el.type === 'number' ? (+el.value || 0) : el.value;
     document.querySelectorAll('#cForm [data-c]').forEach(el => { c[el.dataset.c] = val(el); });
     document.querySelectorAll('#cForm [data-ex]').forEach(el => { c.excluded[+el.dataset.ex][el.dataset.f] = val(el); });
@@ -1607,7 +1613,7 @@
         if (+cfg.options.pLead === 0) res.sections.forEach(s => { s.footnote = s.footnote.replace(/(P value|\bP|\bp) ([≤<]) 0\./g, '$1 $2 .'); });
         if (cfg.options.midDot) midDots(res);
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
-          f.key = f.caption; renderFigure(f, cfg.options);
+          f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options);
           f.note = cfg.options.figNotes ? figNote(f.spec, cfg.options) : '';
           if (cfg.options.midDot) f.note = dot(f.note);
         }); });
@@ -1646,6 +1652,7 @@
       else if (series.some(s => s.lo)) out.push(`${what} show the median; error bars show the interquartile range (IQR).`);
     }
     if (spec.individual) out.push('Thin lines show individual patients.');
+    if (isFinite(spec.refLine)) out.push(`The dashed red line marks ${spec.refLabel ? `${spec.refLabel} (${spec.refLine})` : `the value ${spec.refLine}`}.`);
     if (spec.type === 'box') {
       out.push('Boxes show the median and interquartile range (IQR); whiskers extend to the most extreme values within 1.5 × IQR, and points beyond them are outliers.');
       if (o.boxMean) out.push('◆ marks the mean.');
@@ -1669,6 +1676,14 @@
       }
     }
     return out.filter(Boolean).join(' ');
+  }
+  // per-variable figure settings of step 7: y-axis range and a reference line
+  function figVarProps(f) {
+    const v = f.vid && state.cfg.variables.find(x => x.id === f.vid); if (!v) return;
+    const n = x => { const t = parseFloat(String(x ?? '').replace(',', '.')); return isFinite(t) ? t : undefined; };
+    const yMin = n(v.ymin), yMax = n(v.ymax), ref = n(v.ref);
+    if (yMin !== undefined) f.spec.yMin = yMin; if (yMax !== undefined) f.spec.yMax = yMax;
+    if (ref !== undefined) { f.spec.refLine = ref; if (v.refLabel) f.spec.refLabel = v.refLabel; }
   }
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
   function renderFigure(f, o) {

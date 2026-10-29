@@ -126,6 +126,7 @@ table.xd td.out{background:rgba(224,138,46,.22);font-weight:600}table.xd td.miss
 .chk-item .ico{font-size:16px;line-height:1.3}.chk-item .txt{flex:1;font-size:13px}.chk-item .txt b{font-weight:600}
 .rt td.hl{background:#FFF2CC}
 table.xp-ov tbody tr{cursor:pointer}table.xp-ov tbody tr:hover td{background:var(--hover)}table.xp-ov td.sig{color:var(--bad);font-weight:700}
+input.mini{width:64px!important;min-width:0!important;padding:4px 6px}
 .fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
 .fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
@@ -404,7 +405,7 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
           <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — paired t / Wilcoxon for two timepoints; repeated-measures ANOVA (Greenhouse-Geisser) or Friedman for more, with Bonferroni post hoc versus the first timepoint</span></label>
           <label class="check"><input type="checkbox" id="optWelch"><span><b>Welch's ANOVA + Games-Howell</b> post hoc when variances are unequal (Levene P &lt; 0.05), 3+ groups</span></label>
-          <label class="check"><input type="checkbox" id="optDunn"><span><b>Dunn's test</b> (Bonferroni) as the post hoc after Kruskal-Wallis, instead of pairwise Mann-Whitney</span></label>
+          <label class="check"><input type="checkbox" id="optDunn" checked><span><b>Dunn's test</b> (Bonferroni) as the post hoc after Kruskal-Wallis, instead of pairwise Mann-Whitney</span></label>
         </div>
         <div>
           <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
@@ -549,6 +550,7 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
           <label class="check"><input type="checkbox" id="optBoxMean"><span><b>Mean marker</b> (◆) on box plots</span></label>
           <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
+          <label class="check"><input type="checkbox" id="optFigFrame"><span><b>Frame</b> around each figure</span></label>
           <label class="check"><input type="checkbox" id="optFigNotes" checked><span><b>Explain the symbols in the caption</b> — what *, **, ***, the bars, error bars, boxes and markers show</span></label>
         </div>
       </div>
@@ -560,7 +562,7 @@ footer b{color:var(--purple)}
         <div class="tbl-wrap" style="max-height:560px"><table class="t" id="figTbl"></table></div>
         <div>
           <div class="row"><label class="f" style="margin:0">Preview</label><select id="figPrevVar" style="flex:1"></select></div>
-          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div></div>
+          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevPng" type="button">⬇ This figure (PNG)</button></div></div>
         </div>
       </div>
     </div>
@@ -608,6 +610,12 @@ footer b{color:var(--purple)}
           <div><label class="f">Text size</label><select data-fs="textSize"><option value="small">Small</option><option value="normal">Normal</option><option value="large">Large</option></select></div>
           <div><label class="f">Font</label><select data-fs="font"><option value="sans">Segoe UI</option><option value="arial">Arial</option><option value="calibri">Calibri</option><option value="times">Times New Roman</option></select></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="shadow"><span>Box shadows</span></label></div>
+          <div><label class="f">Numbers</label><select data-fs="nFmt"><option value="tight">(n=30)</option><option value="spaced">(n = 30)</option><option value="upper">(N=30)</option></select></div>
+          <div><label class="f">Spacing</label><select data-fs="spacing"><option value="compact">Compact</option><option value="normal">Normal</option><option value="roomy">Roomy</option></select></div>
+          <div><label class="f">Exclusion box</label><select data-fs="exSide"><option value="right">Right of the main path</option><option value="left">Left of the main path</option></select></div>
+          <div><label class="f">Image resolution</label><select data-fs="res"><option value="1">Standard</option><option value="2">High (2×)</option><option value="3">Very high (3×)</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="pct"><span>Percentages beside the numbers</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="emph"><span>Highlight the final (analysed) boxes</span></label></div>
         </div>
         <div id="flLabels">
           <h3 style="margin:12px 0 4px">Section labels</h3>
@@ -22308,6 +22316,15 @@ const Analysis = (() => {
       sent.push(logistic ? `The model was ${multi.pModel <= alpha ? 'statistically significant' : 'insignificant'} (P value ${pTxt(multi.pModel)}, Nagelkerke R² = ${fmt(multi.nagelkerke, 3)}).`
         : `The model was ${multi.pModel <= alpha ? 'statistically significant' : 'insignificant'} (P value ${pTxt(multi.pModel)}) and explained ${fmt(100 * multi.r2, 1)}% of the variance of ${lowerFirst(plain(outLabel))} (R² = ${fmt(multi.r2, 3)}).`);
     } else sent.push('The model could not be estimated: too few complete cases or perfectly collinear predictors.');
+    if (a.commentDetail === 'detailed' && multi) {
+      const ns = terms.filter(x => x.m && !(x.m.p <= alpha));
+      sigM.forEach(x => {
+        const per = / vs /.test(x.label) ? 'compared with the reference category' : 'for each one-unit increase';
+        sent.push(logistic ? `For ${lowerFirst(x.label)}, the odds of ${what} were ${fmt(Math.abs(x.t.or - 1) * 100, 0)}% ${x.t.or >= 1 ? 'higher' : 'lower'} ${per} (OR = ${fmt(x.t.or, 2)}).`
+          : `${per === 'for each one-unit increase' ? 'Each one-unit increase in' : 'Compared with the reference category,'} ${lowerFirst(x.label)} ${per === 'for each one-unit increase' ? 'was associated with a change of' : 'was associated with a difference of'} ${fmt(x.t.B, d)} in ${what} (95% CI ${fmt(x.t.lo, d)} to ${fmt(x.t.hi, d)}).`);
+      });
+      if (ns.length) sent.push(`${cap(listJoin(ns.map(x => `${lowerFirst(x.label)} (P value ${pTxt(x.m.p)})`)))} ${ns.length > 1 ? 'were' : 'was'} not significant in the multivariable model.`);
+    }
     if (uni && multi && preds.length > 1) {
       if (uSig.length) sent.unshift(`In univariable analysis, ${listJoin(uSig.map(x => lowerFirst(x.label)))} ${uSig.length > 1 ? 'were' : 'was'} significantly associated with ${what}.`);
     }
@@ -22381,7 +22398,9 @@ const Analysis = (() => {
       if (a.youdenCol) row.push({ t: [fmt(c.youden, 3)] });
       return row;
     });
-    const grade = auc => auc >= 0.9 ? 'excellent' : auc >= 0.8 ? 'good' : auc >= 0.7 ? 'fair' : auc >= 0.6 ? 'poor' : 'failed';
+    // AUC interpretation: the common scale (excellent ≥0.9 … failed <0.6) or Hosmer & Lemeshow (outstanding ≥0.9, excellent ≥0.8, acceptable ≥0.7, poor ≥0.6)
+    const grade = a.aucScale === 'hosmer' ? (auc => auc >= 0.9 ? 'outstanding' : auc >= 0.8 ? 'excellent' : auc >= 0.7 ? 'acceptable' : auc >= 0.6 ? 'poor' : 'no')
+      : (auc => auc >= 0.9 ? 'excellent' : auc >= 0.8 ? 'good' : auc >= 0.7 ? 'fair' : auc >= 0.6 ? 'poor' : 'failed');
     const what = eventName(cfg, a);
     const sent = res.filter(x => x.r).map(x => {
       const { label, r } = x, nm = x.combined ? 'The combined model of all test variables' : cap(plain(label));
@@ -22394,7 +22413,14 @@ const Analysis = (() => {
         : `${nm} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}, P value ${pTxt(r.p)}).`;
     });
     res.filter(x => !x.r).forEach(x => sent.push(`The ROC curve of ${lowerFirst(plain(x.label))} could not be estimated: fewer than two patients with or without ${what}.`));
-    const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', ROC_CUT[cutM][1]];
+    // detailed: every accuracy measure at the cut-off, and the tests ranked by AUC
+    if (a.commentDetail === 'detailed') {
+      res.filter(x => x.r && x.r.p <= alpha).forEach(x => { const c = x.r.cutoff, nm = x.combined ? 'the combined model' : lowerFirst(plain(x.label));
+        sent.push(`At this cut-off, ${nm} had a positive predictive value of ${pct(c.ppv)}, a negative predictive value of ${pct(c.npv)} and an accuracy of ${pct(c.accuracy)}; the positive and negative likelihood ratios were ${lrTxt(c.lrPos)} and ${lrTxt(c.lrNeg)} (Youden index ${fmt(c.youden, 3)}).`); });
+      const ranked = res.filter(x => x.r).sort((p1, p2) => p2.r.auc - p1.r.auc), nm = x => x.combined ? 'the combined model' : lowerFirst(plain(x.label));
+      if (ranked.length > 1) sent.push(`The highest AUC was for ${nm(ranked[0])} (${fmt(ranked[0].r.auc, 3)}), followed by ${listJoin(ranked.slice(1).map(x => `${nm(x)} (${fmt(x.r.auc, 3)})`))}.`);
+    }
+    const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', ROC_CUT[cutM][1], ...(a.aucScale === 'hosmer' ? ['AUC interpretation (Hosmer & Lemeshow): ≥0.9 outstanding, 0.8-0.9 excellent, 0.7-0.8 acceptable, 0.6-0.7 poor'] : [])];
     if (res.some(x => x.r && x.r.cutoff.fallback)) f.push(`${listJoin(res.filter(x => x.r && x.r.cutoff.fallback).map(x => x.combined ? 'combined model' : plain(x.label)))}: no cut-off reached the target, Youden index used`);
     if (ciAll) f.push(`95% CI in brackets: exact (Clopper-Pearson) for sensitivity, specificity, PPV, NPV and accuracy${a.lr ? ', log method for likelihood ratios' : ''}`);
     else if (a.ci) f.push('Sensitivity and specificity with exact (Clopper-Pearson) 95% CI');
@@ -22496,6 +22522,11 @@ const Analysis = (() => {
       if (k === 2) sent.push(`The adjusted mean was ${res.pairs[0].diff < 0 ? 'lower' : 'higher'} in ${gl[0]} than ${gl[1]} by ${fmt(Math.abs(res.pairs[0].diff), d)} (95% CI ${fmt(res.pairs[0].lo, d)} to ${fmt(res.pairs[0].hi, d)}).`);
       else if (sp.length) sent.push(`Adjusted means differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).`);
     }
+    if (a.commentDetail === 'detailed') {
+      const terms2 = covs.flatMap(e => e.terms).map((t, i) => ({ label: t.label, ...res.covTerms[i] })), sg = terms2.filter(t => t.p <= alpha);
+      sent.push(sg.length ? `Of the covariates, ${listJoin(sg.map(t => `${lowerFirst(t.label)} (B = ${fmt(t.B, d)}, P value ${pTxt(t.p)})`))} ${sg.length > 1 ? 'were' : 'was'} significantly associated with ${lowerFirst(lab)}.` : `None of the covariates was significantly associated with ${lowerFirst(lab)}.`);
+      sent.push(`The group explained a partial η² of ${fmt(res.partialEta2, 3)} of the variance after adjustment.`);
+    }
     if (slopes) sent.push(slopes.p > alpha ? `The regression slopes of the covariates were homogeneous across the groups (P value ${pTxt(slopes.p)}), supporting the ANCOVA assumption.`
       : `The regression slopes of the covariates differed between the groups (P value ${pTxt(slopes.p)}), so the adjusted comparison should be interpreted with caution.`);
     return { kind: 'ancova', title: `${outLabel} of the studied groups adjusted for covariates (ANCOVA)`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [], meta: { res } };
@@ -22529,6 +22560,7 @@ const Analysis = (() => {
     const sent = [km.every(m => !isFinite(m.median)) ? `The median time to ${lowerFirst(plain(evLabel))} was not reached${one ? '' : ' in any group'}.`
       : `The median time to ${lowerFirst(plain(evLabel))} was ${listJoin(km.map((m, g) => `${med(m)}${isFinite(m.median) ? u : ''} in ${where(g)}`))}.`];
     if (!one) sent.push(`Survival was ${lr.p <= alpha ? 'significantly' : 'insignificantly'} different ${amongTxt(k)} (log-rank P value ${pTxt(lr.p)}).`);
+    if (a.commentDetail === 'detailed') sent.splice(1, 0, `${cap(lowerFirst(plain(evLabel)))} occurred in ${listJoin(km.map((m, g) => `${m.events} of ${m.n} patients (${fmt(100 * m.events / m.n, 1)}%) in ${where(g)}`))}.`);
     ats.forEach(tt => sent.push(`At ${fmt(tt, d)}${u}, the estimated survival was ${listJoin(km.map((m, g) => `${fmt(100 * survAt(m, tt), 1)}% in ${where(g)}`))}.`));
     // pairwise log-rank tests (three or more groups), Bonferroni-adjusted
     let pw = null;
@@ -22606,6 +22638,12 @@ const Analysis = (() => {
     if (multi) sent.push(sm.length ? `In ${preds.length > 1 ? 'multivariable ' : ''}Cox regression, ${listJoin(sm.map(phr))} ${sm.length > 1 ? 'were independent predictors' : 'was a significant predictor'} of ${what}.`
       : `None of the studied variables was a significant ${preds.length > 1 ? 'independent ' : ''}predictor of ${what} in Cox regression.`);
     else sent.push('The multivariable model could not be estimated: too few events or collinear predictors.');
+    if (a.commentDetail === 'detailed' && multi) {
+      sm.forEach(x => sent.push(`For ${lowerFirst(x.label)}, the hazard of ${what} was ${fmt(Math.abs(x.t.hr - 1) * 100, 0)}% ${x.t.hr >= 1 ? 'higher' : 'lower'} ${/ vs /.test(x.label) ? 'compared with the reference category' : 'for each one-unit increase'} (HR = ${fmt(x.t.hr, 2)}).`));
+      const ns = terms.filter(x => x.m && !(x.m.p <= alpha));
+      if (ns.length) sent.push(`${cap(listJoin(ns.map(x => `${lowerFirst(x.label)} (P value ${pTxt(x.m.p)})`)))} ${ns.length > 1 ? 'were' : 'was'} not significant.`);
+      sent.push(`The model included ${multi.n} patients with ${multi.events} events (likelihood ratio P value ${pTxt(multi.pModel)}).`);
+    }
     const fg = a.forest ? forestFigure(terms, 'cox', what, alpha, d) : null;
     return { kind: 'cox', title: `Cox regression analysis for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: fg ? [fg] : [], meta: { multi, uni } };
   }
@@ -23584,6 +23622,7 @@ const Analysis = (() => {
         [].concat(made).forEach((sec, si) => {
           if (si === 0 && a.title && a.title.trim()) sec.title = a.title.trim();
           if (sub.g !== null) sec.title += ` in ${cfg.groupLabels[sub.g] || sub.g}`;
+          if (a.commentDetail === 'brief' && sec.comment) sec.comment = (sec.comment.match(/^.*?\.(?=\s+[A-Z(]|$)/) || [sec.comment])[0];
           sec.comment = wording(sec.comment);
           sections.push(sec);
         });
@@ -23639,7 +23678,7 @@ const Analysis = (() => {
     const items = cols.map(c => ({ label: columnLabel(cfg, c), vals: rows.map(r => toNum(r[c])) }));
     const target = !!a.outcome && cols[0] === a.outcome;
     const title = target ? `Correlation of ${lowerFirst(plain(items[0].label))} with the studied variables (n=${rows.length})` : `Correlation between the studied variables (n=${rows.length})`;
-    const sec = corrTable(items, rows, cfg, alpha, d, { method: ['pearson', 'spearman', 'kendall'].includes(a.method) ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter ?? '2', ci: !!a.ci }, title);
+    const sec = corrTable(items, rows, cfg, alpha, d, { method: ['pearson', 'spearman', 'kendall'].includes(a.method) ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter ?? '2', ci: !!a.ci, detail: a.commentDetail }, title);
     if (sec.meta.pairs.some(q => q.method === 'pearson')) used.add('pearson');
     if (sec.meta.pairs.some(q => q.method === 'spearman')) used.add('spearman');
     if (sec.meta.pairs.some(q => q.method === 'kendall')) used.add('kendall');
@@ -23722,7 +23761,9 @@ const Analysis = (() => {
     const sig = pr.filter(q => q.sig);
     const sent = sig.map(q => `There was a significant ${strength(q.r)} ${q.r > 0 ? 'positive' : 'negative'} correlation between ${lowerFirst(plain(items[q.i].label))} and ${lowerFirst(plain(items[q.j].label))} (${coef(q)}, P value ${pTxt(q.p)}).`);
     if (!sig.length) sent.push('No significant correlations were found among the studied variables.');
-    else if (sig.length < pr.length) sent.push('The remaining correlations were insignificant.');
+    else if (sig.length < pr.length && o.detail !== 'detailed') sent.push('The remaining correlations were insignificant.');
+    if (o.detail === 'detailed') { const ns = pr.filter(q => !q.sig && isFinite(q.r));
+      if (ns.length) sent.push(`The correlations of ${listJoin(ns.map(q => `${lowerFirst(plain(items[q.i].label))} with ${lowerFirst(plain(items[q.j].label))} (${coef(q)}, P value ${pTxt(q.p)})`))} were insignificant.`); }
     const f = [];
     if (sig.length) f.push(`*: Significant as P value ≤ ${alpha}`);
     if (pr.some(q => q.method === 'pearson')) f.push('r: Pearson correlation coefficient');
@@ -24184,7 +24225,9 @@ const Charts = (() => {
     FONT = FONTS[style.font] || FONTS.sans;
     // a chart of one series (one-group studies) needs no legend
     const c = drawChart(spec, paletteName, spec.legend === false ? { ...style, legend: 'none' } : style);
-    return spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
+    const out = spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
+    if (style.frame) { const x = out.getContext('2d'), w = Math.max(2, 3 * (+style.res || 1)); x.setTransform(1, 0, 0, 1, 0, 0); x.strokeStyle = '#555'; x.lineWidth = w; x.strokeRect(w / 2, w / 2, out.width - w, out.height - w); }
+    return out;
   }
   function withTitle(src, title, st) {
     const res = +st.res || 1, ts = TEXT[st.text] || 1, out = document.createElement('canvas'), ctx = out.getContext('2d');
@@ -24241,11 +24284,17 @@ const Charts = (() => {
     if (fit) { const pad = (hi - lo) * 0.1 || 1; lo = Math.max(lo > 0 && spec.type === 'line' && st.yAxis !== 'fit' ? 0 : -Infinity, lo - pad); }
     let sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02), 6, spec.integer);
     if (spec.percent && sc.max > 100) sc.max = 100;
+    // a range chosen for this figure (y min / max); data outside it are clipped
+    const fixY = isFinite(spec.yMin) || isFinite(spec.yMax);
+    if (fixY) {
+      const a = isFinite(spec.yMin) ? +spec.yMin : sc.min, b = isFinite(spec.yMax) ? +spec.yMax : sc.max;
+      if (b > a) { const ns = niceScale(a, b, 6, spec.integer); sc = { min: a, max: b, step: ns.step }; }
+    }
     let y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
     // room above the data for stacked significance brackets / stars
     const dataHi = hi, BR0 = (spec.labels ? 70 : 34) * ts, BRSTEP = 50 * ts;
     const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 * ts : 0;
-    for (let top = hi, tries = 0; need && y(dataHi) - need < T && tries < 12; tries++) {
+    for (let top = hi, tries = 0; !fixY && need && y(dataHi) - need < T && tries < 12; tries++) {
       top += (top - sc.min) * 0.12;
       sc = niceScale(lo, top, 6, spec.integer);
       y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
@@ -24287,6 +24336,7 @@ const Charts = (() => {
       ctx.moveTo(x - w, y(a)); ctx.lineTo(x + w, y(a)); ctx.moveTo(x - w, y(b)); ctx.lineTo(x + w, y(b)); ctx.stroke();
     };
 
+    if (fixY) { ctx.save(); ctx.beginPath(); ctx.rect(L - 4, T - 60, pw + 8, ph + 60); ctx.clip(); }
     if (spec.type === 'bar') {
       const slots = perGroup ? 1 : ns;
       const gw = cw * widthOf(st, perGroup ? 0.42 : 0.78), bw = gw / slots;
@@ -24432,6 +24482,17 @@ const Charts = (() => {
       }));
     }
 
+    if (fixY) ctx.restore();
+    // optional reference line (e.g. a normal limit), dashed, with its label at the right end
+    if (isFinite(spec.refLine) && spec.refLine >= sc.min && spec.refLine <= sc.max) {
+      ctx.strokeStyle = '#C0392B'; ctx.lineWidth = 3; ctx.setLineDash([14, 9]);
+      ctx.beginPath(); ctx.moveTo(L, y(spec.refLine)); ctx.lineTo(L + pw, y(spec.refLine)); ctx.stroke(); ctx.setLineDash([]);
+      if (spec.refLabel) {
+        ctx.font = F(700, 22); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+        const w = ctx.measureText(spec.refLabel).width; ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(L + pw - 12 - w, y(spec.refLine) - 34, w + 12, 28);
+        ctx.fillStyle = '#C0392B'; ctx.fillText(spec.refLabel, L + pw - 6, y(spec.refLine) - 8);
+      }
+    }
     // significance: brackets between groups, or stars above timepoints
     ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = F(700, 30);
@@ -24841,10 +24902,15 @@ const Charts = (() => {
       accent, arrow: theme === 'classic' || theme === 'bw' ? '#222222' : mix(accent, '#000000', 0.35),
       lw: { thin: 1.6, bold: 4 }[st.lines] || 2.5, radius: st.corners === 'rounded' ? 14 : 0, fs, lh: Math.round(fs * 1.3),
       pills: st.pills !== false, shadow: !!st.shadow, font: FONTS[st.font] || FONTS.sans,
+      // numbers: "n=30" (default), "n = 30" or "N=30", optional percentages, exclusion box side, final boxes emphasised, spacing, resolution
+      N: v => `${{ spaced: 'n = ', upper: 'N=' }[st.nFmt] || 'n='}${v}`, pct: !!st.pct, exLeft: st.exSide === 'left', emph: !!st.emph,
+      gap: { compact: 40, roomy: 85 }[st.spacing] || 60, res: Math.min(3, Math.max(1, +st.res || 1)),
       pill: /^#[0-9a-f]{6}$/i.test(st.pillColor || '') ? st.pillColor : accent, pillText: /^#[0-9a-f]{6}$/i.test(st.pillTextColor || '') ? st.pillTextColor : '#fff'
     };
   }
   function flowBox(ctx, S, x, y, w, h, role) {
+    // the analysed (final) boxes can be emphasised with a thick border in the accent colour
+    if (role === 'final') { flowBox(ctx, { ...S, lw: S.lw * 2.2, stroke: () => S.accent }, x, y, w, h, 'col'); return; }
     ctx.save();
     if (S.shadow) { ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4; }
     ctx.fillStyle = S.fill(role);
@@ -24871,21 +24937,23 @@ const Charts = (() => {
     const ex = c.excluded.filter(e => +e.n > 0);
     const exTotal = ex.reduce((s, e) => s + +e.n, 0);
     const topW = 440, exW = 500;
+    // "(n=12)" or with a percentage of its base: "(n=12, 9.5%)"
+    const NP = (v, base) => `(${S.N(+v || 0)}${S.pct && +base > 0 ? `, ${Math.round(1000 * (+v || 0) / base) / 10}%` : ''})`;
     const strobe = type === 'strobe';
     const topText = type === 'stard' ? 'Potentially eligible participants' : strobe ? 'Potentially eligible individuals' : 'Assessed for eligibility';
-    const assessed = [{ t: `${topText} (n=${c.assessed})`, b: true, w: topW }];
-    const excluded = [{ t: `Excluded (n=${exTotal})`, b: true, w: exW }, ...ex.map(e => ({ t: `• ${e.text} (n=${e.n})`, w: exW }))];
+    const assessed = [{ t: `${topText} ${NP(c.assessed)}`, b: true, w: topW }];
+    const excluded = [{ t: `Excluded ${NP(exTotal, c.assessed)}`, b: true, w: exW }, ...ex.map(e => ({ t: `• ${e.text} ${NP(e.n, c.assessed)}`, w: exW }))];
     const midN = branches ? +c.stard.tested || 0 : c.groups.reduce((s, g) => s + (+g.allocated || 0), 0);
-    const randomized = [{ t: `${type === 'stard' ? 'Received index test' : strobe ? 'Included in the study' : 'Randomized'} (n=${midN})`, b: true, w: topW }];
+    const randomized = [{ t: `${type === 'stard' ? 'Received index test' : strobe ? 'Included in the study' : 'Randomized'} ${NP(midN)}`, b: true, w: topW }];
     let alloc, follow, anal;
     if (branches) {
-      alloc = branches.map(b => [{ t: `Index test ${b.name.toLowerCase()} (n=${+b.n || 0})`, b: true, w: colW }]);
-      follow = branches.map(b => [{ t: `No reference standard (n=${+b.noRef || 0})`, b: true, w: colW }, { t: `Reference standard (n=${(+b.present || 0) + (+b.absent || 0) + (+b.inconclusive || 0)})`, w: colW }]);
-      anal = branches.map(b => [{ t: 'Final diagnosis', b: true, w: colW }, { t: `Target condition present (n=${+b.present || 0})\nTarget condition absent (n=${+b.absent || 0})${+b.inconclusive ? `\nInconclusive (n=${b.inconclusive})` : ''}`, w: colW }]);
+      alloc = branches.map(b => [{ t: `Index test ${b.name.toLowerCase()} ${NP(b.n, midN)}`, b: true, w: colW }]);
+      follow = branches.map(b => [{ t: `No reference standard ${NP(b.noRef, b.n)}`, b: true, w: colW }, { t: `Reference standard ${NP((+b.present || 0) + (+b.absent || 0) + (+b.inconclusive || 0), b.n)}`, w: colW }]);
+      anal = branches.map(b => [{ t: 'Final diagnosis', b: true, w: colW }, { t: `Target condition present ${NP(b.present)}\nTarget condition absent ${NP(b.absent)}${+b.inconclusive ? `\nInconclusive ${NP(b.inconclusive)}` : ''}`, w: colW }]);
     } else {
-      alloc = c.groups.map((g, i) => [{ t: `${groupLabels[i]} (n=${g.allocated})`, b: true, w: colW }, { t: g.description || (strobe ? `Included (n=${g.allocated})` : `Received allocated intervention (n=${g.allocated})`), w: colW }]);
-      follow = c.groups.map(g => [{ t: `${strobe ? 'Lost to follow-up / missing data' : 'Lost to follow-up'} (n=${+g.lost || 0})`, b: true, w: colW }, ...(g.lostReason && +g.lost ? [{ t: g.lostReason, w: colW }] : [{ t: strobe ? 'None' : 'No drop out', w: colW }])]);
-      anal = c.groups.map(g => [{ t: `Analysed (n=${g.analysed})`, b: true, w: colW }, { t: `Excluded from analysis (n=${+g.excludedAnalysis || 0})${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
+      alloc = c.groups.map((g, i) => [{ t: `${groupLabels[i]} ${NP(g.allocated, midN)}`, b: true, w: colW }, { t: g.description || (strobe ? `Included ${NP(g.allocated)}` : `Received allocated intervention ${NP(g.allocated)}`), w: colW }]);
+      follow = c.groups.map(g => [{ t: `${strobe ? 'Lost to follow-up / missing data' : 'Lost to follow-up'} ${NP(g.lost, g.allocated)}`, b: true, w: colW }, ...(g.lostReason && +g.lost ? [{ t: g.lostReason, w: colW }] : [{ t: strobe ? 'None' : 'No drop out', w: colW }])]);
+      anal = c.groups.map(g => [{ t: `Analysed ${NP(g.analysed, g.allocated)}`, b: true, w: colW }, { t: `Excluded from analysis ${NP(g.excludedAnalysis, g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
     }
     // section labels: the user's own text where given, else the defaults of the flowchart type
     const own = ((c.style || {}).labels || {})[type] || [];
@@ -24893,11 +24961,11 @@ const Charts = (() => {
 
     const hA = boxH(assessed), hE = boxH(excluded), hR = boxH(randomized);
     const hAl = Math.max(MIN_ROW, ...alloc.map(boxH)), hF = Math.max(MIN_ROW, ...follow.map(boxH)), hAn = Math.max(MIN_ROW, ...anal.map(boxH));
-    const gap = 60;
+    const gap = S.gap;
     const yA = 30, yE = yA + hA + 20, yR = Math.max(yE + hE + 20, yA + hA + gap);
     const yAl = yR + hR + gap + 20, yF = yAl + hAl + gap, yAn = yF + hF + gap;
-    cv.width = CW; cv.height = yAn + hAn + 30;
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    cv.width = CW * S.res; cv.height = (yAn + hAn + 30) * S.res; ctx.scale(S.res, S.res);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, yAn + hAn + 30);
 
     const midX = gutter + (CW - gutter) / 2;
     const box = (x, y, w, h, lines, align = 'center', role = 'main') => {
@@ -24941,9 +25009,10 @@ const Charts = (() => {
 
     box(midX - topW / 2, yA, topW, hA, assessed);
     if (exTotal) {
-      const exX = midX + 60;
+      // the exclusion box to the right (default) or the left of the main path
+      const exX = S.exLeft ? Math.max(gutter + 6, midX - 60 - exW) : midX + 60;
       box(exX, yE, exW, hE, excluded, 'left', 'side');
-      arrow(midX, yE + hE / 2, exX, yE + hE / 2);
+      arrow(midX, yE + hE / 2, S.exLeft ? exX + exW : exX, yE + hE / 2);
     }
     arrow(midX, yA + hA, midX, yR);
     box(midX - topW / 2, yR, topW, hR, randomized);
@@ -24960,7 +25029,7 @@ const Charts = (() => {
       arrow(cx, yAl + hAl, cx, yF);
       box(x, yF, colW, hF, follow[i], 'center', 'col');
       arrow(cx, yF + hF, cx, yAn);
-      box(x, yAn, colW, hAn, anal[i], 'center', 'col');
+      box(x, yAn, colW, hAn, anal[i], 'center', S.emph ? 'final' : 'col');
     }
     return cv;
   }
@@ -24971,14 +25040,14 @@ const Charts = (() => {
   /* ---------- simple flowchart: a chain of steps with optional exclusions, optionally split into the groups ---------- */
   function simpleFlow(c, groupLabels, palName, S) {
     const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
-    const CW = 1200, fs = S.fs, lh = S.lh, boxW = 520, exW = 420, gap = 56;
+    const CW = 1200, fs = S.fs, lh = S.lh, boxW = 520, exW = 420, gap = S.gap - 4;
     const boxH = (text, w, bold) => { ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; return text.split('\n').reduce((h, par) => h + measureLines(ctx, par, w - 28) * lh, 0) + 26; };
     const steps = c.steps.filter(s => String(s.text).trim());
     const midX = CW / 2 - (steps.some(s => +s.exN > 0) ? 160 : 0);
     let y = 30;
     const layout = steps.map(s => {
-      const text = `${s.text} (n=${+s.n || 0})`, h = boxH(text, boxW, true);
-      const ex = +s.exN > 0 ? { text: `${s.exText || 'Excluded'} (n=${s.exN})`, h: 0 } : null;
+      const text = `${s.text} (${S.N(+s.n || 0)})`, h = boxH(text, boxW, true);
+      const ex = +s.exN > 0 ? { text: `${s.exText || 'Excluded'} (${S.N(s.exN)}${S.pct && +s.n > 0 ? `, ${Math.round(1000 * s.exN / s.n) / 10}%` : ''})`, h: 0 } : null;
       if (ex) ex.h = boxH(ex.text, exW, false);
       const box = { text, y, h, ex };
       y += h + gap + (ex ? ex.h + 24 : 0);
@@ -24986,10 +25055,11 @@ const Charts = (() => {
     });
     const k = groupLabels.length, split = c.splitGroups && k > 1 && c.groups;
     const pad = 18, colW = split ? Math.min(360, (CW - pad * (k + 1)) / k) : 0;
-    const gH = split ? Math.max(...groupLabels.map((g, i) => boxH(`${g}\n(n=${c.groups[i].analysed})`, colW, true))) : 0;
+    const gH = split ? Math.max(...groupLabels.map((g, i) => boxH(`${g}\n(${S.N(c.groups[i].analysed)})`, colW, true))) : 0;
     const busY = y - gap / 2;
-    cv.width = CW; cv.height = (split ? y + gH + 30 : y - gap + 30);
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    const Hc = split ? y + gH + 30 : y - gap + 30;
+    cv.width = CW * S.res; cv.height = Hc * S.res; ctx.scale(S.res, S.res);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, Hc);
     const box = (x, yy, w, h, text, bold, align = 'center', role = 'main') => {
       flowBox(ctx, S, x, yy, w, h, role);
       ctx.textBaseline = 'top'; ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; ctx.textAlign = align;
@@ -25015,7 +25085,7 @@ const Charts = (() => {
       const last = layout[layout.length - 1], cx = i => pad + colW / 2 + i * ((CW - 2 * pad - colW) / (k - 1));
       ctx.strokeStyle = S.arrow; ctx.lineWidth = S.lw;
       ctx.beginPath(); ctx.moveTo(midX, last.y + last.h); ctx.lineTo(midX, busY); ctx.moveTo(cx(0), busY); ctx.lineTo(cx(k - 1), busY); ctx.stroke();
-      groupLabels.forEach((g, i) => { arrow(cx(i), busY, cx(i), y); box(cx(i) - colW / 2, y, colW, gH, `${g}\n(n=${c.groups[i].analysed})`, true, 'center', 'col'); });
+      groupLabels.forEach((g, i) => { arrow(cx(i), busY, cx(i), y); box(cx(i) - colW / 2, y, colW, gH, `${g}\n(${S.N(c.groups[i].analysed)})`, true, 'center', S.emph ? 'final' : 'col'); });
     }
     return cv;
   }
@@ -25628,13 +25698,13 @@ if (typeof module !== 'undefined') module.exports = Examples;
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
-    welch: false, dunn: false, chiPost: false, mixed: false, normality: 'sw', catEffect: 'rr',
+    welch: false, dunn: true, chiPost: false, mixed: false, normality: 'sw', catEffect: 'rr',
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
     pctDecimals: 1, meanStyle: 'pm', iqrStyle: 'dash', secondRow: 'auto', pDigits: 3, pHead: 'P value', sigSym: '*', showStat: false, missingNote: false,
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
     pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none', tableNewPage: false,
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
-    mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false,
+    mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -25653,13 +25723,13 @@ if (typeof module !== 'undefined') module.exports = Examples;
     pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
     pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote'], tableNewPage: ['optTableNewPage', true],
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
-    mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true]
+    mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
   const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
-    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont });
+    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont, frame: o.figFrame });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -26598,11 +26668,13 @@ if (typeof module !== 'undefined') module.exports = Examples;
   const chartKind = v => v.kind === 'repeated' ? 'repeated' : v.type;
   function renderFigureTable() {
     const vars = state.cfg.variables.filter(v => v.include);
-    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
+    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th>Y axis from – to</th><th>Reference line (value, label)</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
       <td><b>${esc(v.label)}</b><div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
       <td><select data-fv="${v.id}" data-fk="chart">${CHART_TYPES[chartKind(v)].map(([k, l]) => `<option value="${k}" ${(v.chart || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input type="text" data-fv="${v.id}" data-fk="caption" value="${esc(v.caption || '')}" placeholder="${esc(v.label)} of the studied groups"></td>
       <td><input type="text" data-fv="${v.id}" data-fk="ylabel" value="${esc(v.ylabel || '')}" placeholder="${esc(v.type === 'categorical' ? '% of the studied patients' : v.label)}"></td>
+      <td style="white-space:nowrap">${v.type === 'categorical' ? '<span class="legend-note">—</span>' : `<input type="text" class="mini" data-fv="${v.id}" data-fk="ymin" value="${esc(v.ymin || '')}" placeholder="auto"> – <input type="text" class="mini" data-fv="${v.id}" data-fk="ymax" value="${esc(v.ymax || '')}" placeholder="auto">`}</td>
+      <td style="white-space:nowrap">${v.type === 'categorical' ? '<span class="legend-note">—</span>' : `<input type="text" class="mini" data-fv="${v.id}" data-fk="ref" value="${esc(v.ref || '')}" placeholder="value"> <input type="text" data-fv="${v.id}" data-fk="refLabel" value="${esc(v.refLabel || '')}" placeholder="label, e.g. Normal limit" style="min-width:120px;width:140px">`}</td>
       <td><button class="btn ghost small" data-fprev="${v.id}" type="button" title="Preview this figure">👁</button></td></tr>`).join('')}</tbody>`;
     const cur = $('#figPrevVar').value;
     $('#figPrevVar').innerHTML = vars.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
@@ -26622,7 +26694,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       const res = Analysis.run(state.data, { ...cfg, variables: [{ ...v, include: true }], advanced: [], options: { ...cfg.options, correlation: false, figures: 'all' } });
       const f = res.sections.flatMap(x => x.figures)[0];
       if (!f) { cv.width = cv.height = 0; $('#figPrevNote').textContent = 'No figure for this variable (chart type “No figure”).'; return; }
-      renderFigure(f, cfg.options);
+      figVarProps(f); renderFigure(f, cfg.options); state.prevFig = f;
       const img = new Image();
       img.onload = () => { cv.width = img.width; cv.height = img.height; cv.getContext('2d').drawImage(img, 0, 0); };
       img.src = f.url;
@@ -26630,6 +26702,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     } catch (err) { console.error(err); $('#figPrevNote').textContent = 'Preview failed: ' + err.message; }
   }
   $('#p7').addEventListener('input', schedulePreview);
+  $('#figPrevPng').onclick = () => { const f = state.prevFig; if (!f) return; const a = document.createElement('a'); a.href = f.url; a.download = String(f.caption).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80) + '.png'; document.body.appendChild(a); a.click(); a.remove(); };
   $('#p7').addEventListener('change', schedulePreview);
   $('#figTbl').addEventListener('click', e => { const b = e.target.closest('[data-fprev]'); if (b) { $('#figPrevVar').value = b.dataset.fprev; schedulePreview(); } });
 
@@ -26700,7 +26773,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
   function advOptions(a) {
     const t = a.type, sel = (key, opts, v) => `<select data-af="${key}">${opts.map(([k, l]) => `<option value="${esc(k)}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     const box = (key, label) => `<label class="check" style="margin-top:22px"><input type="checkbox" data-af="${key}" ${a[key] ? 'checked' : ''}><span>${label}</span></label>`;
-    const out = [`<div><label class="f">Title (optional)</label><input type="text" data-af="title" value="${esc(a.title || '')}" placeholder="automatic"></div>`];
+    const out = [`<div><label class="f">Title (optional)</label><input type="text" data-af="title" value="${esc(a.title || '')}" placeholder="automatic"></div>`,
+      `<div><label class="f">Comment</label>${sel('commentDetail', [['standard', 'Standard'], ['detailed', 'Detailed — more numbers and interpretation'], ['brief', 'Brief — one sentence']], a.commentDetail)}</div>`];
     if (!['ancova', 'survival', 'mcnemar'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
@@ -26730,6 +26804,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
         ['spec80', 'Specificity ≥ 80% (best sensitivity)'], ['spec90', 'Specificity ≥ 90% (best sensitivity)'], ['spec95', 'Specificity ≥ 95% (best sensitivity)'],
         ['manual', 'My own cut-off value']], a.cutoff)}</div>`);
       if (a.cutoff === 'manual') out.push(`<div><label class="f">Cut-off value (positive when ≥, or ≤ for lower values)</label><input type="text" data-af="manualCut" value="${esc(a.manualCut || '')}" placeholder="e.g. 2.5"></div>`);
+      out.push(`<div><label class="f">AUC interpretation in the comment</label>${sel('aucScale', [['standard', 'Excellent ≥0.9, good ≥0.8, fair ≥0.7, poor ≥0.6'], ['hosmer', 'Hosmer & Lemeshow: outstanding ≥0.9, excellent ≥0.8, acceptable ≥0.7']], a.aucScale)}</div>`);
       out.push(`<div><label class="f">Positive test direction</label>${sel('direction', [['auto', 'Automatic (from the AUC)'], ['higher', 'Higher values positive'], ['lower', 'Lower values positive']], a.direction)}</div>`);
       out.push(`<div>${box('ci', '95% CI of sensitivity and specificity')}</div>`, `<div>${box('ciAll', '95% CI of every measure (PPV, NPV, accuracy, LRs)')}</div>`, `<div>${box('lr', 'Likelihood ratios (LR+, LR−)')}</div>`, `<div>${box('youdenCol', 'Youden index column')}</div>`,
         `<div>${box('compare', 'Compare the AUCs (DeLong test)')}</div>`, `<div>${box('combined', 'Combined model of all tests (logistic)')}</div>`);
@@ -26897,7 +26972,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     $('#cForm').innerHTML = html;
     drawConsortPreview();
   }
-  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {} };
+  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {}, nFmt: 'tight', spacing: 'normal', exSide: 'right', res: '1', pct: false, emph: false };
   function readConsort() {
     const c = state.cfg && state.cfg.consort; if (!c || !$('#cForm').innerHTML) return;
     c.enabled = $('#cEnabled').checked;
@@ -26906,7 +26981,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const labels = { ...((c.style || {}).labels || {}) };
     if (c.type !== 'simple') labels[c.type] = [...document.querySelectorAll('#p9 [data-fsl]')].map(el => el.value);
     c.style = { theme: st.theme, color: st.colorMode === 'custom' ? st.color : '', corners: st.corners, lines: st.lines, textSize: st.textSize, font: st.font, pills: st.pills, shadow: st.shadow,
-      pillColor: st.pillMode === 'custom' ? st.pillColor : '', pillTextColor: st.pillTextColor, labels };
+      pillColor: st.pillMode === 'custom' ? st.pillColor : '', pillTextColor: st.pillTextColor, labels,
+      nFmt: st.nFmt, spacing: st.spacing, exSide: st.exSide, res: st.res, pct: st.pct, emph: st.emph };
     const val = el => el.type === 'checkbox' ? el.checked : el.type === 'number' ? (+el.value || 0) : el.value;
     document.querySelectorAll('#cForm [data-c]').forEach(el => { c[el.dataset.c] = val(el); });
     document.querySelectorAll('#cForm [data-ex]').forEach(el => { c.excluded[+el.dataset.ex][el.dataset.f] = val(el); });
@@ -27217,7 +27293,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
         if (+cfg.options.pLead === 0) res.sections.forEach(s => { s.footnote = s.footnote.replace(/(P value|\bP|\bp) ([≤<]) 0\./g, '$1 $2 .'); });
         if (cfg.options.midDot) midDots(res);
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
-          f.key = f.caption; renderFigure(f, cfg.options);
+          f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options);
           f.note = cfg.options.figNotes ? figNote(f.spec, cfg.options) : '';
           if (cfg.options.midDot) f.note = dot(f.note);
         }); });
@@ -27256,6 +27332,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       else if (series.some(s => s.lo)) out.push(`${what} show the median; error bars show the interquartile range (IQR).`);
     }
     if (spec.individual) out.push('Thin lines show individual patients.');
+    if (isFinite(spec.refLine)) out.push(`The dashed red line marks ${spec.refLabel ? `${spec.refLabel} (${spec.refLine})` : `the value ${spec.refLine}`}.`);
     if (spec.type === 'box') {
       out.push('Boxes show the median and interquartile range (IQR); whiskers extend to the most extreme values within 1.5 × IQR, and points beyond them are outliers.');
       if (o.boxMean) out.push('◆ marks the mean.');
@@ -27279,6 +27356,14 @@ if (typeof module !== 'undefined') module.exports = Examples;
       }
     }
     return out.filter(Boolean).join(' ');
+  }
+  // per-variable figure settings of step 7: y-axis range and a reference line
+  function figVarProps(f) {
+    const v = f.vid && state.cfg.variables.find(x => x.id === f.vid); if (!v) return;
+    const n = x => { const t = parseFloat(String(x ?? '').replace(',', '.')); return isFinite(t) ? t : undefined; };
+    const yMin = n(v.ymin), yMax = n(v.ymax), ref = n(v.ref);
+    if (yMin !== undefined) f.spec.yMin = yMin; if (yMax !== undefined) f.spec.yMax = yMax;
+    if (ref !== undefined) { f.spec.refLine = ref; if (v.refLabel) f.spec.refLabel = v.refLabel; }
   }
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
   function renderFigure(f, o) {

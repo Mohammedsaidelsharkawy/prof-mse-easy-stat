@@ -182,7 +182,9 @@ const Charts = (() => {
     FONT = FONTS[style.font] || FONTS.sans;
     // a chart of one series (one-group studies) needs no legend
     const c = drawChart(spec, paletteName, spec.legend === false ? { ...style, legend: 'none' } : style);
-    return spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
+    const out = spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
+    if (style.frame) { const x = out.getContext('2d'), w = Math.max(2, 3 * (+style.res || 1)); x.setTransform(1, 0, 0, 1, 0, 0); x.strokeStyle = '#555'; x.lineWidth = w; x.strokeRect(w / 2, w / 2, out.width - w, out.height - w); }
+    return out;
   }
   function withTitle(src, title, st) {
     const res = +st.res || 1, ts = TEXT[st.text] || 1, out = document.createElement('canvas'), ctx = out.getContext('2d');
@@ -239,11 +241,17 @@ const Charts = (() => {
     if (fit) { const pad = (hi - lo) * 0.1 || 1; lo = Math.max(lo > 0 && spec.type === 'line' && st.yAxis !== 'fit' ? 0 : -Infinity, lo - pad); }
     let sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02), 6, spec.integer);
     if (spec.percent && sc.max > 100) sc.max = 100;
+    // a range chosen for this figure (y min / max); data outside it are clipped
+    const fixY = isFinite(spec.yMin) || isFinite(spec.yMax);
+    if (fixY) {
+      const a = isFinite(spec.yMin) ? +spec.yMin : sc.min, b = isFinite(spec.yMax) ? +spec.yMax : sc.max;
+      if (b > a) { const ns = niceScale(a, b, 6, spec.integer); sc = { min: a, max: b, step: ns.step }; }
+    }
     let y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
     // room above the data for stacked significance brackets / stars
     const dataHi = hi, BR0 = (spec.labels ? 70 : 34) * ts, BRSTEP = 50 * ts;
     const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 * ts : 0;
-    for (let top = hi, tries = 0; need && y(dataHi) - need < T && tries < 12; tries++) {
+    for (let top = hi, tries = 0; !fixY && need && y(dataHi) - need < T && tries < 12; tries++) {
       top += (top - sc.min) * 0.12;
       sc = niceScale(lo, top, 6, spec.integer);
       y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
@@ -285,6 +293,7 @@ const Charts = (() => {
       ctx.moveTo(x - w, y(a)); ctx.lineTo(x + w, y(a)); ctx.moveTo(x - w, y(b)); ctx.lineTo(x + w, y(b)); ctx.stroke();
     };
 
+    if (fixY) { ctx.save(); ctx.beginPath(); ctx.rect(L - 4, T - 60, pw + 8, ph + 60); ctx.clip(); }
     if (spec.type === 'bar') {
       const slots = perGroup ? 1 : ns;
       const gw = cw * widthOf(st, perGroup ? 0.42 : 0.78), bw = gw / slots;
@@ -430,6 +439,17 @@ const Charts = (() => {
       }));
     }
 
+    if (fixY) ctx.restore();
+    // optional reference line (e.g. a normal limit), dashed, with its label at the right end
+    if (isFinite(spec.refLine) && spec.refLine >= sc.min && spec.refLine <= sc.max) {
+      ctx.strokeStyle = '#C0392B'; ctx.lineWidth = 3; ctx.setLineDash([14, 9]);
+      ctx.beginPath(); ctx.moveTo(L, y(spec.refLine)); ctx.lineTo(L + pw, y(spec.refLine)); ctx.stroke(); ctx.setLineDash([]);
+      if (spec.refLabel) {
+        ctx.font = F(700, 22); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+        const w = ctx.measureText(spec.refLabel).width; ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(L + pw - 12 - w, y(spec.refLine) - 34, w + 12, 28);
+        ctx.fillStyle = '#C0392B'; ctx.fillText(spec.refLabel, L + pw - 6, y(spec.refLine) - 8);
+      }
+    }
     // significance: brackets between groups, or stars above timepoints
     ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = F(700, 30);
@@ -839,10 +859,15 @@ const Charts = (() => {
       accent, arrow: theme === 'classic' || theme === 'bw' ? '#222222' : mix(accent, '#000000', 0.35),
       lw: { thin: 1.6, bold: 4 }[st.lines] || 2.5, radius: st.corners === 'rounded' ? 14 : 0, fs, lh: Math.round(fs * 1.3),
       pills: st.pills !== false, shadow: !!st.shadow, font: FONTS[st.font] || FONTS.sans,
+      // numbers: "n=30" (default), "n = 30" or "N=30", optional percentages, exclusion box side, final boxes emphasised, spacing, resolution
+      N: v => `${{ spaced: 'n = ', upper: 'N=' }[st.nFmt] || 'n='}${v}`, pct: !!st.pct, exLeft: st.exSide === 'left', emph: !!st.emph,
+      gap: { compact: 40, roomy: 85 }[st.spacing] || 60, res: Math.min(3, Math.max(1, +st.res || 1)),
       pill: /^#[0-9a-f]{6}$/i.test(st.pillColor || '') ? st.pillColor : accent, pillText: /^#[0-9a-f]{6}$/i.test(st.pillTextColor || '') ? st.pillTextColor : '#fff'
     };
   }
   function flowBox(ctx, S, x, y, w, h, role) {
+    // the analysed (final) boxes can be emphasised with a thick border in the accent colour
+    if (role === 'final') { flowBox(ctx, { ...S, lw: S.lw * 2.2, stroke: () => S.accent }, x, y, w, h, 'col'); return; }
     ctx.save();
     if (S.shadow) { ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4; }
     ctx.fillStyle = S.fill(role);
@@ -869,21 +894,23 @@ const Charts = (() => {
     const ex = c.excluded.filter(e => +e.n > 0);
     const exTotal = ex.reduce((s, e) => s + +e.n, 0);
     const topW = 440, exW = 500;
+    // "(n=12)" or with a percentage of its base: "(n=12, 9.5%)"
+    const NP = (v, base) => `(${S.N(+v || 0)}${S.pct && +base > 0 ? `, ${Math.round(1000 * (+v || 0) / base) / 10}%` : ''})`;
     const strobe = type === 'strobe';
     const topText = type === 'stard' ? 'Potentially eligible participants' : strobe ? 'Potentially eligible individuals' : 'Assessed for eligibility';
-    const assessed = [{ t: `${topText} (n=${c.assessed})`, b: true, w: topW }];
-    const excluded = [{ t: `Excluded (n=${exTotal})`, b: true, w: exW }, ...ex.map(e => ({ t: `• ${e.text} (n=${e.n})`, w: exW }))];
+    const assessed = [{ t: `${topText} ${NP(c.assessed)}`, b: true, w: topW }];
+    const excluded = [{ t: `Excluded ${NP(exTotal, c.assessed)}`, b: true, w: exW }, ...ex.map(e => ({ t: `• ${e.text} ${NP(e.n, c.assessed)}`, w: exW }))];
     const midN = branches ? +c.stard.tested || 0 : c.groups.reduce((s, g) => s + (+g.allocated || 0), 0);
-    const randomized = [{ t: `${type === 'stard' ? 'Received index test' : strobe ? 'Included in the study' : 'Randomized'} (n=${midN})`, b: true, w: topW }];
+    const randomized = [{ t: `${type === 'stard' ? 'Received index test' : strobe ? 'Included in the study' : 'Randomized'} ${NP(midN)}`, b: true, w: topW }];
     let alloc, follow, anal;
     if (branches) {
-      alloc = branches.map(b => [{ t: `Index test ${b.name.toLowerCase()} (n=${+b.n || 0})`, b: true, w: colW }]);
-      follow = branches.map(b => [{ t: `No reference standard (n=${+b.noRef || 0})`, b: true, w: colW }, { t: `Reference standard (n=${(+b.present || 0) + (+b.absent || 0) + (+b.inconclusive || 0)})`, w: colW }]);
-      anal = branches.map(b => [{ t: 'Final diagnosis', b: true, w: colW }, { t: `Target condition present (n=${+b.present || 0})\nTarget condition absent (n=${+b.absent || 0})${+b.inconclusive ? `\nInconclusive (n=${b.inconclusive})` : ''}`, w: colW }]);
+      alloc = branches.map(b => [{ t: `Index test ${b.name.toLowerCase()} ${NP(b.n, midN)}`, b: true, w: colW }]);
+      follow = branches.map(b => [{ t: `No reference standard ${NP(b.noRef, b.n)}`, b: true, w: colW }, { t: `Reference standard ${NP((+b.present || 0) + (+b.absent || 0) + (+b.inconclusive || 0), b.n)}`, w: colW }]);
+      anal = branches.map(b => [{ t: 'Final diagnosis', b: true, w: colW }, { t: `Target condition present ${NP(b.present)}\nTarget condition absent ${NP(b.absent)}${+b.inconclusive ? `\nInconclusive ${NP(b.inconclusive)}` : ''}`, w: colW }]);
     } else {
-      alloc = c.groups.map((g, i) => [{ t: `${groupLabels[i]} (n=${g.allocated})`, b: true, w: colW }, { t: g.description || (strobe ? `Included (n=${g.allocated})` : `Received allocated intervention (n=${g.allocated})`), w: colW }]);
-      follow = c.groups.map(g => [{ t: `${strobe ? 'Lost to follow-up / missing data' : 'Lost to follow-up'} (n=${+g.lost || 0})`, b: true, w: colW }, ...(g.lostReason && +g.lost ? [{ t: g.lostReason, w: colW }] : [{ t: strobe ? 'None' : 'No drop out', w: colW }])]);
-      anal = c.groups.map(g => [{ t: `Analysed (n=${g.analysed})`, b: true, w: colW }, { t: `Excluded from analysis (n=${+g.excludedAnalysis || 0})${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
+      alloc = c.groups.map((g, i) => [{ t: `${groupLabels[i]} ${NP(g.allocated, midN)}`, b: true, w: colW }, { t: g.description || (strobe ? `Included ${NP(g.allocated)}` : `Received allocated intervention ${NP(g.allocated)}`), w: colW }]);
+      follow = c.groups.map(g => [{ t: `${strobe ? 'Lost to follow-up / missing data' : 'Lost to follow-up'} ${NP(g.lost, g.allocated)}`, b: true, w: colW }, ...(g.lostReason && +g.lost ? [{ t: g.lostReason, w: colW }] : [{ t: strobe ? 'None' : 'No drop out', w: colW }])]);
+      anal = c.groups.map(g => [{ t: `Analysed ${NP(g.analysed, g.allocated)}`, b: true, w: colW }, { t: `Excluded from analysis ${NP(g.excludedAnalysis, g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
     }
     // section labels: the user's own text where given, else the defaults of the flowchart type
     const own = ((c.style || {}).labels || {})[type] || [];
@@ -891,11 +918,11 @@ const Charts = (() => {
 
     const hA = boxH(assessed), hE = boxH(excluded), hR = boxH(randomized);
     const hAl = Math.max(MIN_ROW, ...alloc.map(boxH)), hF = Math.max(MIN_ROW, ...follow.map(boxH)), hAn = Math.max(MIN_ROW, ...anal.map(boxH));
-    const gap = 60;
+    const gap = S.gap;
     const yA = 30, yE = yA + hA + 20, yR = Math.max(yE + hE + 20, yA + hA + gap);
     const yAl = yR + hR + gap + 20, yF = yAl + hAl + gap, yAn = yF + hF + gap;
-    cv.width = CW; cv.height = yAn + hAn + 30;
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    cv.width = CW * S.res; cv.height = (yAn + hAn + 30) * S.res; ctx.scale(S.res, S.res);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, yAn + hAn + 30);
 
     const midX = gutter + (CW - gutter) / 2;
     const box = (x, y, w, h, lines, align = 'center', role = 'main') => {
@@ -939,9 +966,10 @@ const Charts = (() => {
 
     box(midX - topW / 2, yA, topW, hA, assessed);
     if (exTotal) {
-      const exX = midX + 60;
+      // the exclusion box to the right (default) or the left of the main path
+      const exX = S.exLeft ? Math.max(gutter + 6, midX - 60 - exW) : midX + 60;
       box(exX, yE, exW, hE, excluded, 'left', 'side');
-      arrow(midX, yE + hE / 2, exX, yE + hE / 2);
+      arrow(midX, yE + hE / 2, S.exLeft ? exX + exW : exX, yE + hE / 2);
     }
     arrow(midX, yA + hA, midX, yR);
     box(midX - topW / 2, yR, topW, hR, randomized);
@@ -958,7 +986,7 @@ const Charts = (() => {
       arrow(cx, yAl + hAl, cx, yF);
       box(x, yF, colW, hF, follow[i], 'center', 'col');
       arrow(cx, yF + hF, cx, yAn);
-      box(x, yAn, colW, hAn, anal[i], 'center', 'col');
+      box(x, yAn, colW, hAn, anal[i], 'center', S.emph ? 'final' : 'col');
     }
     return cv;
   }
@@ -969,14 +997,14 @@ const Charts = (() => {
   /* ---------- simple flowchart: a chain of steps with optional exclusions, optionally split into the groups ---------- */
   function simpleFlow(c, groupLabels, palName, S) {
     const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
-    const CW = 1200, fs = S.fs, lh = S.lh, boxW = 520, exW = 420, gap = 56;
+    const CW = 1200, fs = S.fs, lh = S.lh, boxW = 520, exW = 420, gap = S.gap - 4;
     const boxH = (text, w, bold) => { ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; return text.split('\n').reduce((h, par) => h + measureLines(ctx, par, w - 28) * lh, 0) + 26; };
     const steps = c.steps.filter(s => String(s.text).trim());
     const midX = CW / 2 - (steps.some(s => +s.exN > 0) ? 160 : 0);
     let y = 30;
     const layout = steps.map(s => {
-      const text = `${s.text} (n=${+s.n || 0})`, h = boxH(text, boxW, true);
-      const ex = +s.exN > 0 ? { text: `${s.exText || 'Excluded'} (n=${s.exN})`, h: 0 } : null;
+      const text = `${s.text} (${S.N(+s.n || 0)})`, h = boxH(text, boxW, true);
+      const ex = +s.exN > 0 ? { text: `${s.exText || 'Excluded'} (${S.N(s.exN)}${S.pct && +s.n > 0 ? `, ${Math.round(1000 * s.exN / s.n) / 10}%` : ''})`, h: 0 } : null;
       if (ex) ex.h = boxH(ex.text, exW, false);
       const box = { text, y, h, ex };
       y += h + gap + (ex ? ex.h + 24 : 0);
@@ -984,10 +1012,11 @@ const Charts = (() => {
     });
     const k = groupLabels.length, split = c.splitGroups && k > 1 && c.groups;
     const pad = 18, colW = split ? Math.min(360, (CW - pad * (k + 1)) / k) : 0;
-    const gH = split ? Math.max(...groupLabels.map((g, i) => boxH(`${g}\n(n=${c.groups[i].analysed})`, colW, true))) : 0;
+    const gH = split ? Math.max(...groupLabels.map((g, i) => boxH(`${g}\n(${S.N(c.groups[i].analysed)})`, colW, true))) : 0;
     const busY = y - gap / 2;
-    cv.width = CW; cv.height = (split ? y + gH + 30 : y - gap + 30);
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    const Hc = split ? y + gH + 30 : y - gap + 30;
+    cv.width = CW * S.res; cv.height = Hc * S.res; ctx.scale(S.res, S.res);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, Hc);
     const box = (x, yy, w, h, text, bold, align = 'center', role = 'main') => {
       flowBox(ctx, S, x, yy, w, h, role);
       ctx.textBaseline = 'top'; ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; ctx.textAlign = align;
@@ -1013,7 +1042,7 @@ const Charts = (() => {
       const last = layout[layout.length - 1], cx = i => pad + colW / 2 + i * ((CW - 2 * pad - colW) / (k - 1));
       ctx.strokeStyle = S.arrow; ctx.lineWidth = S.lw;
       ctx.beginPath(); ctx.moveTo(midX, last.y + last.h); ctx.lineTo(midX, busY); ctx.moveTo(cx(0), busY); ctx.lineTo(cx(k - 1), busY); ctx.stroke();
-      groupLabels.forEach((g, i) => { arrow(cx(i), busY, cx(i), y); box(cx(i) - colW / 2, y, colW, gH, `${g}\n(n=${c.groups[i].analysed})`, true, 'center', 'col'); });
+      groupLabels.forEach((g, i) => { arrow(cx(i), busY, cx(i), y); box(cx(i) - colW / 2, y, colW, gH, `${g}\n(${S.N(c.groups[i].analysed)})`, true, 'center', S.emph ? 'final' : 'col'); });
     }
     return cv;
   }
