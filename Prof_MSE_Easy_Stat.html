@@ -116,6 +116,11 @@ table.xd{font-size:12px}table.xd th{top:28px;padding:4px 8px}table.xd td{padding
 table.xd td[contenteditable]{cursor:text;outline:none}table.xd td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
 table.xd td.out{background:rgba(224,138,46,.22);font-weight:600}table.xd td.miss{background:rgba(192,57,43,.12)}table.xd td.chg{box-shadow:inset 3px 0 0 var(--purple)}
 .xp-legend{font-size:12px;color:var(--muted);margin-top:6px}
+.xp-side{display:grid;grid-template-columns:minmax(260px,38%) 1fr;gap:16px;margin-top:10px;align-items:start}
+.xp-side-data{border:1px solid var(--line);border-radius:10px;padding:8px;max-height:640px;overflow:auto}.xp-side-data h4{margin:0 0 6px;font-size:13.5px}
+.xp-side-data .xp-groups{margin-top:0}.xp-side-data .xp-group{max-height:none;overflow:visible}
+.xp-fig-below{margin-top:12px;text-align:center}.xp-fig-below img{width:640px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+@media (max-width:900px){.xp-side{grid-template-columns:1fr}}
 .fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
 .fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
@@ -604,6 +609,7 @@ footer b{color:var(--purple)}
     <div class="card">
       <div class="row"><h2>10 · Results by variable</h2><span class="spacer"></span>
         <select id="xpVar" style="width:auto;max-width:360px"></select>
+        <label class="f" style="margin:0">View</label><select id="xpView" style="width:auto" title="How each variable is laid out (the Word file follows it)"><option value="standard">Standard — figure beside the tables</option><option value="side">Data beside results — figure below</option><option value="compact">Compact — tables only</option></select>
         <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
         <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button>
         <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>
@@ -25182,11 +25188,28 @@ const Report = (() => {
       children.push(new Paragraph({ heading: D().HeadingLevel.HEADING_1, pageBreakBefore: i > 0, spacing: { after: 120 },
         children: [new TextRun({ text: `${i + 1}. ${it.label}`, bold: true, size: 28, font: BODY_FONT })] }));
       if (it.summary) children.push(para(it.summary, { size: 20, line: 260, after: 120, italic: true }));
-      if (it.url) children.push(image(it.url, it.w, it.h, 430));
-      it.tables.forEach(t => {
-        children.push(para(t.title, { bold: true, size: 22, line: 260, after: 60, before: 160, keepNext: true, align: AlignmentType.LEFT }));
-        children.push(table(t.head.map(h => ({ t: h })), t.rows.map(r => r.map(c => ({ t: [c] }))), false, 'grid'));
-      });
+      // inside the side-by-side layout the titles must not "keep with next" (Word / LibreOffice would push the whole layout to the next page)
+      const block = (t, small, inCell) => [para(t.title, { bold: true, size: small ? 19 : 22, line: 260, after: 60, before: 120, keepNext: !inCell, align: AlignmentType.LEFT }),
+        table(t.head.map(h => ({ t: h })), t.rows.map(r => r.map(c => ({ t: [c], small }))), false, 'grid')];
+      if (opts.layout === 'side' && it.data && it.data.length) {
+        // the patients' data beside the results (a borderless two-column layout), the figure below
+        const { Table, TableRow, TableCell, WidthType, BorderStyle } = D(), none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+        const gap = 200, leftW = Math.round((LANDSCAPE_W - gap) * 0.3), rightW = LANDSCAPE_W - gap - leftW;
+        // long patient lists are cut into pieces of 14 rows, one layout row each, so no layout row is taller than a page
+        const CH = 14, pieces = it.data.flatMap(t => Array.from({ length: Math.max(1, Math.ceil(t.rows.length / CH)) }, (_, q) => ({ ...t, title: q ? `${t.title} (continued)` : t.title, rows: t.rows.slice(q * CH, q * CH + CH) })));
+        PAGE_W = leftW - 120; const lefts = pieces.map(t => block(t, true, true));
+        PAGE_W = rightW - 120; const right = it.tables.flatMap(t => block(t, false, true));
+        PAGE_W = LANDSCAPE_W;
+        const cell = (w, kids) => new TableCell({ width: { size: w, type: WidthType.DXA }, borders: { top: none, bottom: none, left: none, right: none }, children: kids.length ? kids : [new Paragraph('')] });
+        children.push(new Table({ width: { size: LANDSCAPE_W, type: WidthType.DXA }, columnWidths: [leftW, gap, rightW],
+          borders: { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none },
+          rows: lefts.map((l, q) => new TableRow({ cantSplit: true, children: [cell(leftW, l), cell(gap, []), cell(rightW, q === 0 ? right : [])] })) }));
+        if (it.url) children.push(para('', { after: 60 }), image(it.url, it.w, it.h, 520));
+      } else {
+        if (it.url && opts.layout !== 'compact') children.push(image(it.url, it.w, it.h, 430));
+        it.tables.forEach(t => children.push(...block(t, false)));
+        (it.data || []).forEach(t => children.push(...block(t, true)));
+      }
     });
     const doc = new Document({
       creator: 'Prof MSE Easy Stat', title: opts.title || 'Results by variable',
@@ -26762,11 +26785,12 @@ if (typeof module !== 'undefined') module.exports = Examples;
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   // options of the stage, saved with the setup / project
-  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false };
+  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'standard' };
   const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
   function renderXpOpts() {
     const o = xpo();
     document.querySelectorAll('[data-xo]').forEach(el => { const v = o[el.dataset.xo]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v); });
+    $('#xpView').value = o.view;
   }
   $('#xpOpts').addEventListener('input', e => {
     const k = e.target.dataset.xo; if (!k) return;
@@ -26809,12 +26833,19 @@ if (typeof module !== 'undefined') module.exports = Examples;
   }
   function drawExplore() {
     const x = state.explore; if (!x) return;
-    const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none';
+    const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && xpo().view !== 'compact';
     if (xpo().openData) list.forEach(it => state.xpOpen.add(it.id));
     $('#explore').innerHTML = list.length ? list.map(it => {
       let img = '';
       if (figs && it.spec) { try { img = `<img class="xp-fig" src="${Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png')}" alt="">`; } catch (e) { /* no figure */ } }
-      return `<div class="report-sec xp-item"><div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>
+      const view = xpo().view, headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>`;
+      // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
+      if (view === 'side') return `<div class="report-sec xp-item">${headRow}
+        <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
+        ${img ? `<div class="xp-fig-below">${img}</div>` : ''}</div>`;
+      if (view === 'compact') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div>
+        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
+      return `<div class="report-sec xp-item">${headRow}
         <div class="xp-body">${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
     }).join('') : `<p class="legend-note">${x.items.length ? 'No variable matches the options (type, search, significant only).' : 'No variables are ticked in step 2.'}</p>`;
@@ -26853,7 +26884,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const x = state.explore; if (!x) return;
     busy(true);
     try {
-      const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none';
+      const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && xpo().view !== 'compact';
       const idc = state.cfg.idCols[0], rows = state.data.rows;
       // optional: each group's patients and values after the results
       const dataTables = it => activeGroups().map(g => {
@@ -26861,12 +26892,20 @@ if (typeof module !== 'undefined') module.exports = Examples;
         return { title: `Data — ${state.cfg.groupLabels[g] || g} (n=${idx.length})`, head: ['#', ...(idc ? [idc] : []), ...it.cols.map(c => c.label)],
           rows: idx.map(i => [String(i + 1), ...(idc ? [String(rows[i][idc] ?? '')] : []), ...it.cols.map(c => String(rows[i][c.col] ?? ''))]) };
       });
+      // beside the results: one compact table, the groups' patients side by side (row i = the i-th patient of each group)
+      const sideData = it => {
+        const gs = activeGroups(), idx = gs.map(g => rows.map((r, i) => i).filter(i => Analysis.groupOf(state.cfg, rows[i]) === g));
+        const per = [...(idc ? [idc] : ['#']), ...it.cols.map(c => c.label)], n = Math.max(0, ...idx.map(x => x.length));
+        return { title: "Data of each group — every patient's value", head: gs.flatMap(g => per.map((h, j) => j === 0 ? `${state.cfg.groupLabels[g] || g}: ${h}` : h)),
+          rows: Array.from({ length: n }, (_, r) => idx.flatMap(ix => ix[r] === undefined ? per.map(() => '') : [idc ? String(rows[ix[r]][idc] ?? '') : String(ix[r] + 1), ...it.cols.map(c => String(rows[ix[r]][c.col] ?? ''))])) };
+      };
       const items = list.map(it => {
-        const out = { label: it.label, summary: it.summary, tables: [...xpTables(it), ...(xpo().wordData ? dataTables(it) : [])] };
+        // the Word file follows the view: data beside the results, or after them when asked for
+        const view = xpo().view, out = { label: it.label, summary: it.summary, tables: xpTables(it), data: view === 'side' ? [sideData(it)] : xpo().wordData ? dataTables(it) : [] };
         if (figs && it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), chartStyle(o)); Object.assign(out, { url: c.toDataURL('image/png'), w: c.width, h: c.height }); } catch (e) { /* no figure */ } }
         return out;
       });
-      const blob = await Report.buildResults({ items }, { title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
+      const blob = await Report.buildResults({ items }, { layout: xpo().view, title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - Results by variable.docx';
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
@@ -26875,6 +26914,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     finally { busy(false); }
   };
   $('#xpVar').onchange = drawExplore;
+  $('#xpView').onchange = e => { xpo().view = e.target.value; const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpFigs').onchange = drawExplore;
   $('#xpCopy').onclick = async () => {
     // all tables as tab-separated text, ready to paste into Excel or Word

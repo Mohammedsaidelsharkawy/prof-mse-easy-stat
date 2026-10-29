@@ -1294,11 +1294,12 @@
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   // options of the stage, saved with the setup / project
-  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false };
+  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'standard' };
   const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
   function renderXpOpts() {
     const o = xpo();
     document.querySelectorAll('[data-xo]').forEach(el => { const v = o[el.dataset.xo]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v); });
+    $('#xpView').value = o.view;
   }
   $('#xpOpts').addEventListener('input', e => {
     const k = e.target.dataset.xo; if (!k) return;
@@ -1341,12 +1342,19 @@
   }
   function drawExplore() {
     const x = state.explore; if (!x) return;
-    const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none';
+    const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && xpo().view !== 'compact';
     if (xpo().openData) list.forEach(it => state.xpOpen.add(it.id));
     $('#explore').innerHTML = list.length ? list.map(it => {
       let img = '';
       if (figs && it.spec) { try { img = `<img class="xp-fig" src="${Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png')}" alt="">`; } catch (e) { /* no figure */ } }
-      return `<div class="report-sec xp-item"><div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>
+      const view = xpo().view, headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>`;
+      // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
+      if (view === 'side') return `<div class="report-sec xp-item">${headRow}
+        <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
+        ${img ? `<div class="xp-fig-below">${img}</div>` : ''}</div>`;
+      if (view === 'compact') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div>
+        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
+      return `<div class="report-sec xp-item">${headRow}
         <div class="xp-body">${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
     }).join('') : `<p class="legend-note">${x.items.length ? 'No variable matches the options (type, search, significant only).' : 'No variables are ticked in step 2.'}</p>`;
@@ -1385,7 +1393,7 @@
     const x = state.explore; if (!x) return;
     busy(true);
     try {
-      const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none';
+      const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && xpo().view !== 'compact';
       const idc = state.cfg.idCols[0], rows = state.data.rows;
       // optional: each group's patients and values after the results
       const dataTables = it => activeGroups().map(g => {
@@ -1393,12 +1401,20 @@
         return { title: `Data — ${state.cfg.groupLabels[g] || g} (n=${idx.length})`, head: ['#', ...(idc ? [idc] : []), ...it.cols.map(c => c.label)],
           rows: idx.map(i => [String(i + 1), ...(idc ? [String(rows[i][idc] ?? '')] : []), ...it.cols.map(c => String(rows[i][c.col] ?? ''))]) };
       });
+      // beside the results: one compact table, the groups' patients side by side (row i = the i-th patient of each group)
+      const sideData = it => {
+        const gs = activeGroups(), idx = gs.map(g => rows.map((r, i) => i).filter(i => Analysis.groupOf(state.cfg, rows[i]) === g));
+        const per = [...(idc ? [idc] : ['#']), ...it.cols.map(c => c.label)], n = Math.max(0, ...idx.map(x => x.length));
+        return { title: "Data of each group — every patient's value", head: gs.flatMap(g => per.map((h, j) => j === 0 ? `${state.cfg.groupLabels[g] || g}: ${h}` : h)),
+          rows: Array.from({ length: n }, (_, r) => idx.flatMap(ix => ix[r] === undefined ? per.map(() => '') : [idc ? String(rows[ix[r]][idc] ?? '') : String(ix[r] + 1), ...it.cols.map(c => String(rows[ix[r]][c.col] ?? ''))])) };
+      };
       const items = list.map(it => {
-        const out = { label: it.label, summary: it.summary, tables: [...xpTables(it), ...(xpo().wordData ? dataTables(it) : [])] };
+        // the Word file follows the view: data beside the results, or after them when asked for
+        const view = xpo().view, out = { label: it.label, summary: it.summary, tables: xpTables(it), data: view === 'side' ? [sideData(it)] : xpo().wordData ? dataTables(it) : [] };
         if (figs && it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), chartStyle(o)); Object.assign(out, { url: c.toDataURL('image/png'), w: c.width, h: c.height }); } catch (e) { /* no figure */ } }
         return out;
       });
-      const blob = await Report.buildResults({ items }, { title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
+      const blob = await Report.buildResults({ items }, { layout: xpo().view, title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - Results by variable.docx';
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
@@ -1407,6 +1423,7 @@
     finally { busy(false); }
   };
   $('#xpVar').onchange = drawExplore;
+  $('#xpView').onchange = e => { xpo().view = e.target.value; const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpFigs').onchange = drawExplore;
   $('#xpCopy').onclick = async () => {
     // all tables as tab-separated text, ready to paste into Excel or Word

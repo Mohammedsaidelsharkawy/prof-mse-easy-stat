@@ -282,11 +282,28 @@ const Report = (() => {
       children.push(new Paragraph({ heading: D().HeadingLevel.HEADING_1, pageBreakBefore: i > 0, spacing: { after: 120 },
         children: [new TextRun({ text: `${i + 1}. ${it.label}`, bold: true, size: 28, font: BODY_FONT })] }));
       if (it.summary) children.push(para(it.summary, { size: 20, line: 260, after: 120, italic: true }));
-      if (it.url) children.push(image(it.url, it.w, it.h, 430));
-      it.tables.forEach(t => {
-        children.push(para(t.title, { bold: true, size: 22, line: 260, after: 60, before: 160, keepNext: true, align: AlignmentType.LEFT }));
-        children.push(table(t.head.map(h => ({ t: h })), t.rows.map(r => r.map(c => ({ t: [c] }))), false, 'grid'));
-      });
+      // inside the side-by-side layout the titles must not "keep with next" (Word / LibreOffice would push the whole layout to the next page)
+      const block = (t, small, inCell) => [para(t.title, { bold: true, size: small ? 19 : 22, line: 260, after: 60, before: 120, keepNext: !inCell, align: AlignmentType.LEFT }),
+        table(t.head.map(h => ({ t: h })), t.rows.map(r => r.map(c => ({ t: [c], small }))), false, 'grid')];
+      if (opts.layout === 'side' && it.data && it.data.length) {
+        // the patients' data beside the results (a borderless two-column layout), the figure below
+        const { Table, TableRow, TableCell, WidthType, BorderStyle } = D(), none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+        const gap = 200, leftW = Math.round((LANDSCAPE_W - gap) * 0.3), rightW = LANDSCAPE_W - gap - leftW;
+        // long patient lists are cut into pieces of 14 rows, one layout row each, so no layout row is taller than a page
+        const CH = 14, pieces = it.data.flatMap(t => Array.from({ length: Math.max(1, Math.ceil(t.rows.length / CH)) }, (_, q) => ({ ...t, title: q ? `${t.title} (continued)` : t.title, rows: t.rows.slice(q * CH, q * CH + CH) })));
+        PAGE_W = leftW - 120; const lefts = pieces.map(t => block(t, true, true));
+        PAGE_W = rightW - 120; const right = it.tables.flatMap(t => block(t, false, true));
+        PAGE_W = LANDSCAPE_W;
+        const cell = (w, kids) => new TableCell({ width: { size: w, type: WidthType.DXA }, borders: { top: none, bottom: none, left: none, right: none }, children: kids.length ? kids : [new Paragraph('')] });
+        children.push(new Table({ width: { size: LANDSCAPE_W, type: WidthType.DXA }, columnWidths: [leftW, gap, rightW],
+          borders: { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none },
+          rows: lefts.map((l, q) => new TableRow({ cantSplit: true, children: [cell(leftW, l), cell(gap, []), cell(rightW, q === 0 ? right : [])] })) }));
+        if (it.url) children.push(para('', { after: 60 }), image(it.url, it.w, it.h, 520));
+      } else {
+        if (it.url && opts.layout !== 'compact') children.push(image(it.url, it.w, it.h, 430));
+        it.tables.forEach(t => children.push(...block(t, false)));
+        (it.data || []).forEach(t => children.push(...block(t, true)));
+      }
     });
     const doc = new Document({
       creator: 'Prof MSE Easy Stat', title: opts.title || 'Results by variable',
