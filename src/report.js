@@ -331,15 +331,18 @@ const Report = (() => {
         // long patient lists are cut into pieces of 14 rows, one layout row each, so no layout row is taller than a page
         const CH = 14, pieces = it.data.flatMap(t => Array.from({ length: Math.max(1, Math.ceil(t.rows.length / CH)) }, (_, q) => ({ ...t, title: q ? `${t.title} (continued)` : t.title, rows: t.rows.slice(q * CH, q * CH + CH) })));
         PAGE_W = leftW - 120; const lefts = pieces.map(t => block(t, true, true));
-        PAGE_W = rightW - 120; const right = it.tables.flatMap(t => block(t, false, true));
+        // the result tables go one per layout row (summary beside the first data piece, effects beside the next), so no row outgrows the page
+        PAGE_W = rightW - 120; const rights = opts.layout === 'half' ? it.tables.map(t => block(t, false, true)) : [it.tables.flatMap(t => block(t, false, true))];
         PAGE_W = LANDSCAPE_W;
         const cell = (w, kids) => new TableCell({ width: { size: w, type: WidthType.DXA }, borders: { top: none, bottom: none, left: none, right: none }, children: kids.length ? kids : [new Paragraph('')] });
         children.push(new Table({ width: { size: LANDSCAPE_W, type: WidthType.DXA }, columnWidths: [leftW, gap, rightW],
           borders: { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none },
-          rows: lefts.map((l, q) => new TableRow({ cantSplit: true, children: [cell(leftW, l), cell(gap, []), cell(rightW, q === 0 ? right : [])] })) }));
-        if (it.url) children.push(para('', { after: 60 }), image(it.url, it.w, it.h, 520));
+          rows: Array.from({ length: Math.max(lefts.length, rights.length) }, (_, q) => new TableRow({ cantSplit: true, children: [cell(leftW, lefts[q] || []), cell(gap, []), cell(rightW, rights[q] || [])] })) }));
+        if (it.url) children.push(para('', { after: 60 }), image(it.url, it.w, it.h, 520, !!it.comment));
+        if (it.comment) children.push(para(it.comment, { size: 22, line: 300, after: 120 }));
       } else {
         if (it.url && opts.layout !== 'compact') children.push(image(it.url, it.w, it.h, opts.layout === 'stacked' ? 640 : 430));
+        if (it.comment) children.push(para(it.comment, { size: 22, line: 300, after: 120 }));
         it.tables.forEach(t => children.push(...block(t, false)));
         (it.data || []).forEach(t => children.push(...block(t, true)));
       }

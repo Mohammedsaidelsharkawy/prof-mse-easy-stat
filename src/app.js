@@ -1792,7 +1792,7 @@
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   // options of the stage, saved with the setup / project
-  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true };
+  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true, comments: true };
   const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
   function renderXpOpts() {
     const o = xpo();
@@ -1816,7 +1816,7 @@
     const o = xpo(); renderXpOpts();
     let x;
     try { x = Analysis.explore(state.data, state.cfg, { dec: o.dec, extra: o.extra, fig: o.fig === 'none' ? 'auto' : o.fig, out: o.out }); } catch (err) { console.error(err); box.innerHTML = `<p style="color:var(--bad)">${esc(err.message)}</p>`; return; }
-    state.explore = x;
+    state.explore = x; state.xpComments = new Map();
     const sel = $('#xpVar'), cur = sel.value, kinds = { numeric: 'numeric', categorical: 'categorical', repeated: 'repeated' };
     sel.innerHTML = `<option value="">All variables (${x.items.length})</option>` + x.items.map(it => `<option value="${esc(it.id)}">${esc(it.label)} — ${kinds[it.kind]}</option>`).join('');
     if (x.items.some(it => it.id === cur)) sel.value = cur;
@@ -1886,6 +1886,22 @@
   }
   const sumWordHtml = it => { const t = summaryTable(it); if (!t) return xpTables(it).map(tblHtml).join('');
     return wordTbl(t.note ? `Summary — ${t.note}` : 'Summary', t.head, t.rows.map(r => `<tr>${r.map(c => `<td class="${/\*$/.test(c) ? 'sigp' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')); };
+  const effWordHtml = it => it.effects ? wordTbl(it.effects.title, it.effects.head, it.effects.rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join(''))
+    + (it.effects.note ? `<div class="xp-sum-note">${esc(it.effects.note)}</div>` : '') : '';
+  // the comment the report writes for this variable alone (as in step 11), shown below its figure
+  function xpComment(it) {
+    if (!xpo().comments) return '';
+    const cache = state.xpComments || (state.xpComments = new Map());
+    if (cache.has(it.id)) return cache.get(it.id);
+    const cfg = state.cfg; let v = cfg.variables.find(x => x.id === it.id);
+    if (!v) { const m = /^(.*)_(\d+)$/.exec(it.id), o = m && cfg.variables.find(x => x.id === m[1]), c = o && o.cols.find(x => x.col === it.cols[0].col);
+      if (c) v = { ...o, id: it.id, kind: 'single', type: 'numeric', split: false, cols: [c], label: it.label }; }
+    let txt = '';
+    if (v) try { txt = Analysis.run(state.data, { ...cfg, variables: [{ ...v, include: true }], advanced: [], consort: null, options: { ...effOptions(), correlation: false, figures: 'none', summary: false } }).sections.map(s => s.comment).filter(Boolean).join(' '); } catch (e) { console.error(e); }
+    cache.set(it.id, txt);
+    return txt;
+  }
+  const commentHtml = it => { const t = xpComment(it); return t ? `<div class="xp-comment">${esc(t)}</div>` : ''; };
   const sumHtml = it => { const t = summaryTable(it); return t ? tblHtml(t) + (t.note ? `<div class="xp-sum-note">${esc(t.note)}</div>` : '') : xpTables(it).map(tblHtml).join(''); };
   // a card's lines: each group's mean ± SD or median (IQR), its frequencies, or the values at the first and last timepoint
   function keyLines(it) {
@@ -1926,18 +1942,18 @@
       // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
       if (view === 'side') return `<div class="report-sec xp-item">${headRow}
         <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
-        ${img ? `<div class="xp-fig-below">${img}</div>` : ''}</div>`;
+        ${img ? `<div class="xp-fig-below">${img}</div>` : ''}${commentHtml(it)}</div>`;
       // data of each group in the left half, the summary table (and the figure) in the right half
       if (view === 'half') return `<div class="report-sec xp-item">${headRow}
-        <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div>${sumWordHtml(it)}${img}</div></div></div>`;
-      if (view === 'stacked') return `<div class="report-sec xp-item xp-stacked">${headRow}${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div>
+        <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div>${sumWordHtml(it)}${effWordHtml(it)}${img}${commentHtml(it)}</div></div></div>`;
+      if (view === 'stacked') return `<div class="report-sec xp-item xp-stacked">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
       if (view === 'tables') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div></div>`;
-      if (view === 'twocol') return `<div class="report-sec xp-item">${headRow}${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>`;
+      if (view === 'twocol') return `<div class="report-sec xp-item">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>`;
       if (view === 'compact') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
       return `<div class="report-sec xp-item">${headRow}
-        <div class="xp-body">${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
+        <div class="xp-body">${img ? `<div class="xp-figcol">${img}${commentHtml(it)}</div>` : ''}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
     }).join('');
     $('#explore').innerHTML = ov + (list.length ? (view === 'twocol' ? `<div class="xp-twocol">${html}</div>` : html) : empty);
@@ -2010,7 +2026,8 @@
       const items = list.map(it => {
         // the Word file follows the view: data beside the results, or after them when asked for
         const view = xpo().view, out = { label: it.label, summary: it.summary, test: it.test, p: isFinite(it.p) ? Analysis.fmtP(it.p, o.alpha) : '', sig: it.sig, key: keyLines(it).map(l => l.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")), n: it.n, tables: xpTables(it), data: view === 'side' || view === 'half' ? [sideData(it)] : xpo().wordData ? dataTables(it) : [] };
-        if (view === 'half') { const t = summaryTable(it); if (t) out.tables = [t.note ? { ...t, title: `Summary — ${t.note}` } : t]; }
+        if (view === 'half') { const t = summaryTable(it); if (t) out.tables = [t.note ? { ...t, title: `Summary — ${t.note}` } : t, ...(it.effects ? [{ ...it.effects, title: it.effects.note ? `${it.effects.title} — ${it.effects.note}` : it.effects.title }] : [])]; }
+        if (!['cards', 'gallery', 'tables', 'compact'].includes(view)) out.comment = xpComment(it);
         if (figs && it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), chartStyle(o)); Object.assign(out, { url: c.toDataURL('image/png'), w: c.width, h: c.height }); } catch (e) { /* no figure */ } }
         return out;
       });
@@ -2026,6 +2043,7 @@
   $('#explore').addEventListener('click', e => { const r = e.target.closest('[data-xpgo]'); if (!r) return; $('#xpVar').value = r.dataset.xpgo; drawExplore(); window.scrollTo(0, $('#p10').offsetTop); });
   $('#xpView').onchange = e => { xpo().view = e.target.value; const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpFigs').onchange = drawExplore;
+  $('#xpCom').onchange = e => { xpo().comments = e.target.checked; renderXpOpts(); const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpOv').onchange = e => { xpo().overview = e.target.checked; renderXpOpts(); const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpCopy').onclick = async () => {
     // all tables as tab-separated text, ready to paste into Excel or Word
@@ -2643,10 +2661,45 @@
       if (b.dataset.rs === 'yes') { try { openProject(j, j.file || 'data'); } catch (err) { toast('Could not restore: ' + err.message); } }
       else { try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* ignore */ } } };
   })();
-  // keyboard: Ctrl/⌘+S saves the project, Alt+→ / Alt+← next and previous step
+  /* ---------- keyboard shortcuts (single keys only when not typing) ---------- */
+  const KEYS = [['Anywhere'], [['Ctrl', 'S'], 'Save the project'], [['Ctrl', 'O'], 'Open a project'], [['Ctrl', 'Z'], 'Undo the last change to the data'],
+    [['Alt', '→'], 'Next step'], [['Alt', '←'], 'Previous step'], [[']'], 'Next step'], [['['], 'Previous step'], [['1 … 9'], 'Go to step 1 … 9'], [['0'], 'Step 10 · Results by variable'],
+    [['R'], 'Step 11 · Report'], [['/'], 'Search on this step'], [['T'], 'Light / dark theme'], [['?'], 'This list'],
+    ['On a step'], [['C'], 'Check the data (step 1)'], [['E'], 'Edit the sheet (step 1)'], [['F'], 'Export figures (steps 7, 9 and 11)'], [['W'], 'Download Word (steps 10 and 11)'], [['X'], 'Download Excel (steps 10 and 11)'], [['V'], 'Next view (step 10)']];
+  const typing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  function showKeys() {
+    $('#keysList').innerHTML = KEYS.map(k => k.length === 1 ? `<div class="sec">${k[0]}</div>` : `<div class="k">${k[0].map(x => `<kbd>${esc(x === 'Ctrl' && /Mac/.test(navigator.platform) ? '⌘' : x)}</kbd>`).join('+')}</div><div>${esc(k[1])}</div>`).join('');
+    $('#keysDlg').showModal();
+  }
+  $('#btnKeys').onclick = showKeys;
+  const clickIf = id => { const b = $(id); if (b && !b.disabled) { b.click(); return true; } return false; };
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); $('#btnSaveProj').click(); }
-    else if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && state.data) { e.preventDefault(); go(Math.min(STEPS.length, Math.max(1, state.step + (e.key === 'ArrowRight' ? 1 : -1)))); }
+    if (document.querySelector('dialog[open]') && e.key !== 'Escape') { if (!(e.ctrlKey || e.metaKey)) return; }
+    const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (mod && !e.altKey) {
+      if (k === 's') { e.preventDefault(); $('#btnSaveProj').click(); }
+      else if (k === 'o') { e.preventDefault(); $('#projFile').click(); }
+      else if (k === 'z' && !e.shiftKey && !typing(e.target) && state.undo && state.undo.length) { e.preventDefault(); state.step === 10 ? clickIf('#xpUndo') : clickIf('#gridUndo'); }
+      return;
+    }
+    if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && state.data) { e.preventDefault(); go(Math.min(STEPS.length, Math.max(1, state.step + (e.key === 'ArrowRight' ? 1 : -1)))); return; }
+    if (e.altKey || typing(e.target)) return;
+    const step = state.step, at = n => step === n;
+    let done = true;
+    if (e.key === '?') showKeys();
+    else if (/^[0-9]$/.test(e.key) && (state.data || e.key === '1')) go(e.key === '0' ? 10 : +e.key);
+    else if (k === 'r' && state.data) go(11);
+    else if ((e.key === ']' || e.key === '[') && state.data) go(Math.min(STEPS.length, Math.max(1, step + (e.key === ']' ? 1 : -1))));
+    else if (e.key === '/') { const box = at(1) ? $('#gridSearch') : at(2) ? $('#varSearch') : at(10) ? ($('#xpOpts').open = true, document.querySelector('[data-xo="q"]')) : null; if (box && box.offsetParent !== null) box.focus(); else done = false; }
+    else if (k === 't') $('#btnTheme').click();
+    else if (k === 'c' && at(1) && state.data) $('#gridCheck').click();
+    else if (k === 'e' && at(1) && state.data) $('#gridEdit').click();
+    else if (k === 'f') done = at(11) ? clickIf('#btnPngs') : at(7) ? clickIf('#figPrevPng') : at(9) ? clickIf('#flowPng') : false;
+    else if (k === 'w') done = at(11) ? clickIf('#btnDocx') : at(10) ? clickIf('#xpWord') : false;
+    else if (k === 'x') done = at(11) ? clickIf('#btnXlsx') : at(10) ? clickIf('#xpXlsx') : false;
+    else if (k === 'v' && at(10)) { const sel = $('#xpView'); sel.selectedIndex = (sel.selectedIndex + 1) % sel.options.length; sel.dispatchEvent(new Event('change')); toast(`View: ${sel.options[sel.selectedIndex].text}`); }
+    else done = false;
+    if (done) e.preventDefault();
   });
   $('#btnNew').onclick = () => {
     if (state.data && !confirm('Start a new project? The current data and settings are cleared (save the project first to keep them).')) return;

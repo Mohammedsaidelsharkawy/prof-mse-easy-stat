@@ -262,6 +262,8 @@ table.rt.xw td.out{background:rgba(224,138,46,.28);font-weight:600}table.rt.xw t
 
 table.rt.xw td[contenteditable]:focus{outline:2px solid var(--purple);outline-offset:-2px}
 .xp-half .xp-fig{width:100%;margin-top:10px}
+.xp-comment{font-family:"Times New Roman",serif;font-size:14.5px;line-height:1.55;text-align:justify;margin:8px 2px 4px;color:var(--ink)}
+.xp-figcol{display:flex;flex-direction:column;max-width:440px}
 .xp-sum-note{font-size:12.5px;color:var(--muted);margin-top:4px}
 @media (max-width:900px){.xp-half{grid-template-columns:1fr}}
 /* step 1: data preparation */
@@ -284,6 +286,10 @@ details.prep summary{cursor:pointer}
 .flt select,.flt input[type=text]{width:auto}
 dialog.app-dlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(720px,calc(100vw - 32px));box-shadow:0 20px 60px rgba(28,22,72,.25)}
 dialog.app-dlg::backdrop{background:rgba(20,17,34,.45)}
+.keys-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13.5px;align-items:center}
+.keys-grid .k{display:flex;gap:4px;justify-content:flex-end}
+.keys-grid kbd{font-family:inherit;font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--soft);white-space:nowrap}
+.keys-grid .sec{grid-column:1/-1;font-weight:700;color:var(--title);margin-top:6px}
 dialog.app-dlg h3{margin:0 0 4px;color:var(--title)}
 /* figure export dialog */
 dialog#figDlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);box-shadow:0 20px 60px rgba(28,22,72,.25)}
@@ -308,6 +314,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <label class="btn light small" title="Open a saved project: data, settings and edited text">📂 Open project<input type="file" id="projFile" accept=".json,.easystat" hidden></label>
       <button class="btn light small" id="btnSaveProj" title="Save everything — the data, all settings and the text edited in step 11 — in one file">💾 Save project</button>
       <button class="btn light small" id="btnTheme" title="Switch light / dark theme">◐ Theme</button>
+      <button class="btn light small" id="btnKeys" title="Keyboard shortcuts (?)">⌨ Shortcuts</button>
       <button class="btn light small" id="btnSaveCfg" title="Save your column setup to reuse later">Save setup</button>
       <label class="btn light small" title="Load a saved setup">Load setup<input type="file" id="cfgFile" accept=".json" hidden></label>
     </div>
@@ -834,6 +841,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <label class="f" style="margin:0">View</label><select id="xpView" style="width:auto" title="How each variable is laid out (the Word file follows it)"><option value="standard">Standard — figure beside the tables</option><option value="side">Data beside results — figure below</option><option value="half">Data (left half) · summary table (right half)</option><option value="compact">Compact — tables, data on demand</option><option value="stacked">Figure on top — tables below</option><option value="twocol">Two variables per row</option><option value="tables">Tables only — no figures</option><option value="cards">Key results — a card per variable</option><option value="gallery">Figure gallery — figures with test and P</option></select>
         <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
         <label class="check" style="margin:0" title="The overview table of all variables at the top"><input type="checkbox" id="xpOv" data-xo="overview"><span>Overview</span></label>
+        <label class="check" style="margin:0" title="The comment the report writes for each variable, below its figure"><input type="checkbox" id="xpCom" data-xo="comments"><span>Comments</span></label>
         <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button>
         <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>
         <button class="btn ghost small" id="xpXlsx" type="button" title="Every table shown here in Excel, one sheet per variable">⬇ Excel</button>
@@ -921,6 +929,14 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     </div>
     <p class="legend-note" id="fxInfo"></p>
     <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="fxCancel">Cancel</button> <button type="button" class="btn primary" id="fxGo">⬇ Export</button></div>
+  </form>
+</dialog>
+<dialog id="keysDlg" class="app-dlg">
+  <form method="dialog">
+    <h3>Keyboard shortcuts</h3>
+    <p class="legend-note" style="margin:0 0 8px">Single keys work when you are not typing in a box.</p>
+    <div class="keys-grid" id="keysList"></div>
+    <div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn primary" value="close">Close</button></div>
   </form>
 </dialog>
 <dialog id="pasteDlg" class="app-dlg">
@@ -23097,6 +23113,19 @@ const Analysis = (() => {
       }
       return { type: 'box', perGroup: true, points: true, categories: gl, yLabel: label, series: [{ name: label, data: gv }] };
     };
+    // effect estimates for every pair of groups: mean difference with its Tukey 95% CI and P, Hodges-Lehmann median difference with its 95% CI,
+    // and the non-parametric P (Mann-Whitney for two groups; Dunn (Bonferroni) — or Mann-Whitney with the chosen adjustment — for three or more)
+    const npName = k === 2 ? 'Mann-Whitney P' : opts.dunn ? 'Dunn P (Bonferroni)' : `Mann-Whitney P${opts.mwAdjust === 'bonferroni' ? ' (Bonferroni)' : opts.mwAdjust === 'holm' ? ' (Holm)' : ''}`;
+    const effRows = gv => {
+      if (k < 2 || gv.some(x => x.length < 2)) return null;
+      const tk = S.tukey(gv), dn = k > 2 && opts.dunn ? S.dunn(gv) : null;
+      let mw = pairs(k).map(([i, j]) => S.mannWhitney(gv[i], gv[j]).p);
+      if (k > 2 && !dn && (opts.mwAdjust === 'bonferroni' || opts.mwAdjust === 'holm')) mw = opts.mwAdjust === 'holm' ? S.holm(mw) : mw.map(x => S.bonferroni(x, mw.length));
+      return pairs(k).map(([i, j], q) => { const hl = S.hodgesLehmann(gv[i], gv[j]);
+        return [`${gl[i]} vs ${gl[j]}`, `${F(tk[q].diff)} (${ci(tk[q].lo, tk[q].hi)})`, P(tk[q].p), `${F(hl.diff)} (${ci(hl.lo, hl.hi)})`, P(dn ? dn[q].p : mw[q])]; });
+    };
+    const EFF_HEAD = ['Pair', 'Mean difference (95% CI)', 'Tukey P', 'HL median difference (95% CI)', npName];
+    const EFF_NOTE = `Differences are the first group minus the second. Mean differences with Tukey-adjusted 95% CI and P values; HL: Hodges-Lehmann median difference with its 95% CI and the ${npName.replace(/ P/, '')} P value.`;
     const items = [];
     for (const v of effectiveVariables(cfg)) {
       const it = { id: v.id, label: v.label, kind: v.kind === 'repeated' ? 'repeated' : v.type, tables: [], spec: null, summary: '',
@@ -23106,6 +23135,7 @@ const Analysis = (() => {
         it.tables.push({ cat: 'desc', title: 'Descriptive statistics', head: descHead, rows: [...gv.map((x, g) => descRow(gl[g], x, miss[g])), ...(k > 1 ? [descRow('All patients', gv.flat(), S.sum(miss))] : [])] });
         const t = numericTests(gv, v.dist); if (t) it.tables.push(t);
         const pt = pairTable(gv); if (pt) it.tables.push(pt);
+        const er = effRows(gv); if (er) it.effects = { title: 'Pairwise comparisons and effect estimates', head: EFF_HEAD, rows: er, note: EFF_NOTE };
         if (xo.extra) it.tables.push(extraTable([...gl.map((g, i) => [g, gv[i]]), ...(k > 1 ? [['All patients', gv.flat()]] : [])]));
         it.spec = numSpec(gv, v.label);
         const used2 = new Set(), res = k > 1 && gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts) : null;
@@ -23136,10 +23166,14 @@ const Analysis = (() => {
               return [`${gl[i]} vs ${gl[j]}`, rr ? `${F(rr.rr, 2)} (${ci(rr.lo, rr.hi, 2)})` : '—', or ? `${F(or.or, 2)} (${ci(or.lo, or.hi, 2)})` : '—']; });
             it.tables.push({ cat: 'tests', title: `Effect of “${levels[0]}”`, head: ['Pair', 'Relative risk (95% CI)', 'Odds ratio (95% CI)'], rows: eff });
           }
-          if (k > 2) {
-            const pw = S.chiSquarePairwise(tab, opts.fisher);
-            it.tables.push({ cat: 'pairs', title: 'Pairwise comparisons (Bonferroni)', head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
-          }
+          const pw = k > 2 ? S.chiSquarePairwise(tab, opts.fisher) : null;
+          if (pw) it.tables.push({ cat: 'pairs', title: 'Pairwise comparisons (Bonferroni)', head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
+          // relative risk of the first category for each pair, with the pairwise P (the overall test for two groups)
+          const two = levels.length === 2;
+          it.effects = { title: 'Pairwise comparisons and effect estimates', head: ['Pair', ...(two ? [`Relative risk of “${levels[0]}” (95% CI)`, 'Odds ratio (95% CI)'] : []), k > 2 ? 'P value (Bonferroni)' : 'P value'],
+            rows: pairs(k).map(([i, j], q) => { const rr = two ? S.relativeRisk(tab, 0, i, j) : null, or = two ? S.oddsRatio(tab, 0, i, j) : null;
+              return [`${gl[i]} vs ${gl[j]}`, ...(two ? [rr ? `${F(rr.rr, 2)} (${ci(rr.lo, rr.hi, 2)})` : '—', or ? `${F(or.or, 2)} (${ci(or.lo, or.hi, 2)})` : '—'] : []), P(pw ? pw[q].p : cres.p)]; }),
+            note: `${two ? `Relative risk and odds ratio of “${levels[0]}” in the first group of each pair compared with the second. ` : ''}${k > 2 ? `P values: ${opts.fisher ? 'Chi-square or Fisher' : 'Chi-square'} test between each two groups, Bonferroni-adjusted.` : `P value: ${TEST_NAME[cres.test] || cres.test}.`}` };
         }
         Object.assign(it, { n: N, normal: '—' }); if (it.test === undefined) Object.assign(it, { test: '', p: NaN });
         it.spec = { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the patients', series: levels.map((l, li) => ({ name: l, values: tab[li].map((c, g) => ns[g] ? 100 * c / ns[g] : 0) })) };
@@ -23156,6 +23190,8 @@ const Analysis = (() => {
             if (Math.min(par.p, non.p) <= alpha) it.sig = true;
             return [tps[t], P(par.p), P(non.p), k === 2 ? `${F(par.diff)} (${ci(par.lo, par.hi)})` : `η² = ${F(par.etaSq, 3)}`];
           });
+          const er = per.map((gv, t) => (effRows(gv) || []).map(r => [tps[t], ...r])).flat();
+          if (er.length) it.effects = { title: 'Pairwise comparisons and effect estimates at each timepoint', head: ['Timepoint', ...EFF_HEAD], rows: er, note: EFF_NOTE };
           it.tables.push({ cat: 'tests', title: 'Between the groups at each timepoint', head: ['Timepoint', k === 2 ? "Student's t-test P" : 'ANOVA P', k === 2 ? 'Mann-Whitney P' : 'Kruskal-Wallis P', k === 2 ? 'Mean difference (95% CI)' : 'Effect size'], rows: out });
         }
         const mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
@@ -25821,15 +25857,18 @@ const Report = (() => {
         // long patient lists are cut into pieces of 14 rows, one layout row each, so no layout row is taller than a page
         const CH = 14, pieces = it.data.flatMap(t => Array.from({ length: Math.max(1, Math.ceil(t.rows.length / CH)) }, (_, q) => ({ ...t, title: q ? `${t.title} (continued)` : t.title, rows: t.rows.slice(q * CH, q * CH + CH) })));
         PAGE_W = leftW - 120; const lefts = pieces.map(t => block(t, true, true));
-        PAGE_W = rightW - 120; const right = it.tables.flatMap(t => block(t, false, true));
+        // the result tables go one per layout row (summary beside the first data piece, effects beside the next), so no row outgrows the page
+        PAGE_W = rightW - 120; const rights = opts.layout === 'half' ? it.tables.map(t => block(t, false, true)) : [it.tables.flatMap(t => block(t, false, true))];
         PAGE_W = LANDSCAPE_W;
         const cell = (w, kids) => new TableCell({ width: { size: w, type: WidthType.DXA }, borders: { top: none, bottom: none, left: none, right: none }, children: kids.length ? kids : [new Paragraph('')] });
         children.push(new Table({ width: { size: LANDSCAPE_W, type: WidthType.DXA }, columnWidths: [leftW, gap, rightW],
           borders: { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none },
-          rows: lefts.map((l, q) => new TableRow({ cantSplit: true, children: [cell(leftW, l), cell(gap, []), cell(rightW, q === 0 ? right : [])] })) }));
-        if (it.url) children.push(para('', { after: 60 }), image(it.url, it.w, it.h, 520));
+          rows: Array.from({ length: Math.max(lefts.length, rights.length) }, (_, q) => new TableRow({ cantSplit: true, children: [cell(leftW, lefts[q] || []), cell(gap, []), cell(rightW, rights[q] || [])] })) }));
+        if (it.url) children.push(para('', { after: 60 }), image(it.url, it.w, it.h, 520, !!it.comment));
+        if (it.comment) children.push(para(it.comment, { size: 22, line: 300, after: 120 }));
       } else {
         if (it.url && opts.layout !== 'compact') children.push(image(it.url, it.w, it.h, opts.layout === 'stacked' ? 640 : 430));
+        if (it.comment) children.push(para(it.comment, { size: 22, line: 300, after: 120 }));
         it.tables.forEach(t => children.push(...block(t, false)));
         (it.data || []).forEach(t => children.push(...block(t, true)));
       }
@@ -28013,7 +28052,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   // options of the stage, saved with the setup / project
-  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true };
+  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true, comments: true };
   const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
   function renderXpOpts() {
     const o = xpo();
@@ -28037,7 +28076,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const o = xpo(); renderXpOpts();
     let x;
     try { x = Analysis.explore(state.data, state.cfg, { dec: o.dec, extra: o.extra, fig: o.fig === 'none' ? 'auto' : o.fig, out: o.out }); } catch (err) { console.error(err); box.innerHTML = `<p style="color:var(--bad)">${esc(err.message)}</p>`; return; }
-    state.explore = x;
+    state.explore = x; state.xpComments = new Map();
     const sel = $('#xpVar'), cur = sel.value, kinds = { numeric: 'numeric', categorical: 'categorical', repeated: 'repeated' };
     sel.innerHTML = `<option value="">All variables (${x.items.length})</option>` + x.items.map(it => `<option value="${esc(it.id)}">${esc(it.label)} — ${kinds[it.kind]}</option>`).join('');
     if (x.items.some(it => it.id === cur)) sel.value = cur;
@@ -28107,6 +28146,22 @@ if (typeof module !== 'undefined') module.exports = Examples;
   }
   const sumWordHtml = it => { const t = summaryTable(it); if (!t) return xpTables(it).map(tblHtml).join('');
     return wordTbl(t.note ? `Summary — ${t.note}` : 'Summary', t.head, t.rows.map(r => `<tr>${r.map(c => `<td class="${/\*$/.test(c) ? 'sigp' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')); };
+  const effWordHtml = it => it.effects ? wordTbl(it.effects.title, it.effects.head, it.effects.rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join(''))
+    + (it.effects.note ? `<div class="xp-sum-note">${esc(it.effects.note)}</div>` : '') : '';
+  // the comment the report writes for this variable alone (as in step 11), shown below its figure
+  function xpComment(it) {
+    if (!xpo().comments) return '';
+    const cache = state.xpComments || (state.xpComments = new Map());
+    if (cache.has(it.id)) return cache.get(it.id);
+    const cfg = state.cfg; let v = cfg.variables.find(x => x.id === it.id);
+    if (!v) { const m = /^(.*)_(\d+)$/.exec(it.id), o = m && cfg.variables.find(x => x.id === m[1]), c = o && o.cols.find(x => x.col === it.cols[0].col);
+      if (c) v = { ...o, id: it.id, kind: 'single', type: 'numeric', split: false, cols: [c], label: it.label }; }
+    let txt = '';
+    if (v) try { txt = Analysis.run(state.data, { ...cfg, variables: [{ ...v, include: true }], advanced: [], consort: null, options: { ...effOptions(), correlation: false, figures: 'none', summary: false } }).sections.map(s => s.comment).filter(Boolean).join(' '); } catch (e) { console.error(e); }
+    cache.set(it.id, txt);
+    return txt;
+  }
+  const commentHtml = it => { const t = xpComment(it); return t ? `<div class="xp-comment">${esc(t)}</div>` : ''; };
   const sumHtml = it => { const t = summaryTable(it); return t ? tblHtml(t) + (t.note ? `<div class="xp-sum-note">${esc(t.note)}</div>` : '') : xpTables(it).map(tblHtml).join(''); };
   // a card's lines: each group's mean ± SD or median (IQR), its frequencies, or the values at the first and last timepoint
   function keyLines(it) {
@@ -28147,18 +28202,18 @@ if (typeof module !== 'undefined') module.exports = Examples;
       // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
       if (view === 'side') return `<div class="report-sec xp-item">${headRow}
         <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
-        ${img ? `<div class="xp-fig-below">${img}</div>` : ''}</div>`;
+        ${img ? `<div class="xp-fig-below">${img}</div>` : ''}${commentHtml(it)}</div>`;
       // data of each group in the left half, the summary table (and the figure) in the right half
       if (view === 'half') return `<div class="report-sec xp-item">${headRow}
-        <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div>${sumWordHtml(it)}${img}</div></div></div>`;
-      if (view === 'stacked') return `<div class="report-sec xp-item xp-stacked">${headRow}${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div>
+        <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div>${sumWordHtml(it)}${effWordHtml(it)}${img}${commentHtml(it)}</div></div></div>`;
+      if (view === 'stacked') return `<div class="report-sec xp-item xp-stacked">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
       if (view === 'tables') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div></div>`;
-      if (view === 'twocol') return `<div class="report-sec xp-item">${headRow}${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>`;
+      if (view === 'twocol') return `<div class="report-sec xp-item">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>`;
       if (view === 'compact') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
       return `<div class="report-sec xp-item">${headRow}
-        <div class="xp-body">${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
+        <div class="xp-body">${img ? `<div class="xp-figcol">${img}${commentHtml(it)}</div>` : ''}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
     }).join('');
     $('#explore').innerHTML = ov + (list.length ? (view === 'twocol' ? `<div class="xp-twocol">${html}</div>` : html) : empty);
@@ -28231,7 +28286,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
       const items = list.map(it => {
         // the Word file follows the view: data beside the results, or after them when asked for
         const view = xpo().view, out = { label: it.label, summary: it.summary, test: it.test, p: isFinite(it.p) ? Analysis.fmtP(it.p, o.alpha) : '', sig: it.sig, key: keyLines(it).map(l => l.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")), n: it.n, tables: xpTables(it), data: view === 'side' || view === 'half' ? [sideData(it)] : xpo().wordData ? dataTables(it) : [] };
-        if (view === 'half') { const t = summaryTable(it); if (t) out.tables = [t.note ? { ...t, title: `Summary — ${t.note}` } : t]; }
+        if (view === 'half') { const t = summaryTable(it); if (t) out.tables = [t.note ? { ...t, title: `Summary — ${t.note}` } : t, ...(it.effects ? [{ ...it.effects, title: it.effects.note ? `${it.effects.title} — ${it.effects.note}` : it.effects.title }] : [])]; }
+        if (!['cards', 'gallery', 'tables', 'compact'].includes(view)) out.comment = xpComment(it);
         if (figs && it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), chartStyle(o)); Object.assign(out, { url: c.toDataURL('image/png'), w: c.width, h: c.height }); } catch (e) { /* no figure */ } }
         return out;
       });
@@ -28247,6 +28303,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   $('#explore').addEventListener('click', e => { const r = e.target.closest('[data-xpgo]'); if (!r) return; $('#xpVar').value = r.dataset.xpgo; drawExplore(); window.scrollTo(0, $('#p10').offsetTop); });
   $('#xpView').onchange = e => { xpo().view = e.target.value; const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpFigs').onchange = drawExplore;
+  $('#xpCom').onchange = e => { xpo().comments = e.target.checked; renderXpOpts(); const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpOv').onchange = e => { xpo().overview = e.target.checked; renderXpOpts(); const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpCopy').onclick = async () => {
     // all tables as tab-separated text, ready to paste into Excel or Word
@@ -28864,10 +28921,45 @@ if (typeof module !== 'undefined') module.exports = Examples;
       if (b.dataset.rs === 'yes') { try { openProject(j, j.file || 'data'); } catch (err) { toast('Could not restore: ' + err.message); } }
       else { try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* ignore */ } } };
   })();
-  // keyboard: Ctrl/⌘+S saves the project, Alt+→ / Alt+← next and previous step
+  /* ---------- keyboard shortcuts (single keys only when not typing) ---------- */
+  const KEYS = [['Anywhere'], [['Ctrl', 'S'], 'Save the project'], [['Ctrl', 'O'], 'Open a project'], [['Ctrl', 'Z'], 'Undo the last change to the data'],
+    [['Alt', '→'], 'Next step'], [['Alt', '←'], 'Previous step'], [[']'], 'Next step'], [['['], 'Previous step'], [['1 … 9'], 'Go to step 1 … 9'], [['0'], 'Step 10 · Results by variable'],
+    [['R'], 'Step 11 · Report'], [['/'], 'Search on this step'], [['T'], 'Light / dark theme'], [['?'], 'This list'],
+    ['On a step'], [['C'], 'Check the data (step 1)'], [['E'], 'Edit the sheet (step 1)'], [['F'], 'Export figures (steps 7, 9 and 11)'], [['W'], 'Download Word (steps 10 and 11)'], [['X'], 'Download Excel (steps 10 and 11)'], [['V'], 'Next view (step 10)']];
+  const typing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  function showKeys() {
+    $('#keysList').innerHTML = KEYS.map(k => k.length === 1 ? `<div class="sec">${k[0]}</div>` : `<div class="k">${k[0].map(x => `<kbd>${esc(x === 'Ctrl' && /Mac/.test(navigator.platform) ? '⌘' : x)}</kbd>`).join('+')}</div><div>${esc(k[1])}</div>`).join('');
+    $('#keysDlg').showModal();
+  }
+  $('#btnKeys').onclick = showKeys;
+  const clickIf = id => { const b = $(id); if (b && !b.disabled) { b.click(); return true; } return false; };
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); $('#btnSaveProj').click(); }
-    else if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && state.data) { e.preventDefault(); go(Math.min(STEPS.length, Math.max(1, state.step + (e.key === 'ArrowRight' ? 1 : -1)))); }
+    if (document.querySelector('dialog[open]') && e.key !== 'Escape') { if (!(e.ctrlKey || e.metaKey)) return; }
+    const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (mod && !e.altKey) {
+      if (k === 's') { e.preventDefault(); $('#btnSaveProj').click(); }
+      else if (k === 'o') { e.preventDefault(); $('#projFile').click(); }
+      else if (k === 'z' && !e.shiftKey && !typing(e.target) && state.undo && state.undo.length) { e.preventDefault(); state.step === 10 ? clickIf('#xpUndo') : clickIf('#gridUndo'); }
+      return;
+    }
+    if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && state.data) { e.preventDefault(); go(Math.min(STEPS.length, Math.max(1, state.step + (e.key === 'ArrowRight' ? 1 : -1)))); return; }
+    if (e.altKey || typing(e.target)) return;
+    const step = state.step, at = n => step === n;
+    let done = true;
+    if (e.key === '?') showKeys();
+    else if (/^[0-9]$/.test(e.key) && (state.data || e.key === '1')) go(e.key === '0' ? 10 : +e.key);
+    else if (k === 'r' && state.data) go(11);
+    else if ((e.key === ']' || e.key === '[') && state.data) go(Math.min(STEPS.length, Math.max(1, step + (e.key === ']' ? 1 : -1))));
+    else if (e.key === '/') { const box = at(1) ? $('#gridSearch') : at(2) ? $('#varSearch') : at(10) ? ($('#xpOpts').open = true, document.querySelector('[data-xo="q"]')) : null; if (box && box.offsetParent !== null) box.focus(); else done = false; }
+    else if (k === 't') $('#btnTheme').click();
+    else if (k === 'c' && at(1) && state.data) $('#gridCheck').click();
+    else if (k === 'e' && at(1) && state.data) $('#gridEdit').click();
+    else if (k === 'f') done = at(11) ? clickIf('#btnPngs') : at(7) ? clickIf('#figPrevPng') : at(9) ? clickIf('#flowPng') : false;
+    else if (k === 'w') done = at(11) ? clickIf('#btnDocx') : at(10) ? clickIf('#xpWord') : false;
+    else if (k === 'x') done = at(11) ? clickIf('#btnXlsx') : at(10) ? clickIf('#xpXlsx') : false;
+    else if (k === 'v' && at(10)) { const sel = $('#xpView'); sel.selectedIndex = (sel.selectedIndex + 1) % sel.options.length; sel.dispatchEvent(new Event('change')); toast(`View: ${sel.options[sel.selectedIndex].text}`); }
+    else done = false;
+    if (done) e.preventDefault();
   });
   $('#btnNew').onclick = () => {
     if (state.data && !confirm('Start a new project? The current data and settings are cleared (save the project first to keep them).')) return;

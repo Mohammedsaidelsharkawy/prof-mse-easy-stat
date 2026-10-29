@@ -1144,6 +1144,19 @@ const Analysis = (() => {
       }
       return { type: 'box', perGroup: true, points: true, categories: gl, yLabel: label, series: [{ name: label, data: gv }] };
     };
+    // effect estimates for every pair of groups: mean difference with its Tukey 95% CI and P, Hodges-Lehmann median difference with its 95% CI,
+    // and the non-parametric P (Mann-Whitney for two groups; Dunn (Bonferroni) — or Mann-Whitney with the chosen adjustment — for three or more)
+    const npName = k === 2 ? 'Mann-Whitney P' : opts.dunn ? 'Dunn P (Bonferroni)' : `Mann-Whitney P${opts.mwAdjust === 'bonferroni' ? ' (Bonferroni)' : opts.mwAdjust === 'holm' ? ' (Holm)' : ''}`;
+    const effRows = gv => {
+      if (k < 2 || gv.some(x => x.length < 2)) return null;
+      const tk = S.tukey(gv), dn = k > 2 && opts.dunn ? S.dunn(gv) : null;
+      let mw = pairs(k).map(([i, j]) => S.mannWhitney(gv[i], gv[j]).p);
+      if (k > 2 && !dn && (opts.mwAdjust === 'bonferroni' || opts.mwAdjust === 'holm')) mw = opts.mwAdjust === 'holm' ? S.holm(mw) : mw.map(x => S.bonferroni(x, mw.length));
+      return pairs(k).map(([i, j], q) => { const hl = S.hodgesLehmann(gv[i], gv[j]);
+        return [`${gl[i]} vs ${gl[j]}`, `${F(tk[q].diff)} (${ci(tk[q].lo, tk[q].hi)})`, P(tk[q].p), `${F(hl.diff)} (${ci(hl.lo, hl.hi)})`, P(dn ? dn[q].p : mw[q])]; });
+    };
+    const EFF_HEAD = ['Pair', 'Mean difference (95% CI)', 'Tukey P', 'HL median difference (95% CI)', npName];
+    const EFF_NOTE = `Differences are the first group minus the second. Mean differences with Tukey-adjusted 95% CI and P values; HL: Hodges-Lehmann median difference with its 95% CI and the ${npName.replace(/ P/, '')} P value.`;
     const items = [];
     for (const v of effectiveVariables(cfg)) {
       const it = { id: v.id, label: v.label, kind: v.kind === 'repeated' ? 'repeated' : v.type, tables: [], spec: null, summary: '',
@@ -1153,6 +1166,7 @@ const Analysis = (() => {
         it.tables.push({ cat: 'desc', title: 'Descriptive statistics', head: descHead, rows: [...gv.map((x, g) => descRow(gl[g], x, miss[g])), ...(k > 1 ? [descRow('All patients', gv.flat(), S.sum(miss))] : [])] });
         const t = numericTests(gv, v.dist); if (t) it.tables.push(t);
         const pt = pairTable(gv); if (pt) it.tables.push(pt);
+        const er = effRows(gv); if (er) it.effects = { title: 'Pairwise comparisons and effect estimates', head: EFF_HEAD, rows: er, note: EFF_NOTE };
         if (xo.extra) it.tables.push(extraTable([...gl.map((g, i) => [g, gv[i]]), ...(k > 1 ? [['All patients', gv.flat()]] : [])]));
         it.spec = numSpec(gv, v.label);
         const used2 = new Set(), res = k > 1 && gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts) : null;
@@ -1183,10 +1197,14 @@ const Analysis = (() => {
               return [`${gl[i]} vs ${gl[j]}`, rr ? `${F(rr.rr, 2)} (${ci(rr.lo, rr.hi, 2)})` : '—', or ? `${F(or.or, 2)} (${ci(or.lo, or.hi, 2)})` : '—']; });
             it.tables.push({ cat: 'tests', title: `Effect of “${levels[0]}”`, head: ['Pair', 'Relative risk (95% CI)', 'Odds ratio (95% CI)'], rows: eff });
           }
-          if (k > 2) {
-            const pw = S.chiSquarePairwise(tab, opts.fisher);
-            it.tables.push({ cat: 'pairs', title: 'Pairwise comparisons (Bonferroni)', head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
-          }
+          const pw = k > 2 ? S.chiSquarePairwise(tab, opts.fisher) : null;
+          if (pw) it.tables.push({ cat: 'pairs', title: 'Pairwise comparisons (Bonferroni)', head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
+          // relative risk of the first category for each pair, with the pairwise P (the overall test for two groups)
+          const two = levels.length === 2;
+          it.effects = { title: 'Pairwise comparisons and effect estimates', head: ['Pair', ...(two ? [`Relative risk of “${levels[0]}” (95% CI)`, 'Odds ratio (95% CI)'] : []), k > 2 ? 'P value (Bonferroni)' : 'P value'],
+            rows: pairs(k).map(([i, j], q) => { const rr = two ? S.relativeRisk(tab, 0, i, j) : null, or = two ? S.oddsRatio(tab, 0, i, j) : null;
+              return [`${gl[i]} vs ${gl[j]}`, ...(two ? [rr ? `${F(rr.rr, 2)} (${ci(rr.lo, rr.hi, 2)})` : '—', or ? `${F(or.or, 2)} (${ci(or.lo, or.hi, 2)})` : '—'] : []), P(pw ? pw[q].p : cres.p)]; }),
+            note: `${two ? `Relative risk and odds ratio of “${levels[0]}” in the first group of each pair compared with the second. ` : ''}${k > 2 ? `P values: ${opts.fisher ? 'Chi-square or Fisher' : 'Chi-square'} test between each two groups, Bonferroni-adjusted.` : `P value: ${TEST_NAME[cres.test] || cres.test}.`}` };
         }
         Object.assign(it, { n: N, normal: '—' }); if (it.test === undefined) Object.assign(it, { test: '', p: NaN });
         it.spec = { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the patients', series: levels.map((l, li) => ({ name: l, values: tab[li].map((c, g) => ns[g] ? 100 * c / ns[g] : 0) })) };
@@ -1203,6 +1221,8 @@ const Analysis = (() => {
             if (Math.min(par.p, non.p) <= alpha) it.sig = true;
             return [tps[t], P(par.p), P(non.p), k === 2 ? `${F(par.diff)} (${ci(par.lo, par.hi)})` : `η² = ${F(par.etaSq, 3)}`];
           });
+          const er = per.map((gv, t) => (effRows(gv) || []).map(r => [tps[t], ...r])).flat();
+          if (er.length) it.effects = { title: 'Pairwise comparisons and effect estimates at each timepoint', head: ['Timepoint', ...EFF_HEAD], rows: er, note: EFF_NOTE };
           it.tables.push({ cat: 'tests', title: 'Between the groups at each timepoint', head: ['Timepoint', k === 2 ? "Student's t-test P" : 'ANOVA P', k === 2 ? 'Mann-Whitney P' : 'Kruskal-Wallis P', k === 2 ? 'Mean difference (95% CI)' : 'Effect size'], rows: out });
         }
         const mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));

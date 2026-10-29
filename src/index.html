@@ -262,6 +262,8 @@ table.rt.xw td.out{background:rgba(224,138,46,.28);font-weight:600}table.rt.xw t
 
 table.rt.xw td[contenteditable]:focus{outline:2px solid var(--purple);outline-offset:-2px}
 .xp-half .xp-fig{width:100%;margin-top:10px}
+.xp-comment{font-family:"Times New Roman",serif;font-size:14.5px;line-height:1.55;text-align:justify;margin:8px 2px 4px;color:var(--ink)}
+.xp-figcol{display:flex;flex-direction:column;max-width:440px}
 .xp-sum-note{font-size:12.5px;color:var(--muted);margin-top:4px}
 @media (max-width:900px){.xp-half{grid-template-columns:1fr}}
 /* step 1: data preparation */
@@ -284,6 +286,10 @@ details.prep summary{cursor:pointer}
 .flt select,.flt input[type=text]{width:auto}
 dialog.app-dlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(720px,calc(100vw - 32px));box-shadow:0 20px 60px rgba(28,22,72,.25)}
 dialog.app-dlg::backdrop{background:rgba(20,17,34,.45)}
+.keys-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13.5px;align-items:center}
+.keys-grid .k{display:flex;gap:4px;justify-content:flex-end}
+.keys-grid kbd{font-family:inherit;font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--soft);white-space:nowrap}
+.keys-grid .sec{grid-column:1/-1;font-weight:700;color:var(--title);margin-top:6px}
 dialog.app-dlg h3{margin:0 0 4px;color:var(--title)}
 /* figure export dialog */
 dialog#figDlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);box-shadow:0 20px 60px rgba(28,22,72,.25)}
@@ -308,6 +314,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <label class="btn light small" title="Open a saved project: data, settings and edited text">📂 Open project<input type="file" id="projFile" accept=".json,.easystat" hidden></label>
       <button class="btn light small" id="btnSaveProj" title="Save everything — the data, all settings and the text edited in step 11 — in one file">💾 Save project</button>
       <button class="btn light small" id="btnTheme" title="Switch light / dark theme">◐ Theme</button>
+      <button class="btn light small" id="btnKeys" title="Keyboard shortcuts (?)">⌨ Shortcuts</button>
       <button class="btn light small" id="btnSaveCfg" title="Save your column setup to reuse later">Save setup</button>
       <label class="btn light small" title="Load a saved setup">Load setup<input type="file" id="cfgFile" accept=".json" hidden></label>
     </div>
@@ -834,6 +841,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <label class="f" style="margin:0">View</label><select id="xpView" style="width:auto" title="How each variable is laid out (the Word file follows it)"><option value="standard">Standard — figure beside the tables</option><option value="side">Data beside results — figure below</option><option value="half">Data (left half) · summary table (right half)</option><option value="compact">Compact — tables, data on demand</option><option value="stacked">Figure on top — tables below</option><option value="twocol">Two variables per row</option><option value="tables">Tables only — no figures</option><option value="cards">Key results — a card per variable</option><option value="gallery">Figure gallery — figures with test and P</option></select>
         <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
         <label class="check" style="margin:0" title="The overview table of all variables at the top"><input type="checkbox" id="xpOv" data-xo="overview"><span>Overview</span></label>
+        <label class="check" style="margin:0" title="The comment the report writes for each variable, below its figure"><input type="checkbox" id="xpCom" data-xo="comments"><span>Comments</span></label>
         <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button>
         <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>
         <button class="btn ghost small" id="xpXlsx" type="button" title="Every table shown here in Excel, one sheet per variable">⬇ Excel</button>
@@ -921,6 +929,14 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     </div>
     <p class="legend-note" id="fxInfo"></p>
     <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="fxCancel">Cancel</button> <button type="button" class="btn primary" id="fxGo">⬇ Export</button></div>
+  </form>
+</dialog>
+<dialog id="keysDlg" class="app-dlg">
+  <form method="dialog">
+    <h3>Keyboard shortcuts</h3>
+    <p class="legend-note" style="margin:0 0 8px">Single keys work when you are not typing in a box.</p>
+    <div class="keys-grid" id="keysList"></div>
+    <div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn primary" value="close">Close</button></div>
   </form>
 </dialog>
 <dialog id="pasteDlg" class="app-dlg">
