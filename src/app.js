@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,7 +47,7 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -102,6 +102,8 @@
     if (n === 3) renderTimepoints();
     if (n >= 4 && n <= 8) renderOptions();
     if (n === 7) { renderFigureTable(); renderFigDesign(); }
+    if (n === 4) renderTestPlan();
+    if (n === 6) renderCommentPreview();
     if (n === 5) renderTablePreview();
     if (n === 8) renderAdvanced();
     if (n === 9) renderConsortForm();
@@ -640,6 +642,16 @@
   $('#gridSearch').addEventListener('input', e => { state.grid.q = e.target.value; state.grid.page = 0; renderGrid(); });
 
   // step 2: the same change for every variable
+  // labels of every variable: sentence case, title case, or made again from the column names
+  const SMALL = /^(of|and|or|in|at|to|the|a|an|with|by|for|on|per|vs)$/i, KEEP = w => /[A-Z].*[A-Z]|\d|^\(/.test(w);
+  const sentence = t => t.split(' ').map((w, i) => KEEP(w) ? w : i === 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase()).join(' ');
+  const titleCase = t => t.split(' ').map((w, i) => KEEP(w) ? w : i > 0 && SMALL.test(w) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  $('#varBulk').addEventListener('click', e => {
+    const lb = e.target.closest('[data-vlabel]'); if (!lb || !state.cfg) return;
+    readUiIntoCfg(); const k = lb.dataset.vlabel;
+    state.cfg.variables.forEach(v => { v.label = k === 'cols' ? (v.kind === 'repeated' ? labelFrom(tokens(v.cols[0].col).filter(t => !TP_RE.test(t))) : labelFrom(tokens(v.cols[0].col))) : k === 'title' ? titleCase(v.label) : sentence(v.label); });
+    renderVariables(); toast(k === 'cols' ? 'Labels made from the column names' : `Labels in ${k === 'title' ? 'Title Case' : 'sentence case'}`);
+  });
   $('#varBulk').addEventListener('click', e => {
     const b = e.target.closest('[data-vbulk]'); if (!b || !state.cfg) return;
     readUiIntoCfg();
@@ -652,7 +664,7 @@
 
   /* ---------- step 1: find & replace, and a check of the sheet for common problems ---------- */
   // one tool panel at a time under the grid bar
-  const TOOL_BOXES = ['findBox', 'checkBox', 'recodeBox', 'reshapeBox', 'splitBox'];
+  const TOOL_BOXES = ['findBox', 'checkBox', 'recodeBox', 'reshapeBox', 'splitBox', 'fillBox'];
   function toggleTool(id) { const on = $('#' + id).style.display === 'none'; TOOL_BOXES.forEach(b => { $('#' + b).style.display = b === id && on ? '' : 'none'; }); return on; }
   $('#gridFind').onclick = () => {
     const on = toggleTool('findBox');
@@ -778,6 +790,20 @@
         state.cfg.variables.forEach(v => { if (v.type === 'categorical' && v.cols.some(c => c.col === col)) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); }
     });
     renderRecode(); toast(`${n} cell${n === 1 ? '' : 's'} recoded in ${col}`);
+  };
+  /* ---------- fill down: empty cells take the value above (merged cells, group written once per block) ---------- */
+  const fillCount = col => { let last = null, n = 0; state.data.rows.forEach(r => { if (!isMissing(r[col])) last = r[col]; else if (last !== null) n++; }); return n; };
+  function renderFill() {
+    const h = state.data.headers, best = h.slice().sort((a, b) => fillCount(b) - fillCount(a))[0], cur = h.includes($('#fdCol').value) ? $('#fdCol').value : best;
+    $('#fdCol').innerHTML = h.map(c => `<option ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join('');
+    const n = fillCount(cur); $('#fdInfo').textContent = n ? `${n} empty cell${n > 1 ? 's' : ''} would be filled` : 'No empty cell below a value in this column.'; $('#fdGo').disabled = !n;
+  }
+  $('#gridFill').onclick = () => { if (toggleTool('fillBox')) renderFill(); };
+  $('#fdCol').onchange = renderFill;
+  $('#fdGo').onclick = () => {
+    const col = $('#fdCol').value, n = fillCount(col); let last = null;
+    editSheet(() => { state.data.rows.forEach(r => { if (!isMissing(r[col])) last = r[col]; else if (last !== null) r[col] = last; }); if (col === state.cfg.groupCol) refreshGroups(); });
+    renderFill(); toast(`${n} cell${n > 1 ? 's' : ''} filled in ${col}`);
   };
   /* ---------- split a column at a separator (120/80 → SBP, DBP) ---------- */
   const SPLIT_RE = { '/': /\s*\/\s*/, '-': /\s*-\s*/, ',': /\s*,\s*/, ';': /\s*;\s*/, ' ': /\s+/, x: /\s*[x×]\s*/i };
@@ -1182,6 +1208,26 @@
     $('#customBox').style.display = o.palette === 'custom' ? '' : 'none';
   }
 
+  /* ---------- timepoints: time order and readable names ---------- */
+  const UNIT_H = { min: 1 / 60, mins: 1 / 60, h: 1, hr: 1, hrs: 1, hour: 1, hours: 1, d: 24, day: 24, days: 24, w: 168, wk: 168, wks: 168, week: 168, weeks: 168, m: 730, mo: 730, mon: 730, month: 730, months: 730, y: 8760, yr: 8760, yrs: 8760, year: 8760, years: 8760 };
+  function tpRank(t) {
+    const s = String(t).toLowerCase().replace(/\s+/g, '');
+    if (/^(baseline|base|bl|pre|preop|before|screening|t0|v0|day0|d0)$/.test(s)) return -1;
+    if (/^(post|postop|after|final|end|discharge)$/.test(s)) return 1e9;
+    let m = /^(\d+(?:\.\d+)?)([a-z]+)$/.exec(s); if (m && UNIT_H[m[2]]) return +m[1] * UNIT_H[m[2]];
+    m = /^([a-z]+)(\d+(?:\.\d+)?)$/.exec(s); if (m) return +m[2] * (UNIT_H[m[1]] || 1);
+    return 5e8;
+  }
+  const TP_WORD = { m: 'Month', mo: 'Month', month: 'Month', w: 'Week', wk: 'Week', week: 'Week', d: 'Day', day: 'Day', y: 'Year', yr: 'Year', year: 'Year', v: 'Visit', visit: 'Visit', t: 'T', session: 'Session' };
+  function tpReadable(t) {
+    const s = String(t).trim(); let m = /^([a-z]+)\s*(\d+(?:\.\d+)?)$/i.exec(s);
+    if (m && TP_WORD[m[1].toLowerCase()]) return TP_WORD[m[1].toLowerCase()] === 'T' ? 'T' + m[2] : `${TP_WORD[m[1].toLowerCase()]} ${m[2]}`;
+    m = /^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?|min|mins|d|days?|w|wks?|weeks?|m|mo|months?|y|yrs?|years?)$/i.exec(s);
+    if (m) { const u = m[2].toLowerCase(), one = +m[1] === 1, name = /^(h|hr|hrs|hour|hours)$/.test(u) ? 'h' : /^min/.test(u) ? 'min' : /^d/.test(u) ? (one ? 'day' : 'days') : /^w/.test(u) ? (one ? 'week' : 'weeks') : /^m/.test(u) ? (one ? 'month' : 'months') : (one ? 'year' : 'years'); return `${m[1]} ${name}`; }
+    return tpLabel(s);
+  }
+  $('#tpSort').onclick = () => { readUiIntoCfg(); const o = state.cfg.tpOrder; state.cfg.tpOrder = o.map((t, i) => [t, i]).sort((a, b) => tpRank(a[0]) - tpRank(b[0]) || a[1] - b[1]).map(x => x[0]); renderTimepoints(); toast('Timepoints in time order'); };
+  $('#tpRelabel').onclick = () => { readUiIntoCfg(); const cfg = state.cfg; let n = 0; cfg.tpOrder.forEach(t => { const nw = tpReadable(t); if (cfg.tpLabels[t] !== nw && (cfg.tpLabels[t] === t || cfg.tpLabels[t] === tpLabel(t))) { cfg.tpLabels[t] = nw; n++; } }); renderTimepoints(); toast(n ? `${n} timepoint label${n > 1 ? 's' : ''} made readable` : 'The labels are already readable (or typed by you)'); };
   /* ---------- timepoints per outcome (step 3) ---------- */
   const colTp = c => c.label || state.cfg.tpLabels[c.tp] || c.tp;
   function renderTpVars() {
@@ -1397,7 +1443,14 @@
     categorical: [['auto', 'Auto (bars)'], ['hbar', 'Horizontal bars'], ['stacked', '100% stacked bar'], ['pie', 'Donut'], ['piefull', 'Pie'], ['none', 'No figure']]
   };
   const chartKind = v => v.kind === 'repeated' ? 'repeated' : v.type;
+  // one chart type for every variable of a kind
+  [['#fbNum', 'numeric'], ['#fbCat', 'categorical'], ['#fbRep', 'repeated']].forEach(([id, kind]) => {
+    $(id).onchange = e => { const k = e.target.value; if (!k) return; readUiIntoCfg();
+      let n = 0; state.cfg.variables.forEach(v => { if (v.include && chartKind(v) === kind) { v.chart = k; n++; } });
+      e.target.value = ''; renderFigureTable(); toast(`${n} ${kind} variable${n === 1 ? '' : 's'}: ${CHART_TYPES[kind].find(x => x[0] === k)[1]}`); };
+  });
   function renderFigureTable() {
+    [['#fbNum', 'numeric'], ['#fbCat', 'categorical'], ['#fbRep', 'repeated']].forEach(([id, kind]) => { $(id).innerHTML = `<option value="">${kind}…</option>` + CHART_TYPES[kind].map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); });
     const vars = state.cfg.variables.filter(v => v.include);
     $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th>Y axis from – to</th><th>Reference line (value, label)</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
       <td><b>${esc(v.label)}</b><div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
@@ -1441,15 +1494,46 @@
   $('#p5').addEventListener('change', scheduleDesign(() => renderTablePreview()));
   $('#p5').addEventListener('input', scheduleDesign(() => renderTablePreview()));
   $('#p7').addEventListener('change', scheduleDesign(() => renderFigDesign()));
+  // one numeric and one or two categorical variables of the sheet, analysed with the current options (a significant one first when there is one)
+  function previewSection() {
+    const cfg = state.cfg, o = cfg.options, singles = cfg.variables.filter(v => v.include && v.kind === 'single' && v.cols[0].col !== cfg.groupCol);
+    const pick = [singles.find(v => v.type === 'numeric'), ...singles.filter(v => v.type === 'categorical').slice(0, 2)].filter(Boolean).slice(0, 3);
+    if (!pick.length) return { msg: 'Tick at least one variable in step 2 to see a preview.' };
+    try { return { s: Analysis.run(state.data, { ...cfg, variables: pick.map(v => ({ ...v, include: true, table: pick[0].table || 'Demographic and baseline data' })), advanced: [], consort: null, options: { ...o, correlation: false, figures: 'none', summary: false } }).sections.find(x => x.rows && x.rows.length) }; }
+    catch (err) { console.error(err); return { msg: err.message }; }
+  }
+  function renderCommentPreview() {
+    const box = $('#comPreview'); if (!box || !state.cfg || !state.data) return;
+    const o = state.cfg.options, { s, msg } = previewSection();
+    box.style.fontFamily = `'${o.font}', serif`;
+    box.innerHTML = msg ? `<p class="legend-note">${esc(msg)}</p>` : !s ? '' : o.commentPlace === 'none' ? '<p class="legend-note">Comments are switched off (Comment placement: No comments).</p>'
+      : `<div class="legend-note" style="margin-bottom:6px">Comment ${o.commentPlace === 'before' ? 'before' : 'after'} “Table 1: ${esc(s.title)}”${s.comment ? ` · ${s.comment.split(/\s+/).length} words` : ''}</div><div class="pcom" style="margin:0">${esc(s.comment || '')}</div>`;
+  }
+  $('#p6').addEventListener('change', scheduleDesign(() => renderCommentPreview()));
+  /* ---------- test plan (step 4): the test each variable gets, and the post hoc test when the result is significant ---------- */
+  function postHocOf(it, o, k) {
+    if (k < 3) return k === 2 ? '—' : '';
+    const t = (it.test || '').toLowerCase();
+    if (it.kind === 'repeated') return `Groups at each timepoint; ${o.rmPost === 'all' ? 'every pair of timepoints' : 'each timepoint vs the first'} within groups (${{ bonferroni: 'Bonferroni', holm: 'Holm', none: 'unadjusted' }[o.rmAdjust] || o.rmAdjust})`;
+    if (it.kind === 'categorical') return o.chiPost ? 'Chi-square / Fisher between each two groups (Bonferroni)' : '— (switched off)';
+    if (/kruskal/.test(t)) return o.dunn ? "Dunn's test (Bonferroni)" : `Mann-Whitney${o.mwAdjust && o.mwAdjust !== 'none' ? ` (${o.mwAdjust === 'holm' ? 'Holm' : 'Bonferroni'})` : ''}`;
+    if (/welch/.test(t)) return 'Games-Howell';
+    if (/anova/.test(t)) return 'Tukey HSD';
+    return '—';
+  }
+  function renderTestPlan() {
+    const tbl = $('#testPlan'); if (!tbl || !state.cfg || !state.data) return;
+    let x; try { x = Analysis.explore(state.data, state.cfg, {}); } catch (e) { tbl.innerHTML = `<tbody><tr><td>${esc(e.message)}</td></tr></tbody>`; return; }
+    const o = state.cfg.options, k = x.k;
+    tbl.innerHTML = `<thead><tr><th>Variable</th><th>Type</th><th>Distribution</th><th>Test between the groups</th><th>Post hoc (when significant)</th><th>P value</th></tr></thead><tbody>${x.items.map(it => {
+      const v = state.cfg.variables.find(q => q.id === it.id), forced = v && v.dist && v.dist !== 'auto' ? ` · set to ${v.dist === 'param' ? 'parametric' : 'non-parametric'}` : '';
+      return `<tr><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${esc((it.normal || '—') + forced)}</td><td>${esc(it.test || '—')}</td><td>${esc(postHocOf(it, o, k))}</td><td class="${it.sig ? 'sig' : ''}">${isFinite(it.p) ? esc(Analysis.fmtP(it.p, o.alpha)) : it.sig ? 'significant' : '—'}</td></tr>`; }).join('')}</tbody>`;
+  }
+  $('#p4').addEventListener('change', scheduleDesign(() => renderTestPlan()));
   function renderTablePreview() {
     const box = $('#tblPreview'); if (!box || !state.cfg || !state.data) return;
-    const cfg = state.cfg, o = cfg.options, singles = cfg.variables.filter(v => v.include && v.kind === 'single' && v.cols[0].col !== cfg.groupCol);
-    // one numeric and one or two categorical variables of the sheet, analysed with the current options
-    const pick = [singles.find(v => v.type === 'numeric'), ...singles.filter(v => v.type === 'categorical').slice(0, 2)].filter(Boolean).slice(0, 3);
-    if (!pick.length) { box.innerHTML = '<p class="legend-note">Tick at least one variable in step 2 to see a preview.</p>'; return; }
-    let s;
-    try { s = Analysis.run(state.data, { ...cfg, variables: pick.map(v => ({ ...v, include: true, table: pick[0].table || 'Demographic and baseline data' })), advanced: [], consort: null, options: { ...o, correlation: false, figures: 'none', summary: false } }).sections.find(x => x.rows && x.rows.length); }
-    catch (err) { console.error(err); box.innerHTML = `<p class="legend-note">${esc(err.message)}</p>`; return; }
+    const o = state.cfg.options, { s, msg } = previewSection();
+    if (msg) { box.innerHTML = `<p class="legend-note">${esc(msg)}</p>`; return; }
     if (!s) { box.innerHTML = ''; return; }
     const apa = o.tableCaption === 'apa', align = { justify: 'justify', left: 'left' }[o.tableCapAlign] || 'center';
     const cap = apa ? `<div class="pcap" style="text-align:left">Table 1</div><div class="pcap" style="text-align:left;font-weight:400;font-style:italic">${esc(s.title)}</div>`
@@ -1539,6 +1623,7 @@
       return `<div class="gcard" data-adv="${ai}">
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
           <label class="check" style="margin:0"><input type="checkbox" data-af="include" ${a.include !== false ? 'checked' : ''}><span>Include</span></label>
+          <button class="btn ghost small" data-advdup="${ai}" type="button" title="A copy of this analysis, to change one setting">⧉ Duplicate</button>
           <button class="btn ghost small" data-advdel="${ai}" type="button">✕ Remove</button></div>
         <div class="grid g3" style="margin-top:8px">${fields}${uni}</div>
         <div class="grid g4 adv-opts">${advOptions(a)}</div>
@@ -1609,6 +1694,8 @@
     renderAdvanced();
   });
   $('#advList').addEventListener('click', e => {
+    const d = e.target.closest('[data-advdup]');
+    if (d) { readUiIntoCfg(); const i = +d.dataset.advdup; state.cfg.advanced.splice(i + 1, 0, JSON.parse(JSON.stringify(state.cfg.advanced[i]))); renderAdvanced(); toast('Analysis duplicated — change what you need in the copy'); return; }
     const b = e.target.closest('[data-advdel]'); if (!b) return;
     readUiIntoCfg(); state.cfg.advanced.splice(+b.dataset.advdel, 1); renderAdvanced();
   });
@@ -1771,6 +1858,13 @@
     document.querySelectorAll('#cForm [data-st]').forEach(el => { c.steps[+el.dataset.st][el.dataset.f] = val(el); });
     syncAssessed(c);
   }
+  // group sizes from the data again; the type, style, labels and the on/off switch stay
+  $('#cRebuild').onclick = () => {
+    if (!state.cfg) return; readConsort();
+    const prev = state.cfg.consort; state.cfg.consort = null; const c = ensureConsort();
+    if (prev) Object.assign(c, { enabled: prev.enabled, type: prev.type, style: prev.style, labels: prev.labels });
+    renderConsortForm(); drawConsortPreview(); toast('Flowchart numbers taken from the data again');
+  };
   function drawConsortPreview() {
     const c = state.cfg.consort, gl = activeGroups().map(g => state.cfg.groupLabels[g]);
     const cv = Charts.consort(c, gl, chartPalette(state.cfg.options));
@@ -2058,6 +2152,21 @@
   });
   $('#xpUndo').onclick = $('#xpRedo').onclick = e => { if (!undoRedo(e.currentTarget.id === 'xpRedo')) return; const y = window.scrollY; renderExplore(); renderGrid(); window.scrollTo(0, y); };
   // every table shown, one sheet per variable (tables one under another, each with its title)
+  // print a part of the page (or save it as PDF) through a hidden frame with the page's own styles; boxes become plain text
+  function printPart(title, node) {
+    const clone = node.cloneNode(true);
+    clone.querySelectorAll('textarea').forEach(t => { const d = document.createElement('div'); d.className = 'print-text'; d.textContent = t.value; t.replaceWith(d); });
+    clone.querySelectorAll('input[type=text],input:not([type])').forEach(i => { const s = document.createElement('span'); s.textContent = i.value; i.replaceWith(s); });
+    clone.querySelectorAll('button,input[type=checkbox],.exp-bar,.fr-rep,label.check.exp,select').forEach(el => el.remove());
+    const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'; document.body.appendChild(f);
+    const styles = [...document.querySelectorAll('style')].map(s => s.outerHTML).join('');
+    f.contentDocument.open();
+    f.contentDocument.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>${styles}<style>body{background:#fff;color:#111;padding:12px}.report-sec{break-inside:auto;border:0;box-shadow:none}.print-text{white-space:pre-wrap;font-family:'${esc(state.cfg.options.font)}',serif;font-size:12pt;line-height:1.5;margin:6px 0}img{max-width:100%;break-inside:avoid}table{break-inside:auto}tr{break-inside:avoid}.xp-half-data,.xp-side-data{max-height:none;overflow:visible}</style></head><body><h1 style="font-family:'${esc(state.cfg.options.font)}',serif">${esc(title)}</h1>${clone.innerHTML}</body></html>`);
+    f.contentDocument.close();
+    setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 2000); }, 400);
+  }
+  $('#xpPrint').onclick = () => { if (state.explore) printPart('Results by variable', $('#explore')); };
+  $('#btnPrint').onclick = () => { if (!state.result) return; syncEdits(); printPart(state.cfg.study.title || 'Statistical report', $('#report')); };
   $('#xpXlsx').onclick = () => {
     const x = state.explore; if (!x) return;
     const list = xpList(); if (!list.length) { toast('No variable to export'); return; }
@@ -2193,6 +2302,9 @@
         if (report().style !== 'none' && cfg.options.pWord !== 'P value') res.sections.forEach(s => { s.footnote = s.footnote.replace(/\bP value\b/g, cfg.options.pWord); });
         // P values without the leading zero: also the significance level in the footnotes
         if (+cfg.options.pLead === 0) res.sections.forEach(s => { s.footnote = s.footnote.replace(/(P value|\bP|\bp) ([≤<]) 0\./g, '$1 $2 .'); });
+        // the extra footnote line of step 5 closes every table footnote
+        const fx = String(cfg.options.footExtra || '').trim();
+        if (fx) res.sections.forEach(s => { s.footnote = s.footnote ? `${s.footnote.replace(/\s*\.?\s*$/, '.')} ${fx}` : fx; });
         if (cfg.options.midDot) midDots(res);
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
           f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options);
@@ -2777,7 +2889,7 @@
     [['Alt', '→'], 'Next step'], [['Alt', '←'], 'Previous step'], [[']'], 'Next step'], [['['], 'Previous step'], [['1 … 9'], 'Go to step 1 … 9'], [['0'], 'Step 10 · Results by variable'],
     [['R'], 'Step 11 · Report'], [['/'], 'Search on this step'], [['T'], 'Light / dark theme'], [['?'], 'This list'],
     ['On a step'], [['C'], 'Check the data (step 1)'], [['E'], 'Edit the sheet (step 1)'], [['F'], 'Export figures (steps 7, 9 and 11)'], [['W'], 'Download Word (steps 10 and 11)'], [['X'], 'Download Excel (steps 10 and 11)'], [['V'], 'Next view (step 10)']];
-  const typing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  const typing = el => el && (el.isContentEditable || /^(TEXTAREA|SELECT)$/.test(el.tagName) || (el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|color|range|file)$/i.test(el.type)));
   function showKeys() {
     $('#keysList').innerHTML = KEYS.map(k => k.length === 1 ? `<div class="sec">${k[0]}</div>` : `<div class="k">${k[0].map(x => `<kbd>${esc(x === 'Ctrl' && /Mac/.test(navigator.platform) ? '⌘' : x)}</kbd>`).join('+')}</div><div>${esc(k[1])}</div>`).join('');
     $('#keysDlg').showModal();
