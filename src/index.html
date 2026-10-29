@@ -251,6 +251,12 @@ footer b{color:var(--purple)}
 .xp-gallery figure img{width:100%;display:block}
 .xp-gallery figcaption{font-size:13px;color:#333;margin-top:6px;text-align:center}
 @media (max-width:900px){.xp-twocol{grid-template-columns:1fr}}
+/* step 10: data half / summary half */
+.xp-half{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:10px;align-items:start}
+.xp-half .xp-side-data{max-height:720px}
+.xp-half .xp-fig{width:100%;margin-top:10px}
+.xp-sum-note{font-size:12.5px;color:var(--muted);margin-top:4px}
+@media (max-width:900px){.xp-half{grid-template-columns:1fr}}
 /* step 1: data preparation */
 .messy-tasks{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;margin:12px 0;background:var(--soft)}
 .messy-tasks .mt{display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-size:13.5px}
@@ -818,8 +824,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="card">
       <div class="row"><h2>10 · Results by variable</h2><span class="spacer"></span>
         <select id="xpVar" style="width:auto;max-width:360px"></select>
-        <label class="f" style="margin:0">View</label><select id="xpView" style="width:auto" title="How each variable is laid out (the Word file follows it)"><option value="standard">Standard — figure beside the tables</option><option value="side">Data beside results — figure below</option><option value="compact">Compact — tables, data on demand</option><option value="stacked">Figure on top — tables below</option><option value="twocol">Two variables per row</option><option value="tables">Tables only — no figures</option><option value="cards">Key results — a card per variable</option><option value="gallery">Figure gallery — figures with test and P</option></select>
+        <label class="f" style="margin:0">View</label><select id="xpView" style="width:auto" title="How each variable is laid out (the Word file follows it)"><option value="standard">Standard — figure beside the tables</option><option value="side">Data beside results — figure below</option><option value="half">Data (left half) · summary table (right half)</option><option value="compact">Compact — tables, data on demand</option><option value="stacked">Figure on top — tables below</option><option value="twocol">Two variables per row</option><option value="tables">Tables only — no figures</option><option value="cards">Key results — a card per variable</option><option value="gallery">Figure gallery — figures with test and P</option></select>
         <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
+        <label class="check" style="margin:0" title="The overview table of all variables at the top"><input type="checkbox" id="xpOv" data-xo="overview"><span>Overview</span></label>
         <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button>
         <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>
         <button class="btn ghost small" id="xpXlsx" type="button" title="Every table shown here in Excel, one sheet per variable">⬇ Excel</button>

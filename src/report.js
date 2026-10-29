@@ -324,10 +324,10 @@ const Report = (() => {
       // inside the side-by-side layout the titles must not "keep with next" (Word / LibreOffice would push the whole layout to the next page)
       const block = (t, small, inCell) => [para(t.title, { bold: true, size: small ? 19 : 22, line: 260, after: 60, before: 120, keepNext: !inCell, align: AlignmentType.LEFT }),
         table(t.head.map(h => ({ t: h })), t.rows.map(r => r.map(c => ({ t: [c], small }))), false, 'grid')];
-      if (opts.layout === 'side' && it.data && it.data.length) {
+      if ((opts.layout === 'side' || opts.layout === 'half') && it.data && it.data.length) {
         // the patients' data beside the results (a borderless two-column layout), the figure below
         const { Table, TableRow, TableCell, WidthType, BorderStyle } = D(), none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
-        const gap = 200, leftW = Math.round((LANDSCAPE_W - gap) * 0.3), rightW = LANDSCAPE_W - gap - leftW;
+        const gap = 200, leftW = Math.round((LANDSCAPE_W - gap) * (opts.layout === 'half' ? 0.5 : 0.3)), rightW = LANDSCAPE_W - gap - leftW;
         // long patient lists are cut into pieces of 14 rows, one layout row each, so no layout row is taller than a page
         const CH = 14, pieces = it.data.flatMap(t => Array.from({ length: Math.max(1, Math.ceil(t.rows.length / CH)) }, (_, q) => ({ ...t, title: q ? `${t.title} (continued)` : t.title, rows: t.rows.slice(q * CH, q * CH + CH) })));
         PAGE_W = leftW - 120; const lefts = pieces.map(t => block(t, true, true));

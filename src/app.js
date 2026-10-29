@@ -1839,6 +1839,36 @@
     }).join('')}</div><div class="xp-legend">${Analysis.OUT_RULE[xpo().out] ? `Orange: outlier (${Analysis.OUT_RULE[xpo().out]} of its group) · ` : ''}red: missing · purple edge: changed here. Click a value to change it; Enter to confirm, Esc to cancel.</div>`;
   }
   const XP_NOFIG = ['compact', 'tables'];
+  // one summary table for a variable: each group's n, mean ± SD and median (IQR), with the P value and effect size of the test used in the report
+  function summaryTable(it) {
+    const d = it.tables.find(t => t.cat === 'desc'), tests = it.tables.filter(t => t.cat === 'tests'); if (!d) return null;
+    const ix = n => d.head.indexOf(n), used = tests.map(t => t.rows.find(r => r[r.length - 1] === '✓')).find(Boolean);
+    const P = used ? used[3] : isFinite(it.p) ? Analysis.fmtP(it.p, state.cfg.options.alpha) : '—';
+    if (it.kind === 'categorical') {
+      const eff = tests.find(t => /^Effect of/.test(t.title)), levels = d.rows.filter(r => r[0] !== 'Missing');
+      // two groups and two categories: the relative risk; otherwise Cramér's V from χ² (V = √(χ² / (N × (min(rows, columns) − 1))))
+      const g = d.head.length - 2, cnt = levels.map(r => r.slice(1, 1 + g).map(c => parseInt(c, 10) || 0)), N = cnt.flat().reduce((x, y) => x + y, 0);
+      const rs = cnt.map(r => r.reduce((x, y) => x + y, 0)), cs = cnt[0] ? cnt[0].map((_, j) => cnt.reduce((x, r) => x + r[j], 0)) : [];
+      const chi2 = cnt.reduce((x, r, i) => x + r.reduce((y, o, j) => { const e = rs[i] * cs[j] / N; return e > 0 ? y + (o - e) ** 2 / e : y; }, 0), 0), kk = Math.min(rs.filter(Boolean).length, cs.filter(Boolean).length);
+      const V = used && /χ²/.test(used[1] || '') && N && kk > 1 ? Math.sqrt(chi2 / (N * (kk - 1))) : NaN;
+      const ef = eff && eff.rows.length === 1 ? `RR ${eff.rows[0][1]}` : isFinite(V) ? `Cramér's V = ${V.toFixed(3)}` : '—';
+      return { title: 'Summary', head: [...d.head, 'P value', 'Effect size'], rows: levels.map((r, i) => [...r, i ? '' : P, i ? '' : ef]),
+        note: used ? `${used[0]}${used[1] ? ` (${used[1]}${used[2] ? `, df ${used[2]}` : ''})` : ''}.${/^RR/.test(ef) ? ' RR: relative risk (95% CI).' : ''}` : it.test };
+    }
+    const ms = r => `${r[ix('Mean')]} ± ${r[ix('SD')]}`, mi = r => `${r[ix('Median')]} (${r[ix('IQR')]})`;
+    if (it.kind === 'repeated') {
+      const bt = tests.find(t => t.head[0] === 'Timepoint'), normalAt = tp => d.rows.filter(r => r[0] === tp).every(r => /\(normal\)/.test(r[r.length - 1]));
+      const at = tp => { const r = bt && bt.rows.find(x => x[0] === tp); return r ? [normalAt(tp) ? r[1] : r[2], r[3] || ''] : ['', '']; };
+      const tps = [...new Set(d.rows.map(r => r[0]))];
+      return { title: 'Summary', head: ['Timepoint', '', 'n', 'Mean ± SD', 'Median (IQR)', 'P value', 'Effect size'],
+        rows: d.rows.filter(r => r[1] !== 'All patients').map((r, i, all) => { const first = all.findIndex(x => x[0] === r[0]) === i, [p, e] = at(r[0]); return [first ? r[0] : '', r[1], r[ix('n')], ms(r), mi(r), first ? p : '', first ? e : '']; }),
+        note: `P value between the groups at each timepoint: ${bt ? `${bt.head[1].replace(/ P$/, '')} when every group is normally distributed, otherwise ${bt.head[2].replace(/ P$/, '')}` : '—'}. ${tps.length} timepoints.` };
+    }
+    const rows = d.rows.map((r, i) => [r[0], r[ix('n')], ms(r), mi(r), i ? '' : P, i ? '' : (used && used[4]) || '—']);
+    return { title: 'Summary', head: ['', 'n', 'Mean ± SD', 'Median (IQR)', 'P value', 'Effect size'], rows,
+      note: used ? `${used[0]}${used[1] ? ` (${used[1]}${used[2] ? `, df ${used[2]}` : ''})` : ''}.` : it.test };
+  }
+  const sumHtml = it => { const t = summaryTable(it); return t ? tblHtml(t) + (t.note ? `<div class="xp-sum-note">${esc(t.note)}</div>` : '') : xpTables(it).map(tblHtml).join(''); };
   // a card's lines: each group's mean ± SD or median (IQR), its frequencies, or the values at the first and last timepoint
   function keyLines(it) {
     const t = it.tables.find(x => x.cat === 'desc'); if (!t) return [];
@@ -1879,6 +1909,9 @@
       if (view === 'side') return `<div class="report-sec xp-item">${headRow}
         <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
         ${img ? `<div class="xp-fig-below">${img}</div>` : ''}</div>`;
+      // data of each group in the left half, the summary table (and the figure) in the right half
+      if (view === 'half') return `<div class="report-sec xp-item">${headRow}
+        <div class="xp-half"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div>${sumHtml(it)}${img}</div></div></div>`;
       if (view === 'stacked') return `<div class="report-sec xp-item xp-stacked">${headRow}${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
       if (view === 'tables') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div></div>`;
@@ -1958,7 +1991,8 @@
       };
       const items = list.map(it => {
         // the Word file follows the view: data beside the results, or after them when asked for
-        const view = xpo().view, out = { label: it.label, summary: it.summary, test: it.test, p: isFinite(it.p) ? Analysis.fmtP(it.p, o.alpha) : '', sig: it.sig, key: keyLines(it).map(l => l.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")), n: it.n, tables: xpTables(it), data: view === 'side' ? [sideData(it)] : xpo().wordData ? dataTables(it) : [] };
+        const view = xpo().view, out = { label: it.label, summary: it.summary, test: it.test, p: isFinite(it.p) ? Analysis.fmtP(it.p, o.alpha) : '', sig: it.sig, key: keyLines(it).map(l => l.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")), n: it.n, tables: xpTables(it), data: view === 'side' || view === 'half' ? [sideData(it)] : xpo().wordData ? dataTables(it) : [] };
+        if (view === 'half') { const t = summaryTable(it); if (t) out.tables = [t.note ? { ...t, title: `Summary — ${t.note}` } : t]; }
         if (figs && it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), chartStyle(o)); Object.assign(out, { url: c.toDataURL('image/png'), w: c.width, h: c.height }); } catch (e) { /* no figure */ } }
         return out;
       });
@@ -1974,6 +2008,7 @@
   $('#explore').addEventListener('click', e => { const r = e.target.closest('[data-xpgo]'); if (!r) return; $('#xpVar').value = r.dataset.xpgo; drawExplore(); window.scrollTo(0, $('#p10').offsetTop); });
   $('#xpView').onchange = e => { xpo().view = e.target.value; const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpFigs').onchange = drawExplore;
+  $('#xpOv').onchange = e => { xpo().overview = e.target.checked; renderXpOpts(); const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpCopy').onclick = async () => {
     // all tables as tab-separated text, ready to paste into Excel or Word
     const x = state.explore; if (!x) return;
