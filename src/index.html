@@ -460,7 +460,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
             <span class="spacer"></span>
             <button class="btn ghost small" id="gridAddRow" type="button">+ Row</button>
             <button class="btn ghost small" id="gridAddCol" type="button">+ Column</button>
-            <button class="btn ghost small" id="gridUndo" type="button">↶ Undo</button>
+            <button class="btn ghost small" id="gridUndo" type="button" title="Undo (Ctrl+Z)">↶ Undo</button>
+            <button class="btn ghost small" id="gridRedo" type="button" title="Redo (Ctrl+Y)">↷ Redo</button>
             <button class="btn ghost small" id="gridRedetect" type="button" title="Detect variables again from the edited sheet">⟳ Re-detect variables</button>
             <button class="btn ghost small" id="gridSave" type="button">⬇ Edited Excel</button>
           </div>
@@ -643,7 +644,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       </div>
       <h3>Word page</h3>
       <div class="grid g4">
-        <div><label class="f">Paper size</label><select id="optPageSize"><option value="a4" selected>A4</option><option value="letter">US Letter</option></select></div>
+        <div><label class="f">Paper size</label><select id="optPageSize"><option value="a4" selected>A4</option><option value="letter">US Letter</option><option value="b5">B5 (17.6 × 25 cm)</option><option value="a5">A5 (14.8 × 21 cm)</option><option value="legal">US Legal</option></select></div>
         <div><label class="f">Margins</label><select id="optPageMargin"><option value="normal" selected>Normal (2.54 cm)</option><option value="narrow">Narrow (1.27 cm)</option><option value="wide">Wide (3.18 cm)</option></select></div>
         <div><label class="f">Line spacing of the text</label><select id="optLineSpacing"><option value="1">Single</option><option value="1.15">1.15</option><option value="1.5" selected>1.5 lines</option><option value="2">Double</option></select></div>
         <div><label class="f">Page numbers</label><select id="optPageNum"><option value="center" selected>Centred</option><option value="right">Right</option><option value="of">“Page 3 of 12”</option><option value="none">None</option></select></div>
@@ -843,7 +844,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <label class="check" style="margin:0" title="The overview table of all variables at the top"><input type="checkbox" id="xpOv" data-xo="overview"><span>Overview</span></label>
         <label class="check" style="margin:0" title="The comment the report writes for each variable, below its figure"><input type="checkbox" id="xpCom" data-xo="comments"><span>Comments</span></label>
         <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button>
-        <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>
+        <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data (Ctrl+Z)">↶ Undo</button>
+        <button class="btn ghost small" id="xpRedo" type="button" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
         <button class="btn ghost small" id="xpXlsx" type="button" title="Every table shown here in Excel, one sheet per variable">⬇ Excel</button>
         <button class="btn primary small" id="xpWord" type="button">⬇ Word</button></div>
       <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>

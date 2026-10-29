@@ -186,7 +186,7 @@ const Report = (() => {
     ITALIC_P = !!opts.italicP;
     const landscape = opts.orientation === 'landscape';
     // page: A4 or US Letter, normal / narrow / wide margins (the text width follows), body line spacing
-    const pg = opts.page || {}, [pw0, ph0] = pg.size === 'letter' ? [12240, 15840] : [11906, 16838], mg = { narrow: 720, wide: 1800 }[pg.margin] || 1440;
+    const pg = opts.page || {}, [pw0, ph0] = { letter: [12240, 15840], b5: [9979, 14173], a5: [8391, 11906], legal: [12240, 20160] }[pg.size] || [11906, 16838], mg = { narrow: 720, wide: 1800 }[pg.margin] || 1440;
     PAGE_W = (landscape ? ph0 : pw0) - 2 * mg;
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [];

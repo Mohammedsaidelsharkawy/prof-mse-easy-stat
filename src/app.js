@@ -296,7 +296,7 @@
       .map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? null])));
     state.sheet = name;
     state.data = { headers, rows };
-    state.undo = []; state.grid.page = 0; state.grid.sort = null;
+    state.undo = []; state.redo = []; state.grid.page = 0; state.grid.sort = null;
     const prevCfg = state.pendingCfg;
     state.cfg = detect(state.data);
     if (prevCfg) applySavedCfg(prevCfg);
@@ -350,7 +350,7 @@
     $('#gridInfo').textContent = idx.length ? `Rows ${g.page * per + 1}–${Math.min(idx.length, g.page * per + per)} of ${idx.length}${idx.length < rows.length ? ` (filtered from ${rows.length})` : ''}` : '0 rows';
     $('#gridPrev').disabled = g.page === 0; $('#gridNext').disabled = g.page >= pages - 1;
     $('#gridEditBar').style.display = g.edit ? '' : 'none';
-    $('#gridUndo').disabled = !state.undo.length;
+    $('#gridUndo').disabled = !state.undo.length; $('#gridRedo').disabled = !(state.redo && state.redo.length);
     $('#gridEdit').classList.toggle('primary', g.edit); $('#gridEdit').classList.toggle('ghost', !g.edit);
     $('#gridEdit').textContent = g.edit ? '✓ Done editing' : '✎ Edit sheet';
     renderOverview(kinds); renderMessyTasks();
@@ -467,10 +467,24 @@
       renderPrep(); renderGrid();
     }
   }
+  // undo / redo: snapshots of the data and setup; a new change clears what could be redone
+  function pushUndo() {
+    state.undo = state.undo || []; state.undo.push(JSON.stringify({ data: state.data, cfg: state.cfg }));
+    if (state.undo.length > 30) state.undo.shift();
+    state.redo = [];
+  }
+  function undoRedo(redo) {
+    state.undo = state.undo || []; state.redo = state.redo || [];
+    const from = redo ? state.redo : state.undo, to = redo ? state.undo : state.redo;
+    const snap = from.pop(); if (!snap) { toast(redo ? 'Nothing to redo' : 'Nothing to undo'); return false; }
+    to.push(JSON.stringify({ data: state.data, cfg: state.cfg })); if (to.length > 30) to.shift();
+    const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg; state.result = null;
+    toast(redo ? 'Redone' : 'Undone');
+    return true;
+  }
   // every change to the sheet goes through here: snapshot for undo, apply, keep the setup in step, redraw
   function editSheet(fn) {
-    state.undo.push(JSON.stringify({ data: state.data, cfg: state.cfg }));
-    if (state.undo.length > 30) state.undo.shift();
+    pushUndo();
     fn();
     renderGrid(); renderStepper();
   }
@@ -557,10 +571,7 @@
       g.hidden = d.gcols === 'all' ? [] : d.gcols === 'none' ? [...hs] : hs.filter(h => d.gcols === 'num' ? !isNum(h) : isNum(h));
       renderGrid();
     }
-    else if (b.id === 'gridUndo') {
-      const snap = state.undo.pop(); if (!snap) return;
-      const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg; renderGrid(); renderPrep(); renderStepper(); toast('Undone');
-    }
+    else if (b.id === 'gridUndo' || b.id === 'gridRedo') { if (undoRedo(b.id === 'gridRedo')) { renderGrid(); renderPrep(); renderStepper(); } }
     else if (b.id === 'gridAddRow') { editSheet(() => { state.data.rows.push(Object.fromEntries(state.data.headers.map(h => [h, null]))); }); g.page = 1e9; renderGrid(); }
     else if (b.id === 'gridAddCol') {
       let n = 1; while (state.data.headers.includes(`New_column_${n}`)) n++;
@@ -596,8 +607,7 @@
     const i = +td.dataset.cell, col = td.dataset.col, v = parseCell(td.textContent), old = state.data.rows[i][col];
     if ((old ?? null) === v || String(old ?? '') === String(v ?? '')) return;
     // update only this cell (a full redraw here would swallow a click on a button)
-    state.undo.push(JSON.stringify({ data: state.data, cfg: state.cfg }));
-    if (state.undo.length > 30) state.undo.shift();
+    pushUndo();
     state.data.rows[i][col] = v;
     if (state.cfg && col === state.cfg.groupCol) refreshGroups();
     td.textContent = v ?? '';
@@ -1933,7 +1943,7 @@
             <div class="row" style="gap:8px;align-items:baseline">${isFinite(it.p) ? `<span class="pbig ${it.sig ? 'sig' : ''}">P ${esc(pTxt(it).replace(/^([<>=≤])?/, m => m ? m + ' ' : '= '))}</span>` : `<span class="pbig ${it.sig ? 'sig' : ''}">${it.sig ? 'Significant' : 'Not significant'}</span>`}<span class="legend-note">${esc(it.test || '')}</span></div>
             ${u ? `<img src="${u}" alt="">` : ''}<div class="legend-note">n = ${it.n ?? '—'} · ${esc(it.normal || '')}</div></div>`; }).join('')}</div>`
         : `<div class="xp-gallery">${list.map(it => { const u = figUrl(it); return u ? `<figure data-xpgo="${esc(it.id)}" title="Open all the results of this variable"><img src="${u}" alt=""><figcaption><b>${esc(it.label)}</b> — ${esc(it.test || 'no test')}, P ${esc(pTxt(it))}${it.sig ? ' ✓' : ''}</figcaption></figure>` : ''; }).join('') || '<p class="legend-note">No figures — tick “Figures” and choose a figure type in Options.</p>'}</div>`);
-      $('#xpUndo').disabled = !state.undo || !state.undo.length;
+      $('#xpUndo').disabled = !state.undo || !state.undo.length; $('#xpRedo').disabled = !(state.redo && state.redo.length);
       return;
     }
     const html = list.map(it => {
@@ -1957,7 +1967,7 @@
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
     }).join('');
     $('#explore').innerHTML = ov + (list.length ? (view === 'twocol' ? `<div class="xp-twocol">${html}</div>` : html) : empty);
-    $('#xpUndo').disabled = !state.undo || !state.undo.length;
+    $('#xpUndo').disabled = !state.undo || !state.undo.length; $('#xpRedo').disabled = !(state.redo && state.redo.length);
   }
   // the data panel is filled when opened, and stays open when the results are redrawn
   $('#explore').addEventListener('toggle', e => {
@@ -1971,8 +1981,7 @@
     const td = e.target.closest('[data-xr]'); if (!td) return;
     const i = +td.dataset.xr, col = td.dataset.xc, old = state.data.rows[i][col], v = parseCell(td.textContent);
     if ((old ?? null) === v || String(old ?? '') === String(v ?? '')) return;
-    state.undo.push(JSON.stringify({ data: state.data, cfg: state.cfg }));
-    if (state.undo.length > 30) state.undo.shift();
+    pushUndo();
     state.data.rows[i][col] = v; state.xpChanged.add(i + '|' + col);
     if (col === state.cfg.groupCol && !state.cfg.noGroups) refreshGroups();
     const y = window.scrollY; renderExplore(); renderGrid(); window.scrollTo(0, y);
@@ -1983,11 +1992,7 @@
     if (e.key === 'Enter') { e.preventDefault(); td.blur(); }
     if (e.key === 'Escape') { td.textContent = state.data.rows[+td.dataset.xr][td.dataset.xc] ?? ''; td.blur(); }
   });
-  $('#xpUndo').onclick = () => {
-    const snap = state.undo.pop(); if (!snap) return;
-    const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg;
-    const y = window.scrollY; renderExplore(); renderGrid(); window.scrollTo(0, y); toast('Undone');
-  };
+  $('#xpUndo').onclick = $('#xpRedo').onclick = e => { if (!undoRedo(e.currentTarget.id === 'xpRedo')) return; const y = window.scrollY; renderExplore(); renderGrid(); window.scrollTo(0, y); };
   // every table shown, one sheet per variable (tables one under another, each with its title)
   $('#xpXlsx').onclick = () => {
     const x = state.explore; if (!x) return;
@@ -2626,7 +2631,7 @@
       cfg.options = { ...defaultOptions(), ...cfg.options };
       cfg.tpInclude = cfg.tpInclude || {}; cfg.advanced = cfg.advanced || []; cfg.exportExclude = cfg.exportExclude || {}; cfg.report = { ...DEFAULT_REPORT, ...(cfg.report || {}) };
       state.data = j.data; state.cfg = cfg; state.file = j.file || fname; state.messy = null; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
-      state.undo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
+      state.undo = []; state.redo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
       $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option>${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
       $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value;
       $('#to2').disabled = false; renderGrid(); renderPrep(); $('#hdrRow').innerHTML = '<option>1</option>';
@@ -2662,7 +2667,7 @@
       else { try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* ignore */ } } };
   })();
   /* ---------- keyboard shortcuts (single keys only when not typing) ---------- */
-  const KEYS = [['Anywhere'], [['Ctrl', 'S'], 'Save the project'], [['Ctrl', 'O'], 'Open a project'], [['Ctrl', 'Z'], 'Undo the last change to the data'],
+  const KEYS = [['Anywhere'], [['Ctrl', 'S'], 'Save the project'], [['Ctrl', 'O'], 'Open a project'], [['Ctrl', 'Z'], 'Undo the last change to the data'], [['Ctrl', 'Y'], 'Redo (also Ctrl+Shift+Z)'],
     [['Alt', '→'], 'Next step'], [['Alt', '←'], 'Previous step'], [[']'], 'Next step'], [['['], 'Previous step'], [['1 … 9'], 'Go to step 1 … 9'], [['0'], 'Step 10 · Results by variable'],
     [['R'], 'Step 11 · Report'], [['/'], 'Search on this step'], [['T'], 'Light / dark theme'], [['?'], 'This list'],
     ['On a step'], [['C'], 'Check the data (step 1)'], [['E'], 'Edit the sheet (step 1)'], [['F'], 'Export figures (steps 7, 9 and 11)'], [['W'], 'Download Word (steps 10 and 11)'], [['X'], 'Download Excel (steps 10 and 11)'], [['V'], 'Next view (step 10)']];
@@ -2679,7 +2684,10 @@
     if (mod && !e.altKey) {
       if (k === 's') { e.preventDefault(); $('#btnSaveProj').click(); }
       else if (k === 'o') { e.preventDefault(); $('#projFile').click(); }
-      else if (k === 'z' && !e.shiftKey && !typing(e.target) && state.undo && state.undo.length) { e.preventDefault(); state.step === 10 ? clickIf('#xpUndo') : clickIf('#gridUndo'); }
+      else if ((k === 'z' || k === 'y') && !typing(e.target) && state.data) {
+        e.preventDefault(); const redo = k === 'y' || e.shiftKey;
+        if (undoRedo(redo)) { if (state.step === 10) { const y = window.scrollY; renderExplore(); window.scrollTo(0, y); } renderGrid(); renderPrep(); renderStepper(); if (state.step === 2) renderVariables(); }
+      }
       return;
     }
     if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && state.data) { e.preventDefault(); go(Math.min(STEPS.length, Math.max(1, state.step + (e.key === 'ArrowRight' ? 1 : -1)))); return; }
@@ -2703,7 +2711,7 @@
   });
   $('#btnNew').onclick = () => {
     if (state.data && !confirm('Start a new project? The current data and settings are cleared (save the project first to keep them).')) return;
-    Object.assign(state, { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, pendingCfg: null, pendingEdits: null, undo: [], messy: null });
+    Object.assign(state, { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, pendingCfg: null, pendingEdits: null, undo: [], redo: [], messy: null });
     try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* ignore */ }
     $('#sheetBox').style.display = 'none'; $('#fileName').textContent = ''; $('#studyTitle').value = ''; $('#file').value = '';
     $('#to2').disabled = true; $('#report').innerHTML = '';
