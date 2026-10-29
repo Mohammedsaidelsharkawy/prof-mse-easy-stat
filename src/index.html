@@ -424,6 +424,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
             <button class="btn ghost small" id="gridFind" type="button" title="Find and replace values">🔍 Find &amp; replace</button>
         <button class="btn ghost small" id="gridRecode" type="button" title="Rename or merge the categories of a column (M and male → Male), or blank some of them">🏷 Recode values</button>
         <button class="btn ghost small" id="gridReshape" type="button" title="One row per visit → one row per patient">⇄ Long to wide</button>
+        <button class="btn ghost small" id="gridSplit" type="button" title="Split one column into several, e.g. blood pressure 120/80 → systolic and diastolic">✂ Split column</button>
           </div>
           <div class="gtool" id="findBox" style="display:none">
             <div class="row" style="gap:10px;align-items:flex-end">
@@ -445,6 +446,16 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         </div>
         <div class="tbl-wrap" style="max-height:300px;margin-top:8px"><table class="t" id="rcTbl"></table></div>
         <div class="row" style="margin-top:8px"><span class="legend-note" id="rcInfo"></span><span class="spacer"></span><button class="btn primary small" id="rcGo" type="button">Apply</button></div>
+      </div>
+      <div class="gtool" id="splitBox" style="display:none">
+        <p class="legend-note" style="margin:0 0 8px">Splits each value at a separator into new columns placed after the original, e.g. blood pressure “120/80” → SBP and DBP, or “T2N1M0”-style codes split at a dash. Numbers become numbers.</p>
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Column</label><select id="spCol" style="width:auto"></select></div>
+          <div><label class="f">Separator</label><select id="spSep" style="width:auto"><option value="/">/ (slash)</option><option value="-">- (dash)</option><option value=",">, (comma)</option><option value=";">; (semicolon)</option><option value=" ">space</option><option value="x">x (e.g. 3x4 cm)</option></select></div>
+          <div style="flex:1;min-width:220px"><label class="f">Names of the new columns (comma-separated)</label><input type="text" id="spNames" placeholder="e.g. SBP, DBP"></div>
+          <label class="check" style="margin:0 0 8px"><input type="checkbox" id="spKeep"><span>Keep the original column</span></label>
+        </div>
+        <div class="row" style="margin-top:8px"><span class="legend-note" id="spInfo"></span><span class="spacer"></span><button class="btn primary small" id="spGo" type="button">Split</button></div>
       </div>
       <div class="gtool" id="reshapeBox" style="display:none">
         <p class="legend-note" style="margin:0 0 8px">For sheets with one row per visit (ID, Visit, value …): makes one row per patient with a column per visit (HbA1c_Baseline, HbA1c_Month 3 …), which step 2 reads as repeated measures. Columns that do not change between visits (group, age) are kept once.</p>
@@ -512,7 +523,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" type="button" data-vbulk="num">Only numeric</button><button class="btn ghost small" type="button" data-vbulk="cat">Only categorical</button>
         <span class="legend-note" style="margin-left:10px">Distribution of all numeric:</span>
         <button class="btn ghost small" type="button" data-vbulk="d:auto">Auto</button><button class="btn ghost small" type="button" data-vbulk="d:param">Parametric</button><button class="btn ghost small" type="button" data-vbulk="d:nonparam">Non-parametric</button></div>
-      <div class="row" style="gap:8px;margin-bottom:8px"><input type="search" id="varSearch" placeholder="Find a variable…" style="max-width:260px"><span class="legend-note" id="varCount"></span></div>
+      <div class="row" style="gap:8px;margin-bottom:8px"><input type="search" id="varSearch" placeholder="Find a variable…" style="max-width:260px"><span class="legend-note" id="varCount"></span><span class="spacer"></span><button class="btn ghost small" id="btnCodebook" type="button" title="Every column with its label, role, type, levels, value labels, missing values and range — for the thesis appendix">⬇ Codebook (Excel)</button></div>
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
       <p class="legend-note"><b>Distribution</b>: Auto uses the normality test chosen in step 3 (Shapiro-Wilk by default) in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk / odds ratio).</p>
     </div>
@@ -750,7 +761,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div class="tbl-wrap" style="max-height:560px"><table class="t" id="figTbl"></table></div>
         <div>
           <div class="row"><label class="f" style="margin:0">Preview</label><select id="figPrevVar" style="flex:1"></select></div>
-          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevPng" type="button">⬇ Export this figure…</button></div></div>
+          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevCopy" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="figPrevPng" type="button">⬇ Export this figure…</button></div></div>
         </div>
       </div>
     </div>
@@ -827,7 +838,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <p class="hint" id="cHint"></p>
       <div class="grid g2">
         <div id="cForm"></div>
-        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button></div></div>
+        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="flowCopy" type="button" title="Copy the flowchart, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button></div></div>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Next: Results by variable →</button></div>
@@ -855,6 +866,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Search</label><input type="search" data-xo="q" placeholder="Name of a variable"></div>
           <div><label class="f">Figure</label><select data-xo="fig"><option value="auto">Automatic (box plot / means over time)</option><option value="box">Box plot with every patient</option><option value="violin">Violin plot</option><option value="hist">Histogram</option><option value="qq">Normal Q-Q plot (check normality)</option><option value="meanci">Means with 95% CI</option><option value="spaghetti">Means + every patient's line (repeated)</option><option value="none">No figures</option></select></div>
           <div><label class="f">Outliers</label><select data-xo="out"><option value="1.5">Beyond 1.5 × IQR</option><option value="3">Beyond 3 × IQR (extreme)</option><option value="z3">|z| > 3</option><option value="none">Do not mark</option></select></div>
+          <div><label class="f">Order</label><select data-xo="sort"><option value="sheet">As in the sheet</option><option value="sig">Significant first</option><option value="p">Smallest P value first</option><option value="az">A – Z</option><option value="kind">By type (numeric, categorical, repeated)</option></select></div>
           <div><label class="f">Decimals</label><select data-xo="dec"><option value="">As in step 5</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="sig"><span>Only variables with a significant result</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="openData"><span>Open the data of each group</span></label></div>

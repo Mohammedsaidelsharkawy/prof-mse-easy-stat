@@ -652,7 +652,7 @@
 
   /* ---------- step 1: find & replace, and a check of the sheet for common problems ---------- */
   // one tool panel at a time under the grid bar
-  const TOOL_BOXES = ['findBox', 'checkBox', 'recodeBox', 'reshapeBox'];
+  const TOOL_BOXES = ['findBox', 'checkBox', 'recodeBox', 'reshapeBox', 'splitBox'];
   function toggleTool(id) { const on = $('#' + id).style.display === 'none'; TOOL_BOXES.forEach(b => { $('#' + b).style.display = b === id && on ? '' : 'none'; }); return on; }
   $('#gridFind').onclick = () => {
     const on = toggleTool('findBox');
@@ -778,6 +778,44 @@
         state.cfg.variables.forEach(v => { if (v.type === 'categorical' && v.cols.some(c => c.col === col)) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); }
     });
     renderRecode(); toast(`${n} cell${n === 1 ? '' : 's'} recoded in ${col}`);
+  };
+  /* ---------- split a column at a separator (120/80 → SBP, DBP) ---------- */
+  const SPLIT_RE = { '/': /\s*\/\s*/, '-': /\s*-\s*/, ',': /\s*,\s*/, ';': /\s*;\s*/, ' ': /\s+/, x: /\s*[x×]\s*/i };
+  function splitParts(v, sep) { if (isMissing(v)) return []; const t = String(v).trim(); return sep === '-' ? t.split(/(?<=\S)\s*-\s*(?=\S)/) : t.split(SPLIT_RE[sep]); }
+  function renderSplit() {
+    const h = state.data.headers, rows = state.data.rows;
+    // the first text column whose values hold a separator, else the first column
+    const guess = h.find(c => rows.filter(r => /\d\s*\/\s*\d/.test(String(r[c] ?? ''))).length > rows.length * 0.3) || h.find(c => !columnInfo(rows, c).numeric) || h[0];
+    if (!h.includes($('#spCol').value)) $('#spCol').innerHTML = h.map(c => `<option ${c === guess ? 'selected' : ''}>${esc(c)}</option>`).join('');
+    else { const cur = $('#spCol').value; $('#spCol').innerHTML = h.map(c => `<option ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join(''); }
+    splitPreview();
+  }
+  function splitPreview() {
+    const col = $('#spCol').value, sep = $('#spSep').value, rows = state.data.rows;
+    const parts = rows.map(r => splitParts(r[col], sep)), n = Math.max(0, ...parts.map(p => p.length));
+    const ex = rows.map(r => r[col]).filter(v => !isMissing(v)).slice(0, 3);
+    if (!$('#spNames').dataset.touched) $('#spNames').value = /^(bp|blood.?pressure)/i.test(col) && n === 2 ? 'SBP, DBP' : Array.from({ length: n }, (_, i) => `${col}_${i + 1}`).join(', ');
+    $('#spInfo').textContent = n > 1 ? `${n} parts: ${ex.map(v => `“${v}” → ${splitParts(v, sep).join(' | ')}`).join(' · ')}` : 'No value contains this separator.';
+    $('#spGo').disabled = n < 2;
+  }
+  $('#gridSplit').onclick = () => { if (toggleTool('splitBox')) { $('#spNames').dataset.touched = ''; renderSplit(); } };
+  $('#spCol').onchange = () => { $('#spNames').dataset.touched = ''; splitPreview(); };
+  $('#spSep').onchange = () => { $('#spNames').dataset.touched = ''; splitPreview(); };
+  $('#spNames').oninput = () => { $('#spNames').dataset.touched = '1'; };
+  $('#spGo').onclick = () => {
+    const col = $('#spCol').value, sep = $('#spSep').value, keep = $('#spKeep').checked, rows = state.data.rows;
+    const parts = rows.map(r => splitParts(r[col], sep)), n = Math.max(0, ...parts.map(p => p.length)); if (n < 2) return;
+    const names = $('#spNames').value.split(',').map(x => x.trim()).filter(Boolean), headers = state.data.headers;
+    const made = Array.from({ length: n }, (_, i) => { let nm = names[i] || `${col}_${i + 1}`, k = 2; while (headers.includes(nm) && nm !== col) nm = `${names[i] || col + '_' + (i + 1)}_${k++}`; return nm; });
+    editSheet(() => {
+      rows.forEach((r, ri) => made.forEach((nm, i) => { const v = parts[ri][i]; r[nm] = v === undefined || v === '' ? null : parseCell(v); }));
+      const at = headers.indexOf(col);
+      headers.splice(at + 1, 0, ...made);
+      if (!keep) { headers.splice(at, 1); rows.forEach(r => delete r[col]); state.cfg.variables = state.cfg.variables.filter(v => !v.cols.some(c => c.col === col)); }
+      made.forEach(nm => state.cfg.variables.push({ ...singleVariable(rows, nm, headers.indexOf(nm), 'Other outcomes'), id: 'sp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }));
+    });
+    newRepeated(); renderPrep(); toggleTool('splitBox');
+    toast(`${col} split into ${made.join(', ')}${keep ? '' : ' (original column removed)'}`);
   };
   /* ---------- long to wide: one row per visit → one row per patient ---------- */
   function renderReshape() {
@@ -996,6 +1034,28 @@
     $('#varCount').textContent = q ? `${n} of ${trs.length} variables` : `${trs.length} variables · ${state.cfg.variables.filter(v => v.include).length} included`;
   }
   $('#varSearch').addEventListener('input', filterVars);
+  // the codebook (data dictionary): every column with its role, label, type, levels, value labels, missing values and range
+  $('#btnCodebook').onclick = () => {
+    readUiIntoCfg();
+    const cfg = state.cfg, { headers, rows } = state.data;
+    const varOf = h => cfg.variables.find(v => v.cols.some(c => c.col === h));
+    const aoa = [['Column', 'Label in the report', 'Role', 'Type', 'Timepoint', 'Table', 'Levels / categories (n)', 'Value labels', 'n', 'Missing', 'Mean ± SD', 'Median (IQR)', 'Min', 'Max', 'Footnote']];
+    headers.forEach(h => {
+      const v = varOf(h), vals = rows.map(r => r[h]).filter(x => !isMissing(x)), nums = vals.map(Analysis.toNum).filter(isFinite), numeric = v ? v.type === 'numeric' : columnInfo(rows, h).numeric;
+      const role = h === cfg.groupCol && !cfg.noGroups ? 'Group' : cfg.idCols.includes(h) ? 'ID' : !v ? 'Not analysed' : v.include ? (v.kind === 'repeated' ? 'Repeated measure' : 'Analysed') : 'Not analysed';
+      const c = v && v.cols.find(x => x.col === h), tp = v && v.kind === 'repeated' && c ? (c.label || cfg.tpLabels[c.tp] || c.tp) : '';
+      const cnt = {}; if (!numeric) vals.forEach(x => { const k = String(x).trim(); cnt[k] = (cnt[k] || 0) + 1; });
+      const lv = !numeric ? Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, n]) => `${k} (${n})`).join('; ') : '';
+      const st = numeric && nums.length && role !== 'ID' ? Stats.describe(nums) : null, f = x => Analysis.fmt(x, 2);
+      aoa.push([h, h === cfg.groupCol && !cfg.noGroups ? 'Groups: ' + cfg.groupOrder.map(g => cfg.groupLabels[g] || g).join(', ') : v ? v.label : '', role, numeric ? 'Numeric' : 'Categorical', tp, v ? (v.kind === 'repeated' ? 'own table' : v.table || '') : '',
+        lv, v && v.valueLabels || '', vals.length, rows.length - vals.length, st ? `${f(st.mean)} ± ${f(st.sd)}` : '', st ? `${f(st.median)} (${f(st.q1)} - ${f(st.q3)})` : '', st ? f(st.min) : '', st ? f(st.max) : '', v && v.note || '']);
+    });
+    const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [18, 26, 16, 12, 12, 24, 40, 24, 6, 8, 16, 18, 8, 8, 30].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, 'Codebook');
+    XLSX.writeFile(wb, `${baseName()} - Codebook.xlsx`);
+    toast(`Codebook of ${headers.length} columns saved`);
+  };
   $('#groupsTbl').addEventListener('click', e => {
     const b = e.target.closest('[data-gmove]'); if (!b) return;
     readUiIntoCfg();
@@ -1802,7 +1862,7 @@
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   // options of the stage, saved with the setup / project
-  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true, comments: true };
+  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true, comments: true, sort: 'sheet' };
   const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
   function renderXpOpts() {
     const o = xpo();
@@ -1818,7 +1878,11 @@
   // the variables shown: type, search and "significant only"
   const xpList = () => {
     const x = state.explore, o = xpo(), q = o.q.trim().toLowerCase(), id = $('#xpVar').value;
-    return x.items.filter(it => (!id || it.id === id) && (o.type === 'all' || it.kind === o.type) && (!q || it.label.toLowerCase().includes(q)) && (!o.sig || it.sig));
+    const list = x.items.filter(it => (!id || it.id === id) && (o.type === 'all' || it.kind === o.type) && (!q || it.label.toLowerCase().includes(q)) && (!o.sig || it.sig));
+    // order: as in the sheet, significant first, smallest P first (repeated measures, without one P, after), A–Z, or by type
+    const pv = it => isFinite(it.p) ? it.p : it.sig ? 0.0499 : 2, KIND = { numeric: 0, categorical: 1, repeated: 2 };
+    const by = { sig: (a, b) => (b.sig ? 1 : 0) - (a.sig ? 1 : 0), p: (a, b) => pv(a) - pv(b), az: (a, b) => a.label.localeCompare(b.label), kind: (a, b) => KIND[a.kind] - KIND[b.kind] }[o.sort];
+    return by ? list.map((it, i) => [it, i]).sort((a, b) => by(a[0], b[0]) || a[1] - b[1]).map(x => x[0]) : list;
   };
   const xpTables = it => { const o = xpo(); return it.tables.filter(t => !t.cat || o[t.cat] !== false); };
   function renderExplore() {
@@ -2286,6 +2350,11 @@
     let html = '';
     html += `<div class="row exp-bar"><b>In the Word file:</b> <span class="legend-note">untick any section, table or figure to leave it out — numbering follows what is kept.</span><span class="spacer"></span>
       <button class="btn ghost small" data-exall="1" type="button">Include all</button><button class="btn ghost small" data-exall="0" type="button">Exclude all</button></div>`;
+    // find & replace in every text of the report: methods, comments, titles, captions and the results text
+    html += `<details class="report-sec fr-rep"><summary><b>🔍 Find &amp; replace in the report text</b> — methods, comments, table titles, captions</summary><div class="row" style="gap:8px;align-items:flex-end;margin-top:8px">
+      <div><label class="f">Find</label><input type="text" id="frRepFind" style="width:200px" placeholder="e.g. insignificantly"></div><div><label class="f">Replace with</label><input type="text" id="frRepWith" style="width:200px" placeholder="e.g. not significantly"></div>
+      <label class="check" style="margin:0 0 8px"><input type="checkbox" id="frRepWhole" checked><span>Whole words</span></label><label class="check" style="margin:0 0 8px"><input type="checkbox" id="frRepCase"><span>Match case</span></label>
+      <button class="btn primary small" id="frRepGo" type="button" style="margin-bottom:6px">Replace all</button></div></details>`;
     const off = key => isOut(key) ? ' off' : '';
     if (plan.paper && plan.rep.abstract) html += `<div class="report-sec"><h3>Results for the abstract</h3><textarea id="edAbstract">${esc(r.abstract)}</textarea><div class="legend-note">${words(r.abstract)} words</div></div>`;
     html += `<div class="report-sec${off('methods')}"><div class="row"><h3>Statistical analysis</h3><span class="spacer"></span>${exBox('methods', 'Include')}</div><textarea id="edMethods">${esc(r.methods)}</textarea>${plan.paper ? `<div class="legend-note">${words(r.methods)} words</div>` : ''}</div>`;
@@ -2299,13 +2368,13 @@
       const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f);
       const label = isOut(fk) ? 'Not exported:' : plan.kept.has(f) ? lab(plan.figNum.get(f)) : (f.sig === false && !plan.rep.nonSig ? 'Not in the paper (not significant):' : `Not in the paper (limit ${plan.rep.maxFigs}):`);
       const note = f.note !== undefined && (f.note || o.figNotes) ? `<input type="text" class="fcap fnote" data-fnote="${si}:${fi}" value="${esc(f.note)}" title="Explanation of the symbols (printed after the caption)" placeholder="Explanation of the symbols">` : '';
-      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption">${note}</figcaption>${exBox(fk, 'Figure')}</figure>`;
+      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption">${note} <button class="btn ghost small" data-copyfig="${si}:${fi}" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button></figcaption>${exBox(fk, 'Figure')}</figure>`;
     };
     r.sections.forEach((s, i) => {
       const tk = exKey.table(s), tOut = isOut(tk), place = o.commentPlace || 'after';
       const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
-        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div>
+        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button></div>
         <div class="foot">${esc(s.footnote)}</div>
         ${place !== 'before' ? comment : ''}</div>
         ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
@@ -2318,6 +2387,43 @@
     if (r.summary) html += `<div class="report-sec${off('summary')}"><div class="row"><h3>Summary of key findings</h3><span class="spacer"></span>${exBox('summary', 'Include')}</div><textarea id="edSummary">${esc(r.summary)}</textarea></div>`;
     $('#report').innerHTML = html;
   }
+  /* ---------- clipboard: a figure as an image, a table as a formatted table (paste into Word or PowerPoint) ---------- */
+  async function copyImage(url) {
+    try { const blob = await (await fetch(url)).blob(); await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]); toast('Figure copied — paste it into Word or PowerPoint'); }
+    catch (e) { toast('This browser does not allow copying images here — use ⬇ Export instead'); }
+  }
+  async function copyHtml(html, text) {
+    try { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]); }
+    catch (e) { const d = document.createElement('div'); d.innerHTML = html; d.style.position = 'fixed'; d.style.left = '-9999px'; document.body.appendChild(d);
+      const rg = document.createRange(); rg.selectNodeContents(d); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg); document.execCommand('copy'); sel.removeAllRanges(); d.remove(); }
+    toast('Table copied — paste it into Word');
+  }
+  $('#figPrevCopy').onclick = () => { const f = state.prevFig; if (f) copyImage(f.url); };
+  $('#flowCopy').onclick = () => copyImage($('#consortCanvas').toDataURL('image/png'));
+  $('#report').addEventListener('click', e => {
+    const fc = e.target.closest('[data-copyfig]'), tc = e.target.closest('[data-copytbl]');
+    if (fc) { const [si, fi] = fc.dataset.copyfig.split(':').map(Number); copyImage(state.result.sections[si].figures[fi].url); }
+    if (tc) {
+      syncEdits(); const s = state.result.sections[+tc.dataset.copytbl], o = effOptions(), plan = exportPlan(state.result);
+      const box = tc.closest('.report-sec'), tbl = box.querySelector('table.rt').outerHTML.replace('<table', `<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-family:'${o.font}',serif;font-size:10pt"`);
+      const cap = `Table ${plan.tabNum.get(s) || ''}${o.tableCaption === 'period' ? '.' : ':'} ${s.title}`;
+      copyHtml(`<p style="font-family:'${o.font}',serif;font-weight:bold">${esc(cap)}</p>${tbl}<p style="font-family:'${o.font}',serif;font-size:9pt">${esc(s.footnote || '')}</p>`,
+        [cap, s.head.map(h => h.t ?? h).join('\t'), ...s.rows.map(r => r.map(c => (c.t || []).join(' ')).join('\t')), s.footnote || ''].join('\n'));
+    }
+    if (e.target.closest('#frRepGo')) {
+      const find = $('#frRepFind').value; if (!find) return;
+      const repl = $('#frRepWith').value, cs = $('#frRepCase').checked, whole = $('#frRepWhole').checked;
+      const re = new RegExp((whole ? '\\b' : '') + find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (whole ? '\\b' : ''), cs ? 'g' : 'gi');
+      syncEdits(); const r = state.result; let n = 0;
+      const sub = t => typeof t === 'string' ? t.replace(re, () => { n++; return repl; }) : t;
+      ['methods', 'intro', 'narrative', 'abstract', 'summary'].forEach(k => { if (r[k]) r[k] = sub(r[k]); });
+      if (n && r.narrative) r.narrativeEdited = true; if (n && r.abstract) r.abstractEdited = true;
+      r.sections.forEach(s => { s.comment = sub(s.comment); s.title = sub(s.title); s.figures.forEach(f => { f.caption = sub(f.caption); if (f.note) f.note = sub(f.note); }); });
+      const y = window.scrollY; renderReport(); window.scrollTo(0, y); document.querySelector('.fr-rep').open = true;
+      $('#frRepFind').value = find; $('#frRepWith').value = repl; $('#frRepCase').checked = cs; $('#frRepWhole').checked = whole;
+      toast(n ? `${n} replacement${n > 1 ? 's' : ''} in the report text` : `“${find}” was not found`);
+    }
+  });
   $('#report').addEventListener('change', e => {
     // an edited caption redraws its chart when the caption is printed on the chart
     if (e.target.dataset.fcap !== undefined) {
