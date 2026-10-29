@@ -382,6 +382,25 @@ footer b{color:var(--purple)}
         </div>
       </div>
     </div>
+    <div class="card">
+      <h2>Repeated measures</h2>
+      <p class="hint">How outcomes measured several times in the same patients are tested. Change within each group needs <b>Change over time within each group</b> ticked above (one-group studies always test it).</p>
+      <div class="grid g4">
+        <div><label class="f">Post hoc comparisons over time</label><select id="optRmPost"><option value="first" selected>Each timepoint against the first</option><option value="consecutive">Consecutive timepoints</option><option value="all">All pairs of timepoints</option></select></div>
+        <div><label class="f">Adjustment for multiple comparisons</label><select id="optRmAdjust"><option value="bonferroni" selected>Bonferroni</option><option value="holm">Holm (less conservative)</option><option value="none">None</option></select></div>
+        <div><label class="f">Sphericity correction (repeated-measures ANOVA)</label><select id="optRmSph"><option value="gg" selected>Greenhouse-Geisser</option><option value="hf">Huynh-Feldt</option><option value="none">None (sphericity assumed)</option></select></div>
+        <div><label class="f">Compare the change between the groups</label><select id="optRmChange"><option value="none" selected>No</option><option value="abs">Change from the first timepoint</option><option value="pct">% change from the first timepoint</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:10px">
+        <div>
+          <label class="check"><input type="checkbox" id="optRmPostAlways"><span><b>Post hoc tests always</b> — also when the overall test over time is not significant</span></label>
+          <label class="check"><input type="checkbox" id="optRmAuc"><span><b>Area under the curve</b> — each patient's AUC over all timepoints (trapezoid rule), compared between the groups</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optRmIndividual"><span><b>Individual patient lines</b> on line charts of repeated measures (spaghetti plot)</span></label>
+        </div>
+      </div>
+    </div>
     <div class="nav"><button class="btn ghost" data-go="3">← Back</button><button class="btn primary" data-go="5">Next: Tables →</button></div>
   </section>
 
@@ -590,6 +609,26 @@ footer b{color:var(--purple)}
         <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>
         <button class="btn primary small" id="xpWord" type="button">⬇ Word</button></div>
       <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>
+      <details class="fl-style" id="xpOpts"><summary><b>⚙ Options</b> — filter, tables, statistics, figure, outliers</summary>
+        <div class="grid g4" style="margin-top:8px">
+          <div><label class="f">Variables</label><select data-xo="type"><option value="all">All types</option><option value="numeric">Numeric</option><option value="categorical">Categorical</option><option value="repeated">Repeated measures</option></select></div>
+          <div><label class="f">Search</label><input type="search" data-xo="q" placeholder="Name of a variable"></div>
+          <div><label class="f">Figure</label><select data-xo="fig"><option value="auto">Automatic (box plot / means over time)</option><option value="box">Box plot with every patient</option><option value="violin">Violin plot</option><option value="hist">Histogram</option><option value="qq">Normal Q-Q plot (check normality)</option><option value="meanci">Means with 95% CI</option><option value="spaghetti">Means + every patient's line (repeated)</option><option value="none">No figures</option></select></div>
+          <div><label class="f">Outliers</label><select data-xo="out"><option value="1.5">Beyond 1.5 × IQR</option><option value="3">Beyond 3 × IQR (extreme)</option><option value="z3">|z| > 3</option><option value="none">Do not mark</option></select></div>
+          <div><label class="f">Decimals</label><select data-xo="dec"><option value="">As in step 5</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="sig"><span>Only variables with a significant result</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="openData"><span>Open the data of each group</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="wordData"><span>Patients' data in the Word file</span></label></div>
+        </div>
+        <label class="f" style="margin-top:8px">Tables</label>
+        <div class="row" style="gap:14px">
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="desc"><span>Descriptive statistics / frequencies</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="extra"><span>More statistics (skewness, kurtosis, CV, geometric mean, percentiles, both normality tests, outliers)</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="tests"><span>Tests between the groups</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="pairs"><span>Pairwise comparisons</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="time"><span>Change over time</span></label>
+        </div>
+      </details>
       <div id="explore"></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="9">← Back</button><button class="btn primary" data-go="11">Run report →</button></div>

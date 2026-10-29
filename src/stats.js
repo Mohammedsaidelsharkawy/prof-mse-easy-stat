@@ -800,15 +800,24 @@ const Stats = (() => {
     for (let i = 0; i < k; i++) { tr += D[i][i]; for (let j = 0; j < k; j++) sq += D[i][j] ** 2; }
     let eps = sq > 0 ? tr * tr / ((k - 1) * sq) : 1;
     eps = Math.min(1, Math.max(1 / (k - 1), eps));
-    const p = ssErr <= 0 ? (ssTime > 0 ? 0 : 1) : 1 - jStat.centralF.cdf(F, eps * df1, eps * df2);
-    return { F, df1, df2, eps, p };
+    const pOf = e => ssErr <= 0 ? (ssTime > 0 ? 0 : 1) : 1 - jStat.centralF.cdf(F, e * df1, e * df2);
+    // Huynh–Feldt epsilon (as in SPSS and pingouin), at most 1
+    const epsHF = Math.min(1, (n * (k - 1) * eps - 2) / ((k - 1) * (n - 1 - (k - 1) * eps)));
+    return { F, df1, df2, eps, p: pOf(eps), epsHF, pHF: pOf(epsHF), pUnc: pOf(1) };
+  }
+  // Holm step-down adjustment of a list of P values (same order back)
+  function holm(ps) {
+    const m = ps.length, idx = ps.map((p, i) => i).sort((a, b) => ps[a] - ps[b]), out = new Array(m);
+    let run = 0;
+    idx.forEach((i, r) => { run = Math.max(run, Math.min(1, (m - r) * ps[i])); out[i] = run; });
+    return out;
   }
 
   return {
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
-    pairedT, wilcoxonSigned, pearson, spearman, bonferroni,
+    pairedT, wilcoxonSigned, pearson, spearman, bonferroni, holm,
     invert, linearRegression, logisticRegression, hosmerLemeshow, roc, rocCompare,
     welchAnova, gamesHowell, dunn, chiSquarePairwise, mixedAnova, kaplanMeier, logRank, ancova,
     lilliefors, oddsRatio, mcnemar, cohenKappa, icc, blandAltman, cronbach, clopperPearson, diagnostic2x2, coxRegression

@@ -382,6 +382,25 @@ footer b{color:var(--purple)}
         </div>
       </div>
     </div>
+    <div class="card">
+      <h2>Repeated measures</h2>
+      <p class="hint">How outcomes measured several times in the same patients are tested. Change within each group needs <b>Change over time within each group</b> ticked above (one-group studies always test it).</p>
+      <div class="grid g4">
+        <div><label class="f">Post hoc comparisons over time</label><select id="optRmPost"><option value="first" selected>Each timepoint against the first</option><option value="consecutive">Consecutive timepoints</option><option value="all">All pairs of timepoints</option></select></div>
+        <div><label class="f">Adjustment for multiple comparisons</label><select id="optRmAdjust"><option value="bonferroni" selected>Bonferroni</option><option value="holm">Holm (less conservative)</option><option value="none">None</option></select></div>
+        <div><label class="f">Sphericity correction (repeated-measures ANOVA)</label><select id="optRmSph"><option value="gg" selected>Greenhouse-Geisser</option><option value="hf">Huynh-Feldt</option><option value="none">None (sphericity assumed)</option></select></div>
+        <div><label class="f">Compare the change between the groups</label><select id="optRmChange"><option value="none" selected>No</option><option value="abs">Change from the first timepoint</option><option value="pct">% change from the first timepoint</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:10px">
+        <div>
+          <label class="check"><input type="checkbox" id="optRmPostAlways"><span><b>Post hoc tests always</b> — also when the overall test over time is not significant</span></label>
+          <label class="check"><input type="checkbox" id="optRmAuc"><span><b>Area under the curve</b> — each patient's AUC over all timepoints (trapezoid rule), compared between the groups</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optRmIndividual"><span><b>Individual patient lines</b> on line charts of repeated measures (spaghetti plot)</span></label>
+        </div>
+      </div>
+    </div>
     <div class="nav"><button class="btn ghost" data-go="3">← Back</button><button class="btn primary" data-go="5">Next: Tables →</button></div>
   </section>
 
@@ -590,6 +609,26 @@ footer b{color:var(--purple)}
         <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>
         <button class="btn primary small" id="xpWord" type="button">⬇ Word</button></div>
       <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>
+      <details class="fl-style" id="xpOpts"><summary><b>⚙ Options</b> — filter, tables, statistics, figure, outliers</summary>
+        <div class="grid g4" style="margin-top:8px">
+          <div><label class="f">Variables</label><select data-xo="type"><option value="all">All types</option><option value="numeric">Numeric</option><option value="categorical">Categorical</option><option value="repeated">Repeated measures</option></select></div>
+          <div><label class="f">Search</label><input type="search" data-xo="q" placeholder="Name of a variable"></div>
+          <div><label class="f">Figure</label><select data-xo="fig"><option value="auto">Automatic (box plot / means over time)</option><option value="box">Box plot with every patient</option><option value="violin">Violin plot</option><option value="hist">Histogram</option><option value="qq">Normal Q-Q plot (check normality)</option><option value="meanci">Means with 95% CI</option><option value="spaghetti">Means + every patient's line (repeated)</option><option value="none">No figures</option></select></div>
+          <div><label class="f">Outliers</label><select data-xo="out"><option value="1.5">Beyond 1.5 × IQR</option><option value="3">Beyond 3 × IQR (extreme)</option><option value="z3">|z| > 3</option><option value="none">Do not mark</option></select></div>
+          <div><label class="f">Decimals</label><select data-xo="dec"><option value="">As in step 5</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="sig"><span>Only variables with a significant result</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="openData"><span>Open the data of each group</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="wordData"><span>Patients' data in the Word file</span></label></div>
+        </div>
+        <label class="f" style="margin-top:8px">Tables</label>
+        <div class="row" style="gap:14px">
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="desc"><span>Descriptive statistics / frequencies</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="extra"><span>More statistics (skewness, kurtosis, CV, geometric mean, percentiles, both normality tests, outliers)</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="tests"><span>Tests between the groups</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="pairs"><span>Pairwise comparisons</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="time"><span>Change over time</span></label>
+        </div>
+      </details>
       <div id="explore"></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="9">← Back</button><button class="btn primary" data-go="11">Run report →</button></div>
@@ -21582,15 +21621,24 @@ const Stats = (() => {
     for (let i = 0; i < k; i++) { tr += D[i][i]; for (let j = 0; j < k; j++) sq += D[i][j] ** 2; }
     let eps = sq > 0 ? tr * tr / ((k - 1) * sq) : 1;
     eps = Math.min(1, Math.max(1 / (k - 1), eps));
-    const p = ssErr <= 0 ? (ssTime > 0 ? 0 : 1) : 1 - jStat.centralF.cdf(F, eps * df1, eps * df2);
-    return { F, df1, df2, eps, p };
+    const pOf = e => ssErr <= 0 ? (ssTime > 0 ? 0 : 1) : 1 - jStat.centralF.cdf(F, e * df1, e * df2);
+    // Huynh–Feldt epsilon (as in SPSS and pingouin), at most 1
+    const epsHF = Math.min(1, (n * (k - 1) * eps - 2) / ((k - 1) * (n - 1 - (k - 1) * eps)));
+    return { F, df1, df2, eps, p: pOf(eps), epsHF, pHF: pOf(epsHF), pUnc: pOf(1) };
+  }
+  // Holm step-down adjustment of a list of P values (same order back)
+  function holm(ps) {
+    const m = ps.length, idx = ps.map((p, i) => i).sort((a, b) => ps[a] - ps[b]), out = new Array(m);
+    let run = 0;
+    idx.forEach((i, r) => { run = Math.max(run, Math.min(1, (m - r) * ps[i])); out[i] = run; });
+    return out;
   }
 
   return {
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
-    pairedT, wilcoxonSigned, pearson, spearman, bonferroni,
+    pairedT, wilcoxonSigned, pearson, spearman, bonferroni, holm,
     invert, linearRegression, logisticRegression, hosmerLemeshow, roc, rocCompare,
     welchAnova, gamesHowell, dunn, chiSquarePairwise, mixedAnova, kaplanMeier, logRank, ancova,
     lilliefors, oddsRatio, mcnemar, cohenKappa, icc, blandAltman, cronbach, clopperPearson, diagnostic2x2, coxRegression
@@ -21744,7 +21792,15 @@ const Analysis = (() => {
   }
 
   /* ---------- within-group repeated measures ---------- */
-  // Two timepoints → paired t / Wilcoxon; more → RM ANOVA / Friedman with Bonferroni post hoc vs the first timepoint
+  // options of repeated measures (step 4), set per run: post hoc pairs (against the first timepoint, consecutive or all),
+  // their adjustment (Bonferroni, Holm or none), sphericity correction (Greenhouse-Geisser, Huynh-Feldt or none), post hoc even when the overall test is not significant
+  let RO = { post: 'first', adjust: 'bonferroni', sph: 'gg', always: false };
+  const setRO = o => { RO = { post: o.rmPost || 'first', adjust: o.rmAdjust || 'bonferroni', sph: o.rmSph || 'gg', always: !!o.rmPostAlways }; };
+  const rmPairs = T => RO.post === 'all' ? pairs(T) : RO.post === 'consecutive' ? Array.from({ length: T - 1 }, (_, t) => [t, t + 1]) : Array.from({ length: T - 1 }, (_, t) => [0, t + 1]);
+  const ADJ_NAME = { bonferroni: 'Bonferroni-adjusted', holm: 'Holm-adjusted', none: 'unadjusted' };
+  const POST_WHAT = (tps) => RO.post === 'all' ? 'between each pair of timepoints' : RO.post === 'consecutive' ? 'between consecutive timepoints' : `versus ${tps[0]}`;
+  const adjust = ps => RO.adjust === 'holm' ? S.holm(ps) : RO.adjust === 'none' ? ps : ps.map(p => S.bonferroni(p, ps.length));
+  // Two timepoints → paired t / Wilcoxon; more → RM ANOVA / Friedman with post hoc paired comparisons (by default Bonferroni, against the first timepoint)
   function analyzeWithin(matrixByGroup, param, used, alpha) {
     return matrixByGroup.map(Y => {
       if (Y.length < 3) return { p: NaN };
@@ -21754,13 +21810,13 @@ const Analysis = (() => {
         used.add('wilcoxon'); return { ...S.wilcoxonSigned(col(1), col(0)), test: 'Wilcoxon' };
       }
       const omnibus = param ? { ...S.rmAnova(Y), test: 'RM ANOVA' } : { ...S.friedman(Y), test: 'Friedman' };
+      if (param && RO.sph !== 'gg') { omnibus.p = RO.sph === 'hf' ? omnibus.pHF : omnibus.pUnc; used.add('rmSph:' + RO.sph); }
       used.add(param ? 'rmanova' : 'friedman');
-      if (omnibus.p <= alpha) {
-        used.add(param ? 'postPairedt' : 'postWilcoxon');
-        omnibus.post = Array.from({ length: T - 1 }, (_, t) => {
-          const raw = param ? S.pairedT(col(t + 1), col(0)).p : S.wilcoxonSigned(col(t + 1), col(0)).p;
-          return { t: t + 1, p: S.bonferroni(raw, T - 1) };
-        });
+      if (omnibus.p <= alpha || RO.always) {
+        used.add(param ? 'postPairedt' : 'postWilcoxon'); used.add('rmPost:' + RO.post); used.add('rmAdj:' + RO.adjust);
+        const pr = rmPairs(T), raw = pr.map(([a, b]) => param ? S.pairedT(col(b), col(a)).p : S.wilcoxonSigned(col(b), col(a)).p), adj = adjust(raw);
+        // t: the later timepoint (comparisons against the first keep their old meaning)
+        omnibus.post = pr.map(([a, b], q) => ({ a, b, t: b, p: adj[q] }));
       }
       return omnibus;
     });
@@ -21876,7 +21932,16 @@ const Analysis = (() => {
     const parts = [...buckets].map(([verb, items]) => `${verb} in ${listJoin(items.map(x => x.g))} (P value ${pList(items.map(x => x.p))})`);
     if (!parts.length) return '';
     const sentences = [`Within each group, ${lowerFirst(label)} ${parts.join(', while it ')}.`];
-    // post hoc versus the first timepoint, grouped by direction
+    // post hoc versus the first timepoint, grouped by direction; other designs list the significant pairs
+    if (RO.post !== 'first') {
+      within.forEach((w, g) => {
+        if (!w.post) return;
+        const sig = w.post.filter(q => q.p <= alpha);
+        sentences.push(sig.length ? `In ${gl[g]}, it differed significantly in ${sig.length > 1 ? 'these comparisons' : 'the comparison'}: ${listJoin(sig.map(q => `${tps[q.b]} vs ${tps[q.a]}`))} (P value ${pList(sig.map(q => q.p))}).`
+          : `In ${gl[g]}, none of the ${RO.post === 'all' ? 'pairwise' : 'consecutive'} comparisons was significant.`);
+      });
+      return sentences.join(' ');
+    }
     within.forEach((w, g) => {
       if (!w.post) return;
       const base = center({ desc: results[0].desc[g] }, param);
@@ -22481,8 +22546,25 @@ const Analysis = (() => {
 
   /* ---------- results by variable: every descriptive statistic and every candidate test, for checking (not for the report) ---------- */
   // returns { groups, k, items: [{ id, label, kind, tables: [{ title, head, rows, note }], spec, summary }] }; cells are plain strings
-  function explore(data, cfg) {
-    const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
+  // xo (options of the stage): dec (decimals), extra (more statistics), fig (figure type), out (outlier rule)
+  const OUT_RULE = { '1.5': 'beyond 1.5 × IQR', '3': 'beyond 3 × IQR', z3: '|z| > 3' };
+  function outFence(vals, rule) {
+    if (vals.length < 4 || !OUT_RULE[rule]) return null;
+    if (rule === 'z3') { const m = S.mean(vals), sd = S.sd(vals); return [m - 3 * sd, m + 3 * sd]; }
+    const q1 = S.quantile(vals, 0.25), q3 = S.quantile(vals, 0.75), k = +rule * (q3 - q1); return [q1 - k, q3 + k];
+  }
+  // skewness and excess kurtosis with their standard errors, as in SPSS
+  function shape(a) {
+    const n = a.length; if (n < 4) return null;
+    const m = S.mean(a), sd = S.sd(a); if (!(sd > 0)) return null;
+    const z3 = S.sum(a.map(v => ((v - m) / sd) ** 3)), z4 = S.sum(a.map(v => ((v - m) / sd) ** 4));
+    const skew = n / ((n - 1) * (n - 2)) * z3, kurt = n * (n + 1) / ((n - 1) * (n - 2) * (n - 3)) * z4 - 3 * (n - 1) ** 2 / ((n - 2) * (n - 3));
+    const ses = Math.sqrt(6 * n * (n - 1) / ((n - 2) * (n + 1) * (n + 3))), sek = 2 * ses * Math.sqrt((n * n - 1) / ((n - 3) * (n + 5)));
+    return { skew, ses, kurt, sek };
+  }
+  function explore(data, cfg, xo = {}) {
+    const opts = cfg.options, alpha = opts.alpha, d = xo.dec !== undefined && xo.dec !== '' ? +xo.dec : opts.decimals;
+    setRO(opts);
     normality = normalityTest(opts.normality);
     FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0 };
     const groups = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false), gl = groups.map(g => cfg.groupLabels[g] || g), k = groups.length;
@@ -22515,13 +22597,40 @@ const Analysis = (() => {
         out.push(["Welch's ANOVA", `F = ${F(wa.F, 2)}`, `${F(wa.df1, 0)}, ${F(wa.df2, 1)}`, P(wa.p), '', chosen === 'Welch ANOVA' ? yes : '']);
         out.push(['Kruskal-Wallis test', `H = ${F(kw.H, 2)}`, String(kw.df), P(kw.p), `ε² = ${F(kw.etaSq, 3)}`, chosen === 'Kruskal-Wallis' ? yes : '']);
       }
-      return { title: 'Comparison between the groups', head: ['Test', 'Statistic', 'df', 'P value', 'Effect size (95% CI)', 'In the report'], rows: out };
+      return { cat: 'tests', title: 'Comparison between the groups', head: ['Test', 'Statistic', 'df', 'P value', 'Effect size (95% CI)', 'In the report'], rows: out };
     };
     const pairTable = gv => {
       if (k < 3 || gv.some(x => x.length < 2)) return null;
       const tk = S.tukey(gv), gh = S.gamesHowell(gv), dn = S.dunn(gv);
-      return { title: 'Pairwise comparisons', head: ['Pair', 'Tukey P', 'Mean difference (95% CI)', 'Games-Howell P', 'Dunn P (Bonferroni)', 'Mann-Whitney P (unadjusted)'],
+      return { cat: 'pairs', title: 'Pairwise comparisons', head: ['Pair', 'Tukey P', 'Mean difference (95% CI)', 'Games-Howell P', 'Dunn P (Bonferroni)', 'Mann-Whitney P (unadjusted)'],
         rows: pairs(k).map(([i, j], q) => [`${gl[i]} vs ${gl[j]}`, P(tk[q].p), `${F(tk[q].diff)} (${ci(tk[q].lo, tk[q].hi)})`, P(gh[q].p), P(dn[q].p), P(S.mannWhitney(gv[i], gv[j]).p)]) };
+    };
+    // more statistics: shape, spread and both normality tests; outliers by the chosen rule
+    const extraTable = named => ({ cat: 'extra', title: 'More statistics', head: ['', 'Skewness (SE)', 'Kurtosis (SE)', 'CV %', 'Geometric mean', 'Mode', '5th – 95th percentile', 'Shapiro-Wilk W (P)', 'K-S Lilliefors D (P)', `Outliers (${OUT_RULE[xo.out || '1.5'] || 'none'})`],
+      rows: named.map(([name, a]) => {
+        const sh = shape(a), m = a.length ? S.mean(a) : NaN, sd = a.length > 1 ? S.sd(a) : NaN, sw = a.length >= 3 ? S.shapiroWilk(a) : null, lf = a.length >= 4 ? S.lilliefors(a) : null;
+        const cnt = {}; a.forEach(v => { cnt[v] = (cnt[v] || 0) + 1; }); const top = Math.max(0, ...Object.values(cnt)), modes = Object.keys(cnt).filter(k2 => cnt[k2] === top);
+        const fence = outFence(a, xo.out || '1.5'), outs = fence ? a.filter(v => v < fence[0] || v > fence[1]).length : null;
+        return [name, sh ? `${F(sh.skew, 2)} (${F(sh.ses, 2)})` : '—', sh ? `${F(sh.kurt, 2)} (${F(sh.sek, 2)})` : '—', isFinite(m) && m !== 0 ? F(100 * sd / Math.abs(m), 1) : '—',
+          a.length && a.every(v => v > 0) ? F(Math.exp(S.mean(a.map(Math.log)))) : '—', top > 1 && modes.length <= 3 ? modes.map(x => F(+x)).join(', ') : '—',
+          a.length >= 2 ? `${F(S.quantile(a, 0.05))} – ${F(S.quantile(a, 0.95))}` : '—', sw ? `${F(sw.W, 3)} (${P(sw.p)})` : '—', lf ? `${F(lf.D, 3)} (${P(lf.p)})` : '—', outs === null ? '—' : String(outs)];
+      }) });
+    // figures of the stage: box (default), violin, histogram, normal Q-Q plot or means with 95% CI
+    const ciH = a => a.length > 1 ? jStat.studentt.inv(0.975, a.length - 1) * S.sd(a) / Math.sqrt(a.length) : null;
+    const numSpec = (gv, label) => {
+      const f = xo.fig || 'auto';
+      if (f === 'violin') return { type: 'violin', perGroup: true, points: true, categories: gl, yLabel: label, series: [{ name: label, data: gv }] };
+      if (f === 'qq') return { type: 'qq', yLabel: label, series: gl.map((g, i) => ({ name: g, data: gv[i] })), ...(k < 2 ? { legend: false } : {}) };
+      if (f === 'meanci') return { type: 'line', noLine: true, perGroup: true, categories: gl, yLabel: label, series: [{ name: label, values: gv.map(a => a.length ? S.mean(a) : NaN), err: gv.map(ciH) }] };
+      if (f === 'hist') {
+        const all = gv.flat(); if (!all.length) return null;
+        const sc = niceScale(Math.min(...all), Math.max(...all), 8), edges = [];
+        for (let e = sc.min; e < sc.max - 1e-9; e += sc.step) edges.push(e);
+        const bin = v => Math.min(edges.length - 1, Math.floor((v - sc.min) / sc.step + 1e-9));
+        return { type: 'bar', integer: true, categories: edges.map(e => `${fmt(e, d)}-${fmt(e + sc.step, d)}`), xLabel: label, yLabel: 'Number of patients', ...(k < 2 ? { legend: false } : {}),
+          series: gl.map((g, i) => { const n = new Array(edges.length).fill(0); gv[i].forEach(v => n[bin(v)]++); return { name: g, values: n }; }) };
+      }
+      return { type: 'box', perGroup: true, points: true, categories: gl, yLabel: label, series: [{ name: label, data: gv }] };
     };
     const items = [];
     for (const v of effectiveVariables(cfg)) {
@@ -22529,11 +22638,13 @@ const Analysis = (() => {
         cols: v.cols.map(c => ({ col: c.col, label: v.kind === 'repeated' ? (c.label || cfg.tpLabels[c.tp] || c.tp) : v.label })) };
       if (v.kind !== 'repeated' && v.type === 'numeric') {
         const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toNum(r[col])).filter(isFinite)), miss = byGroup.map(rs => rs.filter(r => !isFinite(toNum(r[col]))).length);
-        it.tables.push({ title: 'Descriptive statistics', head: descHead, rows: [...gv.map((x, g) => descRow(gl[g], x, miss[g])), ...(k > 1 ? [descRow('All patients', gv.flat(), S.sum(miss))] : [])] });
+        it.tables.push({ cat: 'desc', title: 'Descriptive statistics', head: descHead, rows: [...gv.map((x, g) => descRow(gl[g], x, miss[g])), ...(k > 1 ? [descRow('All patients', gv.flat(), S.sum(miss))] : [])] });
         const t = numericTests(gv, v.dist); if (t) it.tables.push(t);
         const pt = pairTable(gv); if (pt) it.tables.push(pt);
-        it.spec = { type: 'box', perGroup: true, points: true, categories: gl, yLabel: v.label, series: [{ name: v.label, data: gv }] };
+        if (xo.extra) it.tables.push(extraTable([...gl.map((g, i) => [g, gv[i]]), ...(k > 1 ? [['All patients', gv.flat()]] : [])]));
+        it.spec = numSpec(gv, v.label);
         const used2 = new Set(), res = k > 1 && gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts) : null;
+        it.sig = !!res && res.p <= alpha;
         it.summary = res ? `Report: ${res.param ? 'parametric' : 'non-parametric'} (${v.dist === 'auto' ? 'from the normality test' : 'set by you'}), ${TEST_NAME[res.test] || res.test}, P ${pTxt(res.p)}.` : `Distribution: ${gv.flat().length >= 3 && normality(gv.flat()) && normality(gv.flat()).p <= 0.05 ? 'non-normal' : 'normal'} by ${nName}.`;
       } else if (v.kind !== 'repeated') {
         const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toCat(r[col])).filter(x => x !== null));
@@ -22541,23 +22652,24 @@ const Analysis = (() => {
         present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
         const tab = levels.map(l => gv.map(x => x.filter(y => y === l).length)), ns = gv.map(x => x.length), N = S.sum(ns);
         const cell = (c, n) => `${c} (${pctTxt(n ? 100 * c / n : 0)}%)`;
-        it.tables.push({ title: 'Frequencies', head: ['', ...gl.map((g, i) => `${g} (n=${ns[i]})`), ...(k > 1 ? [`Total (n=${N})`] : [])],
+        it.tables.push({ cat: 'desc', title: 'Frequencies', head: ['', ...gl.map((g, i) => `${g} (n=${ns[i]})`), ...(k > 1 ? [`Total (n=${N})`] : [])],
           rows: [...levels.map((l, li) => [l, ...tab[li].map((c, g) => cell(c, ns[g])), ...(k > 1 ? [cell(S.sum(tab[li]), N)] : [])]),
             ['Missing', ...byGroup.map(rs => String(rs.filter(r => toCat(r[col]) === null).length)), ...(k > 1 ? [String(byGroup.flat().filter(r => toCat(r[col]) === null).length)] : [])]] });
         const nonEmpty = tab.filter(r => S.sum(r) > 0);
         if (k > 1 && nonEmpty.length >= 2) {
-          const cs = S.chiSquare(nonEmpty), chosen = analyzeCategorical(gv, levels, used, opts).test, out = [];
+          const cs = S.chiSquare(nonEmpty), cres = analyzeCategorical(gv, levels, used, opts), chosen = cres.test, out = [];
+          it.sig = cres.p <= alpha;
           out.push(['Chi-square test', `χ² = ${F(cs.chi, 2)}`, String(cs.df), P(cs.p), `smallest expected count ${F(cs.minE, 1)}; ${F(100 * cs.pctSmall, 0)}% of cells < 5`, chosen === 'Chi-square' ? yes : '']);
           if (nonEmpty.length === 2 && k === 2) out.push(["Fisher's exact test", '', '', P(S.fisher2x2(nonEmpty).p), '', chosen === "Fisher's exact" ? yes : '']);
-          it.tables.push({ title: 'Comparison between the groups', head: ['Test', 'Statistic', 'df', 'P value', 'Note', 'In the report'], rows: out });
+          it.tables.push({ cat: 'tests', title: 'Comparison between the groups', head: ['Test', 'Statistic', 'df', 'P value', 'Note', 'In the report'], rows: out });
           if (levels.length === 2) {
             const eff = pairs(k).map(([i, j]) => { const rr = S.relativeRisk(tab, 0, i, j), or = S.oddsRatio(tab, 0, i, j);
               return [`${gl[i]} vs ${gl[j]}`, rr ? `${F(rr.rr, 2)} (${ci(rr.lo, rr.hi, 2)})` : '—', or ? `${F(or.or, 2)} (${ci(or.lo, or.hi, 2)})` : '—']; });
-            it.tables.push({ title: `Effect of “${levels[0]}”`, head: ['Pair', 'Relative risk (95% CI)', 'Odds ratio (95% CI)'], rows: eff });
+            it.tables.push({ cat: 'tests', title: `Effect of “${levels[0]}”`, head: ['Pair', 'Relative risk (95% CI)', 'Odds ratio (95% CI)'], rows: eff });
           }
           if (k > 2) {
             const pw = S.chiSquarePairwise(tab, opts.fisher);
-            it.tables.push({ title: 'Pairwise comparisons (Bonferroni)', head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
+            it.tables.push({ cat: 'pairs', title: 'Pairwise comparisons (Bonferroni)', head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
           }
         }
         it.spec = { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the patients', series: levels.map((l, li) => ({ name: l, values: tab[li].map((c, g) => ns[g] ? 100 * c / ns[g] : 0) })) };
@@ -22565,38 +22677,46 @@ const Analysis = (() => {
         const tps = v.cols.map(c => c.label || cfg.tpLabels[c.tp] || c.tp), T = tps.length;
         const per = v.cols.map(c => byGroup.map(rs => rs.map(r => toNum(r[c.col])).filter(isFinite)));
         const missAt = (c, g) => byGroup[g].filter(r => !isFinite(toNum(r[c.col]))).length;
-        it.tables.push({ title: 'Descriptive statistics', head: ['Timepoint', ...descHead.slice(0)], rows: v.cols.flatMap((c, t) => gl.map((g, gi) => [tps[t], ...descRow(g, per[t][gi], missAt(c, gi))])) });
+        it.tables.push({ cat: 'desc', title: 'Descriptive statistics', head: ['Timepoint', ...descHead.slice(0)], rows: v.cols.flatMap((c, t) => gl.map((g, gi) => [tps[t], ...descRow(g, per[t][gi], missAt(c, gi))])) });
+        if (xo.extra) it.tables.push(extraTable(v.cols.flatMap((c, t) => gl.map((g, gi) => [k > 1 ? `${tps[t]} · ${g}` : tps[t], per[t][gi]]))));
         if (k > 1) {
           const out = per.map((gv, t) => {
             if (gv.some(x => x.length < 2)) return [tps[t], '—', '—', '—'];
             const par = k === 2 ? S.tTest(gv[0], gv[1], true) : S.anova(gv), non = k === 2 ? S.mannWhitney(gv[0], gv[1]) : S.kruskalWallis(gv);
+            if (Math.min(par.p, non.p) <= alpha) it.sig = true;
             return [tps[t], P(par.p), P(non.p), k === 2 ? `${F(par.diff)} (${ci(par.lo, par.hi)})` : `η² = ${F(par.etaSq, 3)}`];
           });
-          it.tables.push({ title: 'Between the groups at each timepoint', head: ['Timepoint', k === 2 ? "Student's t-test P" : 'ANOVA P', k === 2 ? 'Mann-Whitney P' : 'Kruskal-Wallis P', k === 2 ? 'Mean difference (95% CI)' : 'Effect size'], rows: out });
+          it.tables.push({ cat: 'tests', title: 'Between the groups at each timepoint', head: ['Timepoint', k === 2 ? "Student's t-test P" : 'ANOVA P', k === 2 ? 'Mann-Whitney P' : 'Kruskal-Wallis P', k === 2 ? 'Mean difference (95% CI)' : 'Effect size'], rows: out });
         }
         const mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
+        let wSig = false;
         const within = mats.map((Y, g) => {
           if (Y.length < 3) return [gl[g], String(Y.length), '—', '—', '—'];
           const col = j => Y.map(r => r[j]);
-          if (T === 2) { const pt = S.pairedT(col(1), col(0)), w = S.wilcoxonSigned(col(1), col(0));
+          if (T === 2) { const pt = S.pairedT(col(1), col(0)), w = S.wilcoxonSigned(col(1), col(0)); if (Math.min(pt.p, w.p) <= alpha) wSig = true;
             return [gl[g], String(Y.length), `t = ${F(pt.t, 2)}, P ${pTxt(pt.p)}`, `z = ${F(w.z, 2)}, P ${pTxt(w.p)}`, `${F(pt.diff)} (${ci(pt.lo, pt.hi)})`]; }
-          const ra = S.rmAnova(Y), fr = S.friedman(Y);
-          return [gl[g], String(Y.length), `F = ${F(ra.F, 2)}, ε = ${F(ra.eps, 3)}, P ${pTxt(ra.p)}`, `χ² = ${F(fr.chi, 2)}, P ${pTxt(fr.p)}`, ''];
+          const ra = S.rmAnova(Y), fr = S.friedman(Y); if (Math.min(ra.p, fr.p) <= alpha) wSig = true;
+          return [gl[g], String(Y.length), `F = ${F(ra.F, 2)}; GG ε = ${F(ra.eps, 3)}, P ${pTxt(ra.p)}; HF ε = ${F(ra.epsHF, 3)}, P ${pTxt(ra.pHF)}; uncorrected P ${pTxt(ra.pUnc)}`, `χ² = ${F(fr.chi, 2)}, P ${pTxt(fr.p)}`, ''];
         });
-        it.tables.push({ title: 'Change over time within each group (patients with every measurement)', head: ['Group', 'n', T === 2 ? 'Paired t-test' : 'Repeated-measures ANOVA (Greenhouse-Geisser)', T === 2 ? 'Wilcoxon signed-rank' : 'Friedman test', T === 2 ? `Change ${tps[1]} − ${tps[0]} (95% CI)` : ''], rows: within });
+        it.tables.push({ cat: 'time', title: 'Change over time within each group (patients with every measurement)', head: ['Group', 'n', T === 2 ? 'Paired t-test' : 'Repeated-measures ANOVA', T === 2 ? 'Wilcoxon signed-rank' : 'Friedman test', T === 2 ? `Change ${tps[1]} − ${tps[0]} (95% CI)` : ''], rows: within });
         if (T > 2) {
           const post = [];
           mats.forEach((Y, g) => { if (Y.length < 3) return; const col = j => Y.map(r => r[j]);
-            for (let t = 1; t < T; t++) post.push([gl[g], `${tps[t]} vs ${tps[0]}`, P(S.bonferroni(S.pairedT(col(t), col(0)).p, T - 1)), P(S.bonferroni(S.wilcoxonSigned(col(t), col(0)).p, T - 1))]); });
-          it.tables.push({ title: 'Each timepoint against the first (Bonferroni-adjusted)', head: ['Group', 'Comparison', 'Paired t-test P', 'Wilcoxon P'], rows: post });
+            const pr = rmPairs(T), pt = adjust(pr.map(([a, b]) => S.pairedT(col(b), col(a)).p)), wx = adjust(pr.map(([a, b]) => S.wilcoxonSigned(col(b), col(a)).p));
+            pr.forEach(([a, b], q) => post.push([gl[g], `${tps[b]} vs ${tps[a]}`, P(pt[q]), P(wx[q])])); });
+          it.tables.push({ cat: 'time', title: `Comparisons ${POST_WHAT(tps)} (${ADJ_NAME[RO.adjust]})`, head: ['Group', 'Comparison', 'Paired t-test P', 'Wilcoxon P'], rows: post });
         }
         if (k > 1 && mats.every(Y => Y.length >= 2)) {
           const mx = S.mixedAnova(mats);
-          it.tables.push({ title: 'Mixed (split-plot) ANOVA', head: ['Effect', 'F', 'df', 'P value'], rows: [['Group', F(mx.group.F, 2), `${mx.group.df1}, ${mx.group.df2}`, P(mx.group.p)],
+          it.tables.push({ cat: 'time', title: 'Mixed (split-plot) ANOVA', head: ['Effect', 'F', 'df', 'P value'], rows: [['Group', F(mx.group.F, 2), `${mx.group.df1}, ${mx.group.df2}`, P(mx.group.p)],
             ['Time (Greenhouse-Geisser)', F(mx.time.F, 2), `${mx.time.df1}, ${mx.time.df2}`, P(mx.time.p)], ['Group × time', F(mx.interaction.F, 2), `${mx.interaction.df1}, ${mx.interaction.df2}`, P(mx.interaction.p)]] });
         }
-        it.spec = { type: 'line', categories: tps, yLabel: v.label, xLabel: 'Time', ...(k < 2 ? { legend: false } : {}),
-          series: gl.map((g, gi) => ({ name: g, values: per.map(gv => S.mean(gv[gi])), err: per.map(gv => gv[gi].length > 1 ? S.sd(gv[gi]) : null) })) };
+        if (wSig) it.sig = true;
+        const fT = xo.fig || 'auto';
+        if (fT === 'box' || fT === 'violin') it.spec = { type: fT, categories: tps, yLabel: v.label, points: fT === 'box', ...(k < 2 ? { legend: false } : {}), series: gl.map((g, gi) => ({ name: g, data: per.map(gv => gv[gi]) })) };
+        else it.spec = { type: 'line', categories: tps, yLabel: v.label, xLabel: 'Time', ...(k < 2 ? { legend: false } : {}), ...(fT === 'meanci' ? { errKind: 'ci' } : {}),
+          series: gl.map((g, gi) => ({ name: g, values: per.map(gv => S.mean(gv[gi])), err: per.map(gv => fT === 'meanci' ? ciH(gv[gi]) : gv[gi].length > 1 ? S.sd(gv[gi]) : null) })),
+          ...(fT === 'spaghetti' ? { individual: mats } : {}) };
       }
       items.push(it);
     }
@@ -22606,6 +22726,7 @@ const Analysis = (() => {
   /* ---------- main ---------- */
   function run(data, cfg) {
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
+    setRO(opts);
     // descriptive: the detailed comment plus the test used, effect sizes, values of every group and an overview of each table
     const descriptive = opts.commentStyle === 'descriptive', detailed = opts.commentStyle === 'detailed' || descriptive;
     const wantEff = opts.commentEffect || descriptive;
@@ -22793,7 +22914,8 @@ const Analysis = (() => {
       const w = Y.length >= 3 ? analyzeWithin([Y], param, used, alpha)[0] : { p: NaN };
       const tn = WITHIN_NAME[w.test] || w.test || '', sig = w.p <= alpha;
       // P of each timepoint against the first: the paired test (two timepoints) or the Bonferroni post hoc (three or more, once significant)
-      const pAt = t => t === 0 ? NaN : T === 2 ? w.p : w.post ? w.post[t - 1].p : NaN;
+      const firstPost = RO.post === 'first';
+      const pAt = t => t === 0 ? NaN : T === 2 ? w.p : firstPost && w.post ? w.post[t - 1].p : NaN;
       const change = t => {
         if (t === 0 || Y.length < 2) return '—';
         if (param) { const q = S.pairedT(col(t), col(0)); return `${fmt(q.diff, d)} (${fmt(q.lo, d)} to ${fmt(q.hi, d)})`; }
@@ -22801,29 +22923,36 @@ const Analysis = (() => {
       };
       const head = ['', opts.nHead === false ? G : `${G} (n=${Y.length})`];
       if (opts.effect) head.push(`Change from ${tps[0]} ${param ? '(95% CI)' : '(IQR)'}`);
-      head.push(T === 2 ? 'P value' : `P value (vs ${tps[0]})`);
-      const trows = tps.map((tp, t) => [{ t: [tp], b: true }, { t: [val(t)] }, ...(opts.effect ? [{ t: [change(t)], small: true }] : []), { t: [t === 0 ? '—' : isFinite(pAt(t)) ? fmtP(pAt(t), alpha) : '—'] }]);
+      const pCol = T === 2 || firstPost; // other post hoc designs list their pairs below the table instead
+      if (pCol) head.push(T === 2 ? 'P value' : `P value (vs ${tps[0]})`);
+      const trows = tps.map((tp, t) => [{ t: [tp], b: true }, { t: [val(t)] }, ...(opts.effect ? [{ t: [change(t)], small: true }] : []), ...(pCol ? [{ t: [t === 0 ? '—' : isFinite(pAt(t)) ? fmtP(pAt(t), alpha) : '—'] }] : [])]);
       if (T > 2) trows.push([{ t: [`Overall (${tn})`], b: true }, { t: [isFinite(w.p) ? fmtP(w.p, alpha) : '—'], span: head.length - 1 }]);
+      if (T > 2 && !firstPost && w.post) w.post.forEach(q => trows.push([{ t: [`P (${tps[q.b]} vs ${tps[q.a]})`], b: true }, { t: [fmtP(q.p, alpha)], span: head.length - 1 }]));
       const first = desc[0], last = desc[T - 1], c0 = param ? first.mean : first.median, c1 = param ? last.mean : last.median;
       const dir = c1 < c0 ? 'decreased' : 'increased', sent = [];
       if (!isFinite(w.p)) sent.push(`The change in ${lowerFirst(lab)} over time could not be tested: fewer than three patients had every measurement.`);
       else if (T === 2) sent.push(`${cap(lab)} ${sig ? `${dir} significantly` : 'did not change significantly'} from ${val(0)} at ${lowerFirst(tps[0])} to ${val(1)} at ${lowerFirst(tps[1])} (${tn}, P value ${pTxt(w.p)}).`);
       else {
         sent.push(`${cap(lab)} ${sig ? 'changed significantly over time' : 'did not change significantly over time'} (${tn}, P value ${pTxt(w.p)}); it was ${val(0)} at ${lowerFirst(tps[0])} and ${val(T - 1)} at ${lowerFirst(tps[T - 1])}.`);
-        if (w.post) {
+        if (w.post && !firstPost) {
+          const sig2 = w.post.filter(q => q.p <= alpha);
+          sent.push(sig2.length ? `It differed significantly in ${sig2.length > 1 ? 'these comparisons' : 'the comparison'}: ${listJoin(sig2.map(q => `${lowerFirst(tps[q.b])} vs ${lowerFirst(tps[q.a])}`))} (P value ${pList(sig2.map(q => q.p))}).`
+            : `None of the ${RO.post === 'all' ? 'pairwise' : 'consecutive'} comparisons was significant after ${RO.adjust === 'none' ? 'testing' : RO.adjust === 'holm' ? 'Holm correction' : 'Bonferroni correction'}.`);
+        } else if (w.post) {
           const lower = [], higher = [], same = [];
           w.post.forEach(q => { const t = q.t, ct = param ? desc[t].mean : desc[t].median; (q.p <= alpha ? (ct < c0 ? lower : higher) : same).push({ tp: tps[t], p: q.p }); });
           const part = (list, word) => `significantly ${word} at ${tpGroup(list.map(x => x.tp))} (P value ${list.length > 1 ? pList(list.map(x => x.p)) : pTxt(list[0].p)})`;
           const parts = [lower.length ? part(lower, 'lower') : '', higher.length ? part(higher, 'higher') : ''].filter(Boolean);
           if (parts.length) sent.push(`Compared with ${lowerFirst(tps[0])}, it was ${parts.join(' and ')}${same.length ? `, with no significant difference at ${tpGroup(same.map(x => x.tp))}` : ''}.`);
-          else sent.push(`None of the measurements differed significantly from ${lowerFirst(tps[0])} after Bonferroni correction.`);
+          else sent.push(`None of the measurements differed significantly from ${lowerFirst(tps[0])}${RO.adjust === 'none' ? '' : ` after ${RO.adjust === 'holm' ? 'Holm' : 'Bonferroni'} correction`}.`);
         }
       }
       const f = [];
       if (sig || (w.post && w.post.some(q => q.p <= alpha))) f.push(`*: Significant as P value ≤ ${alpha}`);
       f.push(`Data are presented as ${param ? meanSdName(true) : (FMT.iqr === 'bracket' ? 'median [IQR]' : 'median (IQR)')} of the ${Y.length} patients with every measurement`);
       if (opts.effect) f.push(param ? 'Change: mean difference from the first measurement with 95% CI' : 'Change: median (IQR) of the differences from the first measurement');
-      if (isFinite(w.p)) f.push(T === 2 ? `P value: ${tn}` : `Overall: ${tn}${w.post ? `, P value (vs ${tps[0]}): Bonferroni-adjusted ${param ? 'paired t-test' : 'Wilcoxon signed-rank test'}` : ''}`);
+      const sphTxt = param && T > 2 && RO.sph !== 'gg' ? (RO.sph === 'hf' ? ' (Huynh-Feldt)' : ' (sphericity assumed)') : '';
+      if (isFinite(w.p)) f.push(T === 2 ? `P value: ${tn}` : `Overall: ${tn}${sphTxt}${w.post ? `, ${firstPost ? `P value (vs ${tps[0]})` : 'P (… vs …)'}: ${ADJ_NAME[RO.adjust]} ${param ? 'paired t-test' : 'Wilcoxon signed-rank test'}${firstPost ? '' : ' ' + POST_WHAT(tps)}` : ''}`);
       if (v.note) f.push(v.note);
       const ct = v.chart && v.chart !== 'auto' ? v.chart : opts.chartStyle;
       const meanChart = ct === 'bar' || ct === 'line' || (ct === 'auto' && param);
@@ -22832,7 +22961,7 @@ const Analysis = (() => {
         spec: ct === 'violin' ? { type: 'violin', categories: tps, yLabel: v.ylabel || v.label, legend: false, points: opts.points, ...marks, series: [{ name: G, data: tps.map((_, t) => col(t)) }] }
         : ct === 'meanci' ? { type: 'line', errKind: 'ci', categories: tps, yLabel: v.ylabel || v.label, xLabel: 'Time', legend: false, ...marks, series: [{ name: G, values: desc.map(x => x.mean), err: desc.map(ciHalf) }] }
         : meanChart
-          ? { type: ct === 'bar' ? 'bar' : 'line', categories: tps, yLabel: v.ylabel || v.label, xLabel: 'Time', legend: false, ...marks, ...(ct === 'bar' ? valueLabels : {}),
+          ? { type: ct === 'bar' ? 'bar' : 'line', categories: tps, yLabel: v.ylabel || v.label, xLabel: 'Time', legend: false, ...marks, ...(ct === 'bar' ? valueLabels : {}), ...(opts.rmIndividual && ct !== 'bar' ? { individual: [Y] } : {}),
               series: [{ name: G, values: desc.map(x => param ? x.mean : x.median), err: desc.map(x => param ? errOf(x) : null), lo: param ? null : desc.map(x => x.q1), hi: param ? null : desc.map(x => x.q3) }] }
           : { type: 'box', categories: tps, yLabel: v.ylabel || v.label, legend: false, points: opts.points || ct === 'dot', ...marks, series: [{ name: G, data: tps.map((_, t) => col(t)) }] } }];
       return { kind: 'repeated', title: `${v.label} of the studied patients over time`, head, rows: trows, footnote: f.join(', ') + '.', comment: wording(sent.join(' ')),
@@ -22871,6 +23000,34 @@ const Analysis = (() => {
           if (opts.effect) cells.push({ t: effectLines(r), small: true });
           return cells;
         });
+        // optional rows comparing the groups on the change from the first timepoint and on the area under the curve
+        const extraRes = [], extraNote = [];
+        const extraRow = (label, r) => {
+          const cells = [{ t: [label], b: true }, ...r.desc.map(dd => ({ t: [!dd.n ? '—' : r.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)] })), { t: [fmtP(r.p, alpha) + (isFinite(r.p) ? tm.mark(r.test) : '')] }];
+          if (opts.showStat) cells.push({ t: [r.stat], small: true });
+          if (showPost) cells.push({ t: r.p <= alpha ? postHocLines(r) : ['---'], small: true });
+          if (opts.effect) cells.push({ t: effectLines(r), small: true });
+          return cells;
+        };
+        if ((opts.rmChange === 'abs' || opts.rmChange === 'pct') && k > 1 && tps.length > 1) {
+          const pct = opts.rmChange === 'pct';
+          for (let t = 1; t < tps.length; t++) {
+            const gv = byGroup.map(rs => rs.map(r => [toNum(r[v.cols[0].col]), toNum(r[v.cols[t].col])]).filter(([a, b]) => isFinite(a) && isFinite(b) && (!pct || a !== 0)).map(([a, b]) => pct ? (b - a) / Math.abs(a) * 100 : b - a));
+            if (gv.some(x => x.length < 2)) continue;
+            const r = analyzeNumeric(gv, v.dist, used, opts);
+            extraRes.push({ kind: 'change', t, r }); trows.push(extraRow(`${pct ? '% change' : 'Change'} ${tps[t]} − ${tps[0]}`, r));
+          }
+          extraNote.push(pct ? `% change: (later − ${tps[0]}) / ${tps[0]} × 100 in patients with both values` : `Change: later value − ${tps[0]} in patients with both values`);
+        }
+        if (opts.rmAuc && k > 1 && tps.length > 1) {
+          // area under the curve over the timepoints by the trapezoid rule, timepoints one unit apart
+          const gv = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)).map(a => a.slice(1).reduce((s2, y, i) => s2 + (y + a[i]) / 2, 0)));
+          if (gv.every(x => x.length >= 2)) {
+            const r = analyzeNumeric(gv, 'auto', used, opts);
+            extraRes.push({ kind: 'auc', r }); trows.push(extraRow('AUC over time', r));
+            extraNote.push('AUC: area under the curve over all timepoints (trapezoid rule, equal spacing; patients with every measurement)');
+          }
+        }
         let within = null, withinNote = '';
         if (opts.within && v.cols.length >= 2) {
           const mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
@@ -22878,10 +23035,10 @@ const Analysis = (() => {
           const filler = () => ({ t: [''], span: head.length - 1 - k });
           trows.push([{ t: ['P (within group)'], b: true }, ...within.map(w => ({ t: [fmtP(w.p, alpha)] })), filler()]);
           const hasPost = within.some(w => w.post);
-          if (hasPost) for (let t = 1; t < tps.length; t++)
-            trows.push([{ t: [`P (${tps[t]} vs ${tps[0]})`], b: true }, ...within.map(w => ({ t: [w.post ? fmtP(w.post[t - 1].p, alpha) : '---'] })), filler()]);
-          withinNote = `P (within group): change over time within each group by ${tps.length === 2 ? (param ? 'paired t-test' : 'Wilcoxon signed-rank test') : (param ? 'repeated-measures ANOVA' : 'Friedman test')}`;
-          if (hasPost) withinNote += `, P (… vs ${tps[0]}): Bonferroni-adjusted ${param ? 'paired t-test' : 'Wilcoxon signed-rank test'} versus ${tps[0]}`;
+          if (hasPost) within.find(w => w.post).post.forEach((q, qi) =>
+            trows.push([{ t: [`P (${tps[q.b]} vs ${tps[q.a]})`], b: true }, ...within.map(w => ({ t: [w.post ? fmtP(w.post[qi].p, alpha) : '---'] })), filler()]));
+          withinNote = `P (within group): change over time within each group by ${tps.length === 2 ? (param ? 'paired t-test' : 'Wilcoxon signed-rank test') : (param ? `repeated-measures ANOVA${RO.sph === 'hf' ? ' (Huynh-Feldt)' : RO.sph === 'none' ? ' (sphericity assumed)' : ''}` : 'Friedman test')}`;
+          if (hasPost) withinNote += `, P (… vs …): ${ADJ_NAME[RO.adjust]} ${param ? 'paired t-test' : 'Wilcoxon signed-rank test'} ${POST_WHAT(tps)}`.replace('P (… vs …)', RO.post === 'first' ? `P (… vs ${tps[0]})` : 'P (… vs …)');
         }
         // group × time interaction by mixed (split-plot) ANOVA — parametric outcomes only
         let mixed = null;
@@ -22894,6 +23051,18 @@ const Analysis = (() => {
           }
         }
         let comment = repeatedComment(plain(v.label), tps, results, gl, alpha, detailed);
+        // the change from the first timepoint and the area under the curve
+        if (extraRes.length) {
+          const lab = lowerFirst(plain(v.label)), nsT = [];
+          let aucNs = false;
+          extraRes.forEach(x => {
+            const what = x.kind === 'auc' ? `The area under the curve of ${lab}` : `The ${opts.rmChange === 'pct' ? 'percentage change' : 'change'} in ${lab} from ${lowerFirst(tps[0])} to ${lowerFirst(tps[x.t])}`;
+            if (x.r.p <= alpha) { const pd = pairDescription(x.r, gl, alpha); comment += ` ${what} was ${fillP(pd.key, pd.ps)}.`; }
+            else if (x.kind === 'auc') aucNs = true; else nsT.push(lowerFirst(tps[x.t]));
+          });
+          const parts = [nsT.length ? `the ${opts.rmChange === 'pct' ? 'percentage change' : 'change'} in ${lab} from ${lowerFirst(tps[0])} to ${tpGroup(nsT)}` : '', aucNs ? `the area under the curve of ${lab}` : ''].filter(Boolean);
+          if (parts.length) comment += ` ${cap(listJoin(parts))} did not differ significantly ${amongTxt(k)}.`;
+        }
         if (within) comment += ' ' + withinComment(plain(v.label), tps, within, results, gl, alpha, param);
         // optional effect sizes for the significant timepoints of a two-group comparison
         if (wantEff && k === 2) {
@@ -22914,7 +23083,7 @@ const Analysis = (() => {
         sections.push({
           kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
           footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost, stats: results.map(r => r.stat),
-            missing: v.cols.map((c, t) => [tps[t], missingIn(c.col, true)]).filter(x => x[1]).map(([t, m]) => `${t} (n=${m})`) }, [tm.note, withinNote, v.note].filter(Boolean).join(', ')),
+            missing: v.cols.map((c, t) => [tps[t], missingIn(c.col, true)]).filter(x => x[1]).map(([t, m]) => `${t} (n=${m})`) }, [tm.note, ...extraNote, withinNote, v.note].filter(Boolean).join(', ')),
           comment: wording(comment), brief: opts.paperStyle ? wording(briefRepeated(plain(v.label), tps, results, within, gl, alpha, param, d)) : '', briefSig: !!sigAny,
           figures: v.chart === 'none' ? [] : [(() => {
             // per-variable chart type overrides the global chart style
@@ -22930,6 +23099,7 @@ const Analysis = (() => {
             caption: v.caption || `${v.label} of the studied groups${meanChart && param ? errNote : ''}`,
             spec: meanChart
               ? { type: ct === 'line' ? 'line' : 'bar', categories: tps, yLabel: v.ylabel || v.label, xLabel: 'Time', ...marks, ...(ct === 'line' ? {} : valueLabels),
+                  ...(opts.rmIndividual && ct === 'line' ? { individual: byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite))) } : {}),
                   series: withN(gl, gN).map((g, i) => ({ name: g, values: results.map(r => param ? r.desc[i].mean : r.desc[i].median),
                     err: results.map(r => param ? errOf(r.desc[i]) : null), lo: param ? null : results.map(r => r.desc[i].q1), hi: param ? null : results.map(r => r.desc[i].q3) })) }
               : { type: 'box', categories: tps, yLabel: v.ylabel || v.label, points: opts.points || ct === 'dot', ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
@@ -23373,7 +23543,7 @@ const Analysis = (() => {
     const w = [];
     if (used.has('pairedt')) w.push('paired t-test'); if (used.has('wilcoxon')) w.push('Wilcoxon signed-rank test');
     if (used.has('rmanova')) w.push('repeated-measures ANOVA'); if (used.has('friedman')) w.push('Friedman test');
-    if (w.length || used.has('mixed')) s.push(`Changes over time were assessed with the ${listJoin(w.length ? w : ['mixed ANOVA'])}${used.has('postPairedt') || used.has('postWilcoxon') ? ', with Bonferroni-corrected comparisons against baseline' : ''}${used.has('mixed') && w.length ? ', and the group × time interaction with mixed ANOVA' : ''}.`);
+    if (w.length || used.has('mixed')) s.push(`Changes over time were assessed with the ${listJoin(w.length ? w : ['mixed ANOVA'])}${used.has('postPairedt') || used.has('postWilcoxon') ? `, with ${used.has('rmAdj:holm') ? 'Holm' : used.has('rmAdj:none') ? 'uncorrected' : 'Bonferroni'}-corrected comparisons ${used.has('rmPost:all') ? 'between all timepoints' : used.has('rmPost:consecutive') ? 'between consecutive timepoints' : 'against baseline'}`.replace('uncorrected-corrected', 'uncorrected') : ''}${used.has('mixed') && w.length ? ', and the group × time interaction with mixed ANOVA' : ''}.`);
     if (used.has('pearson') || used.has('spearman')) s.push(`Correlations were assessed with ${[used.has('pearson') ? "Pearson's" : '', used.has('spearman') ? "Spearman's" : ''].filter(Boolean).join(' or ')} coefficient.`);
     const adv = [['linear', 'multiple linear regression'], ['logistic', 'binary logistic regression'], ['cox', 'Cox proportional hazards regression'], ['ancova', 'ANCOVA'],
       ['roc', 'ROC curve analysis'], ['rocClosest', 'ROC curve analysis'], ['survival', k > 1 ? 'Kaplan-Meier analysis with the log-rank test' : 'Kaplan-Meier analysis'], ['mcnemar', 'the McNemar test'], ['kappa', "Cohen's kappa"],
@@ -23437,13 +23607,17 @@ const Analysis = (() => {
     const within = [];
     if (used.has('pairedt')) within.push('paired t-test for parametric data with two measurements');
     if (used.has('wilcoxon')) within.push('Wilcoxon signed-rank test for non-parametric data with two measurements');
-    if (used.has('rmanova')) within.push('repeated-measures ANOVA with Greenhouse-Geisser correction for parametric data');
+    if (used.has('rmanova')) within.push(`repeated-measures ANOVA ${used.has('rmSph:hf') ? 'with Huynh-Feldt correction' : used.has('rmSph:none') ? 'assuming sphericity' : 'with Greenhouse-Geisser correction'} for parametric data`);
     if (used.has('friedman')) within.push('Friedman test for non-parametric data');
     if (within.length) s.push(`Changes over time${k > 1 ? ' within each group' : ''} were assessed using ${listJoin(within)}.`);
     const post = [];
     if (used.has('postPairedt')) post.push('paired t-tests');
     if (used.has('postWilcoxon')) post.push('Wilcoxon signed-rank tests');
-    if (post.length) s.push(`When significant, each measurement was compared with the first one using ${listJoin(post)} with Bonferroni correction.`);
+    if (post.length) {
+      const what = used.has('rmPost:all') ? 'all pairs of measurements were compared' : used.has('rmPost:consecutive') ? 'consecutive measurements were compared' : 'each measurement was compared with the first one';
+      const adj = used.has('rmAdj:holm') ? ' with Holm correction' : used.has('rmAdj:none') ? ' without correction for multiple comparisons' : ' with Bonferroni correction';
+      s.push(`${RO.always ? 'In addition' : 'When significant'}, ${what} using ${listJoin(post)}${adj}.`);
+    }
     if (used.has('pearson') || used.has('spearman')) {
       const c = [];
       if (used.has('pearson')) c.push("Pearson's correlation coefficient (r) for normally distributed variables");
@@ -23543,7 +23717,7 @@ const Analysis = (() => {
     return t;
   }
 
-  return { run, explore, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { run, explore, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();
 
 /* Prof MSE Easy Stat — canvas charts (bar ± error, line, box plot, CONSORT) */
@@ -23748,6 +23922,7 @@ const Charts = (() => {
     const st = { ...DEFAULT_STYLE, ...style };
     if (spec.type === 'pie') return pieChart(spec, paletteName, st);
     if (spec.type === 'hbar') return hbarChart(spec, paletteName, st);
+    if (spec.type === 'qq') return qqChart(spec, paletteName, st);
     if (spec.type === 'scatter') return scatter(spec, paletteName, st);
     if (spec.type === 'roc') return rocChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
@@ -23770,6 +23945,7 @@ const Charts = (() => {
     if (spec.type === 'box' || spec.type === 'dot' || spec.type === 'violin') {
       spec.series.forEach(s => s.data.forEach(arr => arr.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); })));
     } else if (spec.type === 'stacked') { lo = 0; hi = 100; } else {
+      (spec.individual || []).flat(2).forEach(v => { if (isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
       spec.series.forEach(s => s.values.forEach((v, i) => {
         const up = s.err && s.err[i] != null ? v + s.err[i] : s.hi ? s.hi[i] : v;
         const dn = s.err && s.err[i] != null ? v - s.err[i] : s.lo ? s.lo[i] : v;
@@ -23847,6 +24023,13 @@ const Charts = (() => {
         }
       }));
     } else if (spec.type === 'line') {
+      // optional thin line for every patient (spaghetti plot), under the means
+      if (spec.individual) spec.series.forEach((s, si) => {
+        const off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
+        ctx.strokeStyle = pal[si % pal.length]; ctx.globalAlpha = 0.22; ctx.lineWidth = 2; ctx.setLineDash([]);
+        (spec.individual[si] || []).forEach(p => { ctx.beginPath(); p.forEach((v, ci) => { const x = L + cw * (ci + 0.5) + off; ci ? ctx.lineTo(x, y(v)) : ctx.moveTo(x, y(v)); }); ctx.stroke(); });
+        ctx.globalAlpha = 1;
+      });
       spec.series.forEach((s, si) => {
         const color = pal[si % pal.length], off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
         const xs = s.values.map((_, ci) => L + cw * (ci + 0.5) + off);
@@ -23979,6 +24162,44 @@ const Charts = (() => {
     catStars.forEach((s, ci) => { if (s) ctx.fillText(s, L + cw * (ci + 0.5), y(dataHi) - 24); });
 
     drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2 })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
+    return c;
+  }
+
+  /* ---------- normal Q-Q plot: each group's sorted values against normal quantiles (Blom), with the line mean + SD × z ---------- */
+  function qqChart(spec, paletteName, st) {
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const sets = spec.series.filter(s => s.data.length >= 3).map((s, i) => {
+      const a = [...s.data].sort((x, y) => x - y), n = a.length, m = Stats.mean(a), sd = Stats.sd(a);
+      return { name: s.name, color: pal[spec.series.indexOf(s) % pal.length], m, sd, pts: a.map((v, j) => [jStat.normal.inv((j + 1 - 0.375) / (n + 0.25), 0, 1), v]) };
+    });
+    const items = spec.legend === false ? [] : sets.map(x => ({ name: x.name, color: x.color }));
+    const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'inside' ? 'bottom' : st.legend }, ts);
+    const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    const pw = W - L - R, ph = H - T - B;
+    const zs = sets.flatMap(x => x.pts.map(q => q[0])), vs = sets.flatMap(x => x.pts.map(q => q[1]));
+    if (!zs.length) return c;
+    const sx = niceScale(Math.min(...zs), Math.max(...zs), 6), sy = niceScale(Math.min(...vs), Math.max(...vs), 6);
+    const X = z => L + (z - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - sy.min) / (sy.max - sy.min) * ph;
+    ctx.font = F(600, 24);
+    for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) {
+      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); }
+      ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(fmtTick(v, sy.step), L - 12, Y(v));
+    }
+    for (let z = sx.min; z <= sx.max + 1e-9; z += sx.step) { ctx.fillStyle = '#444'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(fmtTick(z, sx.step), X(z), T + ph + 10); }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+    ctx.font = F(700, 26); ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText('Expected normal quantile (z)', L + pw / 2, T + ph + 52 * ts);
+    ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText(`Observed ${spec.yLabel || 'value'}`, 0, 0); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+    sets.forEach(x => {
+      ctx.strokeStyle = x.color; ctx.lineWidth = 3; ctx.setLineDash([12, 8]);
+      ctx.beginPath(); ctx.moveTo(X(sx.min), Y(x.m + x.sd * sx.min)); ctx.lineTo(X(sx.max), Y(x.m + x.sd * sx.max)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = x.color; ctx.globalAlpha = 0.75;
+      x.pts.forEach(([z, v]) => { ctx.beginPath(); ctx.arc(X(z), Y(v), 7, 0, Math.PI * 2); ctx.fill(); });
+      ctx.globalAlpha = 1;
+    });
+    ctx.restore();
+    drawLegend(ctx, items, 'fill', st, lm, { W, H, L, T, pw, ph, ts });
     return c;
   }
 
@@ -25064,6 +25285,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     pctDecimals: 1, meanStyle: 'pm', iqrStyle: 'dash', secondRow: 'auto', pDigits: 3, pHead: 'P value', sigSym: '*', showStat: false, missingNote: false,
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
     pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none', tableNewPage: false,
+    rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -25080,7 +25302,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     pctDecimals: ['optPctDec'], meanStyle: ['optMeanStyle'], iqrStyle: ['optIqrStyle'], secondRow: ['optSecondRow'], pDigits: ['optPDigits'], pHead: ['optPHead'],
     sigSym: ['optSigSym'], showStat: ['optShowStat', true], missingNote: ['optMissingNote', true], orientation: ['optOrientation'], tableCaption: ['optTableCaption'],
     pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
-    pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote'], tableNewPage: ['optTableNewPage', true]
+    pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote'], tableNewPage: ['optTableNewPage', true],
+    rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -26323,10 +26546,30 @@ if (typeof module !== 'undefined') module.exports = Examples;
   /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+  // options of the stage, saved with the setup / project
+  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false };
+  const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
+  function renderXpOpts() {
+    const o = xpo();
+    document.querySelectorAll('[data-xo]').forEach(el => { const v = o[el.dataset.xo]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v); });
+  }
+  $('#xpOpts').addEventListener('input', e => {
+    const k = e.target.dataset.xo; if (!k) return;
+    const o = xpo(); o[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    // the statistics themselves change with these; the rest only filters what is shown
+    if (['extra', 'fig', 'out', 'dec'].includes(k)) renderExplore(); else drawExplore();
+  });
+  // the variables shown: type, search and "significant only"
+  const xpList = () => {
+    const x = state.explore, o = xpo(), q = o.q.trim().toLowerCase(), id = $('#xpVar').value;
+    return x.items.filter(it => (!id || it.id === id) && (o.type === 'all' || it.kind === o.type) && (!q || it.label.toLowerCase().includes(q)) && (!o.sig || it.sig));
+  };
+  const xpTables = it => { const o = xpo(); return it.tables.filter(t => !t.cat || o[t.cat] !== false); };
   function renderExplore() {
     const box = $('#explore'); if (!state.cfg) return;
+    const o = xpo(); renderXpOpts();
     let x;
-    try { x = Analysis.explore(state.data, state.cfg); } catch (err) { console.error(err); box.innerHTML = `<p style="color:var(--bad)">${esc(err.message)}</p>`; return; }
+    try { x = Analysis.explore(state.data, state.cfg, { dec: o.dec, extra: o.extra, fig: o.fig === 'none' ? 'auto' : o.fig, out: o.out }); } catch (err) { console.error(err); box.innerHTML = `<p style="color:var(--bad)">${esc(err.message)}</p>`; return; }
     state.explore = x;
     const sel = $('#xpVar'), cur = sel.value, kinds = { numeric: 'numeric', categorical: 'categorical', repeated: 'repeated' };
     sel.innerHTML = `<option value="">All variables (${x.items.length})</option>` + x.items.map(it => `<option value="${esc(it.id)}">${esc(it.label)} — ${kinds[it.kind]}</option>`).join('');
@@ -26339,10 +26582,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const cfg = state.cfg, idc = cfg.idCols[0], rows = state.data.rows, num = it.kind !== 'categorical';
     return `<div class="xp-groups">${activeGroups().map(g => {
       const idx = rows.map((r, i) => i).filter(i => Analysis.groupOf(cfg, rows[i]) === g);
-      const fence = it.cols.map(c => {
-        const v = idx.map(i => Analysis.toNum(rows[i][c.col])).filter(isFinite); if (!num || v.length < 4) return null;
-        const q1 = Stats.quantile(v, 0.25), q3 = Stats.quantile(v, 0.75), d = 1.5 * (q3 - q1); return [q1 - d, q3 + d];
-      });
+      const fence = it.cols.map(c => num ? Analysis.outFence(idx.map(i => Analysis.toNum(rows[i][c.col])).filter(isFinite), xpo().out) : null);
       const cls = (val, ci, i, col) => {
         const miss = val === null || val === undefined || String(val).trim() === '', n = Analysis.toNum(val), f = fence[ci];
         return [miss ? 'miss' : f && isFinite(n) && (n < f[0] || n > f[1]) ? 'out' : '', state.xpChanged.has(i + '|' + col) ? 'chg' : ''].filter(Boolean).join(' ');
@@ -26350,18 +26590,19 @@ if (typeof module !== 'undefined') module.exports = Examples;
       return `<div class="xp-group"><h5>${esc(cfg.groupLabels[g] || g)} (n=${idx.length})</h5><table class="t xd"><thead><tr><th>#</th>${idc ? `<th>${esc(idc)}</th>` : ''}${it.cols.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${
         idx.map(i => `<tr><td class="rn">${i + 1}</td>${idc ? `<td class="rn">${esc(rows[i][idc] ?? '')}</td>` : ''}${it.cols.map((c, ci) =>
           `<td class="${cls(rows[i][c.col], ci, i, c.col)}" contenteditable="true" data-xr="${i}" data-xc="${esc(c.col)}">${esc(rows[i][c.col] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-    }).join('')}</div><div class="xp-legend">Orange: outlier (beyond 1.5 × IQR of its group) · red: missing · purple edge: changed here. Click a value to change it; Enter to confirm, Esc to cancel.</div>`;
+    }).join('')}</div><div class="xp-legend">${Analysis.OUT_RULE[xpo().out] ? `Orange: outlier (${Analysis.OUT_RULE[xpo().out]} of its group) · ` : ''}red: missing · purple edge: changed here. Click a value to change it; Enter to confirm, Esc to cancel.</div>`;
   }
   function drawExplore() {
     const x = state.explore; if (!x) return;
-    const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items, o = state.cfg.options, figs = $('#xpFigs').checked;
+    const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none';
+    if (xpo().openData) list.forEach(it => state.xpOpen.add(it.id));
     $('#explore').innerHTML = list.length ? list.map(it => {
       let img = '';
       if (figs && it.spec) { try { img = `<img class="xp-fig" src="${Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png')}" alt="">`; } catch (e) { /* no figure */ } }
       return `<div class="report-sec xp-item"><div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>
-        <div class="xp-body">${img}<div class="xp-tables">${it.tables.map(tblHtml).join('')}</div></div>
+        <div class="xp-body">${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-    }).join('') : '<p class="legend-note">No variables are ticked in step 2.</p>';
+    }).join('') : `<p class="legend-note">${x.items.length ? 'No variable matches the options (type, search, significant only).' : 'No variables are ticked in step 2.'}</p>`;
     $('#xpUndo').disabled = !state.undo || !state.undo.length;
   }
   // the data panel is filled when opened, and stays open when the results are redrawn
@@ -26397,9 +26638,16 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const x = state.explore; if (!x) return;
     busy(true);
     try {
-      const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items, o = state.cfg.options, figs = $('#xpFigs').checked;
+      const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none';
+      const idc = state.cfg.idCols[0], rows = state.data.rows;
+      // optional: each group's patients and values after the results
+      const dataTables = it => activeGroups().map(g => {
+        const idx = rows.map((r, i) => i).filter(i => Analysis.groupOf(state.cfg, rows[i]) === g);
+        return { title: `Data — ${state.cfg.groupLabels[g] || g} (n=${idx.length})`, head: ['#', ...(idc ? [idc] : []), ...it.cols.map(c => c.label)],
+          rows: idx.map(i => [String(i + 1), ...(idc ? [String(rows[i][idc] ?? '')] : []), ...it.cols.map(c => String(rows[i][c.col] ?? ''))]) };
+      });
       const items = list.map(it => {
-        const out = { label: it.label, summary: it.summary, tables: it.tables };
+        const out = { label: it.label, summary: it.summary, tables: [...xpTables(it), ...(xpo().wordData ? dataTables(it) : [])] };
         if (figs && it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), chartStyle(o)); Object.assign(out, { url: c.toDataURL('image/png'), w: c.width, h: c.height }); } catch (e) { /* no figure */ } }
         return out;
       });
@@ -26416,8 +26664,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
   $('#xpCopy').onclick = async () => {
     // all tables as tab-separated text, ready to paste into Excel or Word
     const x = state.explore; if (!x) return;
-    const id = $('#xpVar').value, list = id ? x.items.filter(it => it.id === id) : x.items;
-    const txt = list.map(it => [it.label, ...it.tables.map(t => [t.title, t.head.join('\t'), ...t.rows.map(r => r.join('\t'))].join('\n'))].join('\n\n')).join('\n\n\n');
+    const list = xpList();
+    const txt = list.map(it => [it.label, ...xpTables(it).map(t => [t.title, t.head.join('\t'), ...t.rows.map(r => r.join('\t'))].join('\n'))].join('\n\n')).join('\n\n\n');
     try { await navigator.clipboard.writeText(txt); toast('Tables copied — paste them into Excel or Word'); } catch (e) { toast('Copying is blocked in this browser'); }
   };
 
@@ -26532,6 +26780,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       if (series.some(s => s.err && s.err.some(v => v !== null && v !== undefined))) out.push(`${what} show the mean; error bars show ${err}.`);
       else if (series.some(s => s.lo)) out.push(`${what} show the median; error bars show the interquartile range (IQR).`);
     }
+    if (spec.individual) out.push('Thin lines show individual patients.');
     if (spec.type === 'box') {
       out.push('Boxes show the median and interquartile range (IQR); whiskers extend to the most extreme values within 1.5 × IQR, and points beyond them are outliers.');
       if (o.boxMean) out.push('◆ marks the mean.');

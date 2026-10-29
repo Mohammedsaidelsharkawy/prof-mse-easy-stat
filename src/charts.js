@@ -200,6 +200,7 @@ const Charts = (() => {
     const st = { ...DEFAULT_STYLE, ...style };
     if (spec.type === 'pie') return pieChart(spec, paletteName, st);
     if (spec.type === 'hbar') return hbarChart(spec, paletteName, st);
+    if (spec.type === 'qq') return qqChart(spec, paletteName, st);
     if (spec.type === 'scatter') return scatter(spec, paletteName, st);
     if (spec.type === 'roc') return rocChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
@@ -222,6 +223,7 @@ const Charts = (() => {
     if (spec.type === 'box' || spec.type === 'dot' || spec.type === 'violin') {
       spec.series.forEach(s => s.data.forEach(arr => arr.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); })));
     } else if (spec.type === 'stacked') { lo = 0; hi = 100; } else {
+      (spec.individual || []).flat(2).forEach(v => { if (isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
       spec.series.forEach(s => s.values.forEach((v, i) => {
         const up = s.err && s.err[i] != null ? v + s.err[i] : s.hi ? s.hi[i] : v;
         const dn = s.err && s.err[i] != null ? v - s.err[i] : s.lo ? s.lo[i] : v;
@@ -299,6 +301,13 @@ const Charts = (() => {
         }
       }));
     } else if (spec.type === 'line') {
+      // optional thin line for every patient (spaghetti plot), under the means
+      if (spec.individual) spec.series.forEach((s, si) => {
+        const off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
+        ctx.strokeStyle = pal[si % pal.length]; ctx.globalAlpha = 0.22; ctx.lineWidth = 2; ctx.setLineDash([]);
+        (spec.individual[si] || []).forEach(p => { ctx.beginPath(); p.forEach((v, ci) => { const x = L + cw * (ci + 0.5) + off; ci ? ctx.lineTo(x, y(v)) : ctx.moveTo(x, y(v)); }); ctx.stroke(); });
+        ctx.globalAlpha = 1;
+      });
       spec.series.forEach((s, si) => {
         const color = pal[si % pal.length], off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
         const xs = s.values.map((_, ci) => L + cw * (ci + 0.5) + off);
@@ -431,6 +440,44 @@ const Charts = (() => {
     catStars.forEach((s, ci) => { if (s) ctx.fillText(s, L + cw * (ci + 0.5), y(dataHi) - 24); });
 
     drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2 })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
+    return c;
+  }
+
+  /* ---------- normal Q-Q plot: each group's sorted values against normal quantiles (Blom), with the line mean + SD × z ---------- */
+  function qqChart(spec, paletteName, st) {
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const sets = spec.series.filter(s => s.data.length >= 3).map((s, i) => {
+      const a = [...s.data].sort((x, y) => x - y), n = a.length, m = Stats.mean(a), sd = Stats.sd(a);
+      return { name: s.name, color: pal[spec.series.indexOf(s) % pal.length], m, sd, pts: a.map((v, j) => [jStat.normal.inv((j + 1 - 0.375) / (n + 0.25), 0, 1), v]) };
+    });
+    const items = spec.legend === false ? [] : sets.map(x => ({ name: x.name, color: x.color }));
+    const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'inside' ? 'bottom' : st.legend }, ts);
+    const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    const pw = W - L - R, ph = H - T - B;
+    const zs = sets.flatMap(x => x.pts.map(q => q[0])), vs = sets.flatMap(x => x.pts.map(q => q[1]));
+    if (!zs.length) return c;
+    const sx = niceScale(Math.min(...zs), Math.max(...zs), 6), sy = niceScale(Math.min(...vs), Math.max(...vs), 6);
+    const X = z => L + (z - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - sy.min) / (sy.max - sy.min) * ph;
+    ctx.font = F(600, 24);
+    for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) {
+      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); }
+      ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(fmtTick(v, sy.step), L - 12, Y(v));
+    }
+    for (let z = sx.min; z <= sx.max + 1e-9; z += sx.step) { ctx.fillStyle = '#444'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(fmtTick(z, sx.step), X(z), T + ph + 10); }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+    ctx.font = F(700, 26); ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText('Expected normal quantile (z)', L + pw / 2, T + ph + 52 * ts);
+    ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText(`Observed ${spec.yLabel || 'value'}`, 0, 0); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+    sets.forEach(x => {
+      ctx.strokeStyle = x.color; ctx.lineWidth = 3; ctx.setLineDash([12, 8]);
+      ctx.beginPath(); ctx.moveTo(X(sx.min), Y(x.m + x.sd * sx.min)); ctx.lineTo(X(sx.max), Y(x.m + x.sd * sx.max)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = x.color; ctx.globalAlpha = 0.75;
+      x.pts.forEach(([z, v]) => { ctx.beginPath(); ctx.arc(X(z), Y(v), 7, 0, Math.PI * 2); ctx.fill(); });
+      ctx.globalAlpha = 1;
+    });
+    ctx.restore();
+    drawLegend(ctx, items, 'fill', st, lm, { W, H, L, T, pw, ph, ts });
     return c;
   }
 
