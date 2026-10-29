@@ -966,7 +966,7 @@
       if (t === 'ancova') { fields = select('outcome', 'Outcome compared between the study groups', num, a.outcome) + '<div></div>'; predLabel = 'Covariates to adjust for (e.g. the baseline value, age)'; preds = cols.filter(c => c.col !== cfg.groupCol); }
       if (t === 'survival') fields = select('outcome', 'Follow-up time', num, a.outcome) + select('event', 'Event column', cols.filter(isCat), a.event)
         + levelSelect('Event value (others are censored)', a.event, a.positive)
-        + `<div><label class="f">Survival at time (optional)</label><input type="text" data-af="at" value="${esc(a.at || '')}" placeholder="e.g. 12"></div>`;
+        + `<div><label class="f">Survival at time(s) (optional)</label><input type="text" data-af="at" value="${esc(a.at || '')}" placeholder="e.g. 12 or 6, 12, 24"></div>`;
       const cat = cols.filter(isCat);
       if (t === 'cox') { fields = select('outcome', 'Follow-up time', num, a.outcome) + select('event', 'Event column', cat, a.event) + levelSelect('Event value (others are censored)', a.event, a.positive); predLabel = 'Predictors (covariates, e.g. group, age, stage)'; preds = cols.filter(c => c.col !== a.event); }
       if (t === 'mcnemar') fields = select('outcome', 'First measurement (e.g. before)', cat, a.outcome) + select('second', 'Second measurement (e.g. after)', cat.filter(c => c.col !== a.outcome), a.second) + levelSelect('Category to report', a.outcome, a.positive);
@@ -1000,11 +1000,20 @@
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
       out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
-    if (t === 'correlation') out.push(`<div><label class="f">Coefficient</label>${sel('method', [['auto', 'Automatic (Pearson if normal, else Spearman)'], ['pearson', 'Pearson'], ['spearman', 'Spearman']], a.method)}</div>`,
+    if (t === 'correlation') out.push(`<div><label class="f">Coefficient</label>${sel('method', [['auto', 'Automatic (Pearson if normal, else Spearman)'], ['pearson', 'Pearson'], ['spearman', 'Spearman'], ['kendall', "Kendall's tau-b"]], a.method)}</div>`,
       `<div><label class="f">Table layout</label>${sel('layout', [['auto', 'Automatic'], ['matrix', 'Matrix'], ['pairs', 'List of pairs']], a.layout)}</div>`,
       `<div><label class="f">Scatter plots of significant pairs</label>${sel('scatter', [['2', 'Up to 2'], ['0', 'None'], ['1', 'Up to 1'], ['4', 'Up to 4'], ['all', 'All']], a.scatter)}</div>`,
       `<div>${box('ci', '95% CI of the coefficients')}</div>`);
-    if (t === 'linear') out.push(`<div>${box('vif', 'Collinearity (VIF)')}</div>`);
+    if (t === 'linear') out.push(`<div>${box('vif', 'Collinearity (VIF)')}</div>`, `<div>${box('diag', 'Residual diagnostics (Durbin-Watson, normality, residual plot)')}</div>`);
+    if (['linear', 'logistic', 'cox'].includes(t)) out.push(`<div>${box('forest', 'Forest plot of the estimates')}</div>`);
+    if (t === 'logistic') out.push(`<div>${box('modelRoc', 'ROC curve and AUC of the model')}</div>`,
+      `<div><label class="f">Classification cut-off (predicted probability)</label><input type="text" data-af="cut" value="${esc(a.cut || '')}" placeholder="0.5"></div>`);
+    if (t === 'survival') out.push(`<div>${box('ciBand', '95% CI bands on the curves')}</div>`, `<div>${box('risk', 'Number at risk table')}</div>`, `<div>${box('pairwise', 'Pairwise log-rank tests (3+ groups, Bonferroni)')}</div>`);
+    if (t === 'kappa') out.push(`<div><label class="f">Weighted kappa (ordered categories)</label>${sel('weights', [['none', 'No — Cohen\'s kappa only'], ['linear', 'Linear weights'], ['quadratic', 'Quadratic weights']], a.weights)}</div>`);
+    if (t === 'agreement') out.push(`<div><label class="f">ICC type</label>${sel('iccType', [['agreement', 'Absolute agreement (A,1)'], ['consistency', 'Consistency (C,1)']], a.iccType)}</div>`, `<div>${box('baPct', 'Bland-Altman of % differences')}</div>`);
+    if (t === 'diagnostic') out.push(`<div><label class="f">Predictive values at a prevalence of (%)</label><input type="text" data-af="prev" value="${esc(a.prev || '')}" placeholder="e.g. 10"></div>`);
+    if (t === 'ancova') out.push(`<div>${box('slopes', 'Test homogeneity of regression slopes')}</div>`);
+    if (t === 'cronbach') out.push(`<div>${box('split', 'Split-half reliability (Spearman-Brown)')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('hl', 'Hosmer-Lemeshow goodness of fit')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('classTable', 'Classification table (sensitivity / specificity)')}</div>`);
     if (t === 'linear' || t === 'logistic') out.push(`<div>${box('constant', 'Show the constant')}</div>`);
@@ -1528,7 +1537,9 @@
     if (spec.type === 'dot') out.push(`Each dot is one patient; the line and whiskers show the ${spec.median ? 'median and IQR' : 'mean ± SD'}.`);
     if (spec.type === 'roc') out.push([spec.diagonal === false ? '' : 'The dashed diagonal is the line of no discrimination (AUC = 0.5).', spec.fill && series.length === 1 ? 'The shaded region is the area under the curve.' : '',
       series.some(s => s.cut) ? 'Circles mark the chosen cut-off values.' : ''].filter(Boolean).join(' '));
-    if (spec.type === 'km') out.push('Vertical ticks mark censored patients.');
+    if (spec.type === 'km') out.push(`Vertical ticks mark censored patients.${spec.band ? ' Shaded bands show the 95% CI.' : ''}`);
+    if (spec.type === 'forest') out.push(`Squares show the estimates and lines their 95% CI; the dashed line marks no effect (${spec.log ? '1' : '0'}). Significant estimates are coloured.`);
+    if (spec.type === 'scatter' && spec.zeroLine) out.push('Each point is one patient; the dashed line marks zero.');
     if (spec.type === 'ba') out.push('The middle line shows the mean difference (bias) and the dashed lines the 95% limits of agreement (mean ± 1.96 SD).');
     if (['bar', 'line', 'box', 'dot', 'violin'].includes(spec.type)) {
       const ps = [...(spec.sig || []).map(q => q.p), ...(spec.sigCat || [])].filter(p => p <= spec.alpha);

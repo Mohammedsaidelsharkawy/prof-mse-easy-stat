@@ -368,13 +368,18 @@ const Stats = (() => {
   // times: follow-up; events: true = event, false = censored
   function kaplanMeier(times, events) {
     const idx = times.map((t, i) => i).sort((a, b) => times[a] - times[b]);
-    let atRisk = times.length, S = 1;
-    const steps = [{ t: 0, s: 1 }], censored = [];
+    let atRisk = times.length, S = 1, gw = 0;
+    const steps = [{ t: 0, s: 1, lo: 1, hi: 1 }], censored = [];
     for (let i = 0; i < idx.length;) {
       const t = times[idx[i]];
       let d = 0, c = 0;
       while (i < idx.length && times[idx[i]] === t) { events[idx[i]] ? d++ : c++; i++; }
-      if (d) { S *= 1 - d / atRisk; steps.push({ t, s: S, atRisk, d }); }
+      if (d) {
+        S *= 1 - d / atRisk; gw += atRisk > d ? d / (atRisk * (atRisk - d)) : Infinity;
+        // log(-log) limits, as in lifelines
+        const se = Math.sqrt(gw) / Math.abs(Math.log(S)), lo = S > 0 && S < 1 && isFinite(se) ? S ** Math.exp(1.959964 * se) : S > 0 ? S : 0, hi = S > 0 && S < 1 && isFinite(se) ? S ** Math.exp(-1.959964 * se) : S > 0 ? S : 0;
+        steps.push({ t, s: S, atRisk, d, lo, hi });
+      }
       if (c) censored.push({ t, s: S });
       atRisk -= d + c;
     }
@@ -484,8 +489,48 @@ const Stats = (() => {
     const Fu = jStat.centralF.inv(0.975, n - 1, v), Fl = jStat.centralF.inv(0.975, v, n - 1);
     const lo = n * (msR - Fu * msE) / (Fu * (k * msC + (k * n - k - n) * msE) + n * msR);
     const hi = n * (Fl * msR - msE) / (k * msC + (k * n - k - n) * msE + n * Fl * msR);
-    return { single, average, lo, hi, loAvg: lo * k / (1 + lo * (k - 1)), hiAvg: hi * k / (1 + hi * (k - 1)), F, df1, df2, p: 1 - jStat.centralF.cdf(F, df1, df2), n, k };
+    // consistency (ICC(C,1) and ICC(C,k)), with exact F-based limits
+    const cSingle = (msR - msE) / (msR + (k - 1) * msE), cAverage = (msR - msE) / msR;
+    const FL = F / jStat.centralF.inv(0.975, df1, df2), FU = F * jStat.centralF.inv(0.975, df2, df1);
+    const cLo = (FL - 1) / (FL + k - 1), cHi = (FU - 1) / (FU + k - 1);
+    return { single, average, lo, hi, loAvg: lo * k / (1 + lo * (k - 1)), hiAvg: hi * k / (1 + hi * (k - 1)), F, df1, df2, p: 1 - jStat.centralF.cdf(F, df1, df2), n, k,
+      consistency: { single: cSingle, average: cAverage, lo: cLo, hi: cHi, loAvg: 1 - 1 / FL, hiAvg: 1 - 1 / FU } };
   }
+  // weighted kappa for ordered categories (linear or quadratic disagreement weights), variances as in statsmodels / SAS
+  function weightedKappa(table, type = 'linear') {
+    const m = table.length, N = sum(table.flat()), f = table.map(r => r.map(c => c / N));
+    const row = f.map(r => sum(r)), col = f[0].map((_, j) => sum(f.map(r => r[j])));
+    const w = table.map((_, i) => table.map((__, j) => 1 - (type === 'quadratic' ? ((i - j) / (m - 1)) ** 2 : Math.abs(i - j) / (m - 1))));
+    let po = 0, pe = 0;
+    for (let i = 0; i < m; i++) for (let j = 0; j < m; j++) { po += w[i][j] * f[i][j]; pe += w[i][j] * row[i] * col[j]; }
+    const kappa = (po - pe) / (1 - pe);
+    const wRow = w.map(r => sum(r.map((v, j) => v * col[j]))), wCol = w[0].map((_, j) => sum(w.map((r, i) => r[j] * row[i])));
+    let a = 0, a0 = 0;
+    for (let i = 0; i < m; i++) for (let j = 0; j < m; j++) {
+      a += f[i][j] * (w[i][j] - (wCol[j] + wRow[i]) * (1 - kappa)) ** 2;
+      a0 += row[i] * col[j] * (w[i][j] - (wCol[j] + wRow[i])) ** 2;
+    }
+    const fac = 1 / ((1 - pe) ** 2 * N), se = Math.sqrt(Math.max(0, (a - (kappa - pe * (1 - kappa)) ** 2) * fac)), se0 = Math.sqrt(Math.max(0, (a0 - pe ** 2) * fac));
+    const z = se0 > 0 ? kappa / se0 : 0;
+    return { kappa, se, lo: kappa - 1.959964 * se, hi: kappa + 1.959964 * se, z, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), po, pe, n: N, type };
+  }
+  // Kendall's tau-b with the large-sample test (tie-corrected variance, as scipy's asymptotic method)
+  function kendall(x, y) {
+    const n = x.length; let S = 0, tx = 0, ty = 0;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const a = Math.sign(x[i] - x[j]), b = Math.sign(y[i] - y[j]);
+      S += a * b; if (!a) tx++; if (!b) ty++;
+    }
+    const n0 = n * (n - 1) / 2, tau = S / Math.sqrt((n0 - tx) * (n0 - ty));
+    const ties = v => { const c = {}; v.forEach(t => { c[t] = (c[t] || 0) + 1; }); return Object.values(c).filter(t => t > 1); };
+    const T = ties(x), U = ties(y), s = (L, f) => sum(L.map(f));
+    const v = (n * (n - 1) * (2 * n + 5) - s(T, t => t * (t - 1) * (2 * t + 5)) - s(U, t => t * (t - 1) * (2 * t + 5))) / 18
+      + s(T, t => t * (t - 1) * (t - 2)) * s(U, t => t * (t - 1) * (t - 2)) / (9 * n * (n - 1) * (n - 2)) + s(T, t => t * (t - 1)) * s(U, t => t * (t - 1)) / (2 * n * (n - 1));
+    const z = v > 0 ? S / Math.sqrt(v) : 0;
+    return { r: tau, z, n, p: v > 0 ? 2 * jStat.normal.cdf(-Math.abs(z), 0, 1) : 1 };
+  }
+  // Durbin-Watson statistic of residuals in their order
+  const durbinWatson = e => sum(e.slice(1).map((v, i) => (v - e[i]) ** 2)) / sum(e.map(v => v * v));
   // Bland–Altman: bias (a − b) with 95% CI and limits of agreement
   function blandAltman(a, b) {
     const d = a.map((v, i) => v - b[i]), n = d.length, bias = mean(d), s = sd(d), tc = jStat.studentt.inv(0.975, n - 1);
@@ -817,7 +862,7 @@ const Stats = (() => {
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,
-    pairedT, wilcoxonSigned, pearson, spearman, bonferroni, holm,
+    pairedT, wilcoxonSigned, pearson, spearman, kendall, bonferroni, holm, weightedKappa, durbinWatson,
     invert, linearRegression, logisticRegression, hosmerLemeshow, roc, rocCompare,
     welchAnova, gamesHowell, dunn, chiSquarePairwise, mixedAnova, kaplanMeier, logRank, ancova,
     lilliefors, oddsRatio, mcnemar, cohenKappa, icc, blandAltman, cronbach, clopperPearson, diagnostic2x2, coxRegression

@@ -201,6 +201,7 @@ const Charts = (() => {
     if (spec.type === 'pie') return pieChart(spec, paletteName, st);
     if (spec.type === 'hbar') return hbarChart(spec, paletteName, st);
     if (spec.type === 'qq') return qqChart(spec, paletteName, st);
+    if (spec.type === 'forest') return forestChart(spec, paletteName, st);
     if (spec.type === 'scatter') return scatter(spec, paletteName, st);
     if (spec.type === 'roc') return rocChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
@@ -443,6 +444,45 @@ const Charts = (() => {
     return c;
   }
 
+  /* ---------- forest plot: one estimate with its 95% CI per row; OR / HR on a log scale with the line of no effect at 1, B at 0 ---------- */
+  function forestChart(spec, paletteName, st) {
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const rows = spec.rows.filter(r => isFinite(r.est) && isFinite(r.lo) && isFinite(r.hi) && (!spec.log || (r.lo > 0 && r.hi > 0)));
+    ctx.font = F(700, 25);
+    const labW = Math.min(W * 0.34, Math.max(120, ...rows.map(r => ctx.measureText(r.label).width)) + 24), valW = 330 * ts;
+    const L = 24 + labW, R = valW + 30, T = 40, B = 110 * ts, pw = W - L - R, ph = H - T - B, rh = ph / Math.max(1, rows.length);
+    const tr = v => spec.log ? Math.log(v) : v;
+    let lo = Math.min(tr(spec.ref), ...rows.map(r => tr(r.lo))), hi = Math.max(tr(spec.ref), ...rows.map(r => tr(r.hi)));
+    const pad = (hi - lo) * 0.06 || 1; lo -= pad; hi += pad;
+    const X = v => L + (tr(v) - lo) / (hi - lo) * pw;
+    // ticks: powers / halves on the log scale, a nice scale otherwise
+    let ticks = [];
+    if (spec.log) { const cand = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]; ticks = cand.filter(t => Math.log(t) >= lo && Math.log(t) <= hi); if (ticks.length > 7) ticks = ticks.filter((t, i) => t === 1 || i % 2 === ticks.indexOf(1) % 2); }
+    else { const sc = niceScale(lo, hi, 6); for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) if (v >= lo && v <= hi) ticks.push(+v.toFixed(10)); }
+    ctx.font = F(600, 23); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ticks.forEach(t => {
+      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(t), T); ctx.lineTo(X(t), T + ph); ctx.stroke(); }
+      ctx.fillStyle = '#444'; ctx.fillText(String(t), X(t), T + ph + 10);
+    });
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+    ctx.setLineDash([10, 8]); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(X(spec.ref), T); ctx.lineTo(X(spec.ref), T + ph); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = F(700, 25); ctx.fillStyle = '#333'; ctx.fillText(spec.xLabel || '', L + pw / 2, T + ph + 50 * ts);
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.font = F(700, 22); ctx.fillText(spec.valHead || 'Estimate (95% CI)', L + pw + 24, T - 18);
+    rows.forEach((r, i) => {
+      const yy = T + rh * (i + 0.5), col = r.p <= (spec.alpha ?? 0.05) ? pal[0] : '#8A8A8A';
+      // labels shrink to fit their column, then are shortened with an ellipsis
+      let fs = 25, lab = r.label; ctx.font = F(700, fs);
+      while (ctx.measureText(lab).width > labW - 14 && fs > 17) ctx.font = F(700, --fs);
+      while (ctx.measureText(lab).width > labW - 14 && lab.length > 4) lab = lab.slice(0, -2).trimEnd() + '…';
+      ctx.fillStyle = '#333'; ctx.textAlign = 'right'; ctx.fillText(lab, L - 14, yy);
+      ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(X(r.lo), yy); ctx.lineTo(X(r.hi), yy); ctx.stroke();
+      const sz = 11; ctx.fillStyle = col; ctx.fillRect(X(r.est) - sz, yy - sz, 2 * sz, 2 * sz);
+      ctx.font = F(600, 23); ctx.fillStyle = '#333'; ctx.textAlign = 'left'; ctx.fillText(r.text || '', L + pw + 24, yy);
+    });
+    return c;
+  }
+
   /* ---------- normal Q-Q plot: each group's sorted values against normal quantiles (Blom), with the line mean + SD × z ---------- */
   function qqChart(spec, paletteName, st) {
     const pal = palette(paletteName);
@@ -611,6 +651,15 @@ const Charts = (() => {
     ctx.font = F(700, 28); ctx.fillStyle = '#333';
     ctx.fillText(spec.xLabel || 'Time', L + pw / 2, T + ph + 60 * ts);
     ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText('Survival probability', 0, 0); ctx.restore();
+    // optional 95% CI bands, drawn as shaded steps under the curves
+    if (spec.band) spec.series.forEach((s, i) => {
+      const st2 = s.steps.filter(q => isFinite(q.lo) && isFinite(q.hi)); if (st2.length < 2) return;
+      const end = Math.max(s.steps[s.steps.length - 1].t, ...s.censored.map(q => q.t)), up = [], dn = [];
+      st2.forEach((q, k) => { const nx = k + 1 < st2.length ? st2[k + 1].t : end; up.push([q.t, q.hi], [nx, q.hi]); dn.push([q.t, q.lo], [nx, q.lo]); });
+      ctx.fillStyle = items[i].color; ctx.globalAlpha = 0.14; ctx.beginPath();
+      up.forEach(([t, v], k) => k ? ctx.lineTo(X(t), Y(v)) : ctx.moveTo(X(t), Y(v)));
+      dn.reverse().forEach(([t, v]) => ctx.lineTo(X(t), Y(v))); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+    });
     spec.series.forEach((s, i) => {
       const end = Math.max(s.steps[s.steps.length - 1].t, ...s.censored.map(q => q.t));
       ctx.strokeStyle = items[i].color; ctx.lineWidth = 5; ctx.setLineDash(items[i].dash ? [16, 10] : []);
@@ -724,7 +773,9 @@ const Charts = (() => {
     const mx = Stats.mean(xs), my = Stats.mean(ys);
     const sxx = Stats.sum(xs.map(v => (v - mx) ** 2));
     const slope = sxx > 0 ? Stats.sum(xs.map((v, i) => (v - mx) * (ys[i] - my))) / sxx : 0;
-    if (sxx > 0) {
+    // residual plots: a dashed line at zero instead of the least-squares line
+    if (spec.zeroLine) { ctx.save(); ctx.strokeStyle = pal[1]; ctx.lineWidth = 3; ctx.setLineDash([12, 8]); ctx.beginPath(); ctx.moveTo(L, Y(0)); ctx.lineTo(L + pw, Y(0)); ctx.stroke(); ctx.restore(); }
+    else if (sxx > 0) {
       const icpt = my - slope * mx;
       ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
       ctx.strokeStyle = pal[1]; ctx.lineWidth = 5;
