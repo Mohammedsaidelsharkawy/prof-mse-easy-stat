@@ -103,7 +103,7 @@ const Report = (() => {
         columnSpan: cell.span, rowSpan: cell.rs,
         verticalAlign: VerticalAlign.CENTER, borders: apa ? apaBorders(isHead, isLast) : gridBorders,
         margins: { top: 40, bottom: 40, left: 50, right: 50 },
-        shading: isHead && !apa ? { type: ShadingType.CLEAR, color: 'auto', fill: brand ? 'EBDDF6' : 'D9D9D9' } : undefined,
+        shading: isHead && !apa ? { type: ShadingType.CLEAR, color: 'auto', fill: brand ? 'EBDDF6' : 'D9D9D9' } : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : undefined,
         children: lines.map(l => new Paragraph({
           alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240 },
           children: runs(String(l), { bold: isHead || cell.b, size: cell.small ? 17 : 20 })

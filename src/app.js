@@ -24,6 +24,7 @@
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
     pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none', tableNewPage: false,
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
+    mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -41,7 +42,8 @@
     sigSym: ['optSigSym'], showStat: ['optShowStat', true], missingNote: ['optMissingNote', true], orientation: ['optOrientation'], tableCaption: ['optTableCaption'],
     pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
     pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote'], tableNewPage: ['optTableNewPage', true],
-    rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true]
+    rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
+    mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -412,6 +414,98 @@
     renderGrid();
   });
   $('#gridSearch').addEventListener('input', e => { state.grid.q = e.target.value; state.grid.page = 0; renderGrid(); });
+
+  // step 2: the same change for every variable
+  $('#varBulk').addEventListener('click', e => {
+    const b = e.target.closest('[data-vbulk]'); if (!b || !state.cfg) return;
+    readUiIntoCfg();
+    const k = b.dataset.vbulk, vs = state.cfg.variables;
+    if (k === 'inc' || k === 'exc') vs.forEach(v => { v.include = k === 'inc'; });
+    else if (k === 'num' || k === 'cat') vs.forEach(v => { v.include = (v.type === 'numeric') === (k === 'num'); });
+    else vs.filter(v => v.type === 'numeric').forEach(v => { v.dist = k.slice(2); });
+    renderVariables(); renderStepper();
+  });
+
+  /* ---------- step 1: find & replace, and a check of the sheet for common problems ---------- */
+  $('#gridFind').onclick = () => {
+    const box = $('#findBox'), on = box.style.display === 'none'; box.style.display = on ? '' : 'none'; $('#checkBox').style.display = 'none';
+    if (on) { $('#frCol').innerHTML = '<option value="">All columns</option>' + state.data.headers.map(h => `<option>${esc(h)}</option>`).join(''); $('#frFind').focus(); }
+  };
+  $('#frGo').onclick = () => {
+    const f = $('#frFind').value, r = $('#frRepl').value, col = $('#frCol').value, whole = $('#frWhole').checked, cs = $('#frCase').checked;
+    if (f === '' && !whole) { $('#frInfo').textContent = 'Type what to find'; return; }
+    const cols = col ? [col] : state.data.headers, norm = v => cs ? v : v.toLowerCase(), target = norm(f.trim());
+    const re = whole ? null : new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), cs ? 'g' : 'gi');
+    let n = 0;
+    const hits = [];
+    state.data.rows.forEach((row, i) => cols.forEach(h => {
+      const v = row[h], t = v === null || v === undefined ? '' : String(v);
+      if (whole ? norm(t.trim()) === target : re.test(t)) { if (re) re.lastIndex = 0; hits.push([i, h, whole ? parseCell(r) : parseCell(t.replace(re, r))]); }
+    }));
+    if (!hits.length) { $('#frInfo').textContent = 'Nothing found'; return; }
+    editSheet(() => { hits.forEach(([i, h, v]) => { state.data.rows[i][h] = v; n++; }); if (state.cfg && cols.includes(state.cfg.groupCol)) refreshGroups(); });
+    $('#frInfo').textContent = `${n} cell${n > 1 ? 's' : ''} replaced (↶ Undo in edit mode to go back)`;
+  };
+  // the data check: duplicate IDs, text in numeric columns, spelling variants of categories, empty / constant columns, extreme values
+  function dataIssues() {
+    const { headers, rows } = state.data, cfg = state.cfg, out = [];
+    const idc = cfg && cfg.idCols[0];
+    if (idc) {
+      const seen = {}, dup = [];
+      rows.forEach((r, i) => { const v = r[idc]; if (v === null || v === undefined || String(v).trim() === '') return; const k = String(v).trim(); if (seen[k] !== undefined) dup.push(`${k} (rows ${seen[k] + 1} and ${i + 1})`); else seen[k] = i; });
+      if (dup.length) out.push({ ico: '⚠️', txt: `<b>Duplicate IDs in ${esc(idc)}:</b> ${esc(dup.slice(0, 8).join('; '))}${dup.length > 8 ? ` and ${dup.length - 8} more` : ''}`, q: dup[0].split(' ')[0] });
+    }
+    headers.forEach(h => {
+      const vals = rows.map(r => r[h]).filter(v => v !== null && v !== undefined && String(v).trim() !== '');
+      if (!vals.length) { out.push({ ico: '◻️', txt: `<b>${esc(h)}</b> is empty.` }); return; }
+      const nums = vals.map(Analysis.toNum), numShare = nums.filter(isFinite).length / vals.length;
+      if (numShare >= 0.8 && numShare < 1) {
+        const bad = [...new Set(vals.filter(v => !isFinite(Analysis.toNum(v))).map(v => String(v).trim()))];
+        out.push({ ico: '🔤', txt: `<b>${esc(h)}</b> is numeric but has text in ${vals.length - nums.filter(isFinite).length} cell(s): ${bad.slice(0, 6).map(v => `“${esc(v)}”`).join(', ')} — these count as missing.`, q: bad[0] });
+      }
+      if (numShare < 0.8) {
+        // the same category written in different ways ("male", "Male ", "MALE")
+        const groups = {};
+        vals.forEach(v => { const k = String(v).trim().toLowerCase().replace(/\s+/g, ' '); (groups[k] = groups[k] || {})[String(v)] = ((groups[k] || {})[String(v)] || 0) + 1; });
+        const variants = Object.values(groups).filter(g => Object.keys(g).length > 1);
+        if (variants.length) out.push({ ico: '✏️', txt: `<b>${esc(h)}</b> has categories written in different ways: ${variants.slice(0, 4).map(g => Object.keys(g).map(k => `“${esc(k)}”`).join(' / ')).join('; ')}.`, fix: { col: h, kind: 'spelling' } });
+      }
+      const distinct = new Set(vals.map(v => String(v).trim()));
+      if (distinct.size === 1 && rows.length > 2) out.push({ ico: '➖', txt: `<b>${esc(h)}</b> has the same value in every row (“${esc([...distinct][0])}”).` });
+      if (numShare === 1 && vals.length >= 8) {
+        const m = Stats.mean(nums), sd = Stats.sd(nums), ext = vals.filter((v, i) => sd > 0 && Math.abs((nums[i] - m) / sd) > 4);
+        if (ext.length) out.push({ ico: '📍', txt: `<b>${esc(h)}</b> has extreme value(s) more than 4 SD from the mean: ${ext.slice(0, 6).map(v => esc(v)).join(', ')} — check for typing errors.`, q: String(ext[0]) });
+      }
+      if (vals.some(v => typeof v === 'string' && v !== v.trim())) out.push({ ico: '␣', txt: `<b>${esc(h)}</b> has values with extra spaces at the start or end.`, fix: { col: h, kind: 'trim' } });
+    });
+    return out;
+  }
+  function renderCheck() {
+    const issues = dataIssues();
+    $('#checkBox').innerHTML = `<div class="row"><b>Data check</b><span class="legend-note">${issues.length ? `${issues.length} thing${issues.length > 1 ? 's' : ''} to look at` : 'no problems found ✓'}</span><span class="spacer"></span>${issues.some(x => x.fix) ? '<button class="btn ghost small" data-chkfix="all" type="button">Fix all spelling and spaces</button>' : ''}</div>`
+      + issues.map((x, i) => `<div class="chk-item"><span class="ico">${x.ico}</span><span class="txt">${x.txt}</span>${x.q ? `<button class="btn ghost small" data-chkq="${esc(x.q)}" type="button">Show</button>` : ''}${x.fix ? `<button class="btn ghost small" data-chkfix="${i}" type="button">Fix</button>` : ''}</div>`).join('');
+    state.checkIssues = issues;
+  }
+  // fixes: trim spaces; write each category the way most rows write it
+  function applyFix(f) {
+    const rows = state.data.rows;
+    if (f.kind === 'trim') rows.forEach(r => { if (typeof r[f.col] === 'string') r[f.col] = parseCell(r[f.col]); });
+    if (f.kind === 'spelling') {
+      const cnt = {}; rows.forEach(r => { const v = r[f.col]; if (v === null || v === undefined || String(v).trim() === '') return; const k = String(v).trim().toLowerCase().replace(/\s+/g, ' '); (cnt[k] = cnt[k] || {})[String(v).trim()] = ((cnt[k] || {})[String(v).trim()] || 0) + 1; });
+      const best = Object.fromEntries(Object.entries(cnt).map(([k, g]) => [k, Object.entries(g).sort((a, b) => b[1] - a[1])[0][0]]));
+      rows.forEach(r => { const v = r[f.col]; if (v === null || v === undefined || String(v).trim() === '') return; r[f.col] = best[String(v).trim().toLowerCase().replace(/\s+/g, ' ')]; });
+    }
+  }
+  $('#gridCheck').onclick = () => { const box = $('#checkBox'), on = box.style.display === 'none'; box.style.display = on ? '' : 'none'; $('#findBox').style.display = 'none'; if (on) renderCheck(); };
+  $('#checkBox').addEventListener('click', e => {
+    const q = e.target.closest('[data-chkq]'), fx = e.target.closest('[data-chkfix]');
+    if (q) { state.grid.q = q.dataset.chkq; $('#gridSearch').value = q.dataset.chkq; state.grid.page = 0; renderGrid(); }
+    if (fx) {
+      const list = fx.dataset.chkfix === 'all' ? state.checkIssues.filter(x => x.fix) : [state.checkIssues[+fx.dataset.chkfix]];
+      editSheet(() => { list.forEach(x => applyFix(x.fix)); if (state.cfg) { refreshGroups(); state.cfg.variables.forEach(v => { if (v.type === 'categorical' && list.some(x => v.cols.some(c => c.col === x.fix.col))) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); } });
+      renderCheck(); toast('Fixed — ↶ Undo in edit mode to go back');
+    }
+  });
 
   /* ---------- auto-detection ---------- */
   function columnInfo(rows, col) {
@@ -938,7 +1032,7 @@
   });
 
   /* ---------- advanced analyses (regression, ROC) ---------- */
-  const ADV_TYPES = { correlation: 'Correlation (Pearson / Spearman)', linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
+  const ADV_TYPES = { paired: 'Paired comparison (two measurements)', correlation: 'Correlation (Pearson / Spearman)', linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
     cox: 'Cox regression (hazard ratios)', mcnemar: 'McNemar test (paired categorical)', kappa: "Cohen's kappa (agreement, categorical)",
     agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)" };
   const analysedRows = () => { const g = activeGroups(); return state.data.rows.filter(r => g.includes(Analysis.groupOf(state.cfg, r))); };
@@ -971,6 +1065,7 @@
       if (t === 'cox') { fields = select('outcome', 'Follow-up time', num, a.outcome) + select('event', 'Event column', cat, a.event) + levelSelect('Event value (others are censored)', a.event, a.positive); predLabel = 'Predictors (covariates, e.g. group, age, stage)'; preds = cols.filter(c => c.col !== a.event); }
       if (t === 'mcnemar') fields = select('outcome', 'First measurement (e.g. before)', cat, a.outcome) + select('second', 'Second measurement (e.g. after)', cat.filter(c => c.col !== a.outcome), a.second) + levelSelect('Category to report', a.outcome, a.positive);
       if (t === 'kappa') fields = select('outcome', 'Rater / method A', cat, a.outcome) + select('second', 'Rater / method B', cat.filter(c => c.col !== a.outcome), a.second);
+      if (t === 'paired') fields = select('outcome', 'First measurement (e.g. before)', num, a.outcome) + select('second', 'Second measurement (e.g. after)', num.filter(c => c.col !== a.outcome), a.second);
       if (t === 'agreement') fields = select('outcome', 'Method / rater A', num, a.outcome) + select('second', 'Method / rater B', num.filter(c => c.col !== a.outcome), a.second);
       if (t === 'diagnostic') fields = select('outcome', 'Reference standard (true diagnosis)', cat, a.outcome) + levelSelect('Condition present when', a.outcome, a.positive)
         + select('event', 'Index test (categorical result)', cat.filter(c => c.col !== a.outcome), a.event) + levelSelect('Test positive when', a.event, a.eventPositive, 'eventPositive');
@@ -1012,6 +1107,8 @@
     if (t === 'kappa') out.push(`<div><label class="f">Weighted kappa (ordered categories)</label>${sel('weights', [['none', 'No — Cohen\'s kappa only'], ['linear', 'Linear weights'], ['quadratic', 'Quadratic weights']], a.weights)}</div>`);
     if (t === 'agreement') out.push(`<div><label class="f">ICC type</label>${sel('iccType', [['agreement', 'Absolute agreement (A,1)'], ['consistency', 'Consistency (C,1)']], a.iccType)}</div>`, `<div>${box('baPct', 'Bland-Altman of % differences')}</div>`);
     if (t === 'diagnostic') out.push(`<div><label class="f">Predictive values at a prevalence of (%)</label><input type="text" data-af="prev" value="${esc(a.prev || '')}" placeholder="e.g. 10"></div>`);
+    if (t === 'paired') out.push(`<div><label class="f">Test</label>${sel('test', [['auto', 'Automatic (normality of the differences)'], ['param', 'Paired t-test'], ['nonparam', 'Wilcoxon signed-rank test']], a.test)}</div>`,
+      `<div><label class="f">Figure</label>${sel('figure', [['lines', "Each patient's two values joined"], ['none', 'No figure']], a.figure)}</div>`);
     if (t === 'ancova') out.push(`<div>${box('slopes', 'Test homogeneity of regression slopes')}</div>`);
     if (t === 'cronbach') out.push(`<div>${box('split', 'Split-half reliability (Spearman-Brown)')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('hl', 'Hosmer-Lemeshow goodness of fit')}</div>`);
@@ -1287,14 +1384,14 @@
     const h = head.map(c => typeof c === 'string' ? { t: c } : c);
     const o = state.cfg.options;
     return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''}" style="font-family:'${esc(o.font)}',serif"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${
-      rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
   /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   // options of the stage, saved with the setup / project
-  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'standard' };
+  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'standard', overview: true };
   const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
   function renderXpOpts() {
     const o = xpo();
@@ -1344,7 +1441,10 @@
     const x = state.explore; if (!x) return;
     const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && xpo().view !== 'compact';
     if (xpo().openData) list.forEach(it => state.xpOpen.add(it.id));
-    $('#explore').innerHTML = list.length ? list.map(it => {
+    // overview of every shown variable: click a row to open that variable
+    const ov = xpo().overview && !$('#xpVar').value && list.length > 1 ? `<div class="report-sec"><h3 style="margin:0 0 6px">Overview</h3><div style="overflow-x:auto"><table class="t xp xp-ov"><thead><tr><th>Variable</th><th>Type</th><th>n</th><th>Distribution</th><th>Test in the report</th><th>P value</th><th>Significant</th></tr></thead><tbody>${
+      list.map(it => `<tr data-xpgo="${esc(it.id)}"><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${it.n ?? '—'}</td><td>${esc(it.normal || '—')}</td><td>${esc(it.test || '—')}</td><td>${isFinite(it.p) ? esc(Analysis.fmtP(it.p, state.cfg.options.alpha)) : '—'}</td><td class="${it.sig ? 'sig' : ''}">${it.sig ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+    $('#explore').innerHTML = ov + (list.length ? list.map(it => {
       let img = '';
       if (figs && it.spec) { try { img = `<img class="xp-fig" src="${Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png')}" alt="">`; } catch (e) { /* no figure */ } }
       const view = xpo().view, headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>`;
@@ -1357,7 +1457,7 @@
       return `<div class="report-sec xp-item">${headRow}
         <div class="xp-body">${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-    }).join('') : `<p class="legend-note">${x.items.length ? 'No variable matches the options (type, search, significant only).' : 'No variables are ticked in step 2.'}</p>`;
+    }).join('') : `<p class="legend-note">${x.items.length ? 'No variable matches the options (type, search, significant only).' : 'No variables are ticked in step 2.'}</p>`);
     $('#xpUndo').disabled = !state.undo || !state.undo.length;
   }
   // the data panel is filled when opened, and stays open when the results are redrawn
@@ -1423,6 +1523,7 @@
     finally { busy(false); }
   };
   $('#xpVar').onchange = drawExplore;
+  $('#explore').addEventListener('click', e => { const r = e.target.closest('[data-xpgo]'); if (!r) return; $('#xpVar').value = r.dataset.xpgo; drawExplore(); window.scrollTo(0, $('#p10').offsetTop); });
   $('#xpView').onchange = e => { xpo().view = e.target.value; const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpFigs').onchange = drawExplore;
   $('#xpCopy').onclick = async () => {
@@ -1713,6 +1814,56 @@
     };
   }
   $('#btnRerun').onclick = () => runAnalysis();
+  const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
+  const saveUrl = (url, name) => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+  const safeName = t => String(t).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  // every exported table to Excel, one sheet each, with the merged cells of the Word table
+  $('#btnXlsx').onclick = () => {
+    if (!state.result) return;
+    syncEdits();
+    const r = state.result, plan = exportPlan(r), wb = XLSX.utils.book_new(), used = new Set();
+    const sheetName = base => { let n = base.slice(0, 31), q = 2; while (used.has(n)) n = `${base.slice(0, 27)} (${q++})`; used.add(n); return n; };
+    if (!isOut('methods') && r.methods) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Statistical analysis'], [r.methods]]), sheetName('Methods'));
+    r.sections.forEach(sec => {
+      if (!plan.tabNum.has(sec)) return;
+      const head = sec.head.map(h => typeof h === 'string' ? { t: h } : h), aoa = [[`Table ${plan.tabNum.get(sec)}: ${sec.title}`]], merges = [];
+      // header row with column spans
+      const hr = []; head.forEach(h => { const c0 = hr.length; hr.push(h.t || ''); for (let q = 1; q < (h.span || 1); q++) hr.push(''); if ((h.span || 1) > 1) merges.push({ s: { r: 1, c: c0 }, e: { r: 1, c: c0 + h.span - 1 } }); });
+      aoa.push(hr);
+      const occ = [];
+      sec.rows.forEach((row, ri) => {
+        const out = [], R = ri + 2; let c = 0;
+        for (const cell of row) {
+          while (occ[ri] && occ[ri][c]) { out[c] = ''; c++; }
+          out[c] = (cell.t || []).join('\n'); for (let q = 1; q < (cell.span || 1); q++) out[c + q] = '';
+          if ((cell.rs || 1) > 1 || (cell.span || 1) > 1) merges.push({ s: { r: R, c }, e: { r: R + (cell.rs || 1) - 1, c: c + (cell.span || 1) - 1 } });
+          if (cell.rs > 1) for (let q = 1; q < cell.rs; q++) { occ[ri + q] = occ[ri + q] || []; for (let s2 = 0; s2 < (cell.span || 1); s2++) occ[ri + q][c + s2] = true; }
+          c += cell.span || 1;
+        }
+        while (occ[ri] && occ[ri][c]) { out[c] = ''; c++; }
+        aoa.push(out);
+      });
+      aoa.push([], [sec.footnote]);
+      const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!merges'] = merges;
+      ws['!cols'] = hr.map((_, i) => ({ wch: i === 0 ? 28 : 18 }));
+      XLSX.utils.book_append_sheet(wb, ws, sheetName(`Table ${plan.tabNum.get(sec)}`));
+    });
+    if (!wb.SheetNames.length) { toast('No table is selected for export'); return; }
+    XLSX.writeFile(wb, `${baseName()} - Tables.xlsx`);
+    toast(`${wb.SheetNames.length} sheet${wb.SheetNames.length > 1 ? 's' : ''} saved to Excel`);
+  };
+  // every exported figure (and the flowchart) as PNG files named by their number
+  $('#btnPngs').onclick = async () => {
+    if (!state.result) return;
+    syncEdits();
+    const r = state.result, plan = exportPlan(r), files = [];
+    if (plan.consortOn && r.consort) files.push([r.consort.url, `Figure ${plan.consortNum} - ${r.flowCaption}`]);
+    plan.order.forEach(f => files.push([f.url, `Figure ${plan.figNum.get(f)} - ${f.caption}`]));
+    if (!files.length) { toast('No figure is selected for export'); return; }
+    for (const [url, name] of files) { saveUrl(url, safeName(name) + '.png'); await new Promise(res => setTimeout(res, 250)); }
+    toast(`${files.length} figure${files.length > 1 ? 's' : ''} downloaded (allow multiple downloads if the browser asks)`);
+  };
+  $('#flowPng').onclick = () => { readConsort(); const c = state.cfg.consort; const cv = Charts.consort(c, activeGroups().map(g => state.cfg.groupLabels[g]), chartPalette(state.cfg.options)); saveUrl(cv.toDataURL('image/png'), `${baseName()} - Flowchart.png`); };
 
   $('#btnDocx').onclick = async () => {
     if (!state.result) return;

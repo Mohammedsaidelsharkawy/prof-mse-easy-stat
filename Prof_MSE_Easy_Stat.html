@@ -121,6 +121,11 @@ table.xd td.out{background:rgba(224,138,46,.22);font-weight:600}table.xd td.miss
 .xp-side-data .xp-groups{margin-top:0}.xp-side-data .xp-group{max-height:none;overflow:visible}
 .xp-fig-below{margin-top:12px;text-align:center}.xp-fig-below img{width:640px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
 @media (max-width:900px){.xp-side{grid-template-columns:1fr}}
+.gtool{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 10px;background:var(--card)}
+.chk-item{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)}.chk-item:first-of-type{border-top:0}
+.chk-item .ico{font-size:16px;line-height:1.3}.chk-item .txt{flex:1;font-size:13px}.chk-item .txt b{font-weight:600}
+.rt td.hl{background:#FFF2CC}
+table.xp-ov tbody tr{cursor:pointer}table.xp-ov tbody tr:hover td{background:var(--hover)}table.xp-ov td.sig{color:var(--bad);font-weight:700}
 .fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
 .fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
@@ -282,7 +287,22 @@ footer b{color:var(--purple)}
             <label class="check" style="margin:0"><input type="checkbox" id="gridWrapText"><span>Wrap long text</span></label>
             <label class="check" style="margin:0"><input type="checkbox" id="gridFreeze"><span>Freeze first column</span></label>
             <label class="check" style="margin:0"><input type="checkbox" id="gridStripes"><span>Striped rows</span></label>
+            <span class="spacer"></span>
+            <button class="btn ghost small" id="gridCheck" type="button" title="Look for problems in the sheet">🩺 Check data</button>
+            <button class="btn ghost small" id="gridFind" type="button" title="Find and replace values">🔍 Find &amp; replace</button>
           </div>
+          <div class="gtool" id="findBox" style="display:none">
+            <div class="row" style="gap:10px;align-items:flex-end">
+              <div><label class="f">Find</label><input type="text" id="frFind" style="width:180px"></div>
+              <div><label class="f">Replace with</label><input type="text" id="frRepl" style="width:180px" placeholder="(empty = blank cell)"></div>
+              <div><label class="f">In column</label><select id="frCol" style="width:auto"></select></div>
+              <label class="check" style="margin:0 0 8px"><input type="checkbox" id="frWhole" checked><span>Whole cell only</span></label>
+              <label class="check" style="margin:0 0 8px"><input type="checkbox" id="frCase"><span>Match case</span></label>
+              <button class="btn primary small" id="frGo" type="button" style="margin-bottom:6px">Replace all</button>
+              <span class="legend-note" id="frInfo" style="margin-bottom:8px"></span>
+            </div>
+          </div>
+          <div class="gtool" id="checkBox" style="display:none"></div>
           <div class="row grid-bar" id="gridEditBar" style="display:none">
             <span class="legend-note">Click a cell to change it · rename a column in its heading · ◀ ▶ move · ⇅ sort · ✕ delete · ↑ ↓ move rows</span>
             <span class="spacer"></span>
@@ -329,6 +349,11 @@ footer b{color:var(--purple)}
     <div class="card">
       <h2>Variables</h2>
       <p class="hint">Detected automatically — check and adjust. Repeated measures (same name, different timepoints) are analysed as one outcome with one table. Single variables sharing the same <b>Table</b> name appear together in one table.</p>
+      <div class="row" id="varBulk" style="gap:8px;margin-bottom:8px"><span class="legend-note">All variables:</span>
+        <button class="btn ghost small" type="button" data-vbulk="inc">✓ Include all</button><button class="btn ghost small" type="button" data-vbulk="exc">Exclude all</button>
+        <button class="btn ghost small" type="button" data-vbulk="num">Only numeric</button><button class="btn ghost small" type="button" data-vbulk="cat">Only categorical</button>
+        <span class="legend-note" style="margin-left:10px">Distribution of all numeric:</span>
+        <button class="btn ghost small" type="button" data-vbulk="d:auto">Auto</button><button class="btn ghost small" type="button" data-vbulk="d:param">Parametric</button><button class="btn ghost small" type="button" data-vbulk="d:nonparam">Non-parametric</button></div>
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
       <p class="legend-note"><b>Distribution</b>: Auto uses the normality test chosen in step 3 (Shapiro-Wilk by default) in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk / odds ratio).</p>
     </div>
@@ -371,6 +396,8 @@ footer b{color:var(--purple)}
         <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
         <div><label class="f">Normality test</label><select id="optNormality"><option value="sw" selected>Shapiro-Wilk</option><option value="ks">Kolmogorov-Smirnov (Lilliefors)</option></select></div>
         <div><label class="f">Effect of binary variables</label><select id="optCatEffect"><option value="rr" selected>Relative risk (RR)</option><option value="or">Odds ratio (OR)</option></select></div>
+        <div><label class="f">Pairwise Mann-Whitney tests (3+ groups, without Dunn)</label><select id="optMwAdjust"><option value="none" selected>Unadjusted</option><option value="bonferroni">Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option></select></div>
+        <div><label class="f">Pairwise categorical comparisons</label><select id="optChiAdjust"><option value="bonferroni" selected>Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option></select></div>
       </div>
       <div class="grid g2">
         <div>
@@ -436,6 +463,7 @@ footer b{color:var(--purple)}
           <label class="check"><input type="checkbox" id="optNHead" checked><span><b>Group sizes in the headings</b> — “A group (n=30)”</span></label>
           <label class="check"><input type="checkbox" id="optBoldSig"><span><b>Bold significant P values</b> in the tables</span></label>
           <label class="check"><input type="checkbox" id="optTableNewPage"><span><b>Each table starts on a new page</b> in the Word file</span></label>
+          <label class="check"><input type="checkbox" id="optShadeSig"><span><b>Shade the rows of significant results</b> (light yellow)</span></label>
         </div>
       </div>
       <h3>Word document</h3>
@@ -464,6 +492,7 @@ footer b{color:var(--purple)}
         <div>
           <label class="check"><input type="checkbox" id="optNotSig"><span>Write “not significantly” instead of “insignificantly”</span></label>
           <label class="check"><input type="checkbox" id="optCommentEffect"><span><b>Effect sizes in comments</b> — the difference or RR/OR with 95% CI for significant two-group comparisons</span></label>
+          <label class="check"><input type="checkbox" id="optCommentMagnitude"><span><b>Size of each significant effect</b> — Cohen's d, r, η² or Cramér's V, labelled small, medium or large</span></label>
           <label class="check"><input type="checkbox" id="optSummary"><span><b>Summary of key findings</b> — a closing paragraph listing every significant result</span></label>
         </div>
       </div>
@@ -546,6 +575,7 @@ footer b{color:var(--purple)}
       <div id="advList" class="grid"></div>
       <div class="row" id="advAdd" style="margin-top:12px">
         <button class="btn ghost small" data-advadd="correlation" type="button">+ Correlation</button>
+        <button class="btn ghost small" data-advadd="paired" type="button">+ Paired comparison</button>
         <button class="btn ghost small" data-advadd="linear" type="button">+ Linear regression</button>
         <button class="btn ghost small" data-advadd="logistic" type="button">+ Logistic regression</button>
         <button class="btn ghost small" data-advadd="roc" type="button">+ ROC curve</button>
@@ -597,7 +627,7 @@ footer b{color:var(--purple)}
       <p class="hint" id="cHint"></p>
       <div class="grid g2">
         <div id="cForm"></div>
-        <div><canvas id="consortCanvas" class="consort-prev"></canvas></div>
+        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="flowPng" type="button">⬇ Flowchart (PNG)</button></div></div>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Next: Results by variable →</button></div>
@@ -625,6 +655,7 @@ footer b{color:var(--purple)}
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="sig"><span>Only variables with a significant result</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="openData"><span>Open the data of each group</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="wordData"><span>Patients' data in the Word file</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="overview"><span>Overview table of all variables at the top</span></label></div>
         </div>
         <label class="f" style="margin-top:8px">Tables</label>
         <div class="row" style="gap:14px">
@@ -646,6 +677,8 @@ footer b{color:var(--purple)}
       <div class="row">
         <h2>11 · Report</h2><span class="spacer"></span>
         <button class="btn ghost" id="btnRerun">↻ Re-run</button>
+        <button class="btn ghost" id="btnXlsx" title="Every exported table in an Excel file, one sheet per table">⬇ Tables (Excel)</button>
+        <button class="btn ghost" id="btnPngs" title="Every exported figure as a PNG image">⬇ Figures (PNG)</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
       <div id="fmtBar">
@@ -21154,15 +21187,17 @@ const Stats = (() => {
     return out;
   }
   // pairwise Chi-square (or Fisher for 2×2 with small expected counts) between groups; table rows = categories, cols = groups
-  function chiSquarePairwise(table, useFisher) {
+  // adjust: 'bonferroni' (default), 'holm' or 'none'
+  function chiSquarePairwise(table, useFisher, adjust = 'bonferroni') {
     const k = table[0].length, m = k * (k - 1) / 2, out = [];
     for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
       const sub = table.map(r => [r[i], r[j]]).filter(r => r[0] + r[1] > 0);
       if (sub.length < 2) { out.push({ i, j, p: 1 }); continue; }
       const cs = chiSquare(sub);
       const p = useFisher && sub.length === 2 && cs.minE < 5 ? fisher2x2(sub).p : cs.p;
-      out.push({ i, j, p: bonferroni(p, m) });
+      out.push({ i, j, p: adjust === 'bonferroni' ? bonferroni(p, m) : p });
     }
+    if (adjust === 'holm') { const h = holm(out.map(q => q.p)); out.forEach((q, n) => { q.p = h[n]; }); }
     return out;
   }
 
@@ -21751,6 +21786,23 @@ const Analysis = (() => {
     const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(x => x >= raw);
     return { min: Math.floor(min / step) * step, max: Math.max(Math.ceil(max / step) * step, Math.floor(min / step) * step + step), step };
   }
+  // effect size of a between-group comparison with its magnitude (Cohen 1988):
+  // two groups: Cohen's d (parametric) or r = |z| / √N (Mann-Whitney); more groups: η² (ANOVA) or ε² (Kruskal-Wallis); categories: Cramér's V
+  function effectMagnitude(r, k) {
+    const lab = (v, cuts) => v < cuts[0] ? 'negligible' : v < cuts[1] ? 'small' : v < cuts[2] ? 'medium' : 'large';
+    if (r.num) {
+      const gv = r.gv; if (!gv || gv.some(x => x.length < 2)) return '';
+      if (k === 2) {
+        if (r.num.param) { const [a, b] = r.num.desc, sp = Math.sqrt(((a.n - 1) * a.sd ** 2 + (b.n - 1) * b.sd ** 2) / (a.n + b.n - 2)), dv = Math.abs(a.mean - b.mean) / sp; return isFinite(dv) ? `Cohen's d = ${fmt(dv, 2)}, ${lab(dv, [0.2, 0.5, 0.8])}` : ''; }
+        const m = S.mannWhitney(gv[0], gv[1]); return `r = ${fmt(m.r, 2)}, ${lab(m.r, [0.1, 0.3, 0.5])}`;
+      }
+      const e = r.num.param ? S.anova(gv).etaSq : S.kruskalWallis(gv).etaSq;
+      return `${r.num.param ? 'η²' : 'ε²'} = ${fmt(e, 3)}, ${lab(e, [0.01, 0.06, 0.14])}`;
+    }
+    const t = r.cat.table.filter(row => S.sum(row) > 0); if (t.length < 2) return '';
+    const cs = S.chiSquare(t), N = S.sum(t.flat()), v = Math.sqrt(cs.chi / (N * (Math.min(t.length, t[0].length) - 1)));
+    return isFinite(v) ? `Cramér's V = ${fmt(v, 2)}, ${lab(v, [0.1, 0.3, 0.5])}` : '';
+  }
   // test names as written in the descriptive comments
   const TEST_NAME = { 't-test': 'independent t-test', 'Welch t-test': "Welch's t-test", ANOVA: 'one-way ANOVA', 'Welch ANOVA': "Welch's ANOVA", 'Mann-Whitney': 'Mann-Whitney U test',
     'Kruskal-Wallis': 'Kruskal-Wallis test', 'Chi-square': 'Chi-square test', "Fisher's exact": "Fisher's exact test" };
@@ -21816,6 +21868,11 @@ const Analysis = (() => {
         const dn = opts.dunn ? S.dunn(groupVals) : null;
         if (dn) used.add('dunn');
         pw = pr.map(([i, j], q) => ({ i, j, p: dn ? dn[q].p : S.mannWhitney(groupVals[i], groupVals[j]).p, ...S.hodgesLehmann(groupVals[i], groupVals[j]) }));
+        // optional adjustment of the pairwise Mann-Whitney tests (Dunn's test is already Bonferroni-adjusted)
+        if (!dn && (opts.mwAdjust === 'bonferroni' || opts.mwAdjust === 'holm')) {
+          const adj = opts.mwAdjust === 'holm' ? S.holm(pw.map(q => q.p)) : pw.map(q => S.bonferroni(q.p, pw.length));
+          pw.forEach((q, n) => { q.p = adj[n]; }); used.add('mwAdj:' + opts.mwAdjust);
+        }
       }
       used.add('nonparam');
     }
@@ -21845,7 +21902,7 @@ const Analysis = (() => {
     const rr = binary ? pairs(k).map(([i, j]) => ({ i, j, ...(effect(i, j) || { rr: null }) })) : [];
     // optional Bonferroni-adjusted pairwise comparisons once the overall test is significant (3+ groups)
     let catPairs = null;
-    if (opts.chiPost && k > 2 && p <= opts.alpha) { catPairs = S.chiSquarePairwise(table, opts.fisher); used.add('chiPost'); }
+    if (opts.chiPost && k > 2 && p <= opts.alpha) { catPairs = S.chiSquarePairwise(table, opts.fisher, opts.chiAdjust || 'bonferroni'); used.add('chiPost'); if (opts.chiAdjust === 'holm') used.add('chiHolm'); }
     return { table, pct, ns, p, test, stat, rr, binary, pairs: catPairs };
   }
 
@@ -22799,6 +22856,9 @@ const Analysis = (() => {
         it.spec = numSpec(gv, v.label);
         const used2 = new Set(), res = k > 1 && gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts) : null;
         it.sig = !!res && res.p <= alpha;
+        const nn = gv.map(x => x.length >= 3 ? normality(x) : null).filter(Boolean);
+        Object.assign(it, { n: gv.flat().length, test: res ? TEST_NAME[res.test] || res.test : '', p: res ? res.p : NaN,
+          normal: nn.length ? (nn.every(r => r.p > 0.05) ? 'normal' : `non-normal (${nn.filter(r => r.p <= 0.05).length} of ${nn.length} groups)`) : '—' });
         it.summary = res ? `Report: ${res.param ? 'parametric' : 'non-parametric'} (${v.dist === 'auto' ? 'from the normality test' : 'set by you'}), ${TEST_NAME[res.test] || res.test}, P ${pTxt(res.p)}.` : `Distribution: ${gv.flat().length >= 3 && normality(gv.flat()) && normality(gv.flat()).p <= 0.05 ? 'non-normal' : 'normal'} by ${nName}.`;
       } else if (v.kind !== 'repeated') {
         const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toCat(r[col])).filter(x => x !== null));
@@ -22813,6 +22873,7 @@ const Analysis = (() => {
         if (k > 1 && nonEmpty.length >= 2) {
           const cs = S.chiSquare(nonEmpty), cres = analyzeCategorical(gv, levels, used, opts), chosen = cres.test, out = [];
           it.sig = cres.p <= alpha;
+          Object.assign(it, { test: TEST_NAME[cres.test] || cres.test, p: cres.p });
           out.push(['Chi-square test', `χ² = ${F(cs.chi, 2)}`, String(cs.df), P(cs.p), `smallest expected count ${F(cs.minE, 1)}; ${F(100 * cs.pctSmall, 0)}% of cells < 5`, chosen === 'Chi-square' ? yes : '']);
           if (nonEmpty.length === 2 && k === 2) out.push(["Fisher's exact test", '', '', P(S.fisher2x2(nonEmpty).p), '', chosen === "Fisher's exact" ? yes : '']);
           it.tables.push({ cat: 'tests', title: 'Comparison between the groups', head: ['Test', 'Statistic', 'df', 'P value', 'Note', 'In the report'], rows: out });
@@ -22826,6 +22887,7 @@ const Analysis = (() => {
             it.tables.push({ cat: 'pairs', title: 'Pairwise comparisons (Bonferroni)', head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
           }
         }
+        Object.assign(it, { n: N, normal: '—' }); if (it.test === undefined) Object.assign(it, { test: '', p: NaN });
         it.spec = { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the patients', series: levels.map((l, li) => ({ name: l, values: tab[li].map((c, g) => ns[g] ? 100 * c / ns[g] : 0) })) };
       } else {
         const tps = v.cols.map(c => c.label || cfg.tpLabels[c.tp] || c.tp), T = tps.length;
@@ -22866,6 +22928,8 @@ const Analysis = (() => {
             ['Time (Greenhouse-Geisser)', F(mx.time.F, 2), `${mx.time.df1}, ${mx.time.df2}`, P(mx.time.p)], ['Group × time', F(mx.interaction.F, 2), `${mx.interaction.df1}, ${mx.interaction.df2}`, P(mx.interaction.p)]] });
         }
         if (wSig) it.sig = true;
+        Object.assign(it, { n: mats.reduce((a2, Y) => a2 + Y.length, 0), normal: '—', p: NaN,
+          test: `${tps.length} timepoints${k > 1 ? '; between groups and over time' : '; change over time'}` });
         const fT = xo.fig || 'auto';
         if (fT === 'box' || fT === 'violin') it.spec = { type: fT, categories: tps, yLabel: v.label, points: fT === 'box', ...(k < 2 ? { legend: false } : {}), series: gl.map((g, gi) => ({ name: g, data: per.map(gv => gv[gi]) })) };
         else it.spec = { type: 'line', categories: tps, yLabel: v.label, xLabel: 'Time', ...(k < 2 ? { legend: false } : {}), ...(fT === 'meanci' ? { errKind: 'ci' } : {}),
@@ -23369,7 +23433,7 @@ const Analysis = (() => {
             if (c.pairs) {
               const sp = c.pairs.filter(q => q.p <= alpha);
               sent.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).`
-                : 'Pairwise comparisons were insignificant after Bonferroni correction.');
+                : `Pairwise comparisons were insignificant after ${opts.chiAdjust === 'holm' ? 'Holm' : 'Bonferroni'} correction.`);
             }
           }
         }
@@ -23402,7 +23466,7 @@ const Analysis = (() => {
               else out.push(`The distribution of ${lowerFirst(lab)} ${sig ? 'differed significantly' : 'did not differ significantly'} ${amongTxt(k)} (${vals}; ${pb}).`);
               if (sig && c.pairs) {
                 const sp = c.pairs.filter(q => q.p <= alpha);
-                out.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).` : 'Pairwise comparisons were insignificant after Bonferroni correction.');
+                out.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).` : `Pairwise comparisons were insignificant after ${opts.chiAdjust === 'holm' ? 'Holm' : 'Bonferroni'} correction.`);
               }
             }
           }
@@ -23411,6 +23475,11 @@ const Analysis = (() => {
             : !nsL.length ? `Overall, the groups differed significantly in all the studied variables.`
             : `Overall, the groups differed significantly in ${listJoin(sigL)}, whereas they were comparable in ${listJoin(nsL)}.`);
           return out;
+        }
+        // optional: the size of each significant effect, with its conventional magnitude
+        if (opts.commentMagnitude) {
+          const parts = res.filter(r => (r.num || r.cat).p <= alpha).map(r => { const m = effectMagnitude(r, k); return m && `${lowerFirst(plain(r.v.label))} (${m})`; }).filter(Boolean);
+          if (parts.length) sent.push(`The effect size was ${parts.length > 1 ? 'as follows: ' : 'for '}${listJoin(parts)}.`);
         }
         const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: opts.effect, rr: hasRR, posthoc: showPost,
           stats: res.map(r => (r.num || r.cat).stat), ci: opts.secondRow === 'ci' && res.some(r => r.num && r.num.param),
@@ -23496,13 +23565,13 @@ const Analysis = (() => {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
         mcnemar: () => a.second, kappa: () => a.second, agreement: () => a.second, diagnostic: () => a.positive && a.event && a.eventPositive, cronbach: () => true,
-        correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2
+        correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
-        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection }[a.type];
+        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
       const compares = ['ancova', 'survival', 'mcnemar'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
@@ -23529,12 +23598,40 @@ const Analysis = (() => {
     sections.forEach(sec => {
       if (opts.pHead && opts.pHead !== 'P value') sec.head = sec.head.map(h => h === 'P value' ? opts.pHead : h && h.t === 'P value' ? { ...h, t: opts.pHead } : h);
       if (opts.boldSig) boldSigP(sec, opts.pHead || 'P value', alpha);
+      if (opts.shadeSig) shadeSigRows(sec, opts.pHead || 'P value', alpha);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
     });
     return { sections, used, groups: gl, gN, k, methods: opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
+  // paired comparison of two numeric measurements of the same patients (before / after, method A / B)
+  function pairedSection(a, cfg, rows, alpha, d, used) {
+    if (!a.second) return null;
+    const l1 = columnLabel(cfg, a.outcome), l2 = columnLabel(cfg, a.second);
+    const rs = rows.filter(r => isFinite(toNum(r[a.outcome])) && isFinite(toNum(r[a.second])));
+    if (rs.length < 3) return null;
+    const x = rs.map(r => toNum(r[a.outcome])), y = rs.map(r => toNum(r[a.second])), dif = y.map((v, i) => v - x[i]);
+    const nt = normality(dif), param = a.test === 'param' ? true : a.test === 'nonparam' ? false : !nt || nt.p > 0.05;
+    const t = S.pairedT(y, x), w = S.wilcoxonSigned(y, x), res = param ? t : w, p = res.p;
+    used.add(param ? 'pairedt' : 'wilcoxon'); used.add('pairedAdv');
+    const dx = S.describe(x), dy = S.describe(y), dd = S.describe(dif), val = q => param ? msd(q.mean, q.sd, d) : medIqr(q, d);
+    const tn = param ? 'Paired t-test' : 'Wilcoxon signed-rank test';
+    const head = ['', param ? meanSdName() : 'Median (IQR)', 'P value'];
+    const trows = [[{ t: [l1], b: true }, { t: [val(dx)] }, { t: [fmtP(p, alpha)], rs: 3 }], [{ t: [l2], b: true }, { t: [val(dy)] }],
+      [{ t: [`Difference (${plain(l2)} − ${plain(l1)})`], b: true }, { t: param ? [msd(dd.mean, dd.sd, d), `95% CI ${fmt(t.lo, d)} to ${fmt(t.hi, d)}`] : [medIqr(dd, d)] }]];
+    // effect size: Cohen's dz (mean difference / SD of differences) or r = |z| / √n
+    const eff = param ? `Cohen's dz = ${fmt(Math.abs(dd.mean) / dd.sd, 2)}` : `r = ${fmt(Math.abs(w.z) / Math.sqrt(rs.length), 2)}`;
+    const dir = (param ? dd.mean : dd.median) < 0 ? 'lower' : 'higher';
+    const sent = [p <= alpha ? `${cap(plain(l2))} was significantly ${dir} than ${lowerFirst(plain(l1))} (${val(dy)} vs ${val(dx)}; ${tn}, P value ${pTxt(p)}; ${eff}).`
+      : `${cap(plain(l2))} and ${lowerFirst(plain(l1))} were insignificantly different (${val(dy)} vs ${val(dx)}; ${tn}, P value ${pTxt(p)}).`];
+    const f = [...(p <= alpha ? [`*: Significant as P value ≤ ${alpha}`] : []), `n = ${rs.length} patients with both values`, `P value: ${tn}${a.test === 'auto' || !a.test ? ` (differences ${param ? 'normally' : 'not normally'} distributed)` : ''}`,
+      `Other test: ${param ? `Wilcoxon signed-rank P ${pTxt(w.p)}` : `paired t-test P ${pTxt(t.p)}`}`, eff];
+    const figures = a.figure === 'none' ? [] : [{ sig: p <= alpha, caption: `${plain(l1)} and ${lowerFirst(plain(l2))} of each patient`,
+      spec: { type: 'line', categories: [plain(l1), plain(l2)], yLabel: a.ylabel || plain(l1), legend: false, individual: [x.map((v, i) => [v, y[i]])],
+        errKind: 'sd', series: [{ name: 'Mean', values: param ? [dx.mean, dy.mean] : [dx.median, dy.median], err: param ? [dx.sd, dy.sd] : [null, null], lo: param ? null : [dx.q1, dy.q1], hi: param ? null : [dx.q3, dy.q3] }] } }];
+    return { kind: 'paired', title: `${plain(l1)} versus ${lowerFirst(plain(l2))} (paired comparison)`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures, meta: { t, w } };
+  }
   // correlation as an advanced analysis: chosen columns, optionally one main variable against the others
   function advCorrelationSection(a, cfg, rows, alpha, d, used) {
     const cols = [...new Set([a.outcome, ...(a.predictors || [])].filter(Boolean))].filter(c => isNumberColumn(rows, c));
@@ -23549,6 +23646,27 @@ const Analysis = (() => {
     return sec;
   }
   // bold significant P values in the P value column (row spans followed as in the Word table)
+  // shade every row of a significant result (its P value cell and the rows it spans)
+  function shadeSigRows(sec, pHead, alpha) {
+    let col = 0, pc = -1;
+    sec.head.forEach(h => { const t = typeof h === 'string' ? h : h && h.t; if (pc < 0 && t === pHead) pc = col; col += (h && h.span) || 1; });
+    if (pc < 0) return;
+    const occ = [], mark = new Set();
+    sec.rows.forEach((r, ri) => {
+      let c = 0;
+      for (const cell of r) {
+        while (occ[ri] && occ[ri][c]) c++;
+        if (c === pc) {
+          const m = String((cell.t || [])[0] || '').match(/^(<\s?)?(\d*[.·]\d+)/);
+          if (m && (m[1] || parseFloat(m[2].replace('·', '.')) <= alpha)) for (let q = 0; q < (cell.rs || 1); q++) mark.add(ri + q);
+        }
+        if (cell.rs > 1) for (let q = 1; q < cell.rs; q++) { occ[ri + q] = occ[ri + q] || []; for (let s2 = 0; s2 < (cell.span || 1); s2++) occ[ri + q][c + s2] = true; }
+        c += cell.span || 1;
+      }
+    });
+    // a cell spanning rows is shaded when its first row is
+    sec.rows.forEach((r, ri) => { if (mark.has(ri)) r.forEach(cell => { cell.hl = true; }); });
+  }
   function boldSigP(sec, pHead, alpha) {
     let col = 0, pc = -1;
     sec.head.forEach(h => { const t = typeof h === 'string' ? h : h && h.t; if (pc < 0 && t === pHead) pc = col; col += (h && h.span) || 1; });
@@ -23693,8 +23811,8 @@ const Analysis = (() => {
     const cont = [];
     if (used.has('param')) cont.push(k === 2 ? (used.has('welch') ? "Student's or Welch's t-test" : "Student's t-test")
       : `one-way ANOVA with Tukey's post hoc test${used.has('welchAnova') ? " (Welch's ANOVA with Games-Howell when variances differed)" : ''}`);
-    if (used.has('nonparam')) cont.push(k === 2 ? 'Mann-Whitney U test' : `Kruskal-Wallis test with ${used.has('dunn') ? "Dunn's" : 'pairwise Mann-Whitney'} post hoc tests`);
-    const cat = used.has('cat') ? `χ² test${used.has('fisher') ? " or Fisher's exact test" : ''}${used.has('chiPost') ? ' (Bonferroni-corrected pairwise comparisons)' : ''}` : '';
+    if (used.has('nonparam')) cont.push(k === 2 ? 'Mann-Whitney U test' : `Kruskal-Wallis test with ${used.has('dunn') ? "Dunn's" : `pairwise Mann-Whitney${used.has('mwAdj:holm') ? ' (Holm)' : used.has('mwAdj:bonferroni') ? ' (Bonferroni)' : ''}`} post hoc tests`);
+    const cat = used.has('cat') ? `χ² test${used.has('fisher') ? " or Fisher's exact test" : ''}${used.has('chiPost') ? ` (${used.has('chiHolm') ? 'Holm' : 'Bonferroni'}-corrected pairwise comparisons)` : ''}` : '';
     if (cont.length || cat) s.push(`Groups were compared using ${[cont.length ? `the ${cont.join(' or the ')} for continuous variables` : '', cat ? `the ${cat} for categorical variables` : ''].filter(Boolean).join(' and ')}.`);
     const w = [];
     if (used.has('pairedt')) w.push('paired t-test'); if (used.has('wilcoxon')) w.push('Wilcoxon signed-rank test');
@@ -23748,11 +23866,11 @@ const Analysis = (() => {
       s.push(`Quantitative parametric data were presented as mean and standard deviation (SD) and were analyzed by ${t}.`);
     }
     if (used.has('nonparam')) {
-      const t = k === 2 ? 'Mann-Whitney test' : used.has('dunn') ? "Kruskal-Wallis test with Dunn's post hoc test (Bonferroni-adjusted)" : 'Kruskal-Wallis test with Mann-Whitney test to compare each two groups';
+      const t = k === 2 ? 'Mann-Whitney test' : used.has('dunn') ? "Kruskal-Wallis test with Dunn's post hoc test (Bonferroni-adjusted)" : `Kruskal-Wallis test with Mann-Whitney test to compare each two groups${used.has('mwAdj:holm') ? ' (Holm-adjusted)' : used.has('mwAdj:bonferroni') ? ' (Bonferroni-adjusted)' : ''}`;
       s.push(`Quantitative non-parametric data were presented as median and interquartile range (IQR) and were analyzed by ${t}.`);
     }
     if (used.has('cat')) s.push(`Qualitative variables were presented as frequency and percentage (%) and were analyzed utilizing the Chi-square test${used.has('fisher') ? " or Fisher's exact test when appropriate" : ''}.`);
-    if (used.has('chiPost')) s.push('When significant, qualitative variables were compared between each two groups with Bonferroni correction.');
+    if (used.has('chiPost')) s.push(`When significant, qualitative variables were compared between each two groups with ${used.has('chiHolm') ? 'Holm' : 'Bonferroni'} correction.`);
     if (o.effect) {
       const e = [];
       if (used.has('param')) e.push(k === 2 ? 'mean differences' : 'mean differences (Tukey-adjusted)');
@@ -23780,6 +23898,7 @@ const Analysis = (() => {
       if (used.has('spearman')) c.push(`Spearman's rank correlation coefficient (rs)${c.length ? ' otherwise' : ''}`);
       s.push(`Correlation between quantitative variables was assessed using ${c.join(' or ')}.`);
     }
+    if (used.has('pairedAdv')) s.push('Two measurements of the same patients were compared using the paired t-test when their differences were normally distributed, or the Wilcoxon signed-rank test otherwise.');
     if (used.has('kendall')) s.push("Kendall's tau-b (τb) was used for correlation where chosen.");
     if (used.has('mixed')) s.push('The group × time interaction was assessed by mixed (split-plot) ANOVA with Greenhouse-Geisser correction.');
     if (used.has('ancova')) s.push('Analysis of covariance (ANCOVA) was used to compare groups after adjustment for covariates, reporting adjusted (estimated marginal) means with 95% CI and Bonferroni-adjusted pairwise comparisons.');
@@ -25009,7 +25128,7 @@ const Report = (() => {
         columnSpan: cell.span, rowSpan: cell.rs,
         verticalAlign: VerticalAlign.CENTER, borders: apa ? apaBorders(isHead, isLast) : gridBorders,
         margins: { top: 40, bottom: 40, left: 50, right: 50 },
-        shading: isHead && !apa ? { type: ShadingType.CLEAR, color: 'auto', fill: brand ? 'EBDDF6' : 'D9D9D9' } : undefined,
+        shading: isHead && !apa ? { type: ShadingType.CLEAR, color: 'auto', fill: brand ? 'EBDDF6' : 'D9D9D9' } : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : undefined,
         children: lines.map(l => new Paragraph({
           alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240 },
           children: runs(String(l), { bold: isHead || cell.b, size: cell.small ? 17 : 20 })
@@ -25515,6 +25634,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
     pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none', tableNewPage: false,
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
+    mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false,
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -25532,7 +25652,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     sigSym: ['optSigSym'], showStat: ['optShowStat', true], missingNote: ['optMissingNote', true], orientation: ['optOrientation'], tableCaption: ['optTableCaption'],
     pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
     pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote'], tableNewPage: ['optTableNewPage', true],
-    rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true]
+    rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
+    mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true]
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -25903,6 +26024,98 @@ if (typeof module !== 'undefined') module.exports = Examples;
     renderGrid();
   });
   $('#gridSearch').addEventListener('input', e => { state.grid.q = e.target.value; state.grid.page = 0; renderGrid(); });
+
+  // step 2: the same change for every variable
+  $('#varBulk').addEventListener('click', e => {
+    const b = e.target.closest('[data-vbulk]'); if (!b || !state.cfg) return;
+    readUiIntoCfg();
+    const k = b.dataset.vbulk, vs = state.cfg.variables;
+    if (k === 'inc' || k === 'exc') vs.forEach(v => { v.include = k === 'inc'; });
+    else if (k === 'num' || k === 'cat') vs.forEach(v => { v.include = (v.type === 'numeric') === (k === 'num'); });
+    else vs.filter(v => v.type === 'numeric').forEach(v => { v.dist = k.slice(2); });
+    renderVariables(); renderStepper();
+  });
+
+  /* ---------- step 1: find & replace, and a check of the sheet for common problems ---------- */
+  $('#gridFind').onclick = () => {
+    const box = $('#findBox'), on = box.style.display === 'none'; box.style.display = on ? '' : 'none'; $('#checkBox').style.display = 'none';
+    if (on) { $('#frCol').innerHTML = '<option value="">All columns</option>' + state.data.headers.map(h => `<option>${esc(h)}</option>`).join(''); $('#frFind').focus(); }
+  };
+  $('#frGo').onclick = () => {
+    const f = $('#frFind').value, r = $('#frRepl').value, col = $('#frCol').value, whole = $('#frWhole').checked, cs = $('#frCase').checked;
+    if (f === '' && !whole) { $('#frInfo').textContent = 'Type what to find'; return; }
+    const cols = col ? [col] : state.data.headers, norm = v => cs ? v : v.toLowerCase(), target = norm(f.trim());
+    const re = whole ? null : new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), cs ? 'g' : 'gi');
+    let n = 0;
+    const hits = [];
+    state.data.rows.forEach((row, i) => cols.forEach(h => {
+      const v = row[h], t = v === null || v === undefined ? '' : String(v);
+      if (whole ? norm(t.trim()) === target : re.test(t)) { if (re) re.lastIndex = 0; hits.push([i, h, whole ? parseCell(r) : parseCell(t.replace(re, r))]); }
+    }));
+    if (!hits.length) { $('#frInfo').textContent = 'Nothing found'; return; }
+    editSheet(() => { hits.forEach(([i, h, v]) => { state.data.rows[i][h] = v; n++; }); if (state.cfg && cols.includes(state.cfg.groupCol)) refreshGroups(); });
+    $('#frInfo').textContent = `${n} cell${n > 1 ? 's' : ''} replaced (↶ Undo in edit mode to go back)`;
+  };
+  // the data check: duplicate IDs, text in numeric columns, spelling variants of categories, empty / constant columns, extreme values
+  function dataIssues() {
+    const { headers, rows } = state.data, cfg = state.cfg, out = [];
+    const idc = cfg && cfg.idCols[0];
+    if (idc) {
+      const seen = {}, dup = [];
+      rows.forEach((r, i) => { const v = r[idc]; if (v === null || v === undefined || String(v).trim() === '') return; const k = String(v).trim(); if (seen[k] !== undefined) dup.push(`${k} (rows ${seen[k] + 1} and ${i + 1})`); else seen[k] = i; });
+      if (dup.length) out.push({ ico: '⚠️', txt: `<b>Duplicate IDs in ${esc(idc)}:</b> ${esc(dup.slice(0, 8).join('; '))}${dup.length > 8 ? ` and ${dup.length - 8} more` : ''}`, q: dup[0].split(' ')[0] });
+    }
+    headers.forEach(h => {
+      const vals = rows.map(r => r[h]).filter(v => v !== null && v !== undefined && String(v).trim() !== '');
+      if (!vals.length) { out.push({ ico: '◻️', txt: `<b>${esc(h)}</b> is empty.` }); return; }
+      const nums = vals.map(Analysis.toNum), numShare = nums.filter(isFinite).length / vals.length;
+      if (numShare >= 0.8 && numShare < 1) {
+        const bad = [...new Set(vals.filter(v => !isFinite(Analysis.toNum(v))).map(v => String(v).trim()))];
+        out.push({ ico: '🔤', txt: `<b>${esc(h)}</b> is numeric but has text in ${vals.length - nums.filter(isFinite).length} cell(s): ${bad.slice(0, 6).map(v => `“${esc(v)}”`).join(', ')} — these count as missing.`, q: bad[0] });
+      }
+      if (numShare < 0.8) {
+        // the same category written in different ways ("male", "Male ", "MALE")
+        const groups = {};
+        vals.forEach(v => { const k = String(v).trim().toLowerCase().replace(/\s+/g, ' '); (groups[k] = groups[k] || {})[String(v)] = ((groups[k] || {})[String(v)] || 0) + 1; });
+        const variants = Object.values(groups).filter(g => Object.keys(g).length > 1);
+        if (variants.length) out.push({ ico: '✏️', txt: `<b>${esc(h)}</b> has categories written in different ways: ${variants.slice(0, 4).map(g => Object.keys(g).map(k => `“${esc(k)}”`).join(' / ')).join('; ')}.`, fix: { col: h, kind: 'spelling' } });
+      }
+      const distinct = new Set(vals.map(v => String(v).trim()));
+      if (distinct.size === 1 && rows.length > 2) out.push({ ico: '➖', txt: `<b>${esc(h)}</b> has the same value in every row (“${esc([...distinct][0])}”).` });
+      if (numShare === 1 && vals.length >= 8) {
+        const m = Stats.mean(nums), sd = Stats.sd(nums), ext = vals.filter((v, i) => sd > 0 && Math.abs((nums[i] - m) / sd) > 4);
+        if (ext.length) out.push({ ico: '📍', txt: `<b>${esc(h)}</b> has extreme value(s) more than 4 SD from the mean: ${ext.slice(0, 6).map(v => esc(v)).join(', ')} — check for typing errors.`, q: String(ext[0]) });
+      }
+      if (vals.some(v => typeof v === 'string' && v !== v.trim())) out.push({ ico: '␣', txt: `<b>${esc(h)}</b> has values with extra spaces at the start or end.`, fix: { col: h, kind: 'trim' } });
+    });
+    return out;
+  }
+  function renderCheck() {
+    const issues = dataIssues();
+    $('#checkBox').innerHTML = `<div class="row"><b>Data check</b><span class="legend-note">${issues.length ? `${issues.length} thing${issues.length > 1 ? 's' : ''} to look at` : 'no problems found ✓'}</span><span class="spacer"></span>${issues.some(x => x.fix) ? '<button class="btn ghost small" data-chkfix="all" type="button">Fix all spelling and spaces</button>' : ''}</div>`
+      + issues.map((x, i) => `<div class="chk-item"><span class="ico">${x.ico}</span><span class="txt">${x.txt}</span>${x.q ? `<button class="btn ghost small" data-chkq="${esc(x.q)}" type="button">Show</button>` : ''}${x.fix ? `<button class="btn ghost small" data-chkfix="${i}" type="button">Fix</button>` : ''}</div>`).join('');
+    state.checkIssues = issues;
+  }
+  // fixes: trim spaces; write each category the way most rows write it
+  function applyFix(f) {
+    const rows = state.data.rows;
+    if (f.kind === 'trim') rows.forEach(r => { if (typeof r[f.col] === 'string') r[f.col] = parseCell(r[f.col]); });
+    if (f.kind === 'spelling') {
+      const cnt = {}; rows.forEach(r => { const v = r[f.col]; if (v === null || v === undefined || String(v).trim() === '') return; const k = String(v).trim().toLowerCase().replace(/\s+/g, ' '); (cnt[k] = cnt[k] || {})[String(v).trim()] = ((cnt[k] || {})[String(v).trim()] || 0) + 1; });
+      const best = Object.fromEntries(Object.entries(cnt).map(([k, g]) => [k, Object.entries(g).sort((a, b) => b[1] - a[1])[0][0]]));
+      rows.forEach(r => { const v = r[f.col]; if (v === null || v === undefined || String(v).trim() === '') return; r[f.col] = best[String(v).trim().toLowerCase().replace(/\s+/g, ' ')]; });
+    }
+  }
+  $('#gridCheck').onclick = () => { const box = $('#checkBox'), on = box.style.display === 'none'; box.style.display = on ? '' : 'none'; $('#findBox').style.display = 'none'; if (on) renderCheck(); };
+  $('#checkBox').addEventListener('click', e => {
+    const q = e.target.closest('[data-chkq]'), fx = e.target.closest('[data-chkfix]');
+    if (q) { state.grid.q = q.dataset.chkq; $('#gridSearch').value = q.dataset.chkq; state.grid.page = 0; renderGrid(); }
+    if (fx) {
+      const list = fx.dataset.chkfix === 'all' ? state.checkIssues.filter(x => x.fix) : [state.checkIssues[+fx.dataset.chkfix]];
+      editSheet(() => { list.forEach(x => applyFix(x.fix)); if (state.cfg) { refreshGroups(); state.cfg.variables.forEach(v => { if (v.type === 'categorical' && list.some(x => v.cols.some(c => c.col === x.fix.col))) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); } });
+      renderCheck(); toast('Fixed — ↶ Undo in edit mode to go back');
+    }
+  });
 
   /* ---------- auto-detection ---------- */
   function columnInfo(rows, col) {
@@ -26429,7 +26642,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
   });
 
   /* ---------- advanced analyses (regression, ROC) ---------- */
-  const ADV_TYPES = { correlation: 'Correlation (Pearson / Spearman)', linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
+  const ADV_TYPES = { paired: 'Paired comparison (two measurements)', correlation: 'Correlation (Pearson / Spearman)', linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
     cox: 'Cox regression (hazard ratios)', mcnemar: 'McNemar test (paired categorical)', kappa: "Cohen's kappa (agreement, categorical)",
     agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)" };
   const analysedRows = () => { const g = activeGroups(); return state.data.rows.filter(r => g.includes(Analysis.groupOf(state.cfg, r))); };
@@ -26462,6 +26675,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       if (t === 'cox') { fields = select('outcome', 'Follow-up time', num, a.outcome) + select('event', 'Event column', cat, a.event) + levelSelect('Event value (others are censored)', a.event, a.positive); predLabel = 'Predictors (covariates, e.g. group, age, stage)'; preds = cols.filter(c => c.col !== a.event); }
       if (t === 'mcnemar') fields = select('outcome', 'First measurement (e.g. before)', cat, a.outcome) + select('second', 'Second measurement (e.g. after)', cat.filter(c => c.col !== a.outcome), a.second) + levelSelect('Category to report', a.outcome, a.positive);
       if (t === 'kappa') fields = select('outcome', 'Rater / method A', cat, a.outcome) + select('second', 'Rater / method B', cat.filter(c => c.col !== a.outcome), a.second);
+      if (t === 'paired') fields = select('outcome', 'First measurement (e.g. before)', num, a.outcome) + select('second', 'Second measurement (e.g. after)', num.filter(c => c.col !== a.outcome), a.second);
       if (t === 'agreement') fields = select('outcome', 'Method / rater A', num, a.outcome) + select('second', 'Method / rater B', num.filter(c => c.col !== a.outcome), a.second);
       if (t === 'diagnostic') fields = select('outcome', 'Reference standard (true diagnosis)', cat, a.outcome) + levelSelect('Condition present when', a.outcome, a.positive)
         + select('event', 'Index test (categorical result)', cat.filter(c => c.col !== a.outcome), a.event) + levelSelect('Test positive when', a.event, a.eventPositive, 'eventPositive');
@@ -26503,6 +26717,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     if (t === 'kappa') out.push(`<div><label class="f">Weighted kappa (ordered categories)</label>${sel('weights', [['none', 'No — Cohen\'s kappa only'], ['linear', 'Linear weights'], ['quadratic', 'Quadratic weights']], a.weights)}</div>`);
     if (t === 'agreement') out.push(`<div><label class="f">ICC type</label>${sel('iccType', [['agreement', 'Absolute agreement (A,1)'], ['consistency', 'Consistency (C,1)']], a.iccType)}</div>`, `<div>${box('baPct', 'Bland-Altman of % differences')}</div>`);
     if (t === 'diagnostic') out.push(`<div><label class="f">Predictive values at a prevalence of (%)</label><input type="text" data-af="prev" value="${esc(a.prev || '')}" placeholder="e.g. 10"></div>`);
+    if (t === 'paired') out.push(`<div><label class="f">Test</label>${sel('test', [['auto', 'Automatic (normality of the differences)'], ['param', 'Paired t-test'], ['nonparam', 'Wilcoxon signed-rank test']], a.test)}</div>`,
+      `<div><label class="f">Figure</label>${sel('figure', [['lines', "Each patient's two values joined"], ['none', 'No figure']], a.figure)}</div>`);
     if (t === 'ancova') out.push(`<div>${box('slopes', 'Test homogeneity of regression slopes')}</div>`);
     if (t === 'cronbach') out.push(`<div>${box('split', 'Split-half reliability (Spearman-Brown)')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('hl', 'Hosmer-Lemeshow goodness of fit')}</div>`);
@@ -26778,14 +26994,14 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const h = head.map(c => typeof c === 'string' ? { t: c } : c);
     const o = state.cfg.options;
     return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''}" style="font-family:'${esc(o.font)}',serif"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${
-      rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
 
   /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   // options of the stage, saved with the setup / project
-  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'standard' };
+  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'standard', overview: true };
   const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
   function renderXpOpts() {
     const o = xpo();
@@ -26835,7 +27051,10 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const x = state.explore; if (!x) return;
     const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && xpo().view !== 'compact';
     if (xpo().openData) list.forEach(it => state.xpOpen.add(it.id));
-    $('#explore').innerHTML = list.length ? list.map(it => {
+    // overview of every shown variable: click a row to open that variable
+    const ov = xpo().overview && !$('#xpVar').value && list.length > 1 ? `<div class="report-sec"><h3 style="margin:0 0 6px">Overview</h3><div style="overflow-x:auto"><table class="t xp xp-ov"><thead><tr><th>Variable</th><th>Type</th><th>n</th><th>Distribution</th><th>Test in the report</th><th>P value</th><th>Significant</th></tr></thead><tbody>${
+      list.map(it => `<tr data-xpgo="${esc(it.id)}"><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${it.n ?? '—'}</td><td>${esc(it.normal || '—')}</td><td>${esc(it.test || '—')}</td><td>${isFinite(it.p) ? esc(Analysis.fmtP(it.p, state.cfg.options.alpha)) : '—'}</td><td class="${it.sig ? 'sig' : ''}">${it.sig ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+    $('#explore').innerHTML = ov + (list.length ? list.map(it => {
       let img = '';
       if (figs && it.spec) { try { img = `<img class="xp-fig" src="${Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png')}" alt="">`; } catch (e) { /* no figure */ } }
       const view = xpo().view, headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>`;
@@ -26848,7 +27067,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       return `<div class="report-sec xp-item">${headRow}
         <div class="xp-body">${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-    }).join('') : `<p class="legend-note">${x.items.length ? 'No variable matches the options (type, search, significant only).' : 'No variables are ticked in step 2.'}</p>`;
+    }).join('') : `<p class="legend-note">${x.items.length ? 'No variable matches the options (type, search, significant only).' : 'No variables are ticked in step 2.'}</p>`);
     $('#xpUndo').disabled = !state.undo || !state.undo.length;
   }
   // the data panel is filled when opened, and stays open when the results are redrawn
@@ -26914,6 +27133,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
     finally { busy(false); }
   };
   $('#xpVar').onchange = drawExplore;
+  $('#explore').addEventListener('click', e => { const r = e.target.closest('[data-xpgo]'); if (!r) return; $('#xpVar').value = r.dataset.xpgo; drawExplore(); window.scrollTo(0, $('#p10').offsetTop); });
   $('#xpView').onchange = e => { xpo().view = e.target.value; const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpFigs').onchange = drawExplore;
   $('#xpCopy').onclick = async () => {
@@ -27204,6 +27424,56 @@ if (typeof module !== 'undefined') module.exports = Examples;
     };
   }
   $('#btnRerun').onclick = () => runAnalysis();
+  const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
+  const saveUrl = (url, name) => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+  const safeName = t => String(t).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  // every exported table to Excel, one sheet each, with the merged cells of the Word table
+  $('#btnXlsx').onclick = () => {
+    if (!state.result) return;
+    syncEdits();
+    const r = state.result, plan = exportPlan(r), wb = XLSX.utils.book_new(), used = new Set();
+    const sheetName = base => { let n = base.slice(0, 31), q = 2; while (used.has(n)) n = `${base.slice(0, 27)} (${q++})`; used.add(n); return n; };
+    if (!isOut('methods') && r.methods) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Statistical analysis'], [r.methods]]), sheetName('Methods'));
+    r.sections.forEach(sec => {
+      if (!plan.tabNum.has(sec)) return;
+      const head = sec.head.map(h => typeof h === 'string' ? { t: h } : h), aoa = [[`Table ${plan.tabNum.get(sec)}: ${sec.title}`]], merges = [];
+      // header row with column spans
+      const hr = []; head.forEach(h => { const c0 = hr.length; hr.push(h.t || ''); for (let q = 1; q < (h.span || 1); q++) hr.push(''); if ((h.span || 1) > 1) merges.push({ s: { r: 1, c: c0 }, e: { r: 1, c: c0 + h.span - 1 } }); });
+      aoa.push(hr);
+      const occ = [];
+      sec.rows.forEach((row, ri) => {
+        const out = [], R = ri + 2; let c = 0;
+        for (const cell of row) {
+          while (occ[ri] && occ[ri][c]) { out[c] = ''; c++; }
+          out[c] = (cell.t || []).join('\n'); for (let q = 1; q < (cell.span || 1); q++) out[c + q] = '';
+          if ((cell.rs || 1) > 1 || (cell.span || 1) > 1) merges.push({ s: { r: R, c }, e: { r: R + (cell.rs || 1) - 1, c: c + (cell.span || 1) - 1 } });
+          if (cell.rs > 1) for (let q = 1; q < cell.rs; q++) { occ[ri + q] = occ[ri + q] || []; for (let s2 = 0; s2 < (cell.span || 1); s2++) occ[ri + q][c + s2] = true; }
+          c += cell.span || 1;
+        }
+        while (occ[ri] && occ[ri][c]) { out[c] = ''; c++; }
+        aoa.push(out);
+      });
+      aoa.push([], [sec.footnote]);
+      const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!merges'] = merges;
+      ws['!cols'] = hr.map((_, i) => ({ wch: i === 0 ? 28 : 18 }));
+      XLSX.utils.book_append_sheet(wb, ws, sheetName(`Table ${plan.tabNum.get(sec)}`));
+    });
+    if (!wb.SheetNames.length) { toast('No table is selected for export'); return; }
+    XLSX.writeFile(wb, `${baseName()} - Tables.xlsx`);
+    toast(`${wb.SheetNames.length} sheet${wb.SheetNames.length > 1 ? 's' : ''} saved to Excel`);
+  };
+  // every exported figure (and the flowchart) as PNG files named by their number
+  $('#btnPngs').onclick = async () => {
+    if (!state.result) return;
+    syncEdits();
+    const r = state.result, plan = exportPlan(r), files = [];
+    if (plan.consortOn && r.consort) files.push([r.consort.url, `Figure ${plan.consortNum} - ${r.flowCaption}`]);
+    plan.order.forEach(f => files.push([f.url, `Figure ${plan.figNum.get(f)} - ${f.caption}`]));
+    if (!files.length) { toast('No figure is selected for export'); return; }
+    for (const [url, name] of files) { saveUrl(url, safeName(name) + '.png'); await new Promise(res => setTimeout(res, 250)); }
+    toast(`${files.length} figure${files.length > 1 ? 's' : ''} downloaded (allow multiple downloads if the browser asks)`);
+  };
+  $('#flowPng').onclick = () => { readConsort(); const c = state.cfg.consort; const cv = Charts.consort(c, activeGroups().map(g => state.cfg.groupLabels[g]), chartPalette(state.cfg.options)); saveUrl(cv.toDataURL('image/png'), `${baseName()} - Flowchart.png`); };
 
   $('#btnDocx').onclick = async () => {
     if (!state.result) return;

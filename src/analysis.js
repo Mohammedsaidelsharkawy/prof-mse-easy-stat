@@ -53,6 +53,23 @@ const Analysis = (() => {
     const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(x => x >= raw);
     return { min: Math.floor(min / step) * step, max: Math.max(Math.ceil(max / step) * step, Math.floor(min / step) * step + step), step };
   }
+  // effect size of a between-group comparison with its magnitude (Cohen 1988):
+  // two groups: Cohen's d (parametric) or r = |z| / √N (Mann-Whitney); more groups: η² (ANOVA) or ε² (Kruskal-Wallis); categories: Cramér's V
+  function effectMagnitude(r, k) {
+    const lab = (v, cuts) => v < cuts[0] ? 'negligible' : v < cuts[1] ? 'small' : v < cuts[2] ? 'medium' : 'large';
+    if (r.num) {
+      const gv = r.gv; if (!gv || gv.some(x => x.length < 2)) return '';
+      if (k === 2) {
+        if (r.num.param) { const [a, b] = r.num.desc, sp = Math.sqrt(((a.n - 1) * a.sd ** 2 + (b.n - 1) * b.sd ** 2) / (a.n + b.n - 2)), dv = Math.abs(a.mean - b.mean) / sp; return isFinite(dv) ? `Cohen's d = ${fmt(dv, 2)}, ${lab(dv, [0.2, 0.5, 0.8])}` : ''; }
+        const m = S.mannWhitney(gv[0], gv[1]); return `r = ${fmt(m.r, 2)}, ${lab(m.r, [0.1, 0.3, 0.5])}`;
+      }
+      const e = r.num.param ? S.anova(gv).etaSq : S.kruskalWallis(gv).etaSq;
+      return `${r.num.param ? 'η²' : 'ε²'} = ${fmt(e, 3)}, ${lab(e, [0.01, 0.06, 0.14])}`;
+    }
+    const t = r.cat.table.filter(row => S.sum(row) > 0); if (t.length < 2) return '';
+    const cs = S.chiSquare(t), N = S.sum(t.flat()), v = Math.sqrt(cs.chi / (N * (Math.min(t.length, t[0].length) - 1)));
+    return isFinite(v) ? `Cramér's V = ${fmt(v, 2)}, ${lab(v, [0.1, 0.3, 0.5])}` : '';
+  }
   // test names as written in the descriptive comments
   const TEST_NAME = { 't-test': 'independent t-test', 'Welch t-test': "Welch's t-test", ANOVA: 'one-way ANOVA', 'Welch ANOVA': "Welch's ANOVA", 'Mann-Whitney': 'Mann-Whitney U test',
     'Kruskal-Wallis': 'Kruskal-Wallis test', 'Chi-square': 'Chi-square test', "Fisher's exact": "Fisher's exact test" };
@@ -118,6 +135,11 @@ const Analysis = (() => {
         const dn = opts.dunn ? S.dunn(groupVals) : null;
         if (dn) used.add('dunn');
         pw = pr.map(([i, j], q) => ({ i, j, p: dn ? dn[q].p : S.mannWhitney(groupVals[i], groupVals[j]).p, ...S.hodgesLehmann(groupVals[i], groupVals[j]) }));
+        // optional adjustment of the pairwise Mann-Whitney tests (Dunn's test is already Bonferroni-adjusted)
+        if (!dn && (opts.mwAdjust === 'bonferroni' || opts.mwAdjust === 'holm')) {
+          const adj = opts.mwAdjust === 'holm' ? S.holm(pw.map(q => q.p)) : pw.map(q => S.bonferroni(q.p, pw.length));
+          pw.forEach((q, n) => { q.p = adj[n]; }); used.add('mwAdj:' + opts.mwAdjust);
+        }
       }
       used.add('nonparam');
     }
@@ -147,7 +169,7 @@ const Analysis = (() => {
     const rr = binary ? pairs(k).map(([i, j]) => ({ i, j, ...(effect(i, j) || { rr: null }) })) : [];
     // optional Bonferroni-adjusted pairwise comparisons once the overall test is significant (3+ groups)
     let catPairs = null;
-    if (opts.chiPost && k > 2 && p <= opts.alpha) { catPairs = S.chiSquarePairwise(table, opts.fisher); used.add('chiPost'); }
+    if (opts.chiPost && k > 2 && p <= opts.alpha) { catPairs = S.chiSquarePairwise(table, opts.fisher, opts.chiAdjust || 'bonferroni'); used.add('chiPost'); if (opts.chiAdjust === 'holm') used.add('chiHolm'); }
     return { table, pct, ns, p, test, stat, rr, binary, pairs: catPairs };
   }
 
@@ -1101,6 +1123,9 @@ const Analysis = (() => {
         it.spec = numSpec(gv, v.label);
         const used2 = new Set(), res = k > 1 && gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts) : null;
         it.sig = !!res && res.p <= alpha;
+        const nn = gv.map(x => x.length >= 3 ? normality(x) : null).filter(Boolean);
+        Object.assign(it, { n: gv.flat().length, test: res ? TEST_NAME[res.test] || res.test : '', p: res ? res.p : NaN,
+          normal: nn.length ? (nn.every(r => r.p > 0.05) ? 'normal' : `non-normal (${nn.filter(r => r.p <= 0.05).length} of ${nn.length} groups)`) : '—' });
         it.summary = res ? `Report: ${res.param ? 'parametric' : 'non-parametric'} (${v.dist === 'auto' ? 'from the normality test' : 'set by you'}), ${TEST_NAME[res.test] || res.test}, P ${pTxt(res.p)}.` : `Distribution: ${gv.flat().length >= 3 && normality(gv.flat()) && normality(gv.flat()).p <= 0.05 ? 'non-normal' : 'normal'} by ${nName}.`;
       } else if (v.kind !== 'repeated') {
         const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toCat(r[col])).filter(x => x !== null));
@@ -1115,6 +1140,7 @@ const Analysis = (() => {
         if (k > 1 && nonEmpty.length >= 2) {
           const cs = S.chiSquare(nonEmpty), cres = analyzeCategorical(gv, levels, used, opts), chosen = cres.test, out = [];
           it.sig = cres.p <= alpha;
+          Object.assign(it, { test: TEST_NAME[cres.test] || cres.test, p: cres.p });
           out.push(['Chi-square test', `χ² = ${F(cs.chi, 2)}`, String(cs.df), P(cs.p), `smallest expected count ${F(cs.minE, 1)}; ${F(100 * cs.pctSmall, 0)}% of cells < 5`, chosen === 'Chi-square' ? yes : '']);
           if (nonEmpty.length === 2 && k === 2) out.push(["Fisher's exact test", '', '', P(S.fisher2x2(nonEmpty).p), '', chosen === "Fisher's exact" ? yes : '']);
           it.tables.push({ cat: 'tests', title: 'Comparison between the groups', head: ['Test', 'Statistic', 'df', 'P value', 'Note', 'In the report'], rows: out });
@@ -1128,6 +1154,7 @@ const Analysis = (() => {
             it.tables.push({ cat: 'pairs', title: 'Pairwise comparisons (Bonferroni)', head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
           }
         }
+        Object.assign(it, { n: N, normal: '—' }); if (it.test === undefined) Object.assign(it, { test: '', p: NaN });
         it.spec = { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the patients', series: levels.map((l, li) => ({ name: l, values: tab[li].map((c, g) => ns[g] ? 100 * c / ns[g] : 0) })) };
       } else {
         const tps = v.cols.map(c => c.label || cfg.tpLabels[c.tp] || c.tp), T = tps.length;
@@ -1168,6 +1195,8 @@ const Analysis = (() => {
             ['Time (Greenhouse-Geisser)', F(mx.time.F, 2), `${mx.time.df1}, ${mx.time.df2}`, P(mx.time.p)], ['Group × time', F(mx.interaction.F, 2), `${mx.interaction.df1}, ${mx.interaction.df2}`, P(mx.interaction.p)]] });
         }
         if (wSig) it.sig = true;
+        Object.assign(it, { n: mats.reduce((a2, Y) => a2 + Y.length, 0), normal: '—', p: NaN,
+          test: `${tps.length} timepoints${k > 1 ? '; between groups and over time' : '; change over time'}` });
         const fT = xo.fig || 'auto';
         if (fT === 'box' || fT === 'violin') it.spec = { type: fT, categories: tps, yLabel: v.label, points: fT === 'box', ...(k < 2 ? { legend: false } : {}), series: gl.map((g, gi) => ({ name: g, data: per.map(gv => gv[gi]) })) };
         else it.spec = { type: 'line', categories: tps, yLabel: v.label, xLabel: 'Time', ...(k < 2 ? { legend: false } : {}), ...(fT === 'meanci' ? { errKind: 'ci' } : {}),
@@ -1671,7 +1700,7 @@ const Analysis = (() => {
             if (c.pairs) {
               const sp = c.pairs.filter(q => q.p <= alpha);
               sent.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).`
-                : 'Pairwise comparisons were insignificant after Bonferroni correction.');
+                : `Pairwise comparisons were insignificant after ${opts.chiAdjust === 'holm' ? 'Holm' : 'Bonferroni'} correction.`);
             }
           }
         }
@@ -1704,7 +1733,7 @@ const Analysis = (() => {
               else out.push(`The distribution of ${lowerFirst(lab)} ${sig ? 'differed significantly' : 'did not differ significantly'} ${amongTxt(k)} (${vals}; ${pb}).`);
               if (sig && c.pairs) {
                 const sp = c.pairs.filter(q => q.p <= alpha);
-                out.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).` : 'Pairwise comparisons were insignificant after Bonferroni correction.');
+                out.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).` : `Pairwise comparisons were insignificant after ${opts.chiAdjust === 'holm' ? 'Holm' : 'Bonferroni'} correction.`);
               }
             }
           }
@@ -1713,6 +1742,11 @@ const Analysis = (() => {
             : !nsL.length ? `Overall, the groups differed significantly in all the studied variables.`
             : `Overall, the groups differed significantly in ${listJoin(sigL)}, whereas they were comparable in ${listJoin(nsL)}.`);
           return out;
+        }
+        // optional: the size of each significant effect, with its conventional magnitude
+        if (opts.commentMagnitude) {
+          const parts = res.filter(r => (r.num || r.cat).p <= alpha).map(r => { const m = effectMagnitude(r, k); return m && `${lowerFirst(plain(r.v.label))} (${m})`; }).filter(Boolean);
+          if (parts.length) sent.push(`The effect size was ${parts.length > 1 ? 'as follows: ' : 'for '}${listJoin(parts)}.`);
         }
         const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: opts.effect, rr: hasRR, posthoc: showPost,
           stats: res.map(r => (r.num || r.cat).stat), ci: opts.secondRow === 'ci' && res.some(r => r.num && r.num.param),
@@ -1798,13 +1832,13 @@ const Analysis = (() => {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
         mcnemar: () => a.second, kappa: () => a.second, agreement: () => a.second, diagnostic: () => a.positive && a.event && a.eventPositive, cronbach: () => true,
-        correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2
+        correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
-        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection }[a.type];
+        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
       const compares = ['ancova', 'survival', 'mcnemar'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
@@ -1831,12 +1865,40 @@ const Analysis = (() => {
     sections.forEach(sec => {
       if (opts.pHead && opts.pHead !== 'P value') sec.head = sec.head.map(h => h === 'P value' ? opts.pHead : h && h.t === 'P value' ? { ...h, t: opts.pHead } : h);
       if (opts.boldSig) boldSigP(sec, opts.pHead || 'P value', alpha);
+      if (opts.shadeSig) shadeSigRows(sec, opts.pHead || 'P value', alpha);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
     });
     return { sections, used, groups: gl, gN, k, methods: opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
+  // paired comparison of two numeric measurements of the same patients (before / after, method A / B)
+  function pairedSection(a, cfg, rows, alpha, d, used) {
+    if (!a.second) return null;
+    const l1 = columnLabel(cfg, a.outcome), l2 = columnLabel(cfg, a.second);
+    const rs = rows.filter(r => isFinite(toNum(r[a.outcome])) && isFinite(toNum(r[a.second])));
+    if (rs.length < 3) return null;
+    const x = rs.map(r => toNum(r[a.outcome])), y = rs.map(r => toNum(r[a.second])), dif = y.map((v, i) => v - x[i]);
+    const nt = normality(dif), param = a.test === 'param' ? true : a.test === 'nonparam' ? false : !nt || nt.p > 0.05;
+    const t = S.pairedT(y, x), w = S.wilcoxonSigned(y, x), res = param ? t : w, p = res.p;
+    used.add(param ? 'pairedt' : 'wilcoxon'); used.add('pairedAdv');
+    const dx = S.describe(x), dy = S.describe(y), dd = S.describe(dif), val = q => param ? msd(q.mean, q.sd, d) : medIqr(q, d);
+    const tn = param ? 'Paired t-test' : 'Wilcoxon signed-rank test';
+    const head = ['', param ? meanSdName() : 'Median (IQR)', 'P value'];
+    const trows = [[{ t: [l1], b: true }, { t: [val(dx)] }, { t: [fmtP(p, alpha)], rs: 3 }], [{ t: [l2], b: true }, { t: [val(dy)] }],
+      [{ t: [`Difference (${plain(l2)} − ${plain(l1)})`], b: true }, { t: param ? [msd(dd.mean, dd.sd, d), `95% CI ${fmt(t.lo, d)} to ${fmt(t.hi, d)}`] : [medIqr(dd, d)] }]];
+    // effect size: Cohen's dz (mean difference / SD of differences) or r = |z| / √n
+    const eff = param ? `Cohen's dz = ${fmt(Math.abs(dd.mean) / dd.sd, 2)}` : `r = ${fmt(Math.abs(w.z) / Math.sqrt(rs.length), 2)}`;
+    const dir = (param ? dd.mean : dd.median) < 0 ? 'lower' : 'higher';
+    const sent = [p <= alpha ? `${cap(plain(l2))} was significantly ${dir} than ${lowerFirst(plain(l1))} (${val(dy)} vs ${val(dx)}; ${tn}, P value ${pTxt(p)}; ${eff}).`
+      : `${cap(plain(l2))} and ${lowerFirst(plain(l1))} were insignificantly different (${val(dy)} vs ${val(dx)}; ${tn}, P value ${pTxt(p)}).`];
+    const f = [...(p <= alpha ? [`*: Significant as P value ≤ ${alpha}`] : []), `n = ${rs.length} patients with both values`, `P value: ${tn}${a.test === 'auto' || !a.test ? ` (differences ${param ? 'normally' : 'not normally'} distributed)` : ''}`,
+      `Other test: ${param ? `Wilcoxon signed-rank P ${pTxt(w.p)}` : `paired t-test P ${pTxt(t.p)}`}`, eff];
+    const figures = a.figure === 'none' ? [] : [{ sig: p <= alpha, caption: `${plain(l1)} and ${lowerFirst(plain(l2))} of each patient`,
+      spec: { type: 'line', categories: [plain(l1), plain(l2)], yLabel: a.ylabel || plain(l1), legend: false, individual: [x.map((v, i) => [v, y[i]])],
+        errKind: 'sd', series: [{ name: 'Mean', values: param ? [dx.mean, dy.mean] : [dx.median, dy.median], err: param ? [dx.sd, dy.sd] : [null, null], lo: param ? null : [dx.q1, dy.q1], hi: param ? null : [dx.q3, dy.q3] }] } }];
+    return { kind: 'paired', title: `${plain(l1)} versus ${lowerFirst(plain(l2))} (paired comparison)`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures, meta: { t, w } };
+  }
   // correlation as an advanced analysis: chosen columns, optionally one main variable against the others
   function advCorrelationSection(a, cfg, rows, alpha, d, used) {
     const cols = [...new Set([a.outcome, ...(a.predictors || [])].filter(Boolean))].filter(c => isNumberColumn(rows, c));
@@ -1851,6 +1913,27 @@ const Analysis = (() => {
     return sec;
   }
   // bold significant P values in the P value column (row spans followed as in the Word table)
+  // shade every row of a significant result (its P value cell and the rows it spans)
+  function shadeSigRows(sec, pHead, alpha) {
+    let col = 0, pc = -1;
+    sec.head.forEach(h => { const t = typeof h === 'string' ? h : h && h.t; if (pc < 0 && t === pHead) pc = col; col += (h && h.span) || 1; });
+    if (pc < 0) return;
+    const occ = [], mark = new Set();
+    sec.rows.forEach((r, ri) => {
+      let c = 0;
+      for (const cell of r) {
+        while (occ[ri] && occ[ri][c]) c++;
+        if (c === pc) {
+          const m = String((cell.t || [])[0] || '').match(/^(<\s?)?(\d*[.·]\d+)/);
+          if (m && (m[1] || parseFloat(m[2].replace('·', '.')) <= alpha)) for (let q = 0; q < (cell.rs || 1); q++) mark.add(ri + q);
+        }
+        if (cell.rs > 1) for (let q = 1; q < cell.rs; q++) { occ[ri + q] = occ[ri + q] || []; for (let s2 = 0; s2 < (cell.span || 1); s2++) occ[ri + q][c + s2] = true; }
+        c += cell.span || 1;
+      }
+    });
+    // a cell spanning rows is shaded when its first row is
+    sec.rows.forEach((r, ri) => { if (mark.has(ri)) r.forEach(cell => { cell.hl = true; }); });
+  }
   function boldSigP(sec, pHead, alpha) {
     let col = 0, pc = -1;
     sec.head.forEach(h => { const t = typeof h === 'string' ? h : h && h.t; if (pc < 0 && t === pHead) pc = col; col += (h && h.span) || 1; });
@@ -1995,8 +2078,8 @@ const Analysis = (() => {
     const cont = [];
     if (used.has('param')) cont.push(k === 2 ? (used.has('welch') ? "Student's or Welch's t-test" : "Student's t-test")
       : `one-way ANOVA with Tukey's post hoc test${used.has('welchAnova') ? " (Welch's ANOVA with Games-Howell when variances differed)" : ''}`);
-    if (used.has('nonparam')) cont.push(k === 2 ? 'Mann-Whitney U test' : `Kruskal-Wallis test with ${used.has('dunn') ? "Dunn's" : 'pairwise Mann-Whitney'} post hoc tests`);
-    const cat = used.has('cat') ? `χ² test${used.has('fisher') ? " or Fisher's exact test" : ''}${used.has('chiPost') ? ' (Bonferroni-corrected pairwise comparisons)' : ''}` : '';
+    if (used.has('nonparam')) cont.push(k === 2 ? 'Mann-Whitney U test' : `Kruskal-Wallis test with ${used.has('dunn') ? "Dunn's" : `pairwise Mann-Whitney${used.has('mwAdj:holm') ? ' (Holm)' : used.has('mwAdj:bonferroni') ? ' (Bonferroni)' : ''}`} post hoc tests`);
+    const cat = used.has('cat') ? `χ² test${used.has('fisher') ? " or Fisher's exact test" : ''}${used.has('chiPost') ? ` (${used.has('chiHolm') ? 'Holm' : 'Bonferroni'}-corrected pairwise comparisons)` : ''}` : '';
     if (cont.length || cat) s.push(`Groups were compared using ${[cont.length ? `the ${cont.join(' or the ')} for continuous variables` : '', cat ? `the ${cat} for categorical variables` : ''].filter(Boolean).join(' and ')}.`);
     const w = [];
     if (used.has('pairedt')) w.push('paired t-test'); if (used.has('wilcoxon')) w.push('Wilcoxon signed-rank test');
@@ -2050,11 +2133,11 @@ const Analysis = (() => {
       s.push(`Quantitative parametric data were presented as mean and standard deviation (SD) and were analyzed by ${t}.`);
     }
     if (used.has('nonparam')) {
-      const t = k === 2 ? 'Mann-Whitney test' : used.has('dunn') ? "Kruskal-Wallis test with Dunn's post hoc test (Bonferroni-adjusted)" : 'Kruskal-Wallis test with Mann-Whitney test to compare each two groups';
+      const t = k === 2 ? 'Mann-Whitney test' : used.has('dunn') ? "Kruskal-Wallis test with Dunn's post hoc test (Bonferroni-adjusted)" : `Kruskal-Wallis test with Mann-Whitney test to compare each two groups${used.has('mwAdj:holm') ? ' (Holm-adjusted)' : used.has('mwAdj:bonferroni') ? ' (Bonferroni-adjusted)' : ''}`;
       s.push(`Quantitative non-parametric data were presented as median and interquartile range (IQR) and were analyzed by ${t}.`);
     }
     if (used.has('cat')) s.push(`Qualitative variables were presented as frequency and percentage (%) and were analyzed utilizing the Chi-square test${used.has('fisher') ? " or Fisher's exact test when appropriate" : ''}.`);
-    if (used.has('chiPost')) s.push('When significant, qualitative variables were compared between each two groups with Bonferroni correction.');
+    if (used.has('chiPost')) s.push(`When significant, qualitative variables were compared between each two groups with ${used.has('chiHolm') ? 'Holm' : 'Bonferroni'} correction.`);
     if (o.effect) {
       const e = [];
       if (used.has('param')) e.push(k === 2 ? 'mean differences' : 'mean differences (Tukey-adjusted)');
@@ -2082,6 +2165,7 @@ const Analysis = (() => {
       if (used.has('spearman')) c.push(`Spearman's rank correlation coefficient (rs)${c.length ? ' otherwise' : ''}`);
       s.push(`Correlation between quantitative variables was assessed using ${c.join(' or ')}.`);
     }
+    if (used.has('pairedAdv')) s.push('Two measurements of the same patients were compared using the paired t-test when their differences were normally distributed, or the Wilcoxon signed-rank test otherwise.');
     if (used.has('kendall')) s.push("Kendall's tau-b (τb) was used for correlation where chosen.");
     if (used.has('mixed')) s.push('The group × time interaction was assessed by mixed (split-plot) ANOVA with Greenhouse-Geisser correction.');
     if (used.has('ancova')) s.push('Analysis of covariance (ANCOVA) was used to compare groups after adjustment for covariates, reporting adjusted (estimated marginal) means with 95% CI and Bonferroni-adjusted pairwise comparisons.');

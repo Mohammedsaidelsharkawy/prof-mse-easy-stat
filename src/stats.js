@@ -327,15 +327,17 @@ const Stats = (() => {
     return out;
   }
   // pairwise Chi-square (or Fisher for 2×2 with small expected counts) between groups; table rows = categories, cols = groups
-  function chiSquarePairwise(table, useFisher) {
+  // adjust: 'bonferroni' (default), 'holm' or 'none'
+  function chiSquarePairwise(table, useFisher, adjust = 'bonferroni') {
     const k = table[0].length, m = k * (k - 1) / 2, out = [];
     for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
       const sub = table.map(r => [r[i], r[j]]).filter(r => r[0] + r[1] > 0);
       if (sub.length < 2) { out.push({ i, j, p: 1 }); continue; }
       const cs = chiSquare(sub);
       const p = useFisher && sub.length === 2 && cs.minE < 5 ? fisher2x2(sub).p : cs.p;
-      out.push({ i, j, p: bonferroni(p, m) });
+      out.push({ i, j, p: adjust === 'bonferroni' ? bonferroni(p, m) : p });
     }
+    if (adjust === 'holm') { const h = holm(out.map(q => q.p)); out.forEach((q, n) => { q.p = h[n]; }); }
     return out;
   }
 
