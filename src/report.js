@@ -26,11 +26,12 @@ const Report = (() => {
     return u;
   };
 
+  let LINE = 360; // body text line spacing (240 = single, 360 = 1.5 lines), set per build
   function para(text, o = {}) {
     const { Paragraph, TextRun, AlignmentType } = D();
     return new Paragraph({
       alignment: o.align || AlignmentType.JUSTIFIED,
-      spacing: { after: o.after ?? 160, line: o.line ?? 360, before: o.before ?? 0 },
+      spacing: { after: o.after ?? 160, line: o.line ?? LINE, before: o.before ?? 0 },
       keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: [...runs(text, o), ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, bold: false, size: o.noteSize || o.size }) : [])]
     });
@@ -86,9 +87,9 @@ const Report = (() => {
         weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : isP(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
       }
     });
-    const tot = weights.reduce((a, b) => a + b, 0);
-    const widths = weights.map(w => Math.floor(PAGE_W * w / tot));
-    widths[widths.length - 1] += PAGE_W - widths.reduce((a, b) => a + b, 0);
+    const tot = weights.reduce((a, b) => a + b, 0), TW = Math.round(PAGE_W * (+look.width || 100) / 100); // table width: the page or a share of it
+    const widths = weights.map(w => Math.floor(TW * w / tot));
+    widths[widths.length - 1] += TW - widths.reduce((a, b) => a + b, 0);
 
     const apa = style === 'apa';
     const border = { style: BorderStyle.SINGLE, size: 4, color: '8C8C8C' };
@@ -139,7 +140,7 @@ const Report = (() => {
       trs.push(new TableRow({ cantSplit: true, children: cells }));
     });
     const tableBorders = apa ? { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none } : undefined;
-    return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: widths, rows: trs, borders: tableBorders });
+    return new Table({ width: { size: TW, type: WidthType.DXA }, columnWidths: widths, rows: trs, borders: tableBorders, ...(TW < PAGE_W ? { alignment: AlignmentType.CENTER } : {}) });
   }
 
   // figure width in the Word file (px at 96 dpi): one per row, or each of two side by side
@@ -184,11 +185,16 @@ const Report = (() => {
     BODY_FONT = opts.font || DEFAULT_FONT;
     ITALIC_P = !!opts.italicP;
     const landscape = opts.orientation === 'landscape';
-    PAGE_W = landscape ? LANDSCAPE_W : PORTRAIT_W;
+    // page: A4 or US Letter, normal / narrow / wide margins (the text width follows), body line spacing
+    const pg = opts.page || {}, [pw0, ph0] = pg.size === 'letter' ? [12240, 15840] : [11906, 16838], mg = { narrow: 720, wide: 1800 }[pg.margin] || 1440;
+    PAGE_W = (landscape ? ph0 : pw0) - 2 * mg;
+    LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [];
     // thesis chapters number as "Table 4.1" / "Figure 4.1"; a journal paper uses sentence-case headings and one Results narrative
     const pre = opts.numberPrefix || '';
     if (opts.title) children.push(para(opts.title, { bold: true, size: 32, align: AlignmentType.CENTER, after: 240, color: brand ? '7B2FBE' : undefined }));
+    // the list of tables and figures goes here once every number is known
+    const listAt = children.length, listTabs = [], listFigs = [];
     if (model.abstract) {
       children.push(heading('Results for the abstract', brand));
       children.push(para(model.abstract));
@@ -202,6 +208,7 @@ const Report = (() => {
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
       const fl = figLabel(pre + fig++, opts.captionStyle), ft = model.flowCaption || 'CONSORT flowchart of the enrolled patients';
+      listFigs.push(`${fl} ${ft}`);
       if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600));
       else children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600), caption(`${fl} ${ft}`));
     } else if (opts.paper && model.intro) children.push(para(model.intro));
@@ -209,7 +216,7 @@ const Report = (() => {
     const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
     const placeFigures = list => {
       const apa = opts.captionStyle === 'apa';
-      const figs = list.filter(f => f.url).map(f => { const num = figLabel(pre + fig++, opts.captionStyle); return { ...f, apa, num, label: `${num} ${f.caption}` }; });
+      const figs = list.filter(f => f.url).map(f => { const num = figLabel(pre + fig++, opts.captionStyle); listFigs.push(`${num} ${f.caption}`); return { ...f, apa, num, label: `${num} ${f.caption}` }; });
       if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
       else for (const f of figs) {
         // APA places the number and title above the figure and the explanation below it as a note
@@ -231,6 +238,7 @@ const Report = (() => {
         if (opts.sectionHeads) children.push(subheading(s.title, brand, first()));
         if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment, { pageBreakBefore: first() }));
         const num = `Table ${pre}${tab++}`;
+        listTabs.push(`${num}${opts.tableCaption === 'period' || opts.tableCaption === 'apa' ? '.' : ':'} ${s.title}`);
         if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
         else children.push(caption(`${num}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`, { pageBreakBefore: first(), align: { justify: D().AlignmentType.JUSTIFIED, left: D().AlignmentType.LEFT }[opts.tableCapAlign] || D().AlignmentType.CENTER }));
         children.push(table(s.head, s.rows, brand, opts.tableStyle, opts.tableLook));
@@ -248,7 +256,15 @@ const Report = (() => {
       children.push(para(model.summary));
     }
 
+    if (opts.listTF && (listTabs.length || listFigs.length)) {
+      const lst = [];
+      if (listTabs.length) lst.push(heading('List of tables', brand), ...listTabs.map(t => para(t, { line: 276, after: 60, align: AlignmentType.LEFT })));
+      if (listFigs.length) lst.push(heading('List of figures', brand), ...listFigs.map(t => para(t, { line: 276, after: 60, align: AlignmentType.LEFT })));
+      lst.push(new Paragraph({ children: [new (D().PageBreak)()] }));
+      children.splice(listAt, 0, ...lst);
+    }
     const headerKids = [];
+    if (opts.headerText) headerKids.push(new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: opts.headerText, italics: true, size: 18, font: BODY_FONT, color: '555555' })] }));
     if (brand) {
       headerKids.push(new Paragraph({
         alignment: AlignmentType.RIGHT,
@@ -264,13 +280,14 @@ const Report = (() => {
       title: opts.title || 'Statistical report',
       styles: { default: { document: { run: { font: BODY_FONT, size: 24 } } } },
       sections: [{
-        properties: { page: { size: landscape ? { width: 11906, height: 16838, orientation: D().PageOrientation.LANDSCAPE } : { width: 11906, height: 16838 }, margin: { top: 1440, bottom: 1440, left: 1440, right: 1440 } } },
+        properties: { page: { size: landscape ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 }, margin: { top: mg, bottom: mg, left: mg, right: mg } } },
         headers: { default: new Header({ children: headerKids }) },
         footers: {
+          // page numbers: centred (default), right, "Page 3 of 12" or none
           default: new Footer({
-            children: [new Paragraph({
-              alignment: AlignmentType.CENTER,
-              children: [new TextRun({ children: [PageNumber.CURRENT], size: 18, font: BODY_FONT })]
+            children: pg.pageNum === 'none' ? [] : [new Paragraph({
+              alignment: pg.pageNum === 'right' ? AlignmentType.RIGHT : AlignmentType.CENTER,
+              children: pg.pageNum === 'of' ? [new TextRun({ children: ['Page ', PageNumber.CURRENT, ' of ', PageNumber.TOTAL_PAGES], size: 18, font: BODY_FONT })] : [new TextRun({ children: [PageNumber.CURRENT], size: 18, font: BODY_FONT })]
             })]
           })
         },
@@ -284,7 +301,7 @@ const Report = (() => {
   async function buildResults(model, opts) {
     const { Document, Packer, Paragraph, TextRun, Footer, AlignmentType, PageNumber, PageOrientation } = D();
     BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false;
-    PAGE_W = LANDSCAPE_W;
+    PAGE_W = LANDSCAPE_W; LINE = 360;
     const children = [para(opts.title || 'Results by variable', { bold: true, size: 32, align: AlignmentType.CENTER, after: 120 })];
     if (opts.subtitle) children.push(para(opts.subtitle, { align: AlignmentType.CENTER, size: 20, after: 240 }));
     // key results: one table of every variable (group values, test, P), then the figures; gallery: the figures two per row

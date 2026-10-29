@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,14 +47,14 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
   const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
     legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont, frame: o.figFrame,
-    sigLabel: o.sigLabel, series: o.seriesStyle, lineWeight: o.lineWeight, errBars: o.errBars, gridStyle: o.gridStyle, ticks: o.yTicks, pLead: +o.pLead !== 0 });
+    sigLabel: o.sigLabel, series: o.seriesStyle, lineWeight: o.lineWeight, errBars: o.errBars, errColor: o.errColor, gridStyle: o.gridStyle, ticks: o.yTicks, pLead: +o.pLead !== 0 });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -308,7 +308,7 @@
   $('#to2').onclick = () => go(2);
 
   /* ---------- data grid: preview options, editing and rearranging the sheet ---------- */
-  state.grid = { page: 0, per: 10, q: '', onlyMissing: false, hlMissing: true, summary: false, edit: false, sort: null, density: 'normal', hidden: [], types: true, wrap: false, freeze: false, stripes: false };
+  state.grid = { page: 0, per: 10, q: '', onlyMissing: false, hlMissing: true, summary: false, edit: false, sort: null, density: 'normal', hidden: [], types: true, wrap: false, freeze: false, stripes: true, outliers: false };
   const isMissing = v => v === null || v === undefined || String(v).trim() === '';
   const parseCell = t => { t = t.replace(/\u00a0/g, ' ').trim(); if (t === '') return null; const n = Number(t.replace(',', '.')); return isFinite(n) && /^[-+]?[\d.,]+(e[-+]?\d+)?$/i.test(t) ? n : t; };
   function renderGrid() {
@@ -329,6 +329,9 @@
     const per = g.per === 'all' ? Math.max(1, idx.length) : +g.per, pages = Math.max(1, Math.ceil(idx.length / per));
     g.page = Math.min(g.page, pages - 1);
     const shown = idx.slice(g.page * per, g.page * per + per), cfg = state.cfg;
+    // outliers: beyond 1.5 × IQR of the column (numeric columns)
+    const fences = g.outliers ? Object.fromEntries(headers.filter(h => kinds[h] === 'num').map(h => [h, Analysis.outFence(rows.map(r => Analysis.toNum(r[h])).filter(isFinite), '1.5')])) : {};
+    const isOut = (h, v) => { const f = fences[h], n = Analysis.toNum(v); return !!f && isFinite(n) && (n < f[0] || n > f[1]); };
     const role = h => !cfg ? '' : h === cfg.groupCol && !cfg.noGroups ? '<span class="chip info">group</span>' : cfg.idCols.includes(h) ? '<span class="chip">ID</span>' : '';
     const sortMark = h => g.sort && g.sort.col === h ? (g.sort.dir > 0 ? ' ▲' : ' ▼') : '';
     const head = headers.map((h, ci) => g.edit
@@ -341,7 +344,7 @@
       const desc = info.numeric && nums.length ? `num · ${Analysis.fmt(Math.min(...nums), 2)}–${Analysis.fmt(Math.max(...nums), 2)}` : `text · ${info.distinct.length} values`;
       return `<td class="${ci === 0 ? 'c1' : ''}">${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
     const body = shown.map(i => `<tr><td class="rn">${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
-      headers.map((h, ci) => `<td class="${cc(h, ci)}${g.hlMissing && isMissing(rows[i][h]) ? ' miss' : ''}" title="${esc(rows[i][h] ?? '')}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`).join('')}</tr>`).join('');
+      headers.map((h, ci) => `<td class="${cc(h, ci)}${g.hlMissing && isMissing(rows[i][h]) ? ' miss' : ''}${isOut(h, rows[i][h]) ? ' gout' : ''}" title="${esc(rows[i][h] ?? '')}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`).join('')}</tr>`).join('');
     $('#preview').innerHTML = `<thead><tr><th class="rn">#</th>${head}</tr></thead><tbody>${summary}${body || `<tr><td colspan="${headers.length + 1}" class="legend-note">No rows match.</td></tr>`}</tbody>`;
     const rn = tbl.querySelector('th.rn'); if (rn) tbl.style.setProperty('--rnw', rn.getBoundingClientRect().width + 'px');
     $('#gridInfo').textContent = idx.length ? `Rows ${g.page * per + 1}–${Math.min(idx.length, g.page * per + per)} of ${idx.length}${idx.length < rows.length ? ` (filtered from ${rows.length})` : ''}` : '0 rows';
@@ -619,6 +622,7 @@
     else if (t.id === 'gridWrapText') g.wrap = t.checked;
     else if (t.id === 'gridFreeze') g.freeze = t.checked;
     else if (t.id === 'gridStripes') g.stripes = t.checked;
+    else if (t.id === 'gridOut') g.outliers = t.checked;
     else if (t.dataset.gcol !== undefined) g.hidden = t.checked ? g.hidden.filter(h => h !== t.dataset.gcol) : [...g.hidden, t.dataset.gcol];
     else return;
     renderGrid();
@@ -973,8 +977,15 @@
         <td>${v.type === 'categorical' ? `<input type="text" data-k="valueLabels" value="${esc(v.valueLabels || '')}" placeholder="${esc(v.levels.slice(0, 3).map(l => `${l}=…`).join(', ') || 'e.g. 1=Male, 2=Female')}" title="Code=label pairs separated by commas, e.g. 1=Male, 2=Female">` : '<span class="legend-note" title="Set the type to categorical to label coded values">—</span>'}</td>
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
       </tr>`).join('')}</tbody>`;
-    renderRepeated();
+    renderRepeated(); filterVars();
   }
+  function filterVars() {
+    const q = ($('#varSearch').value || '').trim().toLowerCase(), trs = [...document.querySelectorAll('#varsTbl tr[data-vid]')];
+    let n = 0;
+    trs.forEach(tr => { const v = state.cfg.variables.find(x => x.id === tr.dataset.vid), hit = !q || (v && (v.label + ' ' + v.cols.map(c => c.col).join(' ')).toLowerCase().includes(q)); tr.style.display = hit ? '' : 'none'; if (hit) n++; });
+    $('#varCount').textContent = q ? `${n} of ${trs.length} variables` : `${trs.length} variables · ${state.cfg.variables.filter(v => v.include).length} included`;
+  }
+  $('#varSearch').addEventListener('input', filterVars);
   $('#groupsTbl').addEventListener('click', e => {
     const b = e.target.closest('[data-gmove]'); if (!b) return;
     readUiIntoCfg();
@@ -1910,6 +1921,22 @@
     const o = JSON.parse(snap); state.data = o.data; state.cfg = o.cfg;
     const y = window.scrollY; renderExplore(); renderGrid(); window.scrollTo(0, y); toast('Undone');
   };
+  // every table shown, one sheet per variable (tables one under another, each with its title)
+  $('#xpXlsx').onclick = () => {
+    const x = state.explore; if (!x) return;
+    const list = xpList(); if (!list.length) { toast('No variable to export'); return; }
+    const wb = XLSX.utils.book_new(), used = new Set();
+    list.forEach(it => {
+      const aoa = [[it.label], [it.summary || ''], []];
+      xpTables(it).forEach(t => { aoa.push([t.title], t.head, ...t.rows, []); });
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = [{ wch: 26 }, ...Array.from({ length: 14 }, () => ({ wch: 14 }))];
+      let name = it.label.replace(/[\\/?*[\]:]/g, ' ').slice(0, 28).trim() || 'Variable', k = 2; while (used.has(name.toLowerCase())) name = `${name.slice(0, 25)} (${k++})`; used.add(name.toLowerCase());
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    });
+    XLSX.writeFile(wb, `${baseName()} - Results by variable.xlsx`);
+    toast(`${list.length} variable${list.length > 1 ? 's' : ''} saved to Excel`);
+  };
   $('#xpWord').onclick = async () => {
     const x = state.explore; if (!x) return;
     busy(true);
@@ -2376,7 +2403,7 @@
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
       const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
-        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, tableLook: { size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad }, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad }, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -2519,10 +2546,15 @@
       const j = JSON.parse(await f.text());
       if (j.app !== 'ProfMSE-EasyStat-project' || !j.data || !j.cfg) throw new Error(j.app === 'ProfMSE-EasyStat' ? 'this is a setup file — use Load setup' : 'not an Easy Stat project');
       if (state.data && !confirm('Open this project? Unsaved changes to the current one are lost.')) return;
+      openProject(j, f.name);
+    } catch (err) { toast('Could not open the project: ' + err.message); }
+  };
+  function openProject(j, fname) {
+    {
       const cfg = j.cfg;
       cfg.options = { ...defaultOptions(), ...cfg.options };
       cfg.tpInclude = cfg.tpInclude || {}; cfg.advanced = cfg.advanced || []; cfg.exportExclude = cfg.exportExclude || {}; cfg.report = { ...DEFAULT_REPORT, ...(cfg.report || {}) };
-      state.data = j.data; state.cfg = cfg; state.file = j.file || f.name; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
+      state.data = j.data; state.cfg = cfg; state.file = j.file || fname; state.messy = null; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
       state.undo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
       $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option>${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
       $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value;
@@ -2531,11 +2563,42 @@
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       go(Math.min(STEPS.length, Math.max(2, +j.step || 2)));
       toast(`Project opened: ${state.data.rows.length} patients, saved ${String(j.saved || '').slice(0, 10)}`);
-    } catch (err) { toast('Could not open the project: ' + err.message); }
-  };
+    }
+  }
+  /* ---------- autosave: the current work is kept in this browser and offered back on the next visit ---------- */
+  const AUTOSAVE_KEY = 'easystat.autosave';
+  let autosaveTimer = null;
+  function autosave() {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => {
+      if (!state.data || !state.cfg) return;
+      try {
+        const txt = JSON.stringify({ app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step, data: state.data, cfg: state.cfg });
+        if (txt.length < 4.5e6) localStorage.setItem(AUTOSAVE_KEY, txt);
+      } catch (e) { /* storage full or blocked: nothing kept */ }
+    }, 1500);
+  }
+  document.addEventListener('change', autosave); document.addEventListener('click', e => { if (e.target.closest('button,[data-go]')) autosave(); });
+  (function offerRestore() {
+    let j = null; try { j = JSON.parse(localStorage.getItem(AUTOSAVE_KEY) || 'null'); } catch (e) { /* none */ }
+    if (!j || !j.data || !j.cfg) return;
+    const box = document.createElement('div'); box.className = 'restore-bar';
+    const when = new Date(j.saved), ago = isFinite(when) ? when.toLocaleString() : '';
+    box.innerHTML = `<span>↺ Continue where you left off? <b>${esc(String(j.file || 'data').replace(/\.[^.]+$/, ''))}</b> — ${j.data.rows.length} patients, step ${j.step || 2}, saved ${esc(ago)}.</span><span class="spacer"></span><button class="btn primary small" type="button" data-rs="yes">Restore</button><button class="btn ghost small" type="button" data-rs="no">Dismiss</button>`;
+    $('#p1').prepend(box);
+    box.onclick = e => { const b = e.target.closest('[data-rs]'); if (!b) return; box.remove();
+      if (b.dataset.rs === 'yes') { try { openProject(j, j.file || 'data'); } catch (err) { toast('Could not restore: ' + err.message); } }
+      else { try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* ignore */ } } };
+  })();
+  // keyboard: Ctrl/⌘+S saves the project, Alt+→ / Alt+← next and previous step
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); $('#btnSaveProj').click(); }
+    else if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && state.data) { e.preventDefault(); go(Math.min(STEPS.length, Math.max(1, state.step + (e.key === 'ArrowRight' ? 1 : -1)))); }
+  });
   $('#btnNew').onclick = () => {
     if (state.data && !confirm('Start a new project? The current data and settings are cleared (save the project first to keep them).')) return;
-    Object.assign(state, { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, pendingCfg: null, pendingEdits: null, undo: [] });
+    Object.assign(state, { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, pendingCfg: null, pendingEdits: null, undo: [], messy: null });
+    try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* ignore */ }
     $('#sheetBox').style.display = 'none'; $('#fileName').textContent = ''; $('#studyTitle').value = ''; $('#file').value = '';
     $('#to2').disabled = true; $('#report').innerHTML = '';
     go(1); toast('New project — upload an Excel file or open an example');

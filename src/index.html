@@ -153,6 +153,8 @@ table.dgrid.freeze th.c1{z-index:3;background:var(--lav)}
 .colpick-box{position:absolute;z-index:20;top:110%;left:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:340px;overflow:auto;min-width:240px}
 .colpick-box label{display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0;white-space:nowrap}
 table.dgrid td.miss{background:rgba(192,57,43,.09)}
+table.dgrid td.gout,table.dgrid.stripes tbody tr:nth-child(even) td.gout{background:rgba(224,138,46,.25);font-weight:600}
+.restore-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;margin-bottom:12px;background:var(--soft)}
 table.dgrid td.rn,table.dgrid th.rn{color:var(--muted);font-size:12px;white-space:nowrap;position:sticky;left:0;background:var(--card);z-index:2}
 table.dgrid th.rn{z-index:3;background:var(--lav)}
 table.dgrid th.sortable{cursor:pointer}
@@ -395,7 +397,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
             <label class="check" style="margin:0"><input type="checkbox" id="gridTypes" checked><span>Column types</span></label>
             <label class="check" style="margin:0"><input type="checkbox" id="gridWrapText"><span>Wrap long text</span></label>
             <label class="check" style="margin:0"><input type="checkbox" id="gridFreeze"><span>Freeze first column</span></label>
-            <label class="check" style="margin:0"><input type="checkbox" id="gridStripes"><span>Striped rows</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridStripes" checked><span>Striped rows</span></label>
+            <label class="check" style="margin:0" title="Numeric values beyond 1.5 × IQR of their column"><input type="checkbox" id="gridOut"><span>Highlight outliers</span></label>
             <span class="spacer"></span>
             <button class="btn ghost small" id="gridCheck" type="button" title="Look for problems in the sheet">🩺 Check data</button>
             <button class="btn ghost small" id="gridFind" type="button" title="Find and replace values">🔍 Find &amp; replace</button>
@@ -488,6 +491,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" type="button" data-vbulk="num">Only numeric</button><button class="btn ghost small" type="button" data-vbulk="cat">Only categorical</button>
         <span class="legend-note" style="margin-left:10px">Distribution of all numeric:</span>
         <button class="btn ghost small" type="button" data-vbulk="d:auto">Auto</button><button class="btn ghost small" type="button" data-vbulk="d:param">Parametric</button><button class="btn ghost small" type="button" data-vbulk="d:nonparam">Non-parametric</button></div>
+      <div class="row" style="gap:8px;margin-bottom:8px"><input type="search" id="varSearch" placeholder="Find a variable…" style="max-width:260px"><span class="legend-note" id="varCount"></span></div>
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
       <p class="legend-note"><b>Distribution</b>: Auto uses the normality test chosen in step 3 (Shapiro-Wilk by default) in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk / odds ratio).</p>
     </div>
@@ -609,12 +613,22 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Table caption alignment</label><select id="optTableCapAlign"><option value="justify" selected>Justified</option><option value="center">Centred</option><option value="left">Left</option></select></div>
         <div><label class="f">Table text size</label><select id="optTableFontSize"><option value="8">8 pt</option><option value="9">9 pt</option><option value="10" selected>10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></div>
         <div><label class="f">Header colour (grid tables)</label><select id="optTableHead"><option value="auto" selected>Grey</option><option value="lavender">Lavender</option><option value="blue">Light blue</option><option value="green">Light green</option><option value="navy">Navy, white text</option><option value="none">No shading</option></select></div>
+        <div><label class="f">Table width</label><select id="optTableWidth"><option value="100" selected>Full page width</option><option value="90">90% of the page</option><option value="75">75% of the page</option></select></div>
         <div><label class="f">Cell spacing</label><select id="optTablePad"><option value="compact">Compact</option><option value="normal" selected>Normal</option><option value="roomy">Roomy</option></select></div>
         <div><label class="f">Counts in categorical rows</label><select id="optCatFormat"><option value="npct" selected>19 (63.3%)</option><option value="npctNoSign">19 (63.3)</option><option value="nN">19/30 (63.3%)</option><option value="pctN">63.3% (19)</option></select></div>
       </div>
       <div class="grid g2" style="margin-top:8px">
         <label class="check"><input type="checkbox" id="optTableBands"><span><b>Banded rows</b> — every other variable lightly shaded</span></label>
         <label class="check"><input type="checkbox" id="optFirstColLeft"><span><b>Variable names left-aligned</b> (numbers stay centred)</span></label>
+      </div>
+      <h3>Word page</h3>
+      <div class="grid g4">
+        <div><label class="f">Paper size</label><select id="optPageSize"><option value="a4" selected>A4</option><option value="letter">US Letter</option></select></div>
+        <div><label class="f">Margins</label><select id="optPageMargin"><option value="normal" selected>Normal (2.54 cm)</option><option value="narrow">Narrow (1.27 cm)</option><option value="wide">Wide (3.18 cm)</option></select></div>
+        <div><label class="f">Line spacing of the text</label><select id="optLineSpacing"><option value="1">Single</option><option value="1.15">1.15</option><option value="1.5" selected>1.5 lines</option><option value="2">Double</option></select></div>
+        <div><label class="f">Page numbers</label><select id="optPageNum"><option value="center" selected>Centred</option><option value="right">Right</option><option value="of">“Page 3 of 12”</option><option value="none">None</option></select></div>
+        <div><label class="f">Running header (optional)</label><input type="text" id="optHeaderText" placeholder="e.g. MD thesis — Results"></div>
+        <div><label class="check" style="margin-top:22px"><input type="checkbox" id="optListTF"><span><b>List of tables and figures</b> at the start</span></label></div>
       </div>
       <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand"><span><b>Prof MSE branding</b> in the Word header</span></label></div>
       <p class="legend-note">Table titles can be edited in the report preview (step 11).</p>
@@ -680,6 +694,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Groups told apart by</label><select id="optSeriesStyle"><option value="colour" selected>Colour</option><option value="shapes">Colour, marker shapes and line patterns (greyscale print)</option></select></div>
         <div><label class="f">Line weight</label><select id="optLineWeight"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="thick">Thick</option></select></div>
         <div><label class="f">Error bars</label><select id="optErrBars"><option value="both" selected>Both directions, with caps</option><option value="nocap">Both directions, no caps</option><option value="up">Upward only (from the mean)</option></select></div>
+        <div><label class="f">Error bar colour</label><select id="optErrColor"><option value="black" selected>Black</option><option value="group">Colour of the group</option></select></div>
         <div><label class="f">Gridline style</label><select id="optGridStyle"><option value="solid" selected>Solid, light</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dark">Solid, darker</option></select></div>
         <div><label class="f">Axis ticks</label><select id="optYTicks"><option value="fewer">Fewer</option><option value="normal" selected>Normal</option><option value="more">More</option></select></div>
       </div>
@@ -807,6 +822,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
         <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button>
         <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>
+        <button class="btn ghost small" id="xpXlsx" type="button" title="Every table shown here in Excel, one sheet per variable">⬇ Excel</button>
         <button class="btn primary small" id="xpWord" type="button">⬇ Word</button></div>
       <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>
       <details class="fl-style" id="xpOpts"><summary><b>⚙ Options</b> — filter, tables, statistics, figure, outliers</summary>

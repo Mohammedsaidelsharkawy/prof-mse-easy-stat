@@ -327,10 +327,10 @@ const Charts = (() => {
     if (spec.xLabel) { ctx.font = F(700, 26); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + (catLines * 30 + 24) * ts); }
 
     // error bars: both directions with caps (default), without caps, or upward only from the mean (mid)
-    const errBar = (x, a, b, w, mid) => {
+    const errBar = (x, a, b, w, mid, color) => {
       if (st.errBars === 'up' && isFinite(mid)) a = mid;
       if (st.errBars === 'nocap') w = 0;
-      ctx.strokeStyle = '#333'; ctx.lineWidth = 2.5 * lw(st); ctx.setLineDash([]);
+      ctx.strokeStyle = st.errColor === 'group' && color ? (st.barFill === 'outline' || st.barFill === 'hatched' || spec.type === 'line' ? color : shade(color, -0.45)) : '#333'; ctx.lineWidth = 2.5 * lw(st); ctx.setLineDash([]);
       ctx.beginPath(); ctx.moveTo(x, y(a)); ctx.lineTo(x, y(b));
       if (w) { if (!(st.errBars === 'up' && isFinite(mid))) { ctx.moveTo(x - w, y(a)); ctx.lineTo(x + w, y(a)); } ctx.moveTo(x - w, y(b)); ctx.lineTo(x + w, y(b)); }
       ctx.stroke();
@@ -345,8 +345,8 @@ const Charts = (() => {
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
         fillBar(ctx, st, color, perGroup ? ci : si, x0, y(v), w, y(Math.max(sc.min, 0)) - y(v));
         const cx = x0 + w / 2;
-        if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4), v);
-        else if (s.lo && s.hi) errBar(cx, s.lo[ci], s.hi[ci], Math.min(14, w / 4), v);
+        if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4), v, color);
+        else if (s.lo && s.hi) errBar(cx, s.lo[ci], s.hi[ci], Math.min(14, w / 4), v, color);
         if (spec.labels) {
           ctx.fillStyle = '#222'; ctx.font = F(700, 24); ctx.textBaseline = 'bottom';
           const dec = spec.labelDec ?? 1, top = s.err && isFinite(s.err[ci]) ? v + s.err[ci] : s.hi ? s.hi[ci] : v;
@@ -365,8 +365,8 @@ const Charts = (() => {
         const color = pal[si % pal.length], off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
         const xs = s.values.map((_, ci) => L + cw * (ci + 0.5) + off);
         s.values.forEach((v, ci) => {
-          if (s.err && s.err[ci] != null) errBar(xs[ci], v - s.err[ci], v + s.err[ci], 9, v);
-          else if (s.lo && s.hi) errBar(xs[ci], s.lo[ci], s.hi[ci], 9, v);
+          if (s.err && s.err[ci] != null) errBar(xs[ci], v - s.err[ci], v + s.err[ci], 9, v, color);
+          else if (s.lo && s.hi) errBar(xs[ci], s.lo[ci], s.hi[ci], 9, v, color);
         });
         // error plot (noLine): means and their error bars only, coloured by group when the categories are the groups
         if (!spec.noLine) {
