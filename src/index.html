@@ -223,6 +223,32 @@ footer b{color:var(--purple)}
 .busy{position:fixed;inset:0;background:rgba(28,22,72,.35);display:none;place-items:center;z-index:60}
 .busy.show{display:grid}
 .busy div{background:var(--card);padding:22px 30px;border-radius:14px;font-weight:700;color:var(--title)}
+/* design previews (steps 5 and 7) */
+.paper-prev{background:#fff;color:#111;border:1px solid var(--line);border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:28px 36px;margin-top:10px;max-width:900px}
+.paper-prev .pcap{font-weight:700;margin:0 0 8px;line-height:1.35}
+.paper-prev .pfoot{font-size:12px;margin-top:6px;line-height:1.4}
+.paper-prev .pcom{font-size:14px;margin-top:10px;line-height:1.5;text-align:justify}
+.design-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:10px}
+.design-grid figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px}
+.design-grid img{width:100%;display:block}
+.design-grid figcaption{font-size:12px;color:#555;text-align:center;margin-top:4px}
+/* step 10: more views */
+.xp-stacked .xp-fig{width:100%;max-width:820px;display:block;margin:10px auto}
+.xp-twocol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.xp-twocol .report-sec{margin:0}.xp-twocol .xp-fig{width:100%}
+.xp-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.xp-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--card);cursor:pointer;display:flex;flex-direction:column;gap:6px}
+.xp-card:hover{border-color:var(--accent)}
+.xp-card.sig{border-left:4px solid var(--ok)}
+.xp-card h4{margin:0;font-size:15px;color:var(--title)}
+.xp-card .kv{font-size:13px;line-height:1.45}.xp-card .kv b{font-weight:600}
+.xp-card img{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
+.xp-card .pbig{font-size:20px;font-weight:700}.xp-card .pbig.sig{color:var(--ok)}
+.xp-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.xp-gallery figure{margin:0;border:1px solid var(--line);border-radius:10px;padding:8px;background:#fff;cursor:pointer}
+.xp-gallery figure img{width:100%;display:block}
+.xp-gallery figcaption{font-size:13px;color:#333;margin-top:6px;text-align:center}
+@media (max-width:900px){.xp-twocol{grid-template-columns:1fr}}
 /* step 1: data preparation */
 .messy-tasks{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;margin:12px 0;background:var(--soft)}
 .messy-tasks .mt{display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-size:13.5px}
@@ -517,7 +543,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div>
           <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
           <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots of significant pairs</span></label>
-          <label class="check"><input type="checkbox" id="optChiPost"><span><b>Pairwise post hoc for categorical variables</b> — Chi-square / Fisher between each two groups (Bonferroni), 3+ groups</span></label>
+          <label class="check"><input type="checkbox" id="optChiPost" checked><span><b>Pairwise post hoc for categorical variables</b> — Chi-square / Fisher between each two groups (Bonferroni), 3+ groups</span></label>
           <label class="check"><input type="checkbox" id="optMixed"><span><b>Group × time interaction</b> — mixed (split-plot) ANOVA with Greenhouse-Geisser, parametric repeated outcomes</span></label>
         </div>
       </div>
@@ -580,6 +606,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
         <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option></select></div>
         <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
+        <div><label class="f">Table caption alignment</label><select id="optTableCapAlign"><option value="justify" selected>Justified</option><option value="center">Centred</option><option value="left">Left</option></select></div>
         <div><label class="f">Table text size</label><select id="optTableFontSize"><option value="8">8 pt</option><option value="9">9 pt</option><option value="10" selected>10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></div>
         <div><label class="f">Header colour (grid tables)</label><select id="optTableHead"><option value="auto" selected>Grey</option><option value="lavender">Lavender</option><option value="blue">Light blue</option><option value="green">Light green</option><option value="navy">Navy, white text</option><option value="none">No shading</option></select></div>
         <div><label class="f">Cell spacing</label><select id="optTablePad"><option value="compact">Compact</option><option value="normal" selected>Normal</option><option value="roomy">Roomy</option></select></div>
@@ -591,6 +618,10 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       </div>
       <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand"><span><b>Prof MSE branding</b> in the Word header</span></label></div>
       <p class="legend-note">Table titles can be edited in the report preview (step 11).</p>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Design preview</h2><span class="spacer"></span><span class="legend-note">A table from your own data, redrawn as you change any option above — as it will look in the Word file.</span></div>
+      <div class="paper-prev" id="tblPreview"></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="4">← Back</button><button class="btn primary" data-go="6">Next: Comments →</button></div>
   </section>
@@ -687,6 +718,10 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         </div>
       </div>
     </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Design preview</h2><span class="spacer"></span><span class="legend-note">The current chart style on four kinds of figure — colours, fills, text, legend, error bars, significance marks, gridlines and frame.</span></div>
+      <div class="design-grid" id="figDesign"></div>
+    </div>
     <div class="nav"><button class="btn ghost" data-go="6">← Back</button><button class="btn primary" data-go="8">Next: Advanced analyses →</button></div>
   </section>
 
@@ -768,7 +803,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="card">
       <div class="row"><h2>10 · Results by variable</h2><span class="spacer"></span>
         <select id="xpVar" style="width:auto;max-width:360px"></select>
-        <label class="f" style="margin:0">View</label><select id="xpView" style="width:auto" title="How each variable is laid out (the Word file follows it)"><option value="standard">Standard — figure beside the tables</option><option value="side">Data beside results — figure below</option><option value="compact">Compact — tables only</option></select>
+        <label class="f" style="margin:0">View</label><select id="xpView" style="width:auto" title="How each variable is laid out (the Word file follows it)"><option value="standard">Standard — figure beside the tables</option><option value="side">Data beside results — figure below</option><option value="compact">Compact — tables, data on demand</option><option value="stacked">Figure on top — tables below</option><option value="twocol">Two variables per row</option><option value="tables">Tables only — no figures</option><option value="cards">Key results — a card per variable</option><option value="gallery">Figure gallery — figures with test and P</option></select>
         <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
         <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button>
         <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data">↶ Undo</button>

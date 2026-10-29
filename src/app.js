@@ -18,7 +18,7 @@
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
-    welch: false, dunn: true, chiPost: false, mixed: false, normality: 'sw', catEffect: 'rr',
+    welch: false, dunn: true, chiPost: true, mixed: false, normality: 'sw', catEffect: 'rr',
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
     pctDecimals: 1, meanStyle: 'pm', iqrStyle: 'dash', secondRow: 'auto', pDigits: 3, pHead: 'P value', sigSym: '*', showStat: false, missingNote: false,
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,7 +47,7 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -101,7 +101,8 @@
     if (n === 1) renderMessyTasks();
     if (n === 3) renderTimepoints();
     if (n >= 4 && n <= 8) renderOptions();
-    if (n === 7) renderFigureTable();
+    if (n === 7) { renderFigureTable(); renderFigDesign(); }
+    if (n === 5) renderTablePreview();
     if (n === 8) renderAdvanced();
     if (n === 9) renderConsortForm();
     if (n === 10) renderExplore();
@@ -1353,6 +1354,48 @@
   $('#p7').addEventListener('input', schedulePreview);
   $('#figPrevPng').onclick = () => { const f = state.prevFig; if (f) openFigExport([chartItem(f, String(f.caption), state.cfg.options)]); };
   $('#p7').addEventListener('change', schedulePreview);
+  /* ---------- design previews: a real table (step 5) and four sample figures (step 7), redrawn as the options change ---------- */
+  let designTimer = null;
+  const scheduleDesign = fn => () => { clearTimeout(designTimer); designTimer = setTimeout(() => { if (!state.cfg) return; readUiIntoCfg(); fn(); }, 250); };
+  $('#p5').addEventListener('change', scheduleDesign(() => renderTablePreview()));
+  $('#p5').addEventListener('input', scheduleDesign(() => renderTablePreview()));
+  $('#p7').addEventListener('change', scheduleDesign(() => renderFigDesign()));
+  function renderTablePreview() {
+    const box = $('#tblPreview'); if (!box || !state.cfg || !state.data) return;
+    const cfg = state.cfg, o = cfg.options, singles = cfg.variables.filter(v => v.include && v.kind === 'single' && v.cols[0].col !== cfg.groupCol);
+    // one numeric and one or two categorical variables of the sheet, analysed with the current options
+    const pick = [singles.find(v => v.type === 'numeric'), ...singles.filter(v => v.type === 'categorical').slice(0, 2)].filter(Boolean).slice(0, 3);
+    if (!pick.length) { box.innerHTML = '<p class="legend-note">Tick at least one variable in step 2 to see a preview.</p>'; return; }
+    let s;
+    try { s = Analysis.run(state.data, { ...cfg, variables: pick.map(v => ({ ...v, include: true, table: pick[0].table || 'Demographic and baseline data' })), advanced: [], consort: null, options: { ...o, correlation: false, figures: 'none', summary: false } }).sections.find(x => x.rows && x.rows.length); }
+    catch (err) { console.error(err); box.innerHTML = `<p class="legend-note">${esc(err.message)}</p>`; return; }
+    if (!s) { box.innerHTML = ''; return; }
+    const apa = o.tableCaption === 'apa', align = { justify: 'justify', left: 'left' }[o.tableCapAlign] || 'center';
+    const cap = apa ? `<div class="pcap" style="text-align:left">Table 1</div><div class="pcap" style="text-align:left;font-weight:400;font-style:italic">${esc(s.title)}</div>`
+      : `<div class="pcap" style="text-align:${align}">Table 1${o.tableCaption === 'period' ? '.' : ':'} ${esc(s.title)}</div>`;
+    const comment = o.commentPlace !== 'none' && s.comment ? `<div class="pcom">${esc(s.comment)}</div>` : '';
+    box.style.fontFamily = `'${o.font}', serif`;
+    box.innerHTML = (o.commentPlace === 'before' ? comment : '') + cap + htmlTable(s.head, s.rows) + `<div class="pfoot">${esc(s.footnote || '')}</div>` + (o.commentPlace === 'after' ? comment : '');
+  }
+  function renderFigDesign() {
+    const box = $('#figDesign'); if (!box || !state.cfg) return;
+    const o = state.cfg.options, gl = state.data ? activeGroups().map(g => state.cfg.groupLabels[g] || g).slice(0, 3) : [];
+    const groups = gl.length >= 2 ? gl : ['A group', 'B group'];
+    const R = (k => () => (k = (k * 16807) % 2147483647) / 2147483647)(7), nrm = (m, sd) => m + sd * Math.sqrt(-2 * Math.log(R())) * Math.cos(2 * Math.PI * R());
+    const tps = ['Baseline', 'Month 1', 'Month 3', 'Month 6'], err = o.errorBar, lab = !!o.valueLabels;
+    const specs = [
+      ['Groups compared (bars, mean ± error)', { type: 'bar', perGroup: true, categories: groups, yLabel: 'Age (years)', labels: lab, alpha: 0.05, errKind: err,
+        series: [{ name: 'Age', values: groups.map((_, i) => 52 + i * 6), err: groups.map(() => 7) }], sig: o.sigMarks ? [{ i: 0, j: groups.length - 1, p: 0.004 }] : [], legend: false }],
+      ['Change over time (lines)', { type: 'line', categories: tps, yLabel: 'VAS', alpha: 0.05, errKind: err,
+        series: groups.map((g, i) => ({ name: g, values: tps.map((_, t) => 7 - t * (1.4 - i * 0.5)), err: tps.map(() => 1) })), sigCat: o.sigMarks ? [0.6, 0.03, 0.002, 0.0004] : [] }],
+      ['Distribution (box plots)', { type: 'box', categories: tps.slice(0, 3), yLabel: 'WOMAC', alpha: 0.05, points: !!o.points,
+        series: groups.map((g, i) => ({ name: g, data: tps.slice(0, 3).map((_, t) => Array.from({ length: 24 }, () => nrm(60 - t * (8 - i * 4), 9))) })), sigCat: o.sigMarks ? [0.5, 0.01, 0.0008] : [] }],
+      ['Categories (100% stacked bars)', { type: 'stacked', categories: groups, yLabel: 'Patients (%)',
+        series: ['Poor', 'Fair', 'Good', 'Excellent'].map((n, k) => ({ name: n, values: groups.map((_, i) => [[15, 35, 35, 15], [5, 20, 45, 30], [10, 30, 40, 20]][i % 3][k]) })) }]
+    ];
+    box.innerHTML = specs.map(([t, sp]) => { let url = ''; try { url = Charts.draw({ ...sp, title: o.chartTitle ? t : null }, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png'); } catch (e) { console.error(e); }
+      return `<figure>${url ? `<img src="${url}" alt="">` : ''}<figcaption>${esc(t)}</figcaption></figure>`; }).join('');
+  }
   $('#figTbl').addEventListener('click', e => { const b = e.target.closest('[data-fprev]'); if (b) { $('#figPrevVar').value = b.dataset.fprev; schedulePreview(); } });
 
   $('#tpTbl').addEventListener('click', e => {
@@ -1784,27 +1827,58 @@
           `<td class="${cls(rows[i][c.col], ci, i, c.col)}" contenteditable="true" data-xr="${i}" data-xc="${esc(c.col)}">${esc(rows[i][c.col] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     }).join('')}</div><div class="xp-legend">${Analysis.OUT_RULE[xpo().out] ? `Orange: outlier (${Analysis.OUT_RULE[xpo().out]} of its group) · ` : ''}red: missing · purple edge: changed here. Click a value to change it; Enter to confirm, Esc to cancel.</div>`;
   }
+  const XP_NOFIG = ['compact', 'tables'];
+  // a card's lines: each group's mean ± SD or median (IQR), its frequencies, or the values at the first and last timepoint
+  function keyLines(it) {
+    const t = it.tables.find(x => x.cat === 'desc'); if (!t) return [];
+    const col = n => t.head.indexOf(n), normal = /^normal/.test(it.normal || '');
+    const val = r => normal ? `${r[col('Mean')]} ± ${r[col('SD')]}` : `${r[col('Median')]} (IQR ${r[col('IQR')]})`;
+    if (it.kind === 'categorical') return t.rows.filter(r => r[0] !== 'Missing').slice(0, 3).map(r => `<b>${esc(r[0])}:</b> ${t.head.slice(1).map((h, i) => `${esc(h.replace(/ \(n=\d+\)$/, ''))} ${esc(r[i + 1])}`).join(' · ')}`);
+    // repeated: rows are [timepoint, group, n, missing, mean, …], in line with the header
+    if (it.kind === 'repeated') { const tps = [...new Set(t.rows.map(r => r[0]))], ends = [tps[0], tps[tps.length - 1]];
+      return t.rows.filter(r => ends.includes(r[0]) && r[1] !== 'All patients').map(r => `<b>${esc(r[1])}</b> at ${esc(r[0])}: ${esc(val(r))}`).slice(0, 6); }
+    return t.rows.map(r => `<b>${esc(r[0])}:</b> ${esc(val(r))}`).slice(0, 4);
+  }
   function drawExplore() {
     const x = state.explore; if (!x) return;
-    const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && xpo().view !== 'compact';
+    const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && !XP_NOFIG.includes(xpo().view);
     if (xpo().openData) list.forEach(it => state.xpOpen.add(it.id));
     // overview of every shown variable: click a row to open that variable
     const ov = xpo().overview && !$('#xpVar').value && list.length > 1 ? `<div class="report-sec"><h3 style="margin:0 0 6px">Overview</h3><div style="overflow-x:auto"><table class="t xp xp-ov"><thead><tr><th>Variable</th><th>Type</th><th>n</th><th>Distribution</th><th>Test in the report</th><th>P value</th><th>Significant</th></tr></thead><tbody>${
       list.map(it => `<tr data-xpgo="${esc(it.id)}"><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${it.n ?? '—'}</td><td>${esc(it.normal || '—')}</td><td>${esc(it.test || '—')}</td><td>${isFinite(it.p) ? esc(Analysis.fmtP(it.p, state.cfg.options.alpha)) : '—'}</td><td class="${it.sig ? 'sig' : ''}">${it.sig ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table></div></div>` : '';
-    $('#explore').innerHTML = ov + (list.length ? list.map(it => {
-      let img = '';
-      if (figs && it.spec) { try { img = `<img class="xp-fig" src="${Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png')}" alt="">`; } catch (e) { /* no figure */ } }
-      const view = xpo().view, headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>`;
+    const view = xpo().view, figUrl = it => { if (!figs || !it.spec) return ''; try { return Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png'); } catch (e) { return ''; } };
+    const pTxt = it => isFinite(it.p) ? Analysis.fmtP(it.p, o.alpha) : '—';
+    const empty = `<p class="legend-note">${x.items.length ? 'No variable matches the options (type, search, significant only).' : 'No variables are ticked in step 2.'}</p>`;
+    // key results: a card per variable with its group values, test and P; click to open it
+    if (view === 'cards' || view === 'gallery') {
+      $('#explore').innerHTML = ov + (!list.length ? empty : view === 'cards'
+        ? `<div class="xp-cards">${list.map(it => { const u = figUrl(it); return `<div class="xp-card ${it.sig ? 'sig' : ''}" data-xpgo="${esc(it.id)}" title="Open all the results of this variable">
+            <div class="row" style="gap:6px"><h4 style="flex:1">${esc(it.label)}</h4><span class="chip info">${it.kind}</span></div>
+            <div class="kv">${keyLines(it).map(l => `<div>${l}</div>`).join('')}</div>
+            <div class="row" style="gap:8px;align-items:baseline">${isFinite(it.p) ? `<span class="pbig ${it.sig ? 'sig' : ''}">P ${esc(pTxt(it).replace(/^([<>=≤])?/, m => m ? m + ' ' : '= '))}</span>` : `<span class="pbig ${it.sig ? 'sig' : ''}">${it.sig ? 'Significant' : 'Not significant'}</span>`}<span class="legend-note">${esc(it.test || '')}</span></div>
+            ${u ? `<img src="${u}" alt="">` : ''}<div class="legend-note">n = ${it.n ?? '—'} · ${esc(it.normal || '')}</div></div>`; }).join('')}</div>`
+        : `<div class="xp-gallery">${list.map(it => { const u = figUrl(it); return u ? `<figure data-xpgo="${esc(it.id)}" title="Open all the results of this variable"><img src="${u}" alt=""><figcaption><b>${esc(it.label)}</b> — ${esc(it.test || 'no test')}, P ${esc(pTxt(it))}${it.sig ? ' ✓' : ''}</figcaption></figure>` : ''; }).join('') || '<p class="legend-note">No figures — tick “Figures” and choose a figure type in Options.</p>'}</div>`);
+      $('#xpUndo').disabled = !state.undo || !state.undo.length;
+      return;
+    }
+    const html = list.map(it => {
+      const u = figUrl(it), img = u ? `<img class="xp-fig" src="${u}" alt="">` : '';
+      const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>`;
       // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
       if (view === 'side') return `<div class="report-sec xp-item">${headRow}
         <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
         ${img ? `<div class="xp-fig-below">${img}</div>` : ''}</div>`;
+      if (view === 'stacked') return `<div class="report-sec xp-item xp-stacked">${headRow}${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div>
+        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
+      if (view === 'tables') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div></div>`;
+      if (view === 'twocol') return `<div class="report-sec xp-item">${headRow}${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>`;
       if (view === 'compact') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
       return `<div class="report-sec xp-item">${headRow}
         <div class="xp-body">${img}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-    }).join('') : `<p class="legend-note">${x.items.length ? 'No variable matches the options (type, search, significant only).' : 'No variables are ticked in step 2.'}</p>`);
+    }).join('');
+    $('#explore').innerHTML = ov + (list.length ? (view === 'twocol' ? `<div class="xp-twocol">${html}</div>` : html) : empty);
     $('#xpUndo').disabled = !state.undo || !state.undo.length;
   }
   // the data panel is filled when opened, and stays open when the results are redrawn
@@ -1840,7 +1914,7 @@
     const x = state.explore; if (!x) return;
     busy(true);
     try {
-      const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && xpo().view !== 'compact';
+      const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && !XP_NOFIG.includes(xpo().view);
       const idc = state.cfg.idCols[0], rows = state.data.rows;
       // optional: each group's patients and values after the results
       const dataTables = it => activeGroups().map(g => {
@@ -1857,11 +1931,11 @@
       };
       const items = list.map(it => {
         // the Word file follows the view: data beside the results, or after them when asked for
-        const view = xpo().view, out = { label: it.label, summary: it.summary, tables: xpTables(it), data: view === 'side' ? [sideData(it)] : xpo().wordData ? dataTables(it) : [] };
+        const view = xpo().view, out = { label: it.label, summary: it.summary, test: it.test, p: isFinite(it.p) ? Analysis.fmtP(it.p, o.alpha) : '', sig: it.sig, key: keyLines(it).map(l => l.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")), n: it.n, tables: xpTables(it), data: view === 'side' ? [sideData(it)] : xpo().wordData ? dataTables(it) : [] };
         if (figs && it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), chartStyle(o)); Object.assign(out, { url: c.toDataURL('image/png'), w: c.width, h: c.height }); } catch (e) { /* no figure */ } }
         return out;
       });
-      const blob = await Report.buildResults({ items }, { layout: xpo().view, title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
+      const blob = await Report.buildResults({ items }, { layout: { twocol: 'standard', tables: 'compact' }[xpo().view] || xpo().view, title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - Results by variable.docx';
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
@@ -2302,7 +2376,7 @@
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
       const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
-        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableLook: { size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad }, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, tableLook: { size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad }, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

@@ -59,10 +59,10 @@ const Report = (() => {
     return [para(label, { bold: true, align: AlignmentType.LEFT, after: 0, line: 276, keepNext: true, pageBreakBefore: o.pageBreakBefore }),
       para(title, { italic: true, align: AlignmentType.LEFT, after: 120, line: 276, keepNext: true })];
   }
-  function image(dataUrl, srcW, srcH, widthPx = 600) {
+  function image(dataUrl, srcW, srcH, widthPx = 600, keepNext = true) {
     const { Paragraph, ImageRun, AlignmentType } = D();
     return new Paragraph({
-      alignment: AlignmentType.CENTER, spacing: { after: 80 }, keepNext: true,
+      alignment: AlignmentType.CENTER, spacing: { after: 80 }, keepNext,
       children: [new ImageRun({ type: 'png', data: dataUrlToBytes(dataUrl), transformation: { width: widthPx, height: Math.round(widthPx * srcH / srcW) } })]
     });
   }
@@ -232,7 +232,7 @@ const Report = (() => {
         if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment, { pageBreakBefore: first() }));
         const num = `Table ${pre}${tab++}`;
         if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
-        else children.push(caption(`${num}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`, { pageBreakBefore: first() }));
+        else children.push(caption(`${num}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`, { pageBreakBefore: first(), align: { justify: D().AlignmentType.JUSTIFIED, left: D().AlignmentType.LEFT }[opts.tableCapAlign] || D().AlignmentType.CENTER }));
         children.push(table(s.head, s.rows, brand, opts.tableStyle, opts.tableLook));
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));
@@ -287,7 +287,20 @@ const Report = (() => {
     PAGE_W = LANDSCAPE_W;
     const children = [para(opts.title || 'Results by variable', { bold: true, size: 32, align: AlignmentType.CENTER, after: 120 })];
     if (opts.subtitle) children.push(para(opts.subtitle, { align: AlignmentType.CENTER, size: 20, after: 240 }));
-    model.items.forEach((it, i) => {
+    // key results: one table of every variable (group values, test, P), then the figures; gallery: the figures two per row
+    if (opts.layout === 'cards' || opts.layout === 'gallery') {
+      const { Table, TableRow, TableCell, WidthType, BorderStyle } = D(), none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+      if (opts.layout === 'cards') {
+        children.push(para('Key results', { bold: true, size: 26, after: 80, align: AlignmentType.LEFT, keepNext: true }));
+        children.push(table(['Variable', 'Values', 'n', 'Test', 'P value'].map(t => ({ t })), model.items.map(it => [{ t: [it.label], b: true }, { t: it.key && it.key.length ? it.key : ['—'], small: true }, { t: [String(it.n ?? '—')] }, { t: [it.test || '—'], small: true }, { t: [it.p || '—'], b: !!it.sig }]), false, 'grid'));
+        children.push(para('', { after: 200 }));
+      }
+      const figs = model.items.filter(it => it.url), half = Math.round((LANDSCAPE_W - 200) / 2), cell = kids => new TableCell({ width: { size: half, type: WidthType.DXA }, borders: { top: none, bottom: none, left: none, right: none }, children: kids });
+      // inside the layout table nothing keeps with next, or the first row is pushed to the next page
+      const fig = it => [image(it.url, it.w, it.h, 440, false), para(`${it.label} — ${it.test || 'no test'}${it.p ? `, P ${/^[<>=≤]/.test(it.p) ? it.p : '= ' + it.p}` : ''}`, { bold: true, size: 19, align: AlignmentType.CENTER, after: 200, line: 240 })];
+      const rows = []; for (let i = 0; i < figs.length; i += 2) rows.push(new TableRow({ cantSplit: true, children: [cell(fig(figs[i])), cell(figs[i + 1] ? fig(figs[i + 1]) : [new Paragraph('')])] }));
+      if (rows.length) children.push(new Table({ width: { size: LANDSCAPE_W, type: WidthType.DXA }, columnWidths: [half, LANDSCAPE_W - half], borders: { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none }, rows }));
+    } else model.items.forEach((it, i) => {
       children.push(new Paragraph({ heading: D().HeadingLevel.HEADING_1, pageBreakBefore: i > 0, spacing: { after: 120 },
         children: [new TextRun({ text: `${i + 1}. ${it.label}`, bold: true, size: 28, font: BODY_FONT })] }));
       if (it.summary) children.push(para(it.summary, { size: 20, line: 260, after: 120, italic: true }));
@@ -309,7 +322,7 @@ const Report = (() => {
           rows: lefts.map((l, q) => new TableRow({ cantSplit: true, children: [cell(leftW, l), cell(gap, []), cell(rightW, q === 0 ? right : [])] })) }));
         if (it.url) children.push(para('', { after: 60 }), image(it.url, it.w, it.h, 520));
       } else {
-        if (it.url && opts.layout !== 'compact') children.push(image(it.url, it.w, it.h, 430));
+        if (it.url && opts.layout !== 'compact') children.push(image(it.url, it.w, it.h, opts.layout === 'stacked' ? 640 : 430));
         it.tables.forEach(t => children.push(...block(t, false)));
         (it.data || []).forEach(t => children.push(...block(t, true)));
       }
