@@ -29,6 +29,9 @@ const Analysis = (() => {
   const iqrTxt = (a, b, d) => FMT.iqr === 'bracket' ? `[${fmt(a, d)}, ${fmt(b, d)}]` : FMT.iqr === 'endash' ? `${fmt(a, d)}–${fmt(b, d)}` : `${fmt(a, d)} - ${fmt(b, d)}`;
   const medIqr = (dd, d) => FMT.iqr === 'bracket' ? `${fmt(dd.median, d)} ${iqrTxt(dd.q1, dd.q3, d)}` : `${fmt(dd.median, d)} (${iqrTxt(dd.q1, dd.q3, d)})`;
   const pctTxt = v => fmt(v, FMT.pct);
+  // a count in a table cell: 19 (63.3%), 19 (63.3), 19/30 (63.3%) or 63.3% (19)
+  const npc = (cnt, pc, n) => { const p = pctTxt(pc);
+    return FMT.cat === 'npctNoSign' ? `${cnt} (${p})` : FMT.cat === 'nN' ? `${cnt}/${n} (${p}%)` : FMT.cat === 'pctN' ? `${p}% (${cnt})` : `${cnt} (${p}%)`; };
   const meanSdName = lower => (FMT.mean === 'paren' ? 'Mean (SD)' : 'Mean ± SD').replace(/^M/, lower ? 'm' : 'M');
   function listJoin(a) {
     if (a.length <= 1) return a.join('');
@@ -1075,7 +1078,7 @@ const Analysis = (() => {
     const opts = cfg.options, alpha = opts.alpha, d = xo.dec !== undefined && xo.dec !== '' ? +xo.dec : opts.decimals;
     setRO(opts);
     normality = normalityTest(opts.normality);
-    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0 };
+    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct' };
     const groups = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false), gl = groups.map(g => cfg.groupLabels[g] || g), k = groups.length;
     const rows = data.rows.filter(r => groups.includes(groupOf(cfg, r))), byGroup = groups.map(g => rows.filter(r => groupOf(cfg, r) === g));
     const nName = opts.normality === 'ks' ? 'Kolmogorov-Smirnov' : 'Shapiro-Wilk';
@@ -1163,7 +1166,7 @@ const Analysis = (() => {
         const present = [...new Set(gv.flat())], levels = (v.levels && v.levels.length ? v.levels.filter(l => present.includes(l)) : []);
         present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
         const tab = levels.map(l => gv.map(x => x.filter(y => y === l).length)), ns = gv.map(x => x.length), N = S.sum(ns);
-        const cell = (c, n) => `${c} (${pctTxt(n ? 100 * c / n : 0)}%)`;
+        const cell = (c, n) => npc(c, n ? 100 * c / n : 0, n);
         it.tables.push({ cat: 'desc', title: 'Frequencies', head: ['', ...gl.map((g, i) => `${g} (n=${ns[i]})`), ...(k > 1 ? [`Total (n=${N})`] : [])],
           rows: [...levels.map((l, li) => [l, ...tab[li].map((c, g) => cell(c, ns[g])), ...(k > 1 ? [cell(S.sum(tab[li]), N)] : [])]),
             ['Missing', ...byGroup.map(rs => String(rs.filter(r => toCat(r[col]) === null).length)), ...(k > 1 ? [String(byGroup.flat().filter(r => toCat(r[col]) === null).length)] : [])]] });
@@ -1285,7 +1288,7 @@ const Analysis = (() => {
       if (opts.pWord && opts.pWord !== 'P value') s = s.replace(/\bP value\b/g, opts.pWord);
       return s;
     };
-    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0 };
+    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct' };
     const used = new Set();
     // error bars of mean charts: SD (default), SEM or 95% CI of the mean
     const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
@@ -1428,10 +1431,10 @@ const Analysis = (() => {
           const n = vals.length, cnt = levels.map(l => vals.filter(x => x === l).length), pc = cnt.map(c => n ? 100 * c / n : 0);
           const compact = isCompact({ cat: true, levels });
           if (compact) {
-            trows.push([{ t: [v.label], b: true, span: 2 }, { t: [`${cnt[0]} (${pctTxt(pc[0])}%)`] }]);
+            trows.push([{ t: [v.label], b: true, span: 2 }, { t: [npc(cnt[0], pc[0], n)] }]);
             sent.push(`${cap(lab)} was found in ${cnt[0]} (${pctTxt(pc[0])}%) of the studied patients.`);
           } else {
-            levels.forEach((lv, li) => trows.push([...(li === 0 ? [{ t: [v.label], b: true, rs: levels.length }] : []), { t: [lv] }, { t: [`${cnt[li]} (${pctTxt(pc[li])}%)`] }]));
+            levels.forEach((lv, li) => trows.push([...(li === 0 ? [{ t: [v.label], b: true, rs: levels.length }] : []), { t: [lv] }, { t: [npc(cnt[li], pc[li], n)] }]));
             if (levels.length) sent.push(`Regarding ${lowerFirst(lab)}, ${listJoin(levels.map((lv, li) => `${cnt[li]} patients (${pctTxt(pc[li])}%) were ${/^[A-Z][a-z]/.test(lv) ? lv.toLowerCase() : lv}`))}.`);
           }
           if (chart === 'none' || !levels.length) continue;
@@ -1680,7 +1683,7 @@ const Analysis = (() => {
         if (opts.showStat) head.push('Test');
         // the Total column: every analysed patient, whatever the group
         const totDesc = r => S.describe(r.gv.flat());
-        const totCat = (r, li) => { const cnt = S.sum(r.cat.table[li]), n = S.sum(r.cat.ns); return `${cnt} (${pctTxt(n ? 100 * cnt / n : 0)}%)`; };
+        const totCat = (r, li) => { const cnt = S.sum(r.cat.table[li]), n = S.sum(r.cat.ns); return npc(cnt, n ? 100 * cnt / n : 0, n); };
         const tot = (on, f) => totalCol ? [{ t: [on ? f() : ''] }] : [];
         if (showPost) head.push('Post hoc');
         if (opts.effect) head.push(effHead);
@@ -1710,13 +1713,13 @@ const Analysis = (() => {
             }
           } else if (isCompact(r)) {
             const c = r.cat;
-            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...c.table[0].map((cnt, j) => ({ t: [`${cnt} (${pctTxt(c.pct[0][j])}%)`] })), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
+            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...c.table[0].map((cnt, j) => ({ t: [npc(cnt, c.pct[0][j], c.ns[j])] })), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
           } else {
             const c = r.cat, L = r.levels.length;
             r.levels.forEach((lv, li) => {
               const row = [];
               if (li === 0) row.push({ t: [r.v.label], b: true, rs: L });
-              row.push({ t: [lv] }, ...c.table[li].map((cnt, j) => ({ t: [`${cnt} (${pctTxt(c.pct[li][j])}%)`] })), ...tot(true, () => totCat(r, li)));
+              row.push({ t: [lv] }, ...c.table[li].map((cnt, j) => ({ t: [npc(cnt, c.pct[li][j], c.ns[j])] })), ...tot(true, () => totCat(r, li)));
               if (li === 0) row.push(...tail(r, L));
               trows.push(row);
             });

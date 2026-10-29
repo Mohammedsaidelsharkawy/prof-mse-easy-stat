@@ -191,6 +191,12 @@ table.rt th,table.rt td{border:1px solid #9a9a9a;padding:5px 7px;text-align:cent
 table.rt th{background:#EBDDF6}
 table.rt td.b{font-weight:700}
 table.rt td.s{font-size:12.5px}
+table.rt td.s{font-size:.9em}
+table.rt tr.band td{background:#F2F2F2}
+table.rt tr td.hl{background:#FFF2CC}
+table.rt td.left{text-align:left}
+table.rt.rt-compact th,table.rt.rt-compact td{padding:2px 5px}
+table.rt.rt-roomy th,table.rt.rt-roomy td{padding:9px 10px}
 table.rt.apa th,table.rt.apa td{border:0}
 table.rt.apa th{background:#fff;border-top:2px solid #000;border-bottom:1.5px solid #000}
 table.rt.apa tbody tr:last-child td,table.rt.apa td.last{border-bottom:2px solid #000}
@@ -482,6 +488,14 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
         <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option></select></div>
         <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
+        <div><label class="f">Table text size</label><select id="optTableFontSize"><option value="8">8 pt</option><option value="9">9 pt</option><option value="10" selected>10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></div>
+        <div><label class="f">Header colour (grid tables)</label><select id="optTableHead"><option value="auto" selected>Grey</option><option value="lavender">Lavender</option><option value="blue">Light blue</option><option value="green">Light green</option><option value="navy">Navy, white text</option><option value="none">No shading</option></select></div>
+        <div><label class="f">Cell spacing</label><select id="optTablePad"><option value="compact">Compact</option><option value="normal" selected>Normal</option><option value="roomy">Roomy</option></select></div>
+        <div><label class="f">Counts in categorical rows</label><select id="optCatFormat"><option value="npct" selected>19 (63.3%)</option><option value="npctNoSign">19 (63.3)</option><option value="nN">19/30 (63.3%)</option><option value="pctN">63.3% (19)</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:8px">
+        <label class="check"><input type="checkbox" id="optTableBands"><span><b>Banded rows</b> — every other variable lightly shaded</span></label>
+        <label class="check"><input type="checkbox" id="optFirstColLeft"><span><b>Variable names left-aligned</b> (numbers stay centred)</span></label>
       </div>
       <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand"><span><b>Prof MSE branding</b> in the Word header</span></label></div>
       <p class="legend-note">Table titles can be edited in the report preview (step 11).</p>
@@ -539,6 +553,12 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Bar width</label><select id="optBarWidth"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="wide">Wide</option></select></div>
         <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
         <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
+        <div><label class="f">Significance on figures</label><select id="optSigLabel"><option value="stars" selected>Stars (*, **, ***)</option><option value="p">Exact P values (P = 0.013)</option><option value="both">Stars and P values</option></select></div>
+        <div><label class="f">Groups told apart by</label><select id="optSeriesStyle"><option value="colour" selected>Colour</option><option value="shapes">Colour, marker shapes and line patterns (greyscale print)</option></select></div>
+        <div><label class="f">Line weight</label><select id="optLineWeight"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="thick">Thick</option></select></div>
+        <div><label class="f">Error bars</label><select id="optErrBars"><option value="both" selected>Both directions, with caps</option><option value="nocap">Both directions, no caps</option><option value="up">Upward only (from the mean)</option></select></div>
+        <div><label class="f">Gridline style</label><select id="optGridStyle"><option value="solid" selected>Solid, light</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dark">Solid, darker</option></select></div>
+        <div><label class="f">Axis ticks</label><select id="optYTicks"><option value="fewer">Fewer</option><option value="normal" selected>Normal</option><option value="more">More</option></select></div>
       </div>
       <h3>Legend</h3>
       <div class="grid g4">
@@ -21796,6 +21816,9 @@ const Analysis = (() => {
   const iqrTxt = (a, b, d) => FMT.iqr === 'bracket' ? `[${fmt(a, d)}, ${fmt(b, d)}]` : FMT.iqr === 'endash' ? `${fmt(a, d)}–${fmt(b, d)}` : `${fmt(a, d)} - ${fmt(b, d)}`;
   const medIqr = (dd, d) => FMT.iqr === 'bracket' ? `${fmt(dd.median, d)} ${iqrTxt(dd.q1, dd.q3, d)}` : `${fmt(dd.median, d)} (${iqrTxt(dd.q1, dd.q3, d)})`;
   const pctTxt = v => fmt(v, FMT.pct);
+  // a count in a table cell: 19 (63.3%), 19 (63.3), 19/30 (63.3%) or 63.3% (19)
+  const npc = (cnt, pc, n) => { const p = pctTxt(pc);
+    return FMT.cat === 'npctNoSign' ? `${cnt} (${p})` : FMT.cat === 'nN' ? `${cnt}/${n} (${p}%)` : FMT.cat === 'pctN' ? `${p}% (${cnt})` : `${cnt} (${p}%)`; };
   const meanSdName = lower => (FMT.mean === 'paren' ? 'Mean (SD)' : 'Mean ± SD').replace(/^M/, lower ? 'm' : 'M');
   function listJoin(a) {
     if (a.length <= 1) return a.join('');
@@ -22842,7 +22865,7 @@ const Analysis = (() => {
     const opts = cfg.options, alpha = opts.alpha, d = xo.dec !== undefined && xo.dec !== '' ? +xo.dec : opts.decimals;
     setRO(opts);
     normality = normalityTest(opts.normality);
-    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0 };
+    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct' };
     const groups = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false), gl = groups.map(g => cfg.groupLabels[g] || g), k = groups.length;
     const rows = data.rows.filter(r => groups.includes(groupOf(cfg, r))), byGroup = groups.map(g => rows.filter(r => groupOf(cfg, r) === g));
     const nName = opts.normality === 'ks' ? 'Kolmogorov-Smirnov' : 'Shapiro-Wilk';
@@ -22930,7 +22953,7 @@ const Analysis = (() => {
         const present = [...new Set(gv.flat())], levels = (v.levels && v.levels.length ? v.levels.filter(l => present.includes(l)) : []);
         present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
         const tab = levels.map(l => gv.map(x => x.filter(y => y === l).length)), ns = gv.map(x => x.length), N = S.sum(ns);
-        const cell = (c, n) => `${c} (${pctTxt(n ? 100 * c / n : 0)}%)`;
+        const cell = (c, n) => npc(c, n ? 100 * c / n : 0, n);
         it.tables.push({ cat: 'desc', title: 'Frequencies', head: ['', ...gl.map((g, i) => `${g} (n=${ns[i]})`), ...(k > 1 ? [`Total (n=${N})`] : [])],
           rows: [...levels.map((l, li) => [l, ...tab[li].map((c, g) => cell(c, ns[g])), ...(k > 1 ? [cell(S.sum(tab[li]), N)] : [])]),
             ['Missing', ...byGroup.map(rs => String(rs.filter(r => toCat(r[col]) === null).length)), ...(k > 1 ? [String(byGroup.flat().filter(r => toCat(r[col]) === null).length)] : [])]] });
@@ -23052,7 +23075,7 @@ const Analysis = (() => {
       if (opts.pWord && opts.pWord !== 'P value') s = s.replace(/\bP value\b/g, opts.pWord);
       return s;
     };
-    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0 };
+    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct' };
     const used = new Set();
     // error bars of mean charts: SD (default), SEM or 95% CI of the mean
     const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
@@ -23195,10 +23218,10 @@ const Analysis = (() => {
           const n = vals.length, cnt = levels.map(l => vals.filter(x => x === l).length), pc = cnt.map(c => n ? 100 * c / n : 0);
           const compact = isCompact({ cat: true, levels });
           if (compact) {
-            trows.push([{ t: [v.label], b: true, span: 2 }, { t: [`${cnt[0]} (${pctTxt(pc[0])}%)`] }]);
+            trows.push([{ t: [v.label], b: true, span: 2 }, { t: [npc(cnt[0], pc[0], n)] }]);
             sent.push(`${cap(lab)} was found in ${cnt[0]} (${pctTxt(pc[0])}%) of the studied patients.`);
           } else {
-            levels.forEach((lv, li) => trows.push([...(li === 0 ? [{ t: [v.label], b: true, rs: levels.length }] : []), { t: [lv] }, { t: [`${cnt[li]} (${pctTxt(pc[li])}%)`] }]));
+            levels.forEach((lv, li) => trows.push([...(li === 0 ? [{ t: [v.label], b: true, rs: levels.length }] : []), { t: [lv] }, { t: [npc(cnt[li], pc[li], n)] }]));
             if (levels.length) sent.push(`Regarding ${lowerFirst(lab)}, ${listJoin(levels.map((lv, li) => `${cnt[li]} patients (${pctTxt(pc[li])}%) were ${/^[A-Z][a-z]/.test(lv) ? lv.toLowerCase() : lv}`))}.`);
           }
           if (chart === 'none' || !levels.length) continue;
@@ -23447,7 +23470,7 @@ const Analysis = (() => {
         if (opts.showStat) head.push('Test');
         // the Total column: every analysed patient, whatever the group
         const totDesc = r => S.describe(r.gv.flat());
-        const totCat = (r, li) => { const cnt = S.sum(r.cat.table[li]), n = S.sum(r.cat.ns); return `${cnt} (${pctTxt(n ? 100 * cnt / n : 0)}%)`; };
+        const totCat = (r, li) => { const cnt = S.sum(r.cat.table[li]), n = S.sum(r.cat.ns); return npc(cnt, n ? 100 * cnt / n : 0, n); };
         const tot = (on, f) => totalCol ? [{ t: [on ? f() : ''] }] : [];
         if (showPost) head.push('Post hoc');
         if (opts.effect) head.push(effHead);
@@ -23477,13 +23500,13 @@ const Analysis = (() => {
             }
           } else if (isCompact(r)) {
             const c = r.cat;
-            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...c.table[0].map((cnt, j) => ({ t: [`${cnt} (${pctTxt(c.pct[0][j])}%)`] })), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
+            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...c.table[0].map((cnt, j) => ({ t: [npc(cnt, c.pct[0][j], c.ns[j])] })), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
           } else {
             const c = r.cat, L = r.levels.length;
             r.levels.forEach((lv, li) => {
               const row = [];
               if (li === 0) row.push({ t: [r.v.label], b: true, rs: L });
-              row.push({ t: [lv] }, ...c.table[li].map((cnt, j) => ({ t: [`${cnt} (${pctTxt(c.pct[li][j])}%)`] })), ...tot(true, () => totCat(r, li)));
+              row.push({ t: [lv] }, ...c.table[li].map((cnt, j) => ({ t: [npc(cnt, c.pct[li][j], c.ns[j])] })), ...tot(true, () => totCat(r, li)));
               if (li === 0) row.push(...tail(r, L));
               trows.push(row);
             });
@@ -24156,6 +24179,7 @@ const Charts = (() => {
     ['Office-style colours', ['office', 'office2013', 'office2007', 'blueWarm', 'blue', 'blue2', 'blueGreen', 'green', 'greenYellow', 'yellow', 'yellowOrange', 'orange', 'orangeRed', 'redOrange', 'red', 'redViolet', 'violet', 'violet2', 'median', 'paper', 'marquee', 'slipstream', 'aspect']]];
   const FONTS = { sans: '"Segoe UI", Arial, sans-serif', arial: 'Arial, Helvetica, sans-serif', times: '"Times New Roman", Times, serif', calibri: 'Calibri, Carlito, Arial, sans-serif' };
   let FONT = FONTS.sans; // chart text font, set per chart from the style
+  let TICKS = 6; // about how many axis ticks: fewer (4), normal (6) or more (10), set per chart from the style
   // figure shapes (logical canvas size before the resolution multiplier)
   const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300] };
   const TEXT = { normal: 1, large: 1.25, xlarge: 1.5 };
@@ -24212,6 +24236,7 @@ const Charts = (() => {
   }
   function niceScale(min, max, ticks = 6, integer = false) {
     if (min === max) { max = min + 1; }
+    if (ticks === 6) ticks = TICKS; // the y-axis density chosen in the style
     const span = max - min, raw = span / ticks;
     const mag = 10 ** Math.floor(Math.log10(raw));
     // counts get whole-number steps (no 2.5)
@@ -24233,6 +24258,40 @@ const Charts = (() => {
   }
 
   const stars = (p, alpha) => !(p <= alpha) ? '' : p <= 0.001 ? '***' : p <= 0.01 ? '**' : '*';
+  // the text above a significant comparison: stars (default), the exact P value, or both
+  function sigMark(p, alpha, st) {
+    const s = stars(p, alpha); if (!s || !st.sigLabel || st.sigLabel === 'stars') return s;
+    let t = p < 0.001 ? '< 0.001' : '= ' + p.toFixed(3);
+    if (st.pLead === false) t = t.replace(/0\./, '.');
+    return st.sigLabel === 'both' ? `${s} P ${t}` : `P ${t}`;
+  }
+  // centred text with an italic P ("P = 0.013")
+  function fillSig(ctx, t, x, y) {
+    const i = t.indexOf('P '); if (i < 0) { ctx.fillText(t, x, y); return; }
+    const font = ctx.font, it = 'italic ' + font, a = t.slice(0, i), b = t.slice(i + 1);
+    const wa = ctx.measureText(a).width, wb = ctx.measureText(b).width; ctx.font = it; const wp = ctx.measureText('P').width; ctx.font = font;
+    const align = ctx.textAlign; ctx.textAlign = 'left'; let x0 = x - (wa + wp + wb) / 2;
+    ctx.fillText(a, x0, y); x0 += wa; ctx.font = it; ctx.fillText('P', x0, y); x0 += wp; ctx.font = font; ctx.fillText(b, x0, y);
+    ctx.textAlign = align;
+  }
+  // groups told apart without colour: a marker shape and a dash pattern each (greyscale print)
+  const DASHES = [[], [18, 10], [5, 8], [22, 8, 5, 8], [10, 6], [2, 6]];
+  function marker(ctx, k, x, y, r) {
+    ctx.beginPath();
+    switch (k % 6) {
+      case 1: ctx.rect(x - r * 0.88, y - r * 0.88, r * 1.76, r * 1.76); break;
+      case 2: ctx.moveTo(x, y - r * 1.15); ctx.lineTo(x + r, y + r * 0.75); ctx.lineTo(x - r, y + r * 0.75); ctx.closePath(); break;
+      case 3: ctx.moveTo(x, y - r * 1.2); ctx.lineTo(x + r * 1.05, y); ctx.lineTo(x, y + r * 1.2); ctx.lineTo(x - r * 1.05, y); ctx.closePath(); break;
+      case 4: ctx.moveTo(x, y + r * 1.15); ctx.lineTo(x + r, y - r * 0.75); ctx.lineTo(x - r, y - r * 0.75); ctx.closePath(); break;
+      case 5: ctx.arc(x, y, r * 0.75, 0, Math.PI * 2); ctx.save(); ctx.lineWidth = r * 0.5; ctx.strokeStyle = ctx.fillStyle; ctx.setLineDash([]); ctx.stroke(); ctx.restore(); return;
+      default: ctx.arc(x, y, r, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
+  const LINE_W = { thin: 0.6, thick: 1.5 };
+  const lw = st => LINE_W[st.lineWeight] || 1;
+  // gridlines: solid (default), dashed, dotted or darker
+  function gridPen(ctx, st) { ctx.strokeStyle = st.gridStyle === 'dark' ? '#C4BCCF' : '#E6E1EC'; ctx.setLineDash(st.gridStyle === 'dashed' ? [10, 8] : st.gridStyle === 'dotted' ? [2, 6] : []); }
   // deterministic jitter so the same data always gives the same picture
   const jitter = i => ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1 - 0.5;
 
@@ -24253,8 +24312,9 @@ const Charts = (() => {
     const sw = 28 * m.ls;
     const swatch = (it, i, x, yy) => {
       if (kind === 'line') {
-        ctx.strokeStyle = it.color; ctx.lineWidth = 5; ctx.setLineDash(it.dash ? [12, 7] : []);
+        ctx.strokeStyle = it.color; ctx.lineWidth = 5; ctx.setLineDash(it.dashArr || (it.dash ? [12, 7] : []));
         ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + 46 * m.q, yy); ctx.stroke(); ctx.setLineDash([]);
+        if (it.marker != null) { ctx.fillStyle = it.color; marker(ctx, it.marker, x + 23 * m.q, yy, 9 * m.q); }
       } else if (st.barFill === 'gradient') { ctx.fillStyle = it.color; ctx.fillRect(x + 8 * m.q, yy - sw / 2, sw + 2, sw); }
       else fillBar(ctx, st, it.color, i, x + 8 * m.q, yy - sw / 2, sw + 2, sw);
     };
@@ -24283,6 +24343,7 @@ const Charts = (() => {
   // public entry: draws the chart, then adds the optional title band above it
   function draw(spec, paletteName = 'brand', style = {}) {
     FONT = FONTS[style.font] || FONTS.sans;
+    TICKS = { fewer: 4, more: 10 }[style.ticks] || 6;
     // a chart of one series (one-group studies) needs no legend
     const c = drawChart(spec, paletteName, spec.legend === false ? { ...style, legend: 'none' } : style);
     const out = spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
@@ -24316,7 +24377,7 @@ const Charts = (() => {
     const brackets = (spec.sig || []).filter(q => stars(q.p, spec.alpha));
     const catStars = (spec.sigCat || []).map(p => stars(p, spec.alpha));
 
-    const perGroup = !!spec.perGroup && spec.series.length === 1;
+    const perGroup = !!spec.perGroup && spec.series.length === 1, shapes = st.series === 'shapes';
     const legendItems = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: spec.type === 'box' && i === 2 }));
     if (spec.type === 'stacked') spec = { ...spec, percent: true, series: spec.series.map(s => ({ ...s })) };
     const lm = legendMetrics(ctx, legendItems, st, ts);
@@ -24366,7 +24427,8 @@ const Charts = (() => {
       if (spec.percent && v > 100 + 1e-9) break;
       const yy = y(v);
       ctx.strokeStyle = st.grid ? '#E6E1EC' : '#333'; ctx.lineWidth = st.grid ? 1.5 : 3; ctx.setLineDash([]);
-      ctx.beginPath(); ctx.moveTo(st.grid ? L : L - 9, yy); ctx.lineTo(st.grid ? L + pw : L, yy); ctx.stroke();
+      if (st.grid) gridPen(ctx, st);
+      ctx.beginPath(); ctx.moveTo(st.grid ? L : L - 9, yy); ctx.lineTo(st.grid ? L + pw : L, yy); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sc.step) + (spec.percent ? '%' : ''), L - 14, yy);
     }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
@@ -24390,10 +24452,14 @@ const Charts = (() => {
     spec.categories.forEach((cat, i) => wrapText(ctx, cat, L + cw * (i + 0.5), T + ph + 16, cw - 10, 30 * ts));
     if (spec.xLabel) { ctx.font = F(700, 26); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + (catLines * 30 + 24) * ts); }
 
-    const errBar = (x, a, b, w) => {
-      ctx.strokeStyle = '#333'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+    // error bars: both directions with caps (default), without caps, or upward only from the mean (mid)
+    const errBar = (x, a, b, w, mid) => {
+      if (st.errBars === 'up' && isFinite(mid)) a = mid;
+      if (st.errBars === 'nocap') w = 0;
+      ctx.strokeStyle = '#333'; ctx.lineWidth = 2.5 * lw(st); ctx.setLineDash([]);
       ctx.beginPath(); ctx.moveTo(x, y(a)); ctx.lineTo(x, y(b));
-      ctx.moveTo(x - w, y(a)); ctx.lineTo(x + w, y(a)); ctx.moveTo(x - w, y(b)); ctx.lineTo(x + w, y(b)); ctx.stroke();
+      if (w) { if (!(st.errBars === 'up' && isFinite(mid))) { ctx.moveTo(x - w, y(a)); ctx.lineTo(x + w, y(a)); } ctx.moveTo(x - w, y(b)); ctx.lineTo(x + w, y(b)); }
+      ctx.stroke();
     };
 
     if (fixY) { ctx.save(); ctx.beginPath(); ctx.rect(L - 4, T - 60, pw + 8, ph + 60); ctx.clip(); }
@@ -24405,8 +24471,8 @@ const Charts = (() => {
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
         fillBar(ctx, st, color, perGroup ? ci : si, x0, y(v), w, y(Math.max(sc.min, 0)) - y(v));
         const cx = x0 + w / 2;
-        if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4));
-        else if (s.lo && s.hi) errBar(cx, s.lo[ci], s.hi[ci], Math.min(14, w / 4));
+        if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4), v);
+        else if (s.lo && s.hi) errBar(cx, s.lo[ci], s.hi[ci], Math.min(14, w / 4), v);
         if (spec.labels) {
           ctx.fillStyle = '#222'; ctx.font = F(700, 24); ctx.textBaseline = 'bottom';
           const dec = spec.labelDec ?? 1, top = s.err && isFinite(s.err[ci]) ? v + s.err[ci] : s.hi ? s.hi[ci] : v;
@@ -24425,12 +24491,12 @@ const Charts = (() => {
         const color = pal[si % pal.length], off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
         const xs = s.values.map((_, ci) => L + cw * (ci + 0.5) + off);
         s.values.forEach((v, ci) => {
-          if (s.err && s.err[ci] != null) errBar(xs[ci], v - s.err[ci], v + s.err[ci], 9);
-          else if (s.lo && s.hi) errBar(xs[ci], s.lo[ci], s.hi[ci], 9);
+          if (s.err && s.err[ci] != null) errBar(xs[ci], v - s.err[ci], v + s.err[ci], 9, v);
+          else if (s.lo && s.hi) errBar(xs[ci], s.lo[ci], s.hi[ci], 9, v);
         });
         // error plot (noLine): means and their error bars only, coloured by group when the categories are the groups
         if (!spec.noLine) {
-          ctx.strokeStyle = color; ctx.lineWidth = 5; ctx.setLineDash(si === 2 ? [16, 10] : []);
+          ctx.strokeStyle = color; ctx.lineWidth = 5 * lw(st); ctx.setLineDash(shapes ? DASHES[si % 6].map(d => d * lw(st)) : si === 2 ? [16, 10] : []);
           ctx.beginPath(); s.values.forEach((v, ci) => ci ? ctx.lineTo(xs[ci], y(v)) : ctx.moveTo(xs[ci], y(v))); ctx.stroke();
         }
         if (spec.noLine && spec.perGroup && ns === 1) {
@@ -24439,7 +24505,8 @@ const Charts = (() => {
           return;
         }
         ctx.setLineDash([]); ctx.fillStyle = color;
-        s.values.forEach((v, ci) => { ctx.beginPath(); ctx.arc(xs[ci], y(v), 10, 0, Math.PI * 2); ctx.fill(); });
+        if (shapes) s.values.forEach((v, ci) => marker(ctx, si, xs[ci], y(v), 12 * Math.sqrt(lw(st))));
+        else s.values.forEach((v, ci) => { ctx.beginPath(); ctx.arc(xs[ci], y(v), 10, 0, Math.PI * 2); ctx.fill(); });
       });
     } else if (spec.type === 'stacked') {
       // one 100% bar per group, segments = categories
@@ -24492,7 +24559,7 @@ const Charts = (() => {
         grid.forEach((g, i) => i ? ctx.lineTo(cx + wd(dens[i]), y(g)) : ctx.moveTo(cx + wd(dens[i]), y(g)));
         for (let i = grid.length - 1; i >= 0; i--) ctx.lineTo(cx - wd(dens[i]), y(grid[i]));
         ctx.closePath();
-        ctx.fillStyle = shade(color, 0.7); ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 3.5; ctx.setLineDash(!perGroup && si === 2 ? [12, 7] : []); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = shade(color, 0.7); ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 3.5 * lw(st); ctx.setLineDash(perGroup ? [] : shapes ? DASHES[si % 6] : si === 2 ? [12, 7] : []); ctx.stroke(); ctx.setLineDash([]);
         if (spec.points) {
           ctx.fillStyle = color; ctx.globalAlpha = 0.5;
           arr.forEach((v, i) => { ctx.beginPath(); ctx.arc(cx + jitter(i + 1) * half * 0.5, y(v), 5, 0, Math.PI * 2); ctx.fill(); });
@@ -24515,15 +24582,15 @@ const Charts = (() => {
         if (!arr.length) return;
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const b = boxStats(arr), w = bw * 0.62, cx = L + cw * ci + (cw - gw) / 2 + bw * (si + 0.5);
-        ctx.setLineDash(!perGroup && si === 2 ? [12, 7] : []);
-        ctx.strokeStyle = color; ctx.lineWidth = 3.5;
+        ctx.setLineDash(perGroup ? [] : shapes ? DASHES[si % 6] : si === 2 ? [12, 7] : []);
+        ctx.strokeStyle = color; ctx.lineWidth = 3.5 * lw(st);
         ctx.fillStyle = shade(color, 0.85); ctx.fillRect(cx - w / 2, y(b.q3), w, y(b.q1) - y(b.q3));
         ctx.strokeRect(cx - w / 2, y(b.q3), w, y(b.q1) - y(b.q3));
         ctx.beginPath();
         ctx.moveTo(cx, y(b.q3)); ctx.lineTo(cx, y(b.hi)); ctx.moveTo(cx, y(b.q1)); ctx.lineTo(cx, y(b.lo));
         ctx.moveTo(cx - w / 4, y(b.hi)); ctx.lineTo(cx + w / 4, y(b.hi)); ctx.moveTo(cx - w / 4, y(b.lo)); ctx.lineTo(cx + w / 4, y(b.lo));
         ctx.stroke();
-        ctx.setLineDash([]); ctx.lineWidth = 5;
+        ctx.setLineDash([]); ctx.lineWidth = 5 * lw(st);
         ctx.beginPath(); ctx.moveTo(cx - w / 2, y(b.med)); ctx.lineTo(cx + w / 2, y(b.med)); ctx.stroke();
         if (st.boxMean) {
           // mean as a diamond
@@ -24555,15 +24622,16 @@ const Charts = (() => {
     }
     // significance: brackets between groups, or stars above timepoints
     ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = F(700, 30);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.font = F(700, st.sigLabel === 'p' || st.sigLabel === 'both' ? 24 : 30);
     [...brackets].sort((a, b) => (a.j - a.i) - (b.j - b.i)).forEach((q, n) => {
       const x1 = L + cw * (q.i + 0.5), x2 = L + cw * (q.j + 0.5), yy = y(dataHi) - BR0 - BRSTEP * n;
       ctx.beginPath(); ctx.moveTo(x1, yy + 14); ctx.lineTo(x1, yy); ctx.lineTo(x2, yy); ctx.lineTo(x2, yy + 14); ctx.stroke();
-      ctx.fillText(stars(q.p, spec.alpha), (x1 + x2) / 2, yy - 2);
+      fillSig(ctx, sigMark(q.p, spec.alpha, st), (x1 + x2) / 2, yy - 2);
     });
-    catStars.forEach((s, ci) => { if (s) ctx.fillText(s, L + cw * (ci + 0.5), y(dataHi) - 24); });
+    if (st.sigLabel === 'p' || st.sigLabel === 'both') ctx.font = F(700, 22);
+    catStars.forEach((s, ci) => { if (s) fillSig(ctx, sigMark(spec.sigCat[ci], spec.alpha, st), L + cw * (ci + 0.5), y(dataHi) - 24); });
 
-    drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2 })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
+    drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2, ...(shapes ? { dashArr: DASHES[i % 6], marker: spec.type === 'line' ? i : null } : {}) })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
     return c;
   }
 
@@ -24585,7 +24653,7 @@ const Charts = (() => {
     else { const sc = niceScale(lo, hi, 6); for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) if (v >= lo && v <= hi) ticks.push(+v.toFixed(10)); }
     ctx.font = F(600, 23); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ticks.forEach(t => {
-      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(t), T); ctx.lineTo(X(t), T + ph); ctx.stroke(); }
+      if (st.grid) { gridPen(ctx, st); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(t), T); ctx.lineTo(X(t), T + ph); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = '#444'; ctx.fillText(String(t), X(t), T + ph + 10);
     });
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
@@ -24624,7 +24692,7 @@ const Charts = (() => {
     const X = z => L + (z - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - sy.min) / (sy.max - sy.min) * ph;
     ctx.font = F(600, 24);
     for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) {
-      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); }
+      if (st.grid) { gridPen(ctx, st); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(fmtTick(v, sy.step), L - 12, Y(v));
     }
     for (let z = sx.min; z <= sx.max + 1e-9; z += sx.step) { ctx.fillStyle = '#444'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(fmtTick(z, sx.step), X(z), T + ph + 10); }
@@ -24659,7 +24727,7 @@ const Charts = (() => {
     const sc = niceScale(0, max, 6), x = v => L + v / sc.max * pw;
     ctx.font = F(600, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for (let v = 0; v <= sc.max + 1e-9; v += sc.step) {
-      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x(v), T); ctx.lineTo(x(v), T + ph); ctx.stroke(); }
+      if (st.grid) { gridPen(ctx, st); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x(v), T); ctx.lineTo(x(v), T + ph); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sc.step) + (spec.percent === false ? '' : '%'), x(v), T + ph + 12);
     }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
@@ -24725,12 +24793,12 @@ const Charts = (() => {
     ctx.font = F(600, 26); ctx.lineWidth = 1.5;
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) {
-      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); }
+      if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sy.step), L - 14, Y(v));
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for (let v = sx.min; v <= sx.max + 1e-9; v += sx.step) {
-      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); }
+      if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sx.step), X(v), T + ph + 12);
     }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
@@ -24754,7 +24822,7 @@ const Charts = (() => {
   function kmChart(spec, paletteName, st) {
     const pal = palette(paletteName);
     const { c, ctx, W, H, ts, F } = setup(st);
-    const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: i === 2 }));
+    const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: i === 2, ...(st.series === 'shapes' ? { dashArr: DASHES[i % 6] } : {}) }));
     const lm = legendMetrics(ctx, items, st, ts);
     const L = 110 + 40 * ts, R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
     const pw = W - L - R, ph = H - T - B;
@@ -24762,12 +24830,12 @@ const Charts = (() => {
     const sx = niceScale(0, tMax), X = v => L + v / sx.max * pw, Y = v => T + ph - v * ph;
     ctx.font = F(600, 26); ctx.lineWidth = 1.5;
     for (let v = 0; v <= 1.0001; v += 0.2) {
-      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); }
+      if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(Math.round(v * 100) + '%', L - 14, Y(v));
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for (let v = 0; v <= sx.max + 1e-9; v += sx.step) {
-      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); }
+      if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sx.step), X(v), T + ph + 12);
     }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
@@ -24785,7 +24853,7 @@ const Charts = (() => {
     });
     spec.series.forEach((s, i) => {
       const end = Math.max(s.steps[s.steps.length - 1].t, ...s.censored.map(q => q.t));
-      ctx.strokeStyle = items[i].color; ctx.lineWidth = 5; ctx.setLineDash(items[i].dash ? [16, 10] : []);
+      ctx.strokeStyle = items[i].color; ctx.lineWidth = 5 * lw(st); ctx.setLineDash(items[i].dashArr || (items[i].dash ? [16, 10] : []));
       ctx.beginPath(); ctx.moveTo(X(0), Y(1));
       s.steps.forEach((q, k) => { if (k) { ctx.lineTo(X(q.t), Y(s.steps[k - 1].s)); ctx.lineTo(X(q.t), Y(q.s)); } });
       ctx.lineTo(X(end), Y(s.steps[s.steps.length - 1].s)); ctx.stroke(); ctx.setLineDash([]);
@@ -24806,14 +24874,14 @@ const Charts = (() => {
     st = { ...st, legendTitle: '' }; // the legend lists test variables, not groups
     const pal = palette(paletteName);
     const { c, ctx, W, H, ts, F } = setup({ ...st, aspect: st.aspect === 'wide' ? 'standard' : st.aspect });
-    const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: i === 2 }));
+    const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: i === 2, ...(st.series === 'shapes' ? { dashArr: DASHES[i % 6] } : {}) }));
     const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'bottom' || st.legend === 'top' || st.legend === 'none' || st.legend === 'right' ? st.legend : 'inside' }, ts);
     const L = 110 + 40 * ts, R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
     const pw = W - L - R, ph = H - T - B;
     const X = v => L + v * pw, Y = v => T + ph - v * ph;
     ctx.font = F(600, 26); ctx.lineWidth = 1.5;
     for (let v = 0; v <= 1.0001; v += 0.2) {
-      if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); }
+      if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(v.toFixed(1), L - 14, Y(v));
       ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(v.toFixed(1), X(v), T + ph + 12);
     }
@@ -24832,7 +24900,7 @@ const Charts = (() => {
         ctx.fillStyle = items[i].color + '22'; ctx.beginPath(); ctx.moveTo(X(0), Y(0));
         pts.forEach(q => ctx.lineTo(X(q.fpr), Y(q.tpr))); ctx.lineTo(X(1), Y(0)); ctx.closePath(); ctx.fill();
       }
-      ctx.strokeStyle = items[i].color; ctx.lineWidth = { thin: 3, bold: 8 }[spec.lineW] || 5; ctx.setLineDash(items[i].dash ? [16, 10] : []);
+      ctx.strokeStyle = items[i].color; ctx.lineWidth = ({ thin: 3, bold: 8 }[spec.lineW] || 5) * lw(st); ctx.setLineDash(items[i].dashArr || (items[i].dash ? [16, 10] : []));
       ctx.beginPath(); pts.forEach((q, k) => k ? ctx.lineTo(X(q.fpr), Y(q.tpr)) : ctx.moveTo(X(q.fpr), Y(q.tpr))); ctx.stroke();
     });
     ctx.setLineDash([]);
@@ -24873,7 +24941,7 @@ const Charts = (() => {
 
     ctx.font = F(600, 26); ctx.lineWidth = 1.5;
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-    const gridLine = (x1, y1, x2, y2) => { if (st.grid) { ctx.strokeStyle = '#E6E1EC'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); } };
+    const gridLine = (x1, y1, x2, y2) => { if (st.grid) { gridPen(ctx, st); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); } };
     for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) {
       gridLine(L, Y(v), L + pw, Y(v));
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sy.step), L - 14, Y(v));
@@ -25305,7 +25373,10 @@ const Report = (() => {
   }
 
   // Generic table model → docx Table. Cells: {t:[lines], b, rs (rowSpan), span (colSpan), small}
-  function table(head, rows, brand, style = 'grid') {
+  // look: text size (pt), header colour, banded rows, left-aligned variable names and cell spacing
+  const HEAD_FILL = { lavender: 'EBDDF6', blue: 'DCE6F2', green: 'E2EFDA', navy: '1F3864' };
+  const PAD = { compact: [20, 35], roomy: [80, 70] };
+  function table(head, rows, brand, style = 'grid', look = {}) {
     const { Table, TableRow, TableCell, Paragraph, TextRun, WidthType, AlignmentType, ShadingType, VerticalAlign, BorderStyle } = D();
     const headCells = head.map(h => typeof h === 'string' ? { t: h } : h);
     const nCols = headCells.reduce((s, h) => s + (h.span || 1), 0);
@@ -25331,7 +25402,9 @@ const Report = (() => {
     const gridBorders = { top: border, bottom: border, left: border, right: border };
     // three-line (academic) tables: heavy rule above and below the header, heavy rule closing the table
     const apaBorders = (isHead, isLast) => ({ top: isHead ? rule(12) : none, bottom: isHead ? rule(8) : isLast ? rule(12) : none, left: none, right: none });
-    const mkCell = (cell, colIdx, isHead, isLast) => {
+    const sz = 2 * (+look.size || 10), [padV, padH] = PAD[look.pad] || [40, 50];
+    const headFill = !look.head || look.head === 'auto' ? (brand ? 'EBDDF6' : 'D9D9D9') : HEAD_FILL[look.head];
+    const mkCell = (cell, colIdx, isHead, isLast, band) => {
       const lines = Array.isArray(cell.t) ? cell.t : [cell.t ?? ''];
       let w = 0;
       for (let s = 0; s < (cell.span || 1); s++) w += widths[colIdx + s] || 0;
@@ -25339,11 +25412,11 @@ const Report = (() => {
         width: { size: w, type: WidthType.DXA },
         columnSpan: cell.span, rowSpan: cell.rs,
         verticalAlign: VerticalAlign.CENTER, borders: apa ? apaBorders(isHead, isLast) : gridBorders,
-        margins: { top: 40, bottom: 40, left: 50, right: 50 },
-        shading: isHead && !apa ? { type: ShadingType.CLEAR, color: 'auto', fill: brand ? 'EBDDF6' : 'D9D9D9' } : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : undefined,
+        margins: { top: padV, bottom: padV, left: padH, right: padH },
+        shading: isHead && !apa ? (headFill ? { type: ShadingType.CLEAR, color: 'auto', fill: headFill } : undefined) : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : band ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F2F2F2' } : undefined,
         children: lines.map(l => new Paragraph({
-          alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240 },
-          children: runs(String(l), { bold: isHead || cell.b, size: cell.small ? 17 : 20 })
+          alignment: look.left && !isHead && colIdx === 0 ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 },
+          children: runs(String(l), { bold: isHead || cell.b, size: cell.small ? sz - 3 : sz, color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : undefined })
         }))
       });
     };
@@ -25352,12 +25425,16 @@ const Report = (() => {
     const trs = [];
     const headRow = new TableRow({ tableHeader: true, children: (() => { let c = 0; return headCells.map(h => { const cell = mkCell(h, c, true); c += h.span || 1; return cell; }); })() });
     trs.push(headRow);
+    let bandNo = -1;
     rows.forEach((r, ri) => {
       let col = 0;
       const cells = [];
+      // banded rows: a new band starts with each variable (a row whose first column is not covered by a row span)
+      if (!(occupied[ri] && occupied[ri][0])) bandNo++;
+      const band = !!look.bands && bandNo % 2 === 1;
       for (const cell of r) {
         while (occupied[ri] && occupied[ri][col]) col++;
-        cells.push(mkCell(cell, col, false, ri + (cell.rs || 1) === rows.length));
+        cells.push(mkCell(cell, col, false, ri + (cell.rs || 1) === rows.length, band));
         if (cell.rs > 1) for (let k = 1; k < cell.rs; k++) {
           occupied[ri + k] = occupied[ri + k] || [];
           for (let s = 0; s < (cell.span || 1); s++) occupied[ri + k][col + s] = true;
@@ -25461,7 +25538,7 @@ const Report = (() => {
         const num = `Table ${pre}${tab++}`;
         if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
         else children.push(caption(`${num}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`, { pageBreakBefore: first() }));
-        children.push(table(s.head, s.rows, brand, opts.tableStyle));
+        children.push(table(s.head, s.rows, brand, opts.tableStyle, opts.tableLook));
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));
       }
@@ -25847,6 +25924,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none', tableNewPage: false,
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
+    sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
+    tableFontSize: '10', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -25865,13 +25944,16 @@ if (typeof module !== 'undefined') module.exports = Examples;
     pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
     pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote'], tableNewPage: ['optTableNewPage', true],
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
-    mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true]
+    mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
+    sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
+    tableFontSize: ['optTableFontSize'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
   const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
-    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont, frame: o.figFrame });
+    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont, frame: o.figFrame,
+    sigLabel: o.sigLabel, series: o.seriesStyle, lineWeight: o.lineWeight, errBars: o.errBars, gridStyle: o.gridStyle, ticks: o.yTicks, pLead: +o.pLead !== 0 });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -27215,11 +27297,17 @@ if (typeof module !== 'undefined') module.exports = Examples;
   }
 
   /* ---------- step 5: analysis + preview ---------- */
+  const HEAD_BG = { auto: '', lavender: '#EBDDF6', blue: '#DCE6F2', green: '#E2EFDA', navy: '#1F3864', none: '#fff' };
   function htmlTable(head, rows) {
     const h = head.map(c => typeof c === 'string' ? { t: c } : c);
-    const o = state.cfg.options;
-    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''}" style="font-family:'${esc(o.font)}',serif"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${
-      rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const o = state.cfg.options, bg = HEAD_BG[o.tableHead] || '', thStyle = bg ? `style="background:${bg};${o.tableHead === 'navy' ? 'color:#fff' : ''}"` : '';
+    // banded rows and left-aligned names follow the variables: a row starts a new variable unless a row span covers its first column
+    let cover = 0, band = -1;
+    const body = rows.map((r, ri) => {
+      const first = cover === 0; if (first) { band++; cover = Math.max(0, (r[0] && r[0].rs || 1) - 1); } else cover--;
+      return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${o.firstColLeft && first && ci === 0 ? 'left' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
+    }).join('');
+    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
@@ -27477,8 +27565,8 @@ if (typeof module !== 'undefined') module.exports = Examples;
     const err = { sem: 'the standard error of the mean (SEM)', ci: 'the 95% CI of the mean' }[spec.errKind || o.errorBar] || '±1 standard deviation (SD)';
     if ((spec.type === 'bar' || spec.type === 'line') && !spec.percent && !spec.integer) {
       const what = spec.type === 'bar' ? 'Bars' : 'Points';
-      if (series.some(s => s.err && s.err.some(v => v !== null && v !== undefined))) out.push(`${what} show the mean; error bars show ${err}.`);
-      else if (series.some(s => s.lo)) out.push(`${what} show the median; error bars show the interquartile range (IQR).`);
+      if (series.some(s => s.err && s.err.some(v => v !== null && v !== undefined))) out.push(`${what} show the mean; error bars show ${err}${o.errBars === 'up' ? ' (drawn upward only)' : ''}.`);
+      else if (series.some(s => s.lo)) out.push(`${what} show the median; error bars show the interquartile range (IQR)${o.errBars === 'up' ? ', drawn upward only (to the 75th percentile)' : ''}.`);
     }
     if (spec.individual) out.push('Thin lines show individual patients.');
     if (isFinite(spec.refLine)) out.push(`The dashed red line marks ${spec.refLabel ? `${spec.refLabel} (${spec.refLine})` : `the value ${spec.refLine}`}.`);
@@ -27497,11 +27585,13 @@ if (typeof module !== 'undefined') module.exports = Examples;
     if (spec.type === 'ba') out.push('The middle line shows the mean difference (bias) and the dashed lines the 95% limits of agreement (mean ± 1.96 SD).');
     if (['bar', 'line', 'box', 'dot', 'violin'].includes(spec.type)) {
       const ps = [...(spec.sig || []).map(q => q.p), ...(spec.sigCat || [])].filter(p => p <= spec.alpha);
-      if (ps.length) {
+      const what = spec.sig ? 'brackets: comparison between the groups' : spec.sigWhat ? `compared with ${spec.sigWhat}` : 'difference between the groups at that time';
+      if (ps.length && o.sigLabel === 'p') out.push(`Exact ${P} values are shown for significant differences (${what}).`);
+      else if (ps.length) {
         const lv = [`*${P} ≤ ${+o.pLead === 0 ? String(spec.alpha).replace(/^0\./, '.') : spec.alpha}`];
         if (ps.some(p => p <= 0.01)) lv.push(`**${P} ≤ 0.01`);
         if (ps.some(p => p <= 0.001)) lv.push(`***${P} ≤ 0.001`);
-        out.push(`${lv.join(', ')} (${spec.sig ? 'brackets: comparison between the groups' : spec.sigWhat ? `compared with ${spec.sigWhat}` : 'difference between the groups at that time'}).`);
+        out.push(`${lv.join(', ')} (${what}).`);
       }
     }
     return out.filter(Boolean).join(' ');
@@ -27788,7 +27878,7 @@ if (typeof module !== 'undefined') module.exports = Examples;
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
       const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
-        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableLook: { size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad }, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

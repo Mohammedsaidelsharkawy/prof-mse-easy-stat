@@ -25,6 +25,8 @@
     pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none', tableNewPage: false,
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
+    sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
+    tableFontSize: '10', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -43,13 +45,16 @@
     pWord: ['optPWord'], commentPlace: ['optCommentPlace'], commentEffect: ['optCommentEffect', true], summary: ['optSummary', true], barWidth: ['optBarWidth'], boxMean: ['optBoxMean', true], dunn: ['optDunn', true], chiPost: ['optChiPost', true], mixed: ['optMixed', true],
     pLead: ['optPLead'], totalCol: ['optTotalCol', true], nHead: ['optNHead', true], boldSig: ['optBoldSig', true], figNotes: ['optFigNotes', true], chartFont: ['optChartFont'], testNote: ['optTestNote'], tableNewPage: ['optTableNewPage', true],
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
-    mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true]
+    mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
+    sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
+    tableFontSize: ['optTableFontSize'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
   const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
-    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont, frame: o.figFrame });
+    legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont, frame: o.figFrame,
+    sigLabel: o.sigLabel, series: o.seriesStyle, lineWeight: o.lineWeight, errBars: o.errBars, gridStyle: o.gridStyle, ticks: o.yTicks, pLead: +o.pLead !== 0 });
 
   const state = { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, step: 1, edits: {} };
 
@@ -1393,11 +1398,17 @@
   }
 
   /* ---------- step 5: analysis + preview ---------- */
+  const HEAD_BG = { auto: '', lavender: '#EBDDF6', blue: '#DCE6F2', green: '#E2EFDA', navy: '#1F3864', none: '#fff' };
   function htmlTable(head, rows) {
     const h = head.map(c => typeof c === 'string' ? { t: c } : c);
-    const o = state.cfg.options;
-    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''}" style="font-family:'${esc(o.font)}',serif"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${
-      rows.map((r, ri) => `<tr>${r.map(c => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const o = state.cfg.options, bg = HEAD_BG[o.tableHead] || '', thStyle = bg ? `style="background:${bg};${o.tableHead === 'navy' ? 'color:#fff' : ''}"` : '';
+    // banded rows and left-aligned names follow the variables: a row starts a new variable unless a row span covers its first column
+    let cover = 0, band = -1;
+    const body = rows.map((r, ri) => {
+      const first = cover === 0; if (first) { band++; cover = Math.max(0, (r[0] && r[0].rs || 1) - 1); } else cover--;
+      return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${o.firstColLeft && first && ci === 0 ? 'left' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
+    }).join('');
+    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
@@ -1655,8 +1666,8 @@
     const err = { sem: 'the standard error of the mean (SEM)', ci: 'the 95% CI of the mean' }[spec.errKind || o.errorBar] || '±1 standard deviation (SD)';
     if ((spec.type === 'bar' || spec.type === 'line') && !spec.percent && !spec.integer) {
       const what = spec.type === 'bar' ? 'Bars' : 'Points';
-      if (series.some(s => s.err && s.err.some(v => v !== null && v !== undefined))) out.push(`${what} show the mean; error bars show ${err}.`);
-      else if (series.some(s => s.lo)) out.push(`${what} show the median; error bars show the interquartile range (IQR).`);
+      if (series.some(s => s.err && s.err.some(v => v !== null && v !== undefined))) out.push(`${what} show the mean; error bars show ${err}${o.errBars === 'up' ? ' (drawn upward only)' : ''}.`);
+      else if (series.some(s => s.lo)) out.push(`${what} show the median; error bars show the interquartile range (IQR)${o.errBars === 'up' ? ', drawn upward only (to the 75th percentile)' : ''}.`);
     }
     if (spec.individual) out.push('Thin lines show individual patients.');
     if (isFinite(spec.refLine)) out.push(`The dashed red line marks ${spec.refLabel ? `${spec.refLabel} (${spec.refLine})` : `the value ${spec.refLine}`}.`);
@@ -1675,11 +1686,13 @@
     if (spec.type === 'ba') out.push('The middle line shows the mean difference (bias) and the dashed lines the 95% limits of agreement (mean ± 1.96 SD).');
     if (['bar', 'line', 'box', 'dot', 'violin'].includes(spec.type)) {
       const ps = [...(spec.sig || []).map(q => q.p), ...(spec.sigCat || [])].filter(p => p <= spec.alpha);
-      if (ps.length) {
+      const what = spec.sig ? 'brackets: comparison between the groups' : spec.sigWhat ? `compared with ${spec.sigWhat}` : 'difference between the groups at that time';
+      if (ps.length && o.sigLabel === 'p') out.push(`Exact ${P} values are shown for significant differences (${what}).`);
+      else if (ps.length) {
         const lv = [`*${P} ≤ ${+o.pLead === 0 ? String(spec.alpha).replace(/^0\./, '.') : spec.alpha}`];
         if (ps.some(p => p <= 0.01)) lv.push(`**${P} ≤ 0.01`);
         if (ps.some(p => p <= 0.001)) lv.push(`***${P} ≤ 0.001`);
-        out.push(`${lv.join(', ')} (${spec.sig ? 'brackets: comparison between the groups' : spec.sigWhat ? `compared with ${spec.sigWhat}` : 'difference between the groups at that time'}).`);
+        out.push(`${lv.join(', ')} (${what}).`);
       }
     }
     return out.filter(Boolean).join(' ');
@@ -1966,7 +1979,7 @@
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
       const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
-        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableLook: { size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad }, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);

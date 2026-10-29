@@ -68,7 +68,10 @@ const Report = (() => {
   }
 
   // Generic table model → docx Table. Cells: {t:[lines], b, rs (rowSpan), span (colSpan), small}
-  function table(head, rows, brand, style = 'grid') {
+  // look: text size (pt), header colour, banded rows, left-aligned variable names and cell spacing
+  const HEAD_FILL = { lavender: 'EBDDF6', blue: 'DCE6F2', green: 'E2EFDA', navy: '1F3864' };
+  const PAD = { compact: [20, 35], roomy: [80, 70] };
+  function table(head, rows, brand, style = 'grid', look = {}) {
     const { Table, TableRow, TableCell, Paragraph, TextRun, WidthType, AlignmentType, ShadingType, VerticalAlign, BorderStyle } = D();
     const headCells = head.map(h => typeof h === 'string' ? { t: h } : h);
     const nCols = headCells.reduce((s, h) => s + (h.span || 1), 0);
@@ -94,7 +97,9 @@ const Report = (() => {
     const gridBorders = { top: border, bottom: border, left: border, right: border };
     // three-line (academic) tables: heavy rule above and below the header, heavy rule closing the table
     const apaBorders = (isHead, isLast) => ({ top: isHead ? rule(12) : none, bottom: isHead ? rule(8) : isLast ? rule(12) : none, left: none, right: none });
-    const mkCell = (cell, colIdx, isHead, isLast) => {
+    const sz = 2 * (+look.size || 10), [padV, padH] = PAD[look.pad] || [40, 50];
+    const headFill = !look.head || look.head === 'auto' ? (brand ? 'EBDDF6' : 'D9D9D9') : HEAD_FILL[look.head];
+    const mkCell = (cell, colIdx, isHead, isLast, band) => {
       const lines = Array.isArray(cell.t) ? cell.t : [cell.t ?? ''];
       let w = 0;
       for (let s = 0; s < (cell.span || 1); s++) w += widths[colIdx + s] || 0;
@@ -102,11 +107,11 @@ const Report = (() => {
         width: { size: w, type: WidthType.DXA },
         columnSpan: cell.span, rowSpan: cell.rs,
         verticalAlign: VerticalAlign.CENTER, borders: apa ? apaBorders(isHead, isLast) : gridBorders,
-        margins: { top: 40, bottom: 40, left: 50, right: 50 },
-        shading: isHead && !apa ? { type: ShadingType.CLEAR, color: 'auto', fill: brand ? 'EBDDF6' : 'D9D9D9' } : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : undefined,
+        margins: { top: padV, bottom: padV, left: padH, right: padH },
+        shading: isHead && !apa ? (headFill ? { type: ShadingType.CLEAR, color: 'auto', fill: headFill } : undefined) : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : band ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F2F2F2' } : undefined,
         children: lines.map(l => new Paragraph({
-          alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240 },
-          children: runs(String(l), { bold: isHead || cell.b, size: cell.small ? 17 : 20 })
+          alignment: look.left && !isHead && colIdx === 0 ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 },
+          children: runs(String(l), { bold: isHead || cell.b, size: cell.small ? sz - 3 : sz, color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : undefined })
         }))
       });
     };
@@ -115,12 +120,16 @@ const Report = (() => {
     const trs = [];
     const headRow = new TableRow({ tableHeader: true, children: (() => { let c = 0; return headCells.map(h => { const cell = mkCell(h, c, true); c += h.span || 1; return cell; }); })() });
     trs.push(headRow);
+    let bandNo = -1;
     rows.forEach((r, ri) => {
       let col = 0;
       const cells = [];
+      // banded rows: a new band starts with each variable (a row whose first column is not covered by a row span)
+      if (!(occupied[ri] && occupied[ri][0])) bandNo++;
+      const band = !!look.bands && bandNo % 2 === 1;
       for (const cell of r) {
         while (occupied[ri] && occupied[ri][col]) col++;
-        cells.push(mkCell(cell, col, false, ri + (cell.rs || 1) === rows.length));
+        cells.push(mkCell(cell, col, false, ri + (cell.rs || 1) === rows.length, band));
         if (cell.rs > 1) for (let k = 1; k < cell.rs; k++) {
           occupied[ri + k] = occupied[ri + k] || [];
           for (let s = 0; s < (cell.span || 1); s++) occupied[ri + k][col + s] = true;
@@ -224,7 +233,7 @@ const Report = (() => {
         const num = `Table ${pre}${tab++}`;
         if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
         else children.push(caption(`${num}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`, { pageBreakBefore: first() }));
-        children.push(table(s.head, s.rows, brand, opts.tableStyle));
+        children.push(table(s.head, s.rows, brand, opts.tableStyle, opts.tableLook));
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));
       }

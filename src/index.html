@@ -191,6 +191,12 @@ table.rt th,table.rt td{border:1px solid #9a9a9a;padding:5px 7px;text-align:cent
 table.rt th{background:#EBDDF6}
 table.rt td.b{font-weight:700}
 table.rt td.s{font-size:12.5px}
+table.rt td.s{font-size:.9em}
+table.rt tr.band td{background:#F2F2F2}
+table.rt tr td.hl{background:#FFF2CC}
+table.rt td.left{text-align:left}
+table.rt.rt-compact th,table.rt.rt-compact td{padding:2px 5px}
+table.rt.rt-roomy th,table.rt.rt-roomy td{padding:9px 10px}
 table.rt.apa th,table.rt.apa td{border:0}
 table.rt.apa th{background:#fff;border-top:2px solid #000;border-bottom:1.5px solid #000}
 table.rt.apa tbody tr:last-child td,table.rt.apa td.last{border-bottom:2px solid #000}
@@ -482,6 +488,14 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
         <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option></select></div>
         <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
+        <div><label class="f">Table text size</label><select id="optTableFontSize"><option value="8">8 pt</option><option value="9">9 pt</option><option value="10" selected>10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></div>
+        <div><label class="f">Header colour (grid tables)</label><select id="optTableHead"><option value="auto" selected>Grey</option><option value="lavender">Lavender</option><option value="blue">Light blue</option><option value="green">Light green</option><option value="navy">Navy, white text</option><option value="none">No shading</option></select></div>
+        <div><label class="f">Cell spacing</label><select id="optTablePad"><option value="compact">Compact</option><option value="normal" selected>Normal</option><option value="roomy">Roomy</option></select></div>
+        <div><label class="f">Counts in categorical rows</label><select id="optCatFormat"><option value="npct" selected>19 (63.3%)</option><option value="npctNoSign">19 (63.3)</option><option value="nN">19/30 (63.3%)</option><option value="pctN">63.3% (19)</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:8px">
+        <label class="check"><input type="checkbox" id="optTableBands"><span><b>Banded rows</b> — every other variable lightly shaded</span></label>
+        <label class="check"><input type="checkbox" id="optFirstColLeft"><span><b>Variable names left-aligned</b> (numbers stay centred)</span></label>
       </div>
       <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand"><span><b>Prof MSE branding</b> in the Word header</span></label></div>
       <p class="legend-note">Table titles can be edited in the report preview (step 11).</p>
@@ -539,6 +553,12 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Bar width</label><select id="optBarWidth"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="wide">Wide</option></select></div>
         <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
         <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
+        <div><label class="f">Significance on figures</label><select id="optSigLabel"><option value="stars" selected>Stars (*, **, ***)</option><option value="p">Exact P values (P = 0.013)</option><option value="both">Stars and P values</option></select></div>
+        <div><label class="f">Groups told apart by</label><select id="optSeriesStyle"><option value="colour" selected>Colour</option><option value="shapes">Colour, marker shapes and line patterns (greyscale print)</option></select></div>
+        <div><label class="f">Line weight</label><select id="optLineWeight"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="thick">Thick</option></select></div>
+        <div><label class="f">Error bars</label><select id="optErrBars"><option value="both" selected>Both directions, with caps</option><option value="nocap">Both directions, no caps</option><option value="up">Upward only (from the mean)</option></select></div>
+        <div><label class="f">Gridline style</label><select id="optGridStyle"><option value="solid" selected>Solid, light</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dark">Solid, darker</option></select></div>
+        <div><label class="f">Axis ticks</label><select id="optYTicks"><option value="fewer">Fewer</option><option value="normal" selected>Normal</option><option value="more">More</option></select></div>
       </div>
       <h3>Legend</h3>
       <div class="grid g4">
