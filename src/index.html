@@ -197,6 +197,7 @@ table.rt td.s{font-size:.9em}
 table.rt tr.band td{background:#F2F2F2}
 table.rt tr td.hl{background:#FFF2CC}
 table.rt td.left{text-align:left}
+.gloss{margin:6px 0;padding:8px 10px;background:var(--lav);border-radius:8px;font-size:13px}.gloss dt{font-weight:700;margin-top:4px}.gloss dd{margin:0 0 0 12px}
 table.rt.rt-compact th,table.rt.rt-compact td{padding:2px 5px}
 table.rt.rt-roomy th,table.rt.rt-roomy td{padding:9px 10px}
 table.rt.apa th,table.rt.apa td{border:0}
@@ -875,8 +876,33 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optCommentEffect"><span><b>Effect sizes in comments</b> — the difference or RR/OR with 95% CI for significant two-group comparisons</span></label>
           <label class="check"><input type="checkbox" id="optCommentMagnitude"><span><b>Size of each significant effect</b> — Cohen's d, r, η² or Cramér's V, labelled small, medium or large</span></label>
           <label class="check"><input type="checkbox" id="optSummary"><span><b>Summary of key findings</b> — a closing paragraph listing every significant result</span></label>
+          <label class="check"><input type="checkbox" id="optKeyFindings"><span><b>Numbered key findings</b> under each table's comment (Word)</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optVaryWording"><span><b>Varied wording</b> — repeated phrases take alternatives (“did not differ significantly”, “showed no significant difference” …)</span></label>
+          <label class="check"><input type="checkbox" id="optTrendWord"><span><b>Trends</b> — P between the significance level and 0.10 written as “a non-significant trend”</span></label>
+          <label class="check"><input type="checkbox" id="optNsCI"><span><b>Non-significant results with their 95% CI</b> — the difference or RR/OR, two groups</span></label>
+          <label class="check"><input type="checkbox" id="optFigRef"><span><b>Figure references</b> — “(Figure 3)” at the end of each comment (Word)</span></label>
+          <label class="check"><input type="checkbox" id="optBoldSigText"><span><b>Significant findings in bold</b> in the Word comments</span></label>
         </div>
       </div>
+      <h3>Style</h3>
+      <div class="grid g4">
+        <div><label class="f">Preset</label><select id="comPreset"><option value="">— apply a preset —</option><option value="thesis">Thesis — detailed, formal</option><option value="journal">Journal — concise, with effect sizes</option><option value="plain">Plain language — for patients and the public</option></select></div>
+        <div><label class="f">Tone</label><select id="optCommentTone"><option value="standard" selected>Statistical (“significantly”)</option><option value="plain">Plain language (“clearly”)</option></select></div>
+        <div><label class="f">Comments of the tables</label><select id="optCommentMerge"><option value="table" selected>One paragraph with each table</option><option value="combined">One combined results paragraph (Word)</option></select></div>
+        <div><label class="f">Effect size labels (Cohen's d)</label><select id="optEffConv"><option value="cohen" selected>Cohen — 0.2 / 0.5 / 0.8</option><option value="sawilowsky">Sawilowsky — very small … huge</option><option value="ferguson">Ferguson — 0.41 / 1.15 / 2.70</option></select></div>
+        <div><label class="f">Word limit per comment</label><input type="number" min="0" step="10" id="optComMaxWords" placeholder="none"></div>
+        <div><label class="f">Word limit of the abstract results</label><input type="number" min="0" step="10" id="optAbsMaxWords" placeholder="none"></div>
+      </div>
+      <h3>Your own wording</h3>
+      <label class="check"><input type="checkbox" id="optCommentTpl"><span><b>Sentence templates</b> for the tables of single variables — placeholders {variable}, {Variable}, {groups}, {P}, {test}, {values}, {highest}, {lowest}, {effect}, {result}</span></label>
+      <div class="grid g2" style="margin-top:6px">
+        <div><label class="f">Significant result</label><input type="text" id="optTplSig" style="width:100%" value="{Variable} differed significantly {groups} (P value {P}), being highest in {highest}."></div>
+        <div><label class="f">Non-significant result</label><input type="text" id="optTplNs" style="width:100%" value="{Variable} did not differ significantly {groups} (P value {P})."></div>
+      </div>
+      <label class="f" style="margin-top:8px">Phrase dictionary — applied to every comment, one per line: <span class="mono">old phrase =&gt; new phrase</span></label>
+      <textarea id="optPhraseDict" rows="3" style="width:100%" placeholder="insignificantly different =&gt; not significantly different&#10;studied groups =&gt; study groups"></textarea>
       <p class="legend-note">Every comment can still be edited by hand in the report preview (step 11).</p>
     </div>
     <div class="card">
@@ -1167,6 +1193,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div><label class="f">Test between the groups</label><select id="vdTest"></select></div>
       <div><label class="f">Arabic label (optional)</label><input type="text" id="vdAr" dir="rtl"></div>
       <div id="vdShowBox"><label class="f">Row shows (two categories)</label><select id="vdShow"></select></div>
+      <div><label class="f">Minimal clinically important difference (two groups)</label><input type="number" step="any" id="vdMcid" placeholder="e.g. 10"></div>
       <div id="vdNoSecondBox"><label class="check" style="margin-top:22px"><input type="checkbox" id="vdNoSecond"><span>One row in the table (no Range / IQR row)</span></label></div>
     </div>
     <label class="f">Private note (shown as ℹ in later steps, not in the report)</label><input type="text" id="vdMemo" style="width:100%">

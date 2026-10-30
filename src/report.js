@@ -36,6 +36,15 @@ const Report = (() => {
       children: [...runs(text, o), ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, bold: false, size: o.noteSize || o.size }) : [])]
     });
   }
+  // a comment: sentences reporting a significant result in bold (optional), else one plain paragraph
+  const SENT = /[^.!?]+(?:\.(?=\d)[^.!?]*)*[.!?]+(?:\s+|$)|[^.!?]+$/g;
+  const isSigSentence = x => /\b(significant(ly)?|clear(ly)?)\b/.test(x) && !/\b(in|not |non-)significant|no significant|not clear|no clear|insignificant/.test(x);
+  function commentPara(text, o = {}) {
+    if (!o.boldSig) return para(text, o);
+    const { Paragraph, AlignmentType } = D(), ss = String(text).match(SENT) || [text];
+    return new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { after: 160, line: LINE }, keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
+      children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) })) });
+  }
   function heading(text, brand) {
     const { Paragraph, TextRun, HeadingLevel } = D();
     return new Paragraph({
@@ -219,6 +228,9 @@ const Report = (() => {
       else children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600), caption(`${fl} ${ft}`));
     } else if (opts.paper && model.intro) children.push(para(model.intro));
     if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => t.trim() && children.push(para(t.trim())));
+    // one combined results paragraph instead of a comment with each table
+    const merged = opts.commentMerge === 'combined' && opts.commentPlace !== 'none';
+    if (merged) { const all = model.sections.filter(s => s.tableOn !== false && s.comment).map(s => s.comment.trim()).join(' '); if (all) children.push(commentPara(all, { boldSig: opts.boldSigText })); }
     const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
     const placeFigures = list => {
       const apa = opts.captionStyle === 'apa';
@@ -236,6 +248,16 @@ const Report = (() => {
       }
     };
     const atEnd = arrangeFigures(model.sections, opts.figPlacement);
+    // figure numbers of a section, for "(Figure 3)" at the end of its comment
+    const endNum = new Map(); if (atEnd) atEnd.filter(f => f.url).forEach((f, i) => endNum.set(f, fig + i));
+    const figRef = (s, text) => {
+      if (!opts.figRef || !text) return text;
+      const ns = s.figures.filter(f => f.url).map((f, i) => atEnd ? endNum.get(f) : fig + i).filter(n => n !== undefined); if (!ns.length) return text;
+      const lab = ns.length === 1 ? `Figure ${pre}${ns[0]}` : ns.length === 2 ? `Figures ${pre}${ns[0]} and ${pre}${ns[1]}` : `Figures ${pre}${ns[0]}–${pre}${ns[ns.length - 1]}`;
+      return text.replace(/\s*([.!?])?\s*$/, ` (${lab})$1`).replace(/\)$/, ').');
+    };
+    const findings = s => opts.keyFindings && s.findings && s.findings.length
+      ? [para('Key findings:', { bold: true, after: 60, keepNext: true }), ...s.findings.map((x, i) => para(`${i + 1}. ${x}`, { after: 40, line: 276, align: AlignmentType.LEFT }))] : [];
     // orientation "auto": wide tables (more than 7 columns) on landscape pages of their own
     const turns = [], portraitW = PAGE_W, landW = ph0 - 2 * mg, nColsOf = h => h.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0);
     // long tables split into parts of at most N rows (never inside a variable), each part after the first captioned "(continued)"
@@ -251,7 +273,7 @@ const Report = (() => {
         const wideT = opts.orientation === 'auto' && nColsOf(s.head) > 7;
         if (wideT) { turns.push({ at: children.length, land: true }); PAGE_W = landW; brk = false; }
         if (opts.sectionHeads) children.push(subheading(s.title, brand, first()));
-        if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment, { pageBreakBefore: first() }));
+        if (s.comment && !merged && opts.commentPlace === 'before') children.push(commentPara(figRef(s, s.comment), { pageBreakBefore: first(), boldSig: opts.boldSigText }));
         const num = `Table ${pre}${tab++}`;
         listTabs.push(`${num}${opts.tableCaption === 'period' || opts.tableCaption === 'apa' ? '.' : ':'} ${s.title}`);
         if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
@@ -261,7 +283,8 @@ const Report = (() => {
           children.push(table(s.head, part, brand, opts.tableStyle, opts.tableLook));
         });
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
-        if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));
+        if (s.comment && !merged && (opts.commentPlace || 'after') === 'after') children.push(commentPara(figRef(s, s.comment), { boldSig: opts.boldSigText }));
+        if (!merged && opts.commentPlace !== 'none') children.push(...findings(s));
         if (wideT) { turns.push({ at: children.length, land: false }); PAGE_W = portraitW; }
       }
       if (!atEnd) placeFigures(s.figures);

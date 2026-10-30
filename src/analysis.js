@@ -79,7 +79,11 @@ const Analysis = (() => {
   // effect size of a between-group comparison with its magnitude (Cohen 1988):
   // two groups: Cohen's d (parametric) or r = |z| / √N (Mann-Whitney); more groups: η² (ANOVA) or ε² (Kruskal-Wallis); categories: Cramér's V
   function effectMagnitude(r, k, opts = {}) {
-    const lab = (v, cuts) => v < cuts[0] ? 'negligible' : v < cuts[1] ? 'small' : v < cuts[2] ? 'medium' : 'large';
+    const lab = (v, cuts) => {
+      // d-type cut-offs follow the chosen convention: Cohen (0.2/0.5/0.8), Sawilowsky (adds very small, very large, huge) or Ferguson (0.41/1.15/2.70)
+      if (cuts[0] === 0.2 && opts.effConv === 'sawilowsky') return v < 0.1 ? 'negligible' : v < 0.2 ? 'very small' : v < 0.5 ? 'small' : v < 0.8 ? 'medium' : v < 1.2 ? 'large' : v < 2 ? 'very large' : 'huge';
+      if (cuts[0] === 0.2 && opts.effConv === 'ferguson') cuts = [0.41, 1.15, 2.7];
+      return v < cuts[0] ? 'negligible' : v < cuts[1] ? 'small' : v < cuts[2] ? 'medium' : 'large'; };
     if (r.num) {
       const gv = r.gv; if (!gv || gv.some(x => x.length < 2)) return '';
       if (k === 2) {
@@ -2067,6 +2071,9 @@ const Analysis = (() => {
           const q = r.cat.rr && r.cat.rr[0];
           return q && q.rr !== null && q.rr !== undefined ? `; ${EF} = ${fmt(q.rr, 2)}, 95% CI ${fmt(q.lo, 2)}-${fmt(q.hi, 2)}` : '';
         };
+        const effTxtAny = r => { if (k !== 2) return '';
+          if (r.num) { const q = r.num.pairs[0]; return q && isFinite(q.diff) ? `MD = ${fmt(q.diff, d)}, 95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}` : ''; }
+          const q = r.cat.rr && r.cat.rr[0]; return q && q.rr !== null && q.rr !== undefined ? `${EF} = ${fmt(q.rr, 2)}, 95% CI ${fmt(q.lo, 2)} to ${fmt(q.hi, 2)}` : ''; };
         const nsRes = res.filter(r => !((r.num || r.cat).p <= alpha));
         const sent = [];
         if (noP) { const vals = r => r.num ? r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)}`).join(', ')
@@ -2079,15 +2086,26 @@ const Analysis = (() => {
         });
         else if (nsRes.length) {
           // baseline characteristics read as "comparable"; outcomes as "insignificantly different"
-          const base = nsRes.filter(r => r.v.role === 'baseline'), rest = nsRes.filter(r => r.v.role !== 'baseline');
+          // optional: P between alpha and 0.10 written as a trend
+          const trendR = opts.trendWord ? nsRes.filter(r => (r.num || r.cat).p < 0.1) : [];
+          const base = nsRes.filter(r => r.v.role === 'baseline' && !trendR.includes(r)), rest = nsRes.filter(r => r.v.role !== 'baseline' && !trendR.includes(r));
+          trendR.forEach(r => sent.push(`${cap(plain(r.v.label))} showed a non-significant trend towards a difference ${amongTxt(k)} (P value ${pTxt((r.num || r.cat).p)}).`));
           if (base.length) sent.push(`The groups were comparable regarding ${listJoin(base.map(r => lowerFirst(plain(r.v.label))))} (P value > ${opts.alpha}).`);
           if (rest.length) { const nsLabels = rest.map(r => lowerFirst(plain(r.v.label)));
             sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`); }
         }
+        // optional: non-significant two-group results with their estimate and 95% CI, not only the P value
+        if (opts.nsCI && k === 2 && !noP && !descriptive) nsRes.forEach(r => {
+          if (r.num) { const q = r.num.pairs[0]; if (q && isFinite(q.lo)) sent.push(`The ${r.num.param ? 'mean' : 'median'} difference in ${lowerFirst(plain(r.v.label))} was ${fmt(q.diff, d)} (95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}).`); }
+          else { const q = r.cat.rr && r.cat.rr[0]; if (q && q.rr !== null && q.rr !== undefined && isFinite(q.lo)) sent.push(`For ${lowerFirst(plain(r.v.label))}, the ${EF} was ${fmt(q.rr, 2)} (95% CI ${fmt(q.lo, 2)} to ${fmt(q.hi, 2)}).`); }
+        });
         for (const r of res.filter(r => !descriptive && !noP && (r.num || r.cat).p <= alpha)) {
           // compact categorical sentences already quote their percentages
           const lab = isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label));
-          if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps).replace(/\)$/, effTxt(r) + ')')}.`); }
+          if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps).replace(/\)$/, effTxt(r) + ')')}.`);
+            // the minimal clinically important difference of the variable (step 2 ⚙), two groups
+            const mc = Math.abs(toNum(r.v.mcid)), q = r.num.pairs[0];
+            if (k === 2 && mc > 0 && q && isFinite(q.diff)) sent.push(`This difference (${fmt(Math.abs(q.diff), d)}) ${Math.abs(q.diff) >= mc ? 'exceeded' : 'was smaller than'} the minimal clinically important difference of ${fmt(mc, d)}.`); }
           else {
             const c = r.cat, row = 0;
             const best = c.pct[row].indexOf(Math.max(...c.pct[row]));
@@ -2144,6 +2162,18 @@ const Analysis = (() => {
           return out;
         }
         // optional: the size of each significant effect, with its conventional magnitude
+        // your own sentence templates: {variable}, {groups}, {P}, {test}, {values}, {highest}, {lowest}, {effect}, {result}
+        if (opts.commentTpl && !noP) {
+          sent.length = 0;
+          res.forEach(r => {
+            const x = r.num || r.cat, sig = x.p <= alpha, lv = r.num ? r.num.desc.map(dd => r.num.param ? dd.mean : dd.median) : r.cat.pct[0];
+            const hi = lv.indexOf(Math.max(...lv)), lo = lv.indexOf(Math.min(...lv)), ef = effTxtAny(r);
+            const map = { variable: plain(r.v.label), Variable: cap(plain(r.v.label)), groups: amongTxt(k), P: pTxt(x.p), test: TEST_NAME[x.test] || x.test || '', values: values(r) || '',
+              highest: gl[hi], lowest: gl[lo], effect: ef, result: sig ? 'differed significantly' : 'did not differ significantly' };
+            const tpl = String((sig ? opts.tplSig : opts.tplNs) || '').trim(); if (!tpl) return;
+            sent.push(tpl.replace(/\{(\w+)\}/g, (m, key) => key in map ? map[key] : m).replace(/\(\s*\)/g, '').replace(/\s+([,.;])/g, '$1').replace(/\s{2,}/g, ' '));
+          });
+        }
         if (opts.commentMagnitude && !noP) {
           const parts = res.filter(r => (r.num || r.cat).p <= alpha).map(r => { const m = effectMagnitude(r, k, opts); return m && `${lowerFirst(plain(r.v.label))} (${m})`; }).filter(Boolean);
           if (parts.length) sent.push(`The effect size was ${parts.length > 1 ? 'as follows: ' : 'for '}${listJoin(parts)}.`);
@@ -2693,6 +2723,38 @@ const Analysis = (() => {
       for (const k of Object.keys(o)) { const v = o[k]; if (typeof v === 'string' || (v && typeof v === 'object')) o[k] = walk(v); } return o; };
     return walk(x);
   }
-  const run2 = (data, cfg) => relabelCI(run(data, cfg), cfg.options.confLevel), explore2 = (data, cfg, xo) => relabelCI(explore(data, cfg, xo), cfg.options.confLevel);
-  return { run: run2, explore: explore2, relabelCI, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  // finishing touches on every comment of the report: varied wording, plain language, your phrase dictionary, word limits and key findings
+  const VARY = [
+    [/\bwas (in|not )significantly different\b/g, ['did not differ significantly', 'showed no significant difference']],
+    [/\bwere (in|not )significantly different\b/g, ['did not differ significantly', 'showed no significant differences']],
+    [/\bwas significantly higher in\b/g, ['was significantly greater in']],
+    [/\bwas significantly lower in\b/g, ['was significantly smaller in']],
+    [/\bThe groups were comparable regarding\b/g, ['There was no significant difference between the groups regarding', 'The groups were similar regarding']]
+  ];
+  const sentencesOf = t => (String(t || '').match(/[^.!?]+(?:\.(?=\d)[^.!?]*)*[.!?]+(?:\s+|$)|[^.!?]+$/g) || []).map(x => x.trim()).filter(Boolean);
+  const trimWords = (t, n) => { if (!n || !t) return t; const ss = sentencesOf(t), out = []; let w = 0;
+    for (const x of ss) { const c = x.split(/\s+/).length; if (out.length && w + c > n) break; out.push(x); w += c; } return out.join(' '); };
+  function polish(r, o) {
+    if (!r || !r.sections) return r;
+    const dict = String(o.phraseDict || '').split(/\n/).map(l => l.split(/\s*(?:=>|→)\s*/)).filter(x => x.length === 2 && x[0].trim()).map(([a, b]) => [a.trim(), b.trim()]);
+    const seen = VARY.map(() => 0);
+    const fix = t => {
+      if (!t) return t;
+      if (o.varyWording) VARY.forEach(([re, alts], i) => { t = t.replace(re, m => { const n = seen[i]++ % (alts.length + 1); return n === 0 ? m : alts[n - 1]; }); });
+      if (o.commentTone === 'plain') t = t.replace(/\b(was|were) (in|not )significantly different\b/g, '$1 not clearly different').replace(/\bdid not differ significantly\b/g, 'did not clearly differ')
+        .replace(/\bno significant difference/g, 'no clear difference').replace(/\binsignificant(ly)?\b/g, 'not clear$1').replace(/\bsignificantly\b/g, 'clearly').replace(/\bsignificant\b/g, 'clear');
+      dict.forEach(([a, b]) => { t = t.split(a).join(b); });
+      return t;
+    };
+    r.sections.forEach(sec => {
+      sec.comment = trimWords(fix(sec.comment), +o.comMaxWords || 0); sec.autoComment = sec.comment;
+      // numbered key findings: the sentences reporting a significant result
+      if (o.keyFindings) sec.findings = sentencesOf(sec.comment).filter(x => /\b(significant(ly)?|clear(ly)?)\b/.test(x) && !/\b(in|not |non-)significant|no significant|not clear|no clear|insignificant/.test(x)).slice(0, 5);
+    });
+    ['summary', 'narrative'].forEach(kk => { if (r[kk]) r[kk] = fix(r[kk]); });
+    if (r.abstract) r.abstract = trimWords(fix(r.abstract), +o.absMaxWords || 0);
+    return r;
+  }
+  const run2 = (data, cfg) => polish(relabelCI(run(data, cfg), cfg.options.confLevel), cfg.options), explore2 = (data, cfg, xo) => relabelCI(explore(data, cfg, xo), cfg.options.confLevel);
+  return { run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();

@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmImpute: 'none', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmImpute: 'none', commentTpl: false, tplSig: '{Variable} differed significantly {groups} (P value {P}), being highest in {highest}.', tplNs: '{Variable} did not differ significantly {groups} (P value {P}).', varyWording: false, commentTone: 'standard', trendWord: false, nsCI: false, comMaxWords: '', boldSigText: false, phraseDict: '', keyFindings: false, absMaxWords: '', effConv: 'cohen', figRef: false, commentMerge: 'table', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,7 +47,7 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], commentTpl: ['optCommentTpl', true], tplSig: ['optTplSig'], tplNs: ['optTplNs'], varyWording: ['optVaryWording', true], commentTone: ['optCommentTone'], trendWord: ['optTrendWord', true], nsCI: ['optNsCI', true], comMaxWords: ['optComMaxWords'], boldSigText: ['optBoldSigText', true], phraseDict: ['optPhraseDict'], keyFindings: ['optKeyFindings', true], absMaxWords: ['optAbsMaxWords'], effConv: ['optEffConv'], figRef: ['optFigRef', true], commentMerge: ['optCommentMerge'], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -1177,7 +1177,7 @@
     $('#vdTitle').textContent = v.label; $('#vdUnit').value = v.unit || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
     $('#vdTf').value = v.transform || ''; $('#vdTf').disabled = v.type !== 'numeric';
     $('#vdOrd').checked = !!v.ordinal; $('#vdOrd').disabled = v.type !== 'categorical'; $('#vdOrdTest').value = v.ordTest || 'rank';
-    $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || ''; $('#vdNoSecond').checked = !!v.noSecond; $('#vdNoSecondBox').style.display = v.type === 'numeric' && v.kind === 'single' ? '' : 'none';
+    $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || ''; $('#vdNoSecond').checked = !!v.noSecond; $('#vdMcid').value = v.mcid || ''; $('#vdMcid').disabled = v.type !== 'numeric'; $('#vdNoSecondBox').style.display = v.type === 'numeric' && v.kind === 'single' ? '' : 'none';
     const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis']]
       : [['chi', 'Chi-square'], ['fisher', "Fisher's exact (2×2)"], ['ffh', 'Fisher-Freeman-Halton (larger tables)']];
     $('#vdTest').innerHTML = `<option value="">Automatic (step 4 settings)</option>` + tests.map(([k, l]) => `<option value="${k}" ${v.test === k ? 'selected' : ''}>${esc(l)}</option>`).join('');
@@ -1200,7 +1200,7 @@
     const set = (k, val) => { if (val === '' || val === false || val === null) delete v[k]; else v[k] = val; };
     set('unit', $('#vdUnit').value.trim()); set('dec', $('#vdDec').value); set('role', $('#vdRole').value); set('transform', v.type === 'numeric' ? $('#vdTf').value : '');
     set('ordinal', v.type === 'categorical' && $('#vdOrd').checked); set('ordTest', $('#vdOrd').checked ? $('#vdOrdTest').value : '');
-    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('test', $('#vdTest').value); set('noSecond', v.type === 'numeric' && $('#vdNoSecond').checked);
+    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('test', $('#vdTest').value); set('noSecond', v.type === 'numeric' && $('#vdNoSecond').checked); set('mcid', v.type === 'numeric' ? $('#vdMcid').value.trim() : '');
     if (v.type === 'categorical' && $('#vdShowBox').style.display !== 'none') { const first = $('#vdShow').value, lv = v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct; v.levels = [first, ...lv.filter(l => l !== first)]; }
     const m = [...document.querySelectorAll('[data-vdm]')].filter(el => el.value.trim()).map(el => `${el.dataset.vdm}=${el.value.trim()}`);
     if (document.querySelector('[data-vdm]')) v.valueLabels = m.join(', ');
@@ -2197,6 +2197,14 @@
       : `<div class="legend-note" style="margin-bottom:6px">Comment ${o.commentPlace === 'before' ? 'before' : 'after'} “Table 1: ${esc(s.title)}”${s.comment ? ` · ${s.comment.split(/\s+/).length} words` : ''}</div><div class="pcom" style="margin:0">${esc(s.comment || '')}</div>`;
   }
   $('#p6').addEventListener('change', scheduleDesign(() => renderCommentPreview()));
+  $('#p6').addEventListener('input', e => { if (['optTplSig', 'optTplNs', 'optPhraseDict', 'optComMaxWords'].includes(e.target.id)) scheduleDesign(() => renderCommentPreview())(); });
+  // presets: several comment options at once
+  const COM_PRESET = {
+    thesis: { commentStyle: 'detailed', pWord: 'P value', notSig: false, commentMagnitude: true, commentEffect: false, commentTone: 'standard', summary: true, varyWording: false },
+    journal: { commentStyle: 'concise', pWord: 'P', notSig: true, commentMagnitude: false, commentEffect: true, commentTone: 'standard', varyWording: true },
+    plain: { commentStyle: 'concise', pWord: 'P value', notSig: true, commentMagnitude: false, commentEffect: false, commentTone: 'plain', varyWording: true }
+  };
+  $('#comPreset').onchange = e => { const p = COM_PRESET[e.target.value]; if (!p) return; readUiIntoCfg(); Object.assign(state.cfg.options, p); renderOptions(); renderCommentPreview(); toast(`Preset applied: ${e.target.selectedOptions[0].textContent}`); e.target.value = ''; };
   /* ---------- test plan (step 4): the test each variable gets, and the post hoc test when the result is significant ---------- */
   function postHocOf(it, o, k) {
     if (k < 3) return k === 2 ? '—' : '';
@@ -3217,10 +3225,11 @@
   function renderReport() {
     const r = state.result, plan = exportPlan(r), o = plan.o, lab = n => Report.figLabel(n, o.captionStyle);
     if (plan.paper && !r.narrativeEdited) r.narrative = paperNarrative(r, plan);
-    if (plan.paper && plan.rep.abstract && !r.abstractEdited) r.abstract = abstractResults(r);
+    if (plan.paper && plan.rep.abstract && !r.abstractEdited) r.abstract = Analysis.trimWords(abstractResults(r), +state.cfg.options.absMaxWords || 0);
     let html = '';
     html += `<div class="row exp-bar"><b>In the Word file:</b> <span class="legend-note">untick any section, table or figure to leave it out — numbering follows what is kept.</span><span class="spacer"></span>
-      <button class="btn ghost small" data-exall="1" type="button">Include all</button><button class="btn ghost small" data-exall="0" type="button">Exclude all</button></div>`;
+      <button class="btn ghost small" data-exall="1" type="button">Include all</button><button class="btn ghost small" data-exall="0" type="button">Exclude all</button>
+      <button class="btn ghost small" id="comCheck" type="button" title="Numbers in the comments that are not in their table, causal wording and comment lengths">✓ Check comments</button></div><div id="comCheckOut"></div>`;
     // find & replace in every text of the report: methods, comments, titles, captions and the results text
     html += `<details class="report-sec fr-rep"><summary><b>🔍 Find &amp; replace in the report text</b> — methods, comments, table titles, captions</summary><div class="row" style="gap:8px;align-items:flex-end;margin-top:8px">
       <div><label class="f">Find</label><input type="text" id="frRepFind" style="width:200px" placeholder="e.g. insignificantly"></div><div><label class="f">Replace with</label><input type="text" id="frRepWith" style="width:200px" placeholder="e.g. not significantly"></div>
@@ -3243,7 +3252,9 @@
     };
     r.sections.forEach((s, i) => {
       const tk = exKey.table(s), tOut = isOut(tk), place = o.commentPlace || 'after';
-      const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
+      const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}" spellcheck="true" lang="en">${esc(s.comment)}</textarea>
+        <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><span class="legend-note">${words(s.comment)} words</span></div><div class="explain" data-explainbox="${i}"></div>
+        ${o.keyFindings && s.findings && s.findings.length ? `<div class="legend-note"><b>Key findings:</b><ol style="margin:4px 0 0 18px;padding:0">${s.findings.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
         ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button></div>
         <div class="foot">${esc(s.footnote)}</div>
@@ -3269,6 +3280,42 @@
       const rg = document.createRange(); rg.selectNodeContents(d); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg); document.execCommand('copy'); sel.removeAllRanges(); d.remove(); }
     toast('Table copied — paste it into Word');
   }
+  // plain explanations of the statistical terms found in a comment (for students)
+  const GLOSSARY = [
+    [/P value/i, 'P value', 'The probability of a difference at least this large if the groups truly did not differ. Below the significance level (usually 0.05) the difference is called statistically significant.'],
+    [/insignificant|not significant|no significant/i, 'Not significant', 'The data do not show a difference beyond chance. It does not prove that the groups are equal.'],
+    [/\bsignificant/i, 'Significant', 'Statistically significant: unlikely to be due to chance alone. It says nothing about how large or important the difference is.'],
+    [/95% CI|confidence interval/i, '95% confidence interval', 'The range of values compatible with the data; if it excludes 0 (for a difference) or 1 (for a ratio), the result is significant.'],
+    [/\bMD\b|mean difference/i, 'Mean difference', 'The average of one group minus the average of the other.'],
+    [/median difference|Hodges/i, 'Median difference (Hodges-Lehmann)', 'The typical difference between a value of one group and a value of the other; used with skewed data.'],
+    [/\bRR\b|relative risk/i, 'Relative risk', 'How many times more often the outcome happened in one group than in the other (1 = no difference).'],
+    [/\bOR\b|odds ratio/i, 'Odds ratio', 'The ratio of the odds of the outcome between two groups (1 = no difference).'],
+    [/Mann-Whitney/i, 'Mann-Whitney U test', 'Compares two groups using ranks; does not need normally distributed data.'],
+    [/Kruskal-Wallis/i, 'Kruskal-Wallis test', 'The rank-based comparison of three or more groups.'],
+    [/t-test/i, 't-test', 'Compares the means of two groups of normally distributed data.'],
+    [/ANOVA/i, 'ANOVA', 'Compares the means of three or more groups.'],
+    [/Chi-square/i, 'Chi-square test', 'Compares proportions (percentages) between groups.'],
+    [/Fisher/i, "Fisher's exact test", 'Compares proportions when the numbers are small.'],
+    [/Cohen's d|Hedges/i, 'Effect size (d, g)', 'The difference in standard-deviation units: about 0.2 small, 0.5 medium, 0.8 large.'],
+    [/Cramér|\bη²|\bε²|\br = /i, 'Effect size', 'How strong the difference or association is, independent of the sample size.'],
+    [/interaction/i, 'Interaction', 'The change over time was different between the groups.'],
+    [/trend/i, 'Trend', 'A P value close to but above the significance level; the result is suggestive only.']
+  ];
+  const explainHtml = t => { const hits = GLOSSARY.filter(([re]) => re.test(t || '')); return hits.length ? `<dl class="gloss">${hits.map(([, n, d]) => `<dt>${esc(n)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>` : '<p class="legend-note">No statistical terms to explain.</p>'; };
+  // checks of the edited comments: numbers that are not in the table (or the generated comment), causal wording, length
+  const CAUSAL = /\b(caus(e|ed|es|ing)|led to|lead to|resulted in|due to|because of|prov(e|ed|es)|effect of .{0,30} on|improv(ed|es) .{0,20} because|thanks to)\b/i;
+  function checkComments(r) {
+    const nums = t => (String(t || '').match(/-?\d+(?:\.\d+)?/g) || []);
+    const out = r.sections.map((s, i) => {
+      if (!s.comment) return '';
+      const pool = new Set([...nums(JSON.stringify(s.rows)), ...nums(JSON.stringify(s.head)), ...nums(s.footnote), ...nums(s.autoComment)].map(x => String(+x)));
+      const bad = [...new Set(nums(s.comment).filter(x => !pool.has(String(+x)) && !/^(19|20)\d\d$/.test(x)))];
+      const causal = Analysis.sentencesOf(s.comment).filter(x => CAUSAL.test(x));
+      const issues = [...(bad.length ? [`numbers not found in the table: <b>${bad.map(esc).join(', ')}</b>`] : []), ...causal.map(x => `causal wording — an association does not show cause: “${esc(x)}”`)];
+      return issues.length ? `<li><b>${esc(s.title)}</b><ul>${issues.map(x => `<li>${x}</li>`).join('')}</ul></li>` : '';
+    }).filter(Boolean);
+    return `<div class="report-sec">${out.length ? `<b>${out.length} comment${out.length > 1 ? 's' : ''} to check</b><ul>${out.join('')}</ul>` : '<b>✓ Every number in the comments is in its table, and no causal wording was found.</b>'}</div>`;
+  }
   // a table as a picture: its HTML with the page's table styles, drawn through an SVG foreignObject at 2× resolution
   function tableImage(tbl, cap, foot) {
     const css = [...document.styleSheets].flatMap(sh => { try { return [...sh.cssRules]; } catch (e) { return []; } }).map(r => r.cssText).filter(t => /table\.rt|\.rt[ .{]/.test(t)).join('\n');
@@ -3284,6 +3331,10 @@
   $('#figPrevCopy').onclick = () => { const f = state.prevFig; if (f) copyImage(f.url); };
   $('#flowCopy').onclick = () => copyImage($('#consortCanvas').toDataURL('image/png'));
   $('#report').addEventListener('click', e => {
+    const cc = e.target.closest('[data-copycom]'), ex = e.target.closest('[data-explain]');
+    if (cc) { syncEdits(); const t = state.result.sections[+cc.dataset.copycom].comment || ''; navigator.clipboard.writeText(t).then(() => toast('Comment copied'), () => toast('Copying was blocked by the browser')); }
+    if (ex) { syncEdits(); const box = document.querySelector(`[data-explainbox="${ex.dataset.explain}"]`); box.innerHTML = box.innerHTML ? '' : explainHtml(state.result.sections[+ex.dataset.explain].comment); }
+    if (e.target.closest('#comCheck')) { syncEdits(); $('#comCheckOut').innerHTML = checkComments(state.result); }
     const fc = e.target.closest('[data-copyfig]'), tc = e.target.closest('[data-copytbl]'), wt = e.target.closest('[data-wordtbl]'), pt = e.target.closest('[data-pngtbl]');
     if (wt) { syncEdits(); const s = state.result.sections[+wt.dataset.wordtbl], plan = exportPlan(state.result), n = plan.tabNum.get(s) || 1;
       Report.build({ sections: [{ ...s, tableOn: true, figures: [] }], methods: '', consort: null }, { ...wordOptions(), tabStart: n, listTF: false, title: '', sectionHeads: false, tableNewPage: false, bare: true })
@@ -3349,7 +3400,7 @@
     const o = effOptions(), rp = report();
     return { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
         tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
-        orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace };
+        orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings };
   }
   const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
   const saveUrl = (url, name) => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
