@@ -620,10 +620,12 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="card">
       <h2>Subgroup analysis</h2>
       <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
-        <div><label class="f">Repeat every table within each category of</label><select id="subCol" style="width:auto"></select></div>
         <label class="check" style="margin:0 0 8px"><input type="checkbox" id="subOverall" checked><span>Also the tables of all patients</span></label>
+        <button class="btn ghost small" id="subAll" type="button">Tick all</button><button class="btn ghost small" id="subNone" type="button">Clear</button>
       </div>
-      <p class="legend-note">E.g. the comparison of the groups separately in men and women. Each subgroup gets its own tables (titled “… — Sex: Male”), figures and comments in the report.</p>
+      <label class="f" style="margin-top:8px">Repeat every table within each category of (tick one or more categorical variables)</label>
+      <div class="predlist" id="subCols"></div>
+      <p class="legend-note">E.g. the comparison of the groups separately in men and women. Each subgroup gets its own tables (titled “… — Sex: Male”), figures and comments in the report. Choosing the group variable gives the tables of each group on its own (a description of the patients of that group).</p>
     </div>
     <div class="card" id="calcCard">
       <h2>Calculated variables</h2>
@@ -1012,6 +1014,14 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="card">
       <h2>8 · Advanced analyses</h2>
       <p class="hint">Optional. Each analysis adds its own table (and ROC figure) after the main results. Categorical predictors are compared with their first level (group order / levels order from step 2). Patients with missing values are left out of that analysis.</p>
+      <div class="row" id="advComBar" style="gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+        <b style="margin-bottom:8px">Comments of all analyses:</b>
+        <div><label class="f">Comment</label><select data-acall="commentDetail"><option value="">— keep —</option><option value="standard">Standard</option><option value="detailed">Detailed</option><option value="brief">Brief — one sentence</option><option value="none">No comment</option></select></div>
+        <div><label class="f">Content</label><select data-acall="commentFocus"><option value="">— keep —</option><option value="all">All findings</option><option value="sig">Only significant findings</option></select></div>
+        <div><label class="f">Numbers</label><select data-acall="commentNumbers"><option value="">— keep —</option><option value="all">With numbers</option><option value="none">Words only</option></select></div>
+        <div><label class="f">Placement</label><select data-acall="commentPlace"><option value="">— keep —</option><option value="default">As in step 6</option><option value="after">After the table</option><option value="before">Before the table</option></select></div>
+        <button class="btn ghost small" id="advComApply" type="button" style="margin-bottom:4px">Apply to all analyses</button>
+      </div>
       <div id="advList" class="grid"></div>
       <div class="row" id="advAdd" style="margin-top:12px">
         <button class="btn ghost small" data-advadd="correlation" type="button">+ Correlation</button>

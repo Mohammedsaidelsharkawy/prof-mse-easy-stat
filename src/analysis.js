@@ -895,6 +895,17 @@ const Analysis = (() => {
   };
   // options: direction (auto / higher / lower), cutoff method (ROC_CUT; manual uses manualCut), CIs of sensitivity and specificity,
   // likelihood ratios and Youden index columns, cut-off point on the curve, DeLong comparison of the AUCs, combined logistic score
+  // comment options of an advanced analysis: only the significant findings, without the numbers, your own text, text before / after
+  function advComment(a, c, si) {
+    if (a.commentDetail === 'none') return '';
+    if (si === 0 && a.commentCustom && String(a.commentCustom).trim()) return String(a.commentCustom).trim();
+    const sents = t => t.split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean);
+    if (a.commentFocus === 'sig' && c) { const keep = sents(c).filter(x => !/\b(insignificant(ly)?|not significant(ly)?|no significant|did not (differ|depart|significantly)|was not|were not|none of|could not)\b/i.test(x)); c = keep.length ? keep.join(' ') : sents(c)[0] || ''; }
+    if (a.commentNumbers === 'none' && c) { let prev; do { prev = c; c = c.replace(/\s*\([^()]*\)/g, ''); } while (c !== prev); c = c.replace(/\s+([,.;])/g, '$1'); }
+    if (si === 0) { const pre = String(a.commentPre || '').trim(), post = String(a.commentPost || '').trim(), end = t => /[.!?]$/.test(t) ? t : t + '.';
+      c = [pre && end(pre), c, post && end(post)].filter(Boolean).join(' '); }
+    return c;
+  }
   /* ---------- more advanced analyses: competing risks, time-dependent ROC, quantile regression, Fleiss' kappa, rmcorr, Firth, multiple imputation ---------- */
   const numList = s => String(s ?? '').split(/[,;\s]+/).map(x => parseFloat(x.replace(',', '.'))).filter(x => isFinite(x));
   const unitOf = l => ((l.match(/\(([^)]*)\)\s*$/) || [])[1] || '').trim();
@@ -2655,7 +2666,8 @@ const Analysis = (() => {
           if (si === 0 && a.title && a.title.trim()) sec.title = a.title.trim();
           if (sub.g !== null) sec.title += ` in ${cfg.groupLabels[sub.g] || sub.g}`;
           if (a.commentDetail === 'brief' && sec.comment) sec.comment = (sec.comment.match(/^.*?\.(?=\s+[A-Z(]|$)/) || [sec.comment])[0];
-          sec.comment = wording(sec.comment);
+          sec.comment = wording(advComment(a, sec.comment || '', si));
+          if (a.commentPlace === 'before' || a.commentPlace === 'after') sec.place = a.commentPlace;
           sections.push(sec);
         });
       }

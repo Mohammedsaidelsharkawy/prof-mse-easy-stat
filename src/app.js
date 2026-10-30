@@ -22,7 +22,7 @@
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
     pctDecimals: 1, meanStyle: 'pm', iqrStyle: 'dash', secondRow: 'auto', pDigits: 3, pHead: 'P value', sigSym: '*', showStat: false, missingNote: false,
     orientation: 'portrait', tableCaption: 'colon', pWord: 'P value', commentPlace: 'after', commentEffect: false, summary: false, barWidth: 'normal', boxMean: false,
-    pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none', tableNewPage: false,
+    pLead: 1, totalCol: false, nHead: true, boldSig: false, figNotes: true, chartFont: 'sans', testNote: 'none', tableNewPage: true,
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
@@ -1286,14 +1286,24 @@
   // subgroup analysis
   function renderSubgroup() {
     const cfg = state.cfg, rows = state.data.rows, sg = cfg.subgroup || {};
-    const cands = state.data.headers.filter(h => h !== cfg.groupCol && !cfg.idCols.includes(h) && (n => n >= 2 && n <= 6)(columnInfo(rows, h).distinct.length));
-    $('#subCol').innerHTML = `<option value="">— none —</option>` + cands.map(h => `<option ${h === sg.col ? 'selected' : ''}>${esc(h)}</option>`).join('');
+    const on = subCols(sg), cands = subCands();
+    $('#subCols').innerHTML = cands.length ? cands.map(h => `<label><input type="checkbox" data-subcol="${esc(h)}" ${on.includes(h) ? 'checked' : ''}>${esc(Analysis.columnLabel(cfg, h))}${h === cfg.groupCol ? ' <span class="legend-note">group</span>' : ''} <span class="legend-note">${columnInfo(rows, h).distinct.length}</span></label>`).join('')
+      : '<span class="legend-note">No categorical variables.</span>';
     $('#subOverall').checked = sg.overall !== false;
     const qv = cfg.variables.filter(v => v.kind === 'single' && v.type === 'numeric');
     $('#qVar').innerHTML = qv.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
     renderSelBar();
   }
-  $('#subCol').onchange = $('#subOverall').onchange = () => { state.cfg.subgroup = { col: $('#subCol').value, overall: $('#subOverall').checked }; state.cfg.consort = null; };
+  // the columns of the subgroup analysis (older setups keep one column in `col`), and the categorical columns that can be chosen: the group variable and any column of 2 to 12 categories
+  const subCols = sg => !sg ? [] : Array.isArray(sg.cols) ? sg.cols : sg.col ? [sg.col] : [];
+  function subCands() {
+    const cfg = state.cfg, rows = state.data.rows;
+    return state.data.headers.filter(h => !cfg.idCols.includes(h) && (h === cfg.groupCol || ((n => n >= 2 && n <= 12)(columnInfo(rows, h).distinct.length) && Analysis.columnKind(cfg, rows, h) === 'categorical')));
+  }
+  const readSub = () => { state.cfg.subgroup = { cols: [...document.querySelectorAll('[data-subcol]')].filter(x => x.checked).map(x => x.dataset.subcol), overall: $('#subOverall').checked }; state.cfg.consort = null; };
+  $('#subCols').onchange = $('#subOverall').onchange = readSub;
+  $('#subAll').onclick = () => { document.querySelectorAll('[data-subcol]').forEach(x => { x.checked = true; }); readSub(); };
+  $('#subNone').onclick = () => { document.querySelectorAll('[data-subcol]').forEach(x => { x.checked = false; }); readSub(); };
 
   /* ---------- step 3 tools: time values, templates, derived outcomes, merging timepoints, overview tables, every patient over time ---------- */
   function guessTime(t) { const s = String(t).toLowerCase(); if (/^(baseline|base|bl|pre|preop|before|t0|v0|d0|day0)$/.test(s)) return '0';
@@ -2400,7 +2410,14 @@
     const t = a.type, sel = (key, opts, v) => `<select data-af="${key}">${opts.map(([k, l]) => `<option value="${esc(k)}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     const box = (key, label) => `<label class="check" style="margin-top:22px"><input type="checkbox" data-af="${key}" ${a[key] ? 'checked' : ''}><span>${label}</span></label>`;
     const out = [`<div><label class="f">Title (optional)</label><input type="text" data-af="title" value="${esc(a.title || '')}" placeholder="automatic"></div>`,
-      `<div><label class="f">Comment</label>${sel('commentDetail', [['standard', 'Standard'], ['detailed', 'Detailed — more numbers and interpretation'], ['brief', 'Brief — one sentence']], a.commentDetail)}</div>`];
+      `<div><label class="f">Comment</label>${sel('commentDetail', [['standard', 'Standard'], ['detailed', 'Detailed — more numbers and interpretation'], ['brief', 'Brief — one sentence'], ['none', 'No comment (table only)']], a.commentDetail)}</div>`];
+    { const set = ['commentFocus', 'commentNumbers', 'commentPlace', 'commentPre', 'commentPost', 'commentCustom'].some(k => a[k] && !['all', 'default'].includes(a[k]));
+      out.push(`<details style="grid-column:1/-1" ${set ? 'open' : ''}><summary class="legend-note" style="cursor:pointer"><b>Comment options</b> — significant findings only, words only, placement, your own text</summary><div class="grid g4" style="margin-top:6px">${[`<div><label class="f">Comment content</label>${sel('commentFocus', [['all', 'All findings'], ['sig', 'Only the significant findings']], a.commentFocus)}</div>`,
+      `<div><label class="f">Numbers in the comment</label>${sel('commentNumbers', [['all', 'With the numbers in brackets'], ['none', 'Without the numbers (words only)']], a.commentNumbers)}</div>`,
+      `<div><label class="f">Comment placement</label>${sel('commentPlace', [['default', 'As in step 6'], ['after', 'After the table'], ['before', 'Before the table']], a.commentPlace)}</div>`,
+      `<div><label class="f">Text before the comment (optional)</label><input type="text" data-af="commentPre" value="${esc(a.commentPre || '')}" placeholder="e.g. To identify the predictors of …"></div>`,
+      `<div><label class="f">Text after the comment (optional)</label><input type="text" data-af="commentPost" value="${esc(a.commentPost || '')}" placeholder="e.g. This supports the hypothesis that …"></div>`,
+      `<div style="grid-column:1/-1"><label class="f">Your own comment (optional — replaces the automatic one)</label><textarea data-af="commentCustom" rows="2" placeholder="Leave empty for the automatic comment">${esc(a.commentCustom || '')}</textarea></div>`].join('')}</div></details>`); }
     if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
@@ -2462,6 +2479,12 @@
       a.predictors = [...card.querySelectorAll('[data-apred]')].filter(el => el.checked).map(el => el.dataset.apred);
     });
   }
+  // the comment options of every advanced analysis at once
+  $('#advComApply').onclick = () => {
+    readUiIntoCfg(); const set = {}; ['commentDetail', 'commentFocus', 'commentNumbers', 'commentPlace'].forEach(k => { const v = $(`[data-acall="${k}"]`).value; if (v) set[k] = v; });
+    if (!Object.keys(set).length) { toast('Choose at least one comment option to apply'); return; }
+    state.cfg.advanced.forEach(a => Object.assign(a, set)); renderAdvanced(); toast(`Comment options applied to ${state.cfg.advanced.length} analyses`);
+  };
   $('#advAdd').addEventListener('click', e => {
     const b = e.target.closest('[data-advadd]'); if (!b) return;
     readUiIntoCfg();
@@ -3428,15 +3451,21 @@
         postRepeated(res, state.cfg);
         if (cfg.options.rmImpute === 'locf') res.methods += ' Missing follow-up values were replaced by the last observation carried forward.';
         // subgroup analysis: every table again within each category of the chosen column
-        const sg = state.cfg.subgroup;
-        if (sg && sg.col && state.data.headers.includes(sg.col)) {
-          const lab = Analysis.columnLabel(state.cfg, sg.col), lv = Analysis.levelsOf(state.cfg, Analysis.filterRows(state.cfg, state.data.rows), sg.col), subs = [];
-          lv.forEach(l => {
-            const r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: sg.col, op: 'eq', val: l, on: true }], advanced: [] }), name = `${lab}: ${valueLabel(sg.col, l)}`;
-            r2.sections.forEach(s => { s.title = `${s.title} — ${name}`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (${name})`; }); subs.push(s); });
+        const sg = state.cfg.subgroup, sgCols = subCols(sg).filter(c => state.data.headers.includes(c));
+        if (sgCols.length) {
+          const subs = [], done = [];
+          sgCols.forEach(col => {
+            const isG = col === state.cfg.groupCol, lab = Analysis.columnLabel(state.cfg, col), lvName = l => isG ? (state.cfg.groupLabels[l] || l) : valueLabel(col, l);
+            const lv = isG ? activeGroups() : Analysis.levelsOf(state.cfg, Analysis.filterRows(state.cfg, state.data.rows), col);
+            lv.forEach(l => {
+              let r2; try { r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col, op: 'eq', val: l, on: true }], advanced: [], ...(isG ? { groupInclude: Object.fromEntries(cfg.groupOrder.map(g => [g, g === l])), timeline: null } : {}) }); } catch (e) { return; }
+              const name = `${lab}: ${lvName(l)}`;
+              r2.sections.forEach(s => { s.title = `${s.title} — ${name}`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (${name})`; }); subs.push(s); });
+            });
+            done.push(`${lowerFirstApp(lab)} (${lv.map(lvName).join(', ')})`);
           });
           res.sections = [...(sg.overall !== false ? res.sections : []), ...subs];
-          res.methods += ` Subgroup analyses were performed within each category of ${lowerFirstApp(lab)} (${lv.map(l => valueLabel(sg.col, l)).join(', ')}).`;
+          if (done.length) res.methods += ` Subgroup analyses were performed within each category of ${done.length > 1 ? done.slice(0, -1).join(', ') + ' and ' + done[done.length - 1] : done[0]}.`;
         }
         // a journal style's P wording also goes into the table footnotes
         if (report().style !== 'none' && cfg.options.pWord !== 'P value') res.sections.forEach(s => { s.footnote = s.footnote.replace(/\bP value\b/g, cfg.options.pWord); });
@@ -3626,7 +3655,7 @@
       return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption">${note} <button class="btn ghost small" data-copyfig="${si}:${fi}" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button></figcaption>${exBox(fk, 'Figure')}</figure>`;
     };
     r.sections.forEach((s, i) => {
-      const tk = exKey.table(s), tOut = isOut(tk), place = o.commentPlace || 'after';
+      const tk = exKey.table(s), tOut = isOut(tk), place = s.place && o.commentPlace !== 'none' ? s.place : o.commentPlace || 'after';
       const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}" spellcheck="true" lang="en">${esc(s.comment)}</textarea>
         <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><span class="legend-note">${words(s.comment)} words</span></div><div class="explain" data-explainbox="${i}"></div>
         ${o.keyFindings && s.findings && s.findings.length ? `<div class="legend-note"><b>Key findings:</b><ol style="margin:4px 0 0 18px;padding:0">${s.findings.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}`;
@@ -3795,10 +3824,11 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (plan.paper && r.narrative) r.narrative.split(/\n\s*\n/).forEach(t => P(t.trim()));
     r.sections.forEach(s => {
       if (plan.tabNum.get(s)) {
-        if (s.comment && o.commentPlace === 'before' && !plan.paper) P(s.comment);
+        const cp = s.place && o.commentPlace !== 'none' ? s.place : o.commentPlace || 'after';
+        if (s.comment && cp === 'before' && !plan.paper) P(s.comment);
         B.push({ html: `<div class="cap tcap">Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : ':'} ${esc(s.title)}</div>`, head: true });
         B.push({ table: s }); B.push({ html: `<div class="foot">${esc(s.footnote || '')}</div>` });
-        if (s.comment && (o.commentPlace || 'after') === 'after' && !plan.paper) P(s.comment);
+        if (s.comment && cp === 'after' && !plan.paper) P(s.comment);
       }
       s.figures.forEach(f => { const n = plan.figNum.get(f); if (n && f.url) img(f.url, 560, 560 * f.h / f.w, `${lab(n)} ${f.caption}${f.note ? ' ' + f.note : ''}`); });
     });
@@ -3952,7 +3982,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       template: !!state.wordTemplate, tplPage: state.wordTemplate && state.wordTemplate.page,
       refs: rp.refs && r0 ? METHOD_REFS.filter(([re]) => re.test(r0.methods || '')).map(x => x[1]) : null, appendix: r0 ? appendixTables(r0, plan0) : [] };
     return { ...extras, numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
-        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        tableNewPage: rp.format === 'thesis' ? !!rp.newPage : rp.format === 'paper' ? false : !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, capAbove: !!o.capAbove, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings };
   }
   const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');

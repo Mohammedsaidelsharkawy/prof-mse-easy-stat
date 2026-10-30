@@ -315,7 +315,8 @@ const Report = (() => {
         if (wideT) { turns.push({ at: children.length, land: true }); PAGE_W = landW; brk = false; }
         // chapter-numbered subheadings: 4.1, 4.2 …
         if (opts.sectionHeads) children.push(subheading(opts.headNum ? `${(opts.numberPrefix || '').replace(/\.$/, '') || '1'}.${++headN} ${s.title}` : s.title, brand, first()));
-        if (s.comment && !merged && opts.commentPlace === 'before') { children.push(commentPara(figRef(s, s.comment), { pageBreakBefore: first(), boldSig: opts.boldSigText })); arAfter(s.comment); }
+        const cp = s.place && opts.commentPlace !== 'none' ? s.place : opts.commentPlace;
+        if (s.comment && !merged && cp === 'before') { children.push(commentPara(figRef(s, s.comment), { pageBreakBefore: first(), boldSig: opts.boldSigText })); arAfter(s.comment); }
         const num = `Table ${pre}${tab++}`;
         listTabs.push(`${num}${opts.tableCaption === 'period' || opts.tableCaption === 'apa' ? '.' : ':'} ${s.title}`);
         if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
@@ -329,7 +330,7 @@ const Report = (() => {
         });
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (AR && s.footnote) children.push(arPara(AR.footnote(s.footnote), { size: 18, line: 240, after: 160 }));
-        if (s.comment && !merged && (opts.commentPlace || 'after') === 'after') { children.push(commentPara(figRef(s, s.comment), { boldSig: opts.boldSigText })); arAfter(s.comment); }
+        if (s.comment && !merged && (cp || 'after') === 'after') { children.push(commentPara(figRef(s, s.comment), { boldSig: opts.boldSigText })); arAfter(s.comment); }
         if (!merged && opts.commentPlace !== 'none') children.push(...findings(s));
         if (wideT) { turns.push({ at: children.length, land: false }); PAGE_W = portraitW; }
       }
