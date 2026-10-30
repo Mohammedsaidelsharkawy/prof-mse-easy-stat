@@ -856,6 +856,22 @@ const Stats = (() => {
     const epsHF = Math.min(1, (n * (k - 1) * eps - 2) / ((k - 1) * (n - 1 - (k - 1) * eps)));
     return { F, df1, df2, eps, p: pOf(eps), epsHF, pHF: pOf(epsHF), pUnc: pOf(1) };
   }
+  // Mauchly's test of sphericity on orthonormal (Helmert) contrasts of the k measurements;
+  // with several groups (a list of matrices) the pooled within-group covariance is used, as SPSS does
+  function mauchly(Y) {
+    const sets = Array.isArray(Y[0][0]) ? Y.filter(m => m.length) : [Y]; Y = sets.flat();
+    const g = sets.length, n = Y.length - g + 1, k = Y[0].length, p = k - 1; if (k < 3 || n <= k) return null;
+    const C = Array.from({ length: p }, (_, j) => { const r = new Array(k).fill(0), d = Math.sqrt((j + 1) * (j + 2)); for (let i = 0; i <= j; i++) r[i] = 1 / d; r[j + 1] = -(j + 1) / d; return r; });
+    const Z = sets.flatMap(m => { const z = m.map(row => C.map(c => c.reduce((t, v, i) => t + v * row[i], 0))), zm = Array.from({ length: p }, (_, j) => mean(z.map(r => r[j]))); return z.map(r => r.map((v, j) => v - zm[j])); });
+    const M = Array.from({ length: p }, (_, i) => Array.from({ length: p }, (_, j) => sum(Z.map(r => r[i] * r[j])) / (n - 1)));
+    let det = 1; const A = M.map(r => r.slice());
+    for (let c = 0; c < p; c++) { let piv = c; for (let r = c + 1; r < p; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+      if (Math.abs(A[piv][c]) < 1e-300) return null; if (piv !== c) { [A[c], A[piv]] = [A[piv], A[c]]; det = -det; } det *= A[c][c];
+      for (let r = c + 1; r < p; r++) { const f = A[r][c] / A[c][c]; for (let q = c; q < p; q++) A[r][q] -= f * A[c][q]; } }
+    const tr = sum(M.map((r, i) => r[i])), W = det / (tr / p) ** p;
+    const f = 1 - (2 * p * p + p + 2) / (6 * p * (n - 1)), chi = -(n - 1) * f * Math.log(W), df = p * (p + 1) / 2 - 1;
+    return { W, chi, df, p: 1 - jStat.chisquare.cdf(chi, df) };
+  }
   // Holm step-down adjustment of a list of P values (same order back)
   function holm(ps) {
     const m = ps.length, idx = ps.map((p, i) => i).sort((a, b) => ps[a] - ps[b]), out = new Array(m);
@@ -1127,7 +1143,7 @@ const Stats = (() => {
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
   return {
-    skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost,
+    mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,

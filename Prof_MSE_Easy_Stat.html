@@ -22185,6 +22185,22 @@ const Stats = (() => {
     const epsHF = Math.min(1, (n * (k - 1) * eps - 2) / ((k - 1) * (n - 1 - (k - 1) * eps)));
     return { F, df1, df2, eps, p: pOf(eps), epsHF, pHF: pOf(epsHF), pUnc: pOf(1) };
   }
+  // Mauchly's test of sphericity on orthonormal (Helmert) contrasts of the k measurements;
+  // with several groups (a list of matrices) the pooled within-group covariance is used, as SPSS does
+  function mauchly(Y) {
+    const sets = Array.isArray(Y[0][0]) ? Y.filter(m => m.length) : [Y]; Y = sets.flat();
+    const g = sets.length, n = Y.length - g + 1, k = Y[0].length, p = k - 1; if (k < 3 || n <= k) return null;
+    const C = Array.from({ length: p }, (_, j) => { const r = new Array(k).fill(0), d = Math.sqrt((j + 1) * (j + 2)); for (let i = 0; i <= j; i++) r[i] = 1 / d; r[j + 1] = -(j + 1) / d; return r; });
+    const Z = sets.flatMap(m => { const z = m.map(row => C.map(c => c.reduce((t, v, i) => t + v * row[i], 0))), zm = Array.from({ length: p }, (_, j) => mean(z.map(r => r[j]))); return z.map(r => r.map((v, j) => v - zm[j])); });
+    const M = Array.from({ length: p }, (_, i) => Array.from({ length: p }, (_, j) => sum(Z.map(r => r[i] * r[j])) / (n - 1)));
+    let det = 1; const A = M.map(r => r.slice());
+    for (let c = 0; c < p; c++) { let piv = c; for (let r = c + 1; r < p; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+      if (Math.abs(A[piv][c]) < 1e-300) return null; if (piv !== c) { [A[c], A[piv]] = [A[piv], A[c]]; det = -det; } det *= A[c][c];
+      for (let r = c + 1; r < p; r++) { const f = A[r][c] / A[c][c]; for (let q = c; q < p; q++) A[r][q] -= f * A[c][q]; } }
+    const tr = sum(M.map((r, i) => r[i])), W = det / (tr / p) ** p;
+    const f = 1 - (2 * p * p + p + 2) / (6 * p * (n - 1)), chi = -(n - 1) * f * Math.log(W), df = p * (p + 1) / 2 - 1;
+    return { W, chi, df, p: 1 - jStat.chisquare.cdf(chi, df) };
+  }
   // Holm step-down adjustment of a list of P values (same order back)
   function holm(ps) {
     const m = ps.length, idx = ps.map((p, i) => i).sort((a, b) => ps[a] - ps[b]), out = new Array(m);
@@ -22456,7 +22472,7 @@ const Stats = (() => {
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
   return {
-    skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost,
+    mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
@@ -23771,6 +23787,7 @@ const Analysis = (() => {
           normal: nn.length ? (nn.every(r => r.p > 0.05) ? 'normal' : `non-normal (${nn.filter(r => r.p <= 0.05).length} of ${nn.length} groups)`) : '—' });
         // normality P of each group, and whether the parametric and non-parametric tests disagree on significance
         it.normPs = gv.map(x => x.length >= 3 ? normality(x).p : NaN);
+        if (k >= 2 && gv.every(x => x.length >= 2)) it.levP = S.levene(gv);
         if (k >= 2 && gv.every(x => x.length >= 2)) { const pp = k === 2 ? S.tTest(gv[0], gv[1]).p : S.anova(gv).p, pn = k === 2 ? S.mannWhitney(gv[0], gv[1]).p : S.kruskalWallis(gv).p;
           it.disagree = isFinite(pp) && isFinite(pn) && (pp <= alpha) !== (pn <= alpha); }
         it.summary = res ? `Report: ${res.param ? 'parametric' : 'non-parametric'} (${v.dist === 'auto' ? 'from the normality test' : 'set by you'}), ${TEST_NAME[res.test] || res.test}, P ${pTxt(res.p)}.` : `Distribution: ${gv.flat().length >= 3 && normality(gv.flat()) && normality(gv.flat()).p <= 0.05 ? 'non-normal' : 'normal'} by ${nName}.`;
@@ -23826,6 +23843,7 @@ const Analysis = (() => {
         }
         const mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
         let wSig = false;
+        if (T >= 3) { const mc = S.mauchly(mats.filter(m => m.length)); if (mc) it.sph = mc; }
         const within = mats.map((Y, g) => {
           if (Y.length < 3) return [gl[g], String(Y.length), '—', '—', '—'];
           const col = j => Y.map(r => r[j]);
@@ -29365,11 +29383,11 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const tbl = $('#testPlan'); if (!tbl || !state.cfg || !state.data) return;
     let x; try { x = Analysis.explore(state.data, state.cfg, {}); } catch (e) { tbl.innerHTML = `<tbody><tr><td>${esc(e.message)}</td></tr></tbody>`; return; }
     const o = state.cfg.options, k = x.k;
-    tbl.innerHTML = `<thead><tr><th>Variable</th><th>Type</th><th>Distribution</th><th>Test between the groups</th><th>Post hoc (when significant)</th><th>Normality P (per group)</th><th>P value</th><th>Check</th></tr></thead><tbody>${x.items.map(it => {
+    tbl.innerHTML = `<thead><tr><th>Variable</th><th>Type</th><th>Distribution</th><th>Test between the groups</th><th>Post hoc (when significant)</th><th>Normality P (per group)</th><th>Levene P</th><th>Sphericity (Mauchly)</th><th>P value</th><th>Check</th></tr></thead><tbody>${x.items.map(it => {
       const nps = (it.normPs || []).map(p => isFinite(p) ? Analysis.fmtP(p, -1) : '—').join(' / ') || '—';
       const chk = it.disagree ? '<span class="chip warn" title="The parametric and non-parametric tests disagree on significance — check the distribution">⚠ tests disagree</span>' : '';
       const v = state.cfg.variables.find(q => q.id === it.id), forced = v && v.dist && v.dist !== 'auto' ? ` · set to ${v.dist === 'param' ? 'parametric' : 'non-parametric'}` : '';
-      return `<tr><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${esc((it.normal || '—') + forced)}</td><td>${esc(it.test || '—')}</td><td>${esc(postHocOf(it, o, k))}</td><td>${esc(nps)}</td><td class="${it.sig ? 'sig' : ''}">${isFinite(it.p) ? esc(Analysis.fmtP(it.p, o.alpha)) : it.sig ? 'significant' : '—'}</td><td>${chk}</td></tr>`; }).join('')}</tbody>`;
+      return `<tr><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${esc((it.normal || '—') + forced)}</td><td>${esc(it.test || '—')}</td><td>${esc(postHocOf(it, o, k))}</td><td>${esc(nps)}</td><td>${isFinite(it.levP) ? esc(Analysis.fmtP(it.levP, -1)) : '—'}</td><td>${it.sph ? esc(`W = ${it.sph.W.toFixed(3)}, P ${Analysis.fmtP(it.sph.p, -1)}`) : '—'}</td><td class="${it.sig ? 'sig' : ''}">${isFinite(it.p) ? esc(Analysis.fmtP(it.p, o.alpha)) : it.sig ? 'significant' : '—'}</td><td>${chk}</td></tr>`; }).join('')}</tbody>`;
   }
   $('#p4').addEventListener('change', scheduleDesign(() => renderTestPlan()));
   // sample size for two groups: means (difference, SD) or proportions, at the chosen α, power and allocation ratio

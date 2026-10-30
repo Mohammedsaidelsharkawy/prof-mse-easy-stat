@@ -2183,11 +2183,11 @@
     const tbl = $('#testPlan'); if (!tbl || !state.cfg || !state.data) return;
     let x; try { x = Analysis.explore(state.data, state.cfg, {}); } catch (e) { tbl.innerHTML = `<tbody><tr><td>${esc(e.message)}</td></tr></tbody>`; return; }
     const o = state.cfg.options, k = x.k;
-    tbl.innerHTML = `<thead><tr><th>Variable</th><th>Type</th><th>Distribution</th><th>Test between the groups</th><th>Post hoc (when significant)</th><th>Normality P (per group)</th><th>P value</th><th>Check</th></tr></thead><tbody>${x.items.map(it => {
+    tbl.innerHTML = `<thead><tr><th>Variable</th><th>Type</th><th>Distribution</th><th>Test between the groups</th><th>Post hoc (when significant)</th><th>Normality P (per group)</th><th>Levene P</th><th>Sphericity (Mauchly)</th><th>P value</th><th>Check</th></tr></thead><tbody>${x.items.map(it => {
       const nps = (it.normPs || []).map(p => isFinite(p) ? Analysis.fmtP(p, -1) : '—').join(' / ') || '—';
       const chk = it.disagree ? '<span class="chip warn" title="The parametric and non-parametric tests disagree on significance — check the distribution">⚠ tests disagree</span>' : '';
       const v = state.cfg.variables.find(q => q.id === it.id), forced = v && v.dist && v.dist !== 'auto' ? ` · set to ${v.dist === 'param' ? 'parametric' : 'non-parametric'}` : '';
-      return `<tr><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${esc((it.normal || '—') + forced)}</td><td>${esc(it.test || '—')}</td><td>${esc(postHocOf(it, o, k))}</td><td>${esc(nps)}</td><td class="${it.sig ? 'sig' : ''}">${isFinite(it.p) ? esc(Analysis.fmtP(it.p, o.alpha)) : it.sig ? 'significant' : '—'}</td><td>${chk}</td></tr>`; }).join('')}</tbody>`;
+      return `<tr><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${esc((it.normal || '—') + forced)}</td><td>${esc(it.test || '—')}</td><td>${esc(postHocOf(it, o, k))}</td><td>${esc(nps)}</td><td>${isFinite(it.levP) ? esc(Analysis.fmtP(it.levP, -1)) : '—'}</td><td>${it.sph ? esc(`W = ${it.sph.W.toFixed(3)}, P ${Analysis.fmtP(it.sph.p, -1)}`) : '—'}</td><td class="${it.sig ? 'sig' : ''}">${isFinite(it.p) ? esc(Analysis.fmtP(it.p, o.alpha)) : it.sig ? 'significant' : '—'}</td><td>${chk}</td></tr>`; }).join('')}</tbody>`;
   }
   $('#p4').addEventListener('change', scheduleDesign(() => renderTestPlan()));
   // sample size for two groups: means (difference, SD) or proportions, at the chosen α, power and allocation ratio

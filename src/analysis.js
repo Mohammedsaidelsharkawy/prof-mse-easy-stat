@@ -1300,6 +1300,7 @@ const Analysis = (() => {
           normal: nn.length ? (nn.every(r => r.p > 0.05) ? 'normal' : `non-normal (${nn.filter(r => r.p <= 0.05).length} of ${nn.length} groups)`) : '—' });
         // normality P of each group, and whether the parametric and non-parametric tests disagree on significance
         it.normPs = gv.map(x => x.length >= 3 ? normality(x).p : NaN);
+        if (k >= 2 && gv.every(x => x.length >= 2)) it.levP = S.levene(gv);
         if (k >= 2 && gv.every(x => x.length >= 2)) { const pp = k === 2 ? S.tTest(gv[0], gv[1]).p : S.anova(gv).p, pn = k === 2 ? S.mannWhitney(gv[0], gv[1]).p : S.kruskalWallis(gv).p;
           it.disagree = isFinite(pp) && isFinite(pn) && (pp <= alpha) !== (pn <= alpha); }
         it.summary = res ? `Report: ${res.param ? 'parametric' : 'non-parametric'} (${v.dist === 'auto' ? 'from the normality test' : 'set by you'}), ${TEST_NAME[res.test] || res.test}, P ${pTxt(res.p)}.` : `Distribution: ${gv.flat().length >= 3 && normality(gv.flat()) && normality(gv.flat()).p <= 0.05 ? 'non-normal' : 'normal'} by ${nName}.`;
@@ -1355,6 +1356,7 @@ const Analysis = (() => {
         }
         const mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
         let wSig = false;
+        if (T >= 3) { const mc = S.mauchly(mats.filter(m => m.length)); if (mc) it.sph = mc; }
         const within = mats.map((Y, g) => {
           if (Y.length < 3) return [gl[g], String(Y.length), '—', '—', '—'];
           const col = j => Y.map(r => r[j]);
