@@ -120,6 +120,11 @@ const Report = (() => {
         weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : isP(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
       }
     });
+    // widths fitted to the content: the longest text of each column (rows that fill every column)
+    if (look.autoFit) { const len = new Array(nCols).fill(3);
+      headCells.forEach((h, i) => { const t = String(Array.isArray(h.t) ? h.t.join(' ') : h.t || ''); if (!(h.span > 1)) len[i] = Math.max(len[i], Math.min(28, t.length * 0.8)); });
+      rows.forEach(r => { if (r.reduce((a, c) => a + (c.span || 1), 0) !== nCols) return; let ci = 0; r.forEach(c => { const t = (c.t || []).map(String); if (!(c.span > 1)) len[ci] = Math.max(len[ci], Math.min(40, Math.max(0, ...t.map(x => x.length)))); ci += c.span || 1; }); });
+      len.forEach((l, i) => { weights[i] = Math.max(0.5, Math.pow(l, 0.85)); }); }
     const tot = weights.reduce((a, b) => a + b, 0), TW = Math.round(PAGE_W * (+look.width || 100) / 100); // table width: the page or a share of it
     const widths = weights.map(w => Math.floor(TW * w / tot));
     widths[widths.length - 1] += TW - widths.reduce((a, b) => a + b, 0);
@@ -340,6 +345,7 @@ const Report = (() => {
       children.push(heading('Figures', brand));
       placeFigures(atEnd);
     }
+    if (model.abbrev) { children.push(H1('Abbreviations', brand)); children.push(para(model.abbrev, { size: 20 })); }
     if (model.summary) {
       children.push(H1('Summary of key findings', brand));
       children.push(para(model.summary)); arAfter(model.summary);

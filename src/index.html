@@ -918,6 +918,18 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optBaselineNoP"><span><b>No P values in the baseline table</b> (CONSORT) — tables named “Baseline …” / “Demographic …”, or whose variables all have the baseline role</span></label>
           <label class="check"><input type="checkbox" id="optPostLetters"><span><b>Post hoc letters</b> (a, b, c) after the group values instead of a post hoc column, 3+ groups</span></label>
           <label class="check"><input type="checkbox" id="optCatTotal"><span><b>Total row</b> under each categorical variable (n = 100%)</span></label>
+          <label class="check"><input type="checkbox" id="optEsCol"><span><b>Effect size column</b> — Cohen's d, r, η², ε² or Cramér's V with its size</span></label>
+          <label class="check"><input type="checkbox" id="optRefCol"><span><b>Reference range column</b> — the normal range set in step 2 ⚙</span></label>
+          <label class="check"><input type="checkbox" id="optNoteCol"><span><b>Notes column</b> — the table note of each variable (step 2 ⚙)</span></label>
+          <label class="check"><input type="checkbox" id="optHideNs"><span><b>Only significant rows</b> — the other variables listed in the footnote</span></label>
+          <label class="check"><input type="checkbox" id="optBoldMax"><span><b>Highest value in bold</b> in each numeric row</span></label>
+          <label class="check"><input type="checkbox" id="optTranspose"><span><b>Groups as rows</b> — variables as columns (useful with many groups)</span></label>
+          <label class="check"><input type="checkbox" id="optMissTable"><span><b>Missing-data table</b> — missing values of every variable per group</span></label>
+          <label class="check"><input type="checkbox" id="optAutoFit"><span><b>Column widths fitted to the content</b> in Word</span></label>
+          <label class="check"><input type="checkbox" id="optAbbrEnd"><span><b>One abbreviation list</b> at the end of the results instead of under each table</span></label>
+          <div class="row" style="gap:8px;margin-top:6px"><div><label class="f">Order of the rows</label><select id="optTableSort" style="width:auto"><option value="">As in step 2</option><option value="p">By P value (smallest first)</option><option value="effect">By effect size (largest first)</option></select></div>
+            <div><label class="f">Baseline table split by</label><select id="optTwoFactor" style="width:auto"></select></div>
+            <div><label class="f">Journal table preset</label><select id="tblPreset" style="width:auto"><option value="">— apply a preset —</option><option value="nejm">NEJM</option><option value="lancet">The Lancet</option><option value="jama">JAMA</option><option value="bmj">BMJ</option><option value="apa">APA 7th</option><option value="thesis">Thesis (grid)</option></select></div></div>
         </div>
         <div>
           <label class="check"><input type="checkbox" id="optNCol"><span><b>“n” column</b> — patients analysed for each variable</span></label>
@@ -1250,7 +1262,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost" id="btnRerun">↻ Re-run</button>
  <button class="btn ghost" id="btnCopyText" title="Copy every text of the report (methods, results, comments, captions) to paste elsewhere">⧉ Copy text</button>
         <button class="btn ghost" id="btnPrint" title="Print the report preview, or save it as PDF">🖨 Print / PDF</button>
-        <button class="btn ghost" id="btnXlsx" title="Every exported table in an Excel file, one sheet per table">⬇ Tables (Excel)</button>
+        <button class="btn ghost" id="btnXlsx" title="Every exported table in an Excel file, one sheet per table">⬇ Tables (Excel)</button><button class="btn ghost" id="btnXlsxF" title="The data and a summary sheet whose numbers are Excel formulas (n, mean, SD, median, counts and %) — they update when the data change">⬇ Excel with formulas</button>
         <button class="btn ghost" id="btnPngs" title="Export one, several or all figures as PNG, JPEG or TIFF, up to 1200 dpi, in colour or greyscale">⬇ Figures (PNG · JPG · TIFF)</button>
         <button class="btn ghost" id="btnPdf" title="The report as a PDF file, laid out on A4 pages (pages are images: the text is not selectable)">⬇ PDF</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
@@ -1380,6 +1392,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div><label class="check" style="margin-top:22px"><input type="checkbox" id="vdLock"><span>🔒 Lock — bulk actions skip this variable</span></label></div>
       <div id="vdNoSecondBox"><label class="check" style="margin-top:22px"><input type="checkbox" id="vdNoSecond"><span>One row in the table (no Range / IQR row)</span></label></div>
     </div>
+    <label class="f">Table note (shown in the Notes column of step 5, if ticked)</label><input type="text" id="vdRowNote" style="width:100%;margin-bottom:6px" placeholder="e.g. measured fasting">
     <label class="f">Private note (shown as ℹ in later steps, not in the report)</label><input type="text" id="vdMemo" style="width:100%">
     <p class="legend-note" id="vdRefCat" style="margin:8px 0 0"></p>
     <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap" id="vdTools"><span id="vdRareBox" class="row" style="gap:4px;align-items:center"><button type="button" class="btn ghost small" id="vdRare">Merge rare categories into “Other”</button><span class="legend-note">fewer than</span><input type="number" id="vdRareN" value="5" min="1" style="width:56px"><span class="legend-note">patients</span></span><button type="button" class="btn ghost small" id="vdDup" title="A second copy of this variable, e.g. to analyse it with another transformation">⧉ Duplicate this variable</button></div>

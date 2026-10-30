@@ -14,7 +14,7 @@
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
@@ -33,7 +33,7 @@
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
@@ -1215,7 +1215,7 @@
     { const lv0 = v.type === 'categorical' ? (v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct) : [], ref = lv0.length === 2 && Analysis.POSITIVE.test(lv0[0]) && !Analysis.POSITIVE.test(lv0[1]) ? lv0[1] : lv0[0];
       $('#vdRefCat').textContent = v.type === 'categorical' && lv0.length ? `In regression models this variable is compared with its reference category “${ref}” (change the order with ↕ in the list).` : ''; $('#vdRareBox').style.display = v.type === 'categorical' && v.kind === 'single' ? '' : 'none'; }
     $('#vdOrd').checked = !!v.ordinal; $('#vdOrd').disabled = v.type !== 'categorical'; $('#vdOrdTest').value = v.ordTest || 'rank';
-    $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || ''; $('#vdNoSecond').checked = !!v.noSecond; $('#vdMcid').value = v.mcid || ''; $('#vdMcid').disabled = v.type !== 'numeric'; $('#vdNoSecondBox').style.display = v.type === 'numeric' && v.kind === 'single' ? '' : 'none';
+    $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || ''; $('#vdRowNote').value = v.rowNote || ''; $('#vdNoSecond').checked = !!v.noSecond; $('#vdMcid').value = v.mcid || ''; $('#vdMcid').disabled = v.type !== 'numeric'; $('#vdNoSecondBox').style.display = v.type === 'numeric' && v.kind === 'single' ? '' : 'none';
     const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis'], ['median', "Mood's median test"], ['perm', 'Permutation test (two groups)'], ['huber', 'Huber robust regression']]
       : [['chi', 'Chi-square'], ['fisher', "Fisher's exact (2×2)"], ['ffh', 'Fisher-Freeman-Halton (larger tables)']];
     $('#vdTest').innerHTML = `<option value="">Automatic (step 4 settings)</option>` + tests.map(([k, l]) => `<option value="${k}" ${v.test === k ? 'selected' : ''}>${esc(l)}</option>`).join('');
@@ -1298,7 +1298,7 @@
     set('ordinal', v.type === 'categorical' && $('#vdOrd').checked); set('ordTest', $('#vdOrd').checked ? $('#vdOrdTest').value : '');
     set('winsorP', v.transform === 'winsor' || $('#vdTf').value === 'winsor' ? $('#vdWinP').value : ''); set('outRule', v.type === 'numeric' ? $('#vdOut').value : ''); set('outLo', $('#vdOut').value === 'limits' ? $('#vdOutLo').value : ''); set('outHi', $('#vdOut').value === 'limits' ? $('#vdOutHi').value : '');
     set('impute', $('#vdImp').value); set('refLo', v.type === 'numeric' ? $('#vdRefLo').value : ''); set('refHi', v.type === 'numeric' ? $('#vdRefHi').value : ''); set('locked', $('#vdLock').checked);
-    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('test', $('#vdTest').value); set('noSecond', v.type === 'numeric' && $('#vdNoSecond').checked); set('mcid', v.type === 'numeric' ? $('#vdMcid').value.trim() : '');
+    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('rowNote', $('#vdRowNote').value.trim()); set('test', $('#vdTest').value); set('noSecond', v.type === 'numeric' && $('#vdNoSecond').checked); set('mcid', v.type === 'numeric' ? $('#vdMcid').value.trim() : '');
     if (v.type === 'categorical' && $('#vdShowBox').style.display !== 'none') { const first = $('#vdShow').value, lv = v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct; v.levels = [first, ...lv.filter(l => l !== first)]; }
     const m = [...document.querySelectorAll('[data-vdm]')].filter(el => el.value.trim()).map(el => `${el.dataset.vdm}=${el.value.trim()}`);
     if (document.querySelector('[data-vdm]')) v.valueLabels = m.join(', ');
@@ -2115,7 +2115,7 @@
     // column choices of step 4: clustering, strata and the per-protocol population
     if (state.data) { const h = state.data.headers, opt = list => '<option value="">— none —</option>' + list.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
       const cats = h.filter(c => c !== state.cfg.groupCol && (n => n >= 2 && n <= 40)(columnInfo(state.data.rows, c).distinct.length));
-      $('#optClusterCol').innerHTML = opt(h.filter(c => c !== state.cfg.groupCol)); $('#optStrataCol').innerHTML = opt(cats); $('#optPpCol').innerHTML = opt(cats);
+      $('#optClusterCol').innerHTML = opt(h.filter(c => c !== state.cfg.groupCol)); $('#optTwoFactor').innerHTML = opt(cats.filter(c => columnInfo(state.data.rows, c).distinct.length <= 4)); $('#optStrataCol').innerHTML = opt(cats); $('#optPpCol').innerHTML = opt(cats);
       $('#optPpVal').innerHTML = o.ppCol ? columnInfo(state.data.rows, o.ppCol).distinct.map(v => `<option>${esc(v)}</option>`).join('') : '<option value="">—</option>'; }
     for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
     const gNames = state.data && !state.cfg.noGroups ? activeGroups().map(g => state.cfg.groupLabels[g] || g) : [];
@@ -3302,6 +3302,15 @@
 
   /* ---------- step 5: analysis + preview ---------- */
   const HEAD_BG = { auto: '', lavender: '#EBDDF6', blue: '#DCE6F2', green: '#E2EFDA', navy: '#1F3864', none: '#fff' };
+  // notes on single cells (double-click a cell in the report preview): † ‡ § ¶ after the value, explained in the footnote
+  const NOTE_MARKS = ['†', '‡', '§', '¶', '#', '††', '‡‡'];
+  function applyCellNotes(res) {
+    const all = state.cfg.cellNotes || {};
+    res.sections.forEach(s => { const notes = all[s.key || s.title]; if (!notes) return; const marks = [];
+      Object.entries(notes).forEach(([rc, txt], i) => { const [ri, ci] = rc.split(':').map(Number), cell = s.rows[ri] && s.rows[ri][ci]; if (!cell || !txt) return; const m = NOTE_MARKS[i % NOTE_MARKS.length];
+        cell.t = [...(cell.t || [''])]; cell.t[cell.t.length - 1] = `${cell.t[cell.t.length - 1]}${m}`; marks.push(`${m} ${txt}`); });
+      if (marks.length) s.footnote = `${(s.footnote || '').replace(/\s*\.?\s*$/, s.footnote ? '.' : '')} ${marks.join(' ')}`.trim(); });
+  }
   function htmlTable(head, rows) {
     const h = head.map(c => typeof c === 'string' ? { t: c } : c);
     const o = state.cfg.options, bg = HEAD_BG[o.tableHead] || '', thStyle = bg ? `style="background:${bg};${o.tableHead === 'navy' ? 'color:#fff' : ''}"` : '';
@@ -3312,7 +3321,7 @@
     const pcolOn = pcol && sym;
     const body = rows.map((r, ri) => {
       const first = cover === 0; if (first) { if (!(r[0] && r[0].ind)) band++; cover = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); } else cover--;
-      return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${(o.firstColLeft && first && ci === 0) || c.ind || c.left ? 'left' : ''}"${pcolOn && (c.t || []).length === 1 && sigRe.test(String(c.t[0])) ? ` style="color:${pcol}"` : ''}>${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
+      return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td data-rc="${ri}:${ci}" ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${(o.firstColLeft && first && ci === 0) || c.ind || c.left ? 'left' : ''}"${pcolOn && (c.t || []).length === 1 && sigRe.test(String(c.t[0])) ? ` style="color:${pcol}"` : ''}>${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
     }).join('');
     return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.tableFont && o.tableFont !== 'same' ? o.tableFont : o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
   }
@@ -3931,6 +3940,12 @@
         // the extra footnote line of step 5 closes every table footnote
         const fx = String(cfg.options.footExtra || '').trim();
         if (fx) res.sections.forEach(s => { s.footnote = s.footnote ? `${s.footnote.replace(/\s*\.?\s*$/, '.')} ${fx}` : fx; });
+        // one abbreviation list at the end: definitions such as "CI: Confidence interval" leave the table footnotes
+        if (cfg.options.abbrEnd) { const ab = new Map(), isAb = p => /^[A-Za-zα-ωΑ-Ω²±\u0394\u03b7\u03b5]{1,6}[0-9²]*: [A-Z]/.test(p) && !/^P /.test(p);
+          res.sections.forEach(s => { if (!s.footnote) return; const parts = s.footnote.replace(/\.\s*$/, '').split(/, (?=[^,]{1,8}: )/), keep = [];
+            parts.forEach(p => { if (isAb(p.trim())) { const [k2, ...v2] = p.trim().split(': '); if (!ab.has(k2)) ab.set(k2, v2.join(': ')); } else keep.push(p); }); s.footnote = keep.length ? keep.join(', ') + '.' : ''; });
+          res.abbrev = ab.size ? [...ab.entries()].sort((a2, b2) => a2[0].localeCompare(b2[0])).map(([k2, v2]) => `${k2}: ${v2.replace(/\.$/, '')}`).join('; ') + '.' : ''; }
+        applyCellNotes(res);
         if (cfg.options.midDot) midDots(res);
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
           f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options);
@@ -4117,7 +4132,7 @@
         <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><span class="legend-note">${words(s.comment)} words</span></div><div class="explain" data-explainbox="${i}"></div>
         ${o.keyFindings && s.findings && s.findings.length ? `<div class="legend-note"><b>Key findings:</b><ol style="margin:4px 0 0 18px;padding:0">${s.findings.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
-        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button>${s.meta && s.meta.calc ? ` <button class="btn ghost small" data-riskcalc="${i}" type="button" title="A small web page that computes the prediction of this model">⬇ Risk calculator</button>` : ''}</div>
+        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button> <button class="btn ghost small" data-pdftbl="${i}" type="button" title="This table on an A4 page (PDF)">⬇ PDF</button>${s.meta && s.meta.calc ? ` <button class="btn ghost small" data-riskcalc="${i}" type="button" title="A small web page that computes the prediction of this model">⬇ Risk calculator</button>` : ''}</div>
         <div class="foot">${esc(s.footnote)}</div>
         ${place !== 'before' ? comment : ''}</div>
         ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
@@ -4127,6 +4142,7 @@
       const sorted = [...all.filter(f => plan.kept.has(f)).sort((a, b) => plan.order.indexOf(a) - plan.order.indexOf(b)), ...all.filter(f => !plan.kept.has(f))];
       if (sorted.length) html += `<div class="report-sec"><h3>Figures</h3><div class="figs">${sorted.map(figHtml).join('')}</div></div>`;
     }
+    if (r.abbrev) html += `<div class="report-sec"><h3>Abbreviations</h3><p class="legend-note" style="font-size:13px">${esc(r.abbrev)}</p></div>`;
     if (r.summary) html += `<div class="report-sec${off('summary')}"><div class="row"><h3>Summary of key findings</h3><span class="spacer"></span>${exBox('summary', 'Include')}</div><textarea id="edSummary">${esc(r.summary)}</textarea></div>`;
     $('#report').innerHTML = html;
   }
@@ -4439,13 +4455,59 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       template: !!state.wordTemplate, tplPage: state.wordTemplate && state.wordTemplate.page,
       refs: rp.refs && r0 ? METHOD_REFS.filter(([re]) => re.test(r0.methods || '')).map(x => x[1]) : null, appendix: r0 ? appendixTables(r0, plan0) : [] };
     return { ...extras, numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
-        tableNewPage: rp.format === 'thesis' ? !!rp.newPage : rp.format === 'paper' ? false : !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        tableNewPage: rp.format === 'thesis' ? !!rp.newPage : rp.format === 'paper' ? false : !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { autoFit: !!o.autoFit, width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, capAbove: !!o.capAbove, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings };
   }
   const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
   const saveUrl = (url, name) => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
   const safeName = t => String(t).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
   // every exported table to Excel, one sheet each, with the merged cells of the Word table
+  // a cell note: double-click a table cell of the report preview
+  $('#report').addEventListener('dblclick', e => {
+    const td = e.target.closest('table.rt td[data-rc]'), sec = td && td.closest('.report-sec'); if (!td || !state.result) return;
+    const i = [...document.querySelectorAll('#report .report-sec')].filter(x => x.querySelector('[data-ttl]')).indexOf(sec), s = state.result.sections[+((sec.querySelector('[data-ttl]') || {}).dataset || {}).ttl];
+    if (!s) return; const key = s.key || s.title, rc = td.dataset.rc, all = state.cfg.cellNotes = state.cfg.cellNotes || {}, cur = (all[key] || {})[rc] || '';
+    const txt = prompt(`Note for this cell (shown with a † mark and explained in the footnote). Leave empty to remove it.\n\nCell: “${td.textContent.trim()}”`, cur); if (txt === null) return;
+    all[key] = { ...(all[key] || {}) }; if (txt.trim()) all[key][rc] = txt.trim(); else delete all[key][rc]; if (!Object.keys(all[key]).length) delete all[key];
+    runAnalysis(); toast(txt.trim() ? 'Cell note added' : 'Cell note removed'); });
+  // one table as a PDF page: its picture on A4
+  $('#report').addEventListener('click', e => { const b = e.target.closest('[data-pdftbl]'); if (!b) return; syncEdits();
+    const s = state.result.sections[+b.dataset.pdftbl], n = exportPlan(state.result).tabNum.get(s) || 1;
+    tableImage(b.closest('.report-sec').querySelector('table.rt'), `Table ${n}${effOptions().tableCaption === 'period' ? '.' : ':'} ${s.title}`, s.footnote).then(url => new Promise(res2 => { const im = new Image(); im.onload = () => res2(im); im.src = url; }))
+      .then(im => { const W = 1240, Hh = 1754, m = 90, c = document.createElement('canvas'); c.width = W; c.height = Hh; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, W, Hh);
+        const sc = Math.min((W - 2 * m) / im.width, (Hh - 2 * m) / im.height); x.drawImage(im, m, m, im.width * sc, im.height * sc);
+        const bin = atob(c.toDataURL('image/jpeg', 0.92).split(',')[1]), bytes = Uint8Array.from(bin, ch => ch.charCodeAt(0));
+        saveUrl(URL.createObjectURL(pdfFromJpegs([{ w: W, h: Hh, bytes }], s.title)), `${baseName()} - Table ${n}.pdf`); }).catch(err => toast('The PDF could not be made: ' + err.message)); });
+  // journal presets for the look of the tables (step 5)
+  const TABLE_PRESETS = { nejm: { tableStyle: 'apa', tableHead: 'none', tableFontSize: '9', tableBands: false, firstColLeft: true, decAlign: false, tableCaption: 'period', tableCapAlign: 'left', tablePad: 'compact' },
+    lancet: { tableStyle: 'apa', tableHead: 'none', tableFontSize: '9', tableBands: false, firstColLeft: true, tableCaption: 'colon', tableCapAlign: 'left', tablePad: 'compact', catFormat: 'npct' },
+    jama: { tableStyle: 'apa', tableHead: 'auto', tableFontSize: '9', tableBands: true, firstColLeft: true, tableCaption: 'period', tableCapAlign: 'left', tablePad: 'compact' },
+    bmj: { tableStyle: 'grid', tableHead: 'auto', tableFontSize: '9', tableBands: false, firstColLeft: true, tableCaption: 'colon', tableCapAlign: 'left', tablePad: 'compact' },
+    apa: { tableStyle: 'apa', tableHead: 'none', tableFontSize: '10', tableBands: false, firstColLeft: true, tableCaption: 'apa', tableCapAlign: 'left', tablePad: 'normal' },
+    thesis: { tableStyle: 'grid', tableHead: 'auto', tableFontSize: '10', tableBands: false, firstColLeft: false, tableCaption: 'colon', tableCapAlign: 'justify', tablePad: 'normal' } };
+  $('#tblPreset').onchange = e => { const p = TABLE_PRESETS[e.target.value]; if (!p) return; readUiIntoCfg(); Object.assign(state.cfg.options, p); renderOptions(); if (typeof renderTablePreview === 'function') renderTablePreview(); toast(`${e.target.selectedOptions[0].textContent} table style applied`); e.target.value = ''; };
+  // the data with a summary sheet of Excel formulas (they follow later edits of the data in Excel)
+  $('#btnXlsxF').onclick = () => {
+    readUiIntoCfg(); const cfg = state.cfg, { headers, rows } = state.data, groups = activeGroups(), gc = cfg.groupCol, N = rows.length + 1;
+    const colL = i => { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+    const ref = h => `Data!$${colL(headers.indexOf(h))}$2:$${colL(headers.indexOf(h))}$${N}`, G = gc && !cfg.noGroups ? ref(gc) : null, q = v => `"${String(v).replace(/"/g, '""')}"`;
+    const out = [['Variable', 'Statistic', ...groups.map(g => cfg.groupLabels[g] || g)]];
+    const vars = cfg.variables.filter(v => v.include && v.kind === 'single' && v.cols[0].col !== gc);
+    vars.forEach(v => { const R = ref(v.cols[0].col), cond = g => G ? `(${G}=${q(g)})*` : '';
+      if (v.type === 'numeric') {
+        out.push([v.label, 'n', ...groups.map(g => ({ f: `SUMPRODUCT(${cond(g)}ISNUMBER(${R}))` }))]);
+        out.push(['', 'Mean', ...groups.map(g => ({ f: G ? `AVERAGEIFS(${R},${G},${q(g)})` : `AVERAGE(${R})` }))]);
+        out.push(['', 'SD', ...groups.map(g => ({ f: G ? `STDEV(IF((${G}=${q(g)})*ISNUMBER(${R}),${R}))` : `STDEV(${R})`, F: true }))]);
+        out.push(['', 'Median', ...groups.map(g => ({ f: G ? `MEDIAN(IF((${G}=${q(g)})*ISNUMBER(${R}),${R}))` : `MEDIAN(${R})`, F: true }))]);
+      } else { const lv = v.levels.length ? v.levels : columnInfo(rows, v.cols[0].col).distinct;
+        lv.forEach((l, li) => { out.push([li ? '' : v.label, `${l}: n`, ...groups.map(g => ({ f: G ? `COUNTIFS(${G},${q(g)},${R},${q(l)})` : `COUNTIF(${R},${q(l)})` }))]);
+          out.push(['', `${l}: %`, ...groups.map(g => ({ f: G ? `IFERROR(100*COUNTIFS(${G},${q(g)},${R},${q(l)})/SUMPRODUCT((${G}=${q(g)})*(${R}<>"")),"")` : `IFERROR(100*COUNTIF(${R},${q(l)})/COUNTA(${R}),"")` }))]); }); } });
+    const ws = XLSX.utils.aoa_to_sheet(out.map(r => r.map(c => typeof c === 'object' && c && c.f ? null : c)));
+    out.forEach((r, ri) => r.forEach((c, ci) => { if (c && typeof c === 'object' && c.f) { const a = XLSX.utils.encode_cell({ r: ri, c: ci }); ws[a] = { t: 'n', f: c.f, ...(c.F ? { F: `${a}:${a}`, D: 1 } : {}) }; } }));
+    ws['!cols'] = [{ wch: 28 }, { wch: 14 }, ...groups.map(() => ({ wch: 14 }))];
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ...rows.map(r => headers.map(h => r[h] ?? null))]), 'Data'); XLSX.utils.book_append_sheet(wb, ws, 'Summary (formulas)');
+    XLSX.writeFile(wb, `${baseName()} - Summary with formulas.xlsx`); toast('Excel file with formulas saved — the summary recalculates when the data sheet changes');
+  };
   $('#btnXlsx').onclick = () => {
     if (!state.result) return;
     syncEdits();
