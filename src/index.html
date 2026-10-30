@@ -266,6 +266,9 @@ table.rt.xw td[contenteditable]:focus{outline:2px solid var(--purple);outline-of
 .xp-figcol{display:flex;flex-direction:column;max-width:440px}
 .xp-sum-note{font-size:12.5px;color:var(--muted);margin-top:4px}
 @media (max-width:900px){.xp-half{grid-template-columns:1fr}}
+/* step 2: more */
+#varsTbl td.vdrag{white-space:nowrap}#varsTbl .grip{cursor:grab;color:var(--muted);margin-right:4px;user-select:none}
+#varsTbl tr.dragging{opacity:.4}#varsTbl tr.dropto td{border-top:2px solid var(--accent)}
 /* step 1: more tools */
 .fm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 12px;margin-top:10px;max-height:62vh;overflow:auto}
 .fm-grid label{font-size:12px;color:var(--muted);display:block}.fm-grid input{width:100%}
@@ -593,8 +596,26 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" type="button" data-vbulk="d:auto">Auto</button><button class="btn ghost small" type="button" data-vbulk="d:param">Parametric</button><button class="btn ghost small" type="button" data-vbulk="d:nonparam">Non-parametric</button>
         <span class="legend-note" style="margin-left:10px">Labels:</span><button class="btn ghost small" type="button" data-vlabel="sentence" title="Age (years), Body mass index">Sentence case</button><button class="btn ghost small" type="button" data-vlabel="title" title="Age (Years), Body Mass Index">Title Case</button><button class="btn ghost small" type="button" data-vlabel="cols" title="Labels made again from the column names">From column names</button></div>
       <div class="row" style="gap:8px;margin-bottom:8px"><input type="search" id="varSearch" placeholder="Find a variable…" style="max-width:260px"><label class="check" style="margin:0"><input type="checkbox" id="varOnlyInc"><span>Only included</span></label><span class="legend-note" id="varCount"></span><span class="spacer"></span><button class="btn ghost small" id="btnCodebook" type="button" title="Every column with its label, role, type, levels, value labels, missing values and range — for the thesis appendix">⬇ Codebook (Excel)</button></div>
+      <div class="row" id="varSelBar" style="gap:6px;margin-bottom:8px;flex-wrap:wrap;display:none"><b id="varSelN"></b>
+        <span class="legend-note">Table</span><input type="text" id="vsTable" placeholder="table name" style="width:200px"><button class="btn ghost small" id="vsTableGo" type="button">Set</button>
+        <span class="legend-note">Type</span><select id="vsType" style="width:auto"><option value="">—</option><option value="numeric">numeric</option><option value="categorical">categorical</option></select>
+        <span class="legend-note">Copy the settings of</span><select id="vsFrom" style="width:auto"></select><button class="btn ghost small" id="vsCopyGo" type="button" title="Distribution, table, decimals, unit, role, ordinal and transformation">Copy</button>
+        <button class="btn ghost small" id="vsClear" type="button">Clear selection</button></div>
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
+      <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn ghost small" id="autoTables" type="button" title="Demographics, history, laboratory, vital signs and outcomes — by the variable names">⚡ Auto-assign tables</button>
+        <span class="legend-note">Categorise</span><select id="qVar" style="width:auto"></select><select id="qHow" style="width:auto"><option value="2">median split</option><option value="3">tertiles</option><option value="4">quartiles</option></select><button class="btn ghost small" id="qGo" type="button">New column</button>
+        <span class="spacer"></span><button class="btn ghost small" id="setupCsv" type="button" title="The variable setup as CSV, to edit in Excel">⬇ Setup CSV</button><label class="btn ghost small" title="Read the edited setup back (matched by column)">⬆ Import setup<input type="file" id="setupCsvIn" accept=".csv" hidden></label>
+      </div>
       <p class="legend-note"><b>Distribution</b>: Auto uses the normality test chosen in step 3 (Shapiro-Wilk by default) in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk / odds ratio).</p>
+    </div>
+    <div class="card">
+      <h2>Subgroup analysis</h2>
+      <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div><label class="f">Repeat every table within each category of</label><select id="subCol" style="width:auto"></select></div>
+        <label class="check" style="margin:0 0 8px"><input type="checkbox" id="subOverall" checked><span>Also the tables of all patients</span></label>
+      </div>
+      <p class="legend-note">E.g. the comparison of the groups separately in men and women. Each subgroup gets its own tables (titled “… — Sex: Male”), figures and comments in the report.</p>
     </div>
     <div class="card" id="calcCard">
       <h2>Calculated variables</h2>
@@ -716,6 +737,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
         <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option></select></div>
         <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
+        <div><label class="f">Labels in the report</label><select id="optLabelLang"><option value="en" selected>English</option><option value="ar">Arabic (where given in step 2 ⚙)</option><option value="both">Both (English / Arabic)</option></select></div>
+        <div><label class="check" style="margin-top:22px"><input type="checkbox" id="optAutoAbbr"><span>Explain known abbreviations (BMI, CRP, ASA …) in the footnotes</span></label></div>
         <div><label class="f">Table caption alignment</label><select id="optTableCapAlign"><option value="justify" selected>Justified</option><option value="center">Centred</option><option value="left">Left</option></select></div>
         <div><label class="f">Table text size</label><select id="optTableFontSize"><option value="8">8 pt</option><option value="9">9 pt</option><option value="10" selected>10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></div>
         <div><label class="f">Header colour (grid tables)</label><select id="optTableHead"><option value="auto" selected>Grey</option><option value="lavender">Lavender</option><option value="blue">Light blue</option><option value="green">Light green</option><option value="navy">Navy, white text</option><option value="none">No shading</option></select></div>
@@ -1035,6 +1058,25 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <p class="legend-note" style="margin:0 0 8px">Single keys work when you are not typing in a box.</p>
     <div class="keys-grid" id="keysList"></div>
     <div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn primary" value="close">Close</button></div>
+  </form>
+</dialog>
+<dialog id="varDlg" class="app-dlg" style="width:min(760px,calc(100vw - 32px))">
+  <form method="dialog">
+    <h3 id="vdTitle">Variable</h3>
+    <div class="fx-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:10px 0">
+      <div><label class="f">Unit (added to the label)</label><input type="text" id="vdUnit" placeholder="e.g. mg/dL"></div>
+      <div><label class="f">Decimal places</label><select id="vdDec"><option value="">As in step 5</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+      <div><label class="f">Role</label><select id="vdRole"><option value="">—</option><option value="baseline">Baseline characteristic (“comparable”)</option><option value="outcome">Outcome</option></select></div>
+      <div><label class="f">Transformation (numeric)</label><select id="vdTf"><option value="">None</option><option value="log">Natural log</option><option value="log10">Log₁₀</option><option value="sqrt">Square root</option></select></div>
+      <div><label class="check" style="margin-top:22px"><input type="checkbox" id="vdOrd"><span><b>Ordinal</b> (ordered categories)</span></label></div>
+      <div><label class="f">Test for ordinal</label><select id="vdOrdTest"><option value="rank">Mann-Whitney / Kruskal-Wallis</option><option value="trend">Chi-square for trend</option></select></div>
+      <div><label class="f">Arabic label (optional)</label><input type="text" id="vdAr" dir="rtl"></div>
+      <div id="vdShowBox"><label class="f">Row shows (two categories)</label><select id="vdShow"></select></div>
+    </div>
+    <label class="f">Private note (shown as ℹ in later steps, not in the report)</label><input type="text" id="vdMemo" style="width:100%">
+    <div id="vdMerge" style="margin-top:10px"></div>
+    <div class="row" style="gap:8px;margin-top:10px;align-items:flex-end;flex-wrap:wrap" id="vdAdjBox"><div><label class="f">Adjusted comparison (ANCOVA) for</label><select id="vdCov" multiple size="3" style="min-width:220px"></select></div><button type="button" class="btn ghost small" id="vdAdj" style="margin-bottom:6px">Add to step 8</button></div>
+    <div class="row" style="margin-top:12px"><span class="spacer"></span><button type="button" class="btn ghost" id="vdCancel">Cancel</button> <button type="button" class="btn primary" id="vdSave">Save</button></div>
   </form>
 </dialog>
 <dialog id="formDlg" class="app-dlg">

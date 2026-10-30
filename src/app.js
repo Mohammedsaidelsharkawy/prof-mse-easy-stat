@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,7 +47,7 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -64,6 +64,7 @@
   // "Month 3", "Week 12", "6 months" stay one token, so they read as timepoints
   const GLUED = new Map(); // glued token → how the sheet wrote it ("Month3" → "Month 3"), for its label
   const glue = (m, a, b) => { GLUED.set(a + b, `${a} ${b}`); return a + b; };
+  const lowerFirstApp = t => /^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t;
   const tokens = name => String(name).trim().replace(/(?<![A-Za-z])(month|mo|week|wk|day|visit|year|yr|hour|hr|session)\s+(\d+)(?![\d.])/gi, glue)
     .replace(/(?<![\d.])(\d+)\s+(months?|weeks?|days?|years?|hours?|hrs?|mins?)(?![A-Za-z])/gi, glue).split(/[_\s.]+/).filter(Boolean);
   function labelFrom(toks) {
@@ -1145,6 +1146,151 @@
   // random sample
   const readSample = () => { state.cfg.sample = { on: $('#sampleOn').checked, n: +$('#sampleN').value || 30, seed: +$('#sampleSeed').value || 1 }; state.result = null; state.cfg.consort = null; renderFilters(); renderGrid(); };
   ['#sampleOn', '#sampleN', '#sampleSeed'].forEach(id => { $(id).onchange = readSample; });
+
+  /* ---------- step 2, more: warnings, per-variable settings, selection, drag order, tables, categorising, setup CSV, subgroups ---------- */
+  // small flags beside each variable: many missing values, a group with fewer than 5, many categories, sparse cells
+  function varWarnings(byGroup) {
+    const out = {}, n0 = state.data.rows.length;
+    state.cfg.variables.forEach(v => {
+      if (!v.include) return; const w = []; const c = v.cols[0].col;
+      const miss = state.data.rows.filter(r => isMissing(r[c])).length; if (n0 && miss / n0 > 0.2) w.push(['missing', `${Math.round(100 * miss / n0)}% missing values`]);
+      if (v.type === 'numeric') { const small = byGroup.filter(rs => rs.filter(r => isFinite(Analysis.toNum(r[c]))).length < 5).length; if (small) w.push(['n<5', `${small} group${small > 1 ? 's have' : ' has'} fewer than 5 values`]); }
+      else if (v.kind === 'single') {
+        const lv = columnInfo(state.data.rows, c).distinct; if (lv.length > 8) w.push(['many', `${lv.length} categories — merge some?`]);
+        if (byGroup.length > 1 && lv.length >= 2 && lv.length <= 8) {
+          const t = lv.map(l => byGroup.map(rs => rs.filter(r => String(r[c] ?? '').trim() === l).length)), N = t.flat().reduce((a, b) => a + b, 0);
+          const rs = t.map(r => r.reduce((a, b) => a + b, 0)), cs = byGroup.map((_, j) => t.reduce((a, r) => a + r[j], 0));
+          const lowE = N ? t.flatMap((r, i) => r.map((_, j) => rs[i] * cs[j] / N)).filter(e => e < 5).length / (lv.length * byGroup.length) : 0;
+          if (lowE > 0.2) w.push(['sparse', `${Math.round(100 * lowE)}% of the expected counts are below 5 (Fisher's exact test or merging categories)`]);
+        }
+      }
+      if (w.length) out[v.id] = w;
+    });
+    return out;
+  }
+  const varBadges = v => [v.unit ? ' u' : '', v.ordinal ? ' ord' : '', v.transform ? ' tf' : '', v.memo ? ' ℹ' : ''].join('');
+  // the settings window of one variable
+  let vdVar = null;
+  function openVarDlg(id) {
+    readUiIntoCfg();
+    const v = state.cfg.variables.find(x => x.id === id); if (!v) return; vdVar = v;
+    $('#vdTitle').textContent = v.label; $('#vdUnit').value = v.unit || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
+    $('#vdTf').value = v.transform || ''; $('#vdTf').disabled = v.type !== 'numeric';
+    $('#vdOrd').checked = !!v.ordinal; $('#vdOrd').disabled = v.type !== 'categorical'; $('#vdOrdTest').value = v.ordTest || 'rank';
+    $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || '';
+    const lv = v.type === 'categorical' ? (v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct) : [];
+    $('#vdShowBox').style.display = lv.length === 2 ? '' : 'none';
+    $('#vdShow').innerHTML = lv.map(l => `<option ${l === lv[0] ? 'selected' : ''}>${esc(l)}</option>`).join('');
+    // merging categories: each category gets a new name; categories with the same new name become one (written as value labels)
+    const vl = Analysis.parseValueLabels(v.valueLabels || '');
+    $('#vdMerge').innerHTML = v.type === 'categorical' && v.kind === 'single' ? `<label class="f">Merge or rename categories (the sheet keeps its values) — give several categories the same new name to merge them</label>
+      <table class="t"><tbody>${lv.map(l => `<tr><td class="mono">${esc(l)}</td><td>→</td><td><input type="text" data-vdm="${esc(l)}" value="${esc(vl[l] ?? '')}" placeholder="${esc(l)}"></td></tr>`).join('')}</tbody></table>` : '';
+    const num = state.data.headers.filter(h => columnInfo(state.data.rows, h).numeric && !v.cols.some(c => c.col === h) && h !== state.cfg.groupCol);
+    $('#vdCov').innerHTML = num.map(h => `<option ${/base|pre|before|age/i.test(h) && v.cols.some(c => tokens(c.col)[0] === tokens(h)[0]) ? 'selected' : ''}>${esc(h)}</option>`).join('');
+    $('#vdAdjBox').style.display = v.type === 'numeric' && v.kind === 'single' && !state.cfg.noGroups ? '' : 'none';
+    $('#varDlg').showModal();
+  }
+  $('#varsTbl').addEventListener('click', e => { const b = e.target.closest('[data-vgear]'); if (b) openVarDlg(b.dataset.vgear); });
+  $('#vdCancel').onclick = () => $('#varDlg').close();
+  $('#vdSave').onclick = () => {
+    const v = vdVar; if (!v) return;
+    const set = (k, val) => { if (val === '' || val === false || val === null) delete v[k]; else v[k] = val; };
+    set('unit', $('#vdUnit').value.trim()); set('dec', $('#vdDec').value); set('role', $('#vdRole').value); set('transform', v.type === 'numeric' ? $('#vdTf').value : '');
+    set('ordinal', v.type === 'categorical' && $('#vdOrd').checked); set('ordTest', $('#vdOrd').checked ? $('#vdOrdTest').value : '');
+    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim());
+    if (v.type === 'categorical' && $('#vdShowBox').style.display !== 'none') { const first = $('#vdShow').value, lv = v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct; v.levels = [first, ...lv.filter(l => l !== first)]; }
+    const m = [...document.querySelectorAll('[data-vdm]')].filter(el => el.value.trim()).map(el => `${el.dataset.vdm}=${el.value.trim()}`);
+    if (document.querySelector('[data-vdm]')) v.valueLabels = m.join(', ');
+    $('#varDlg').close(); renderVariables(); toast(`${v.label}: settings saved`);
+  };
+  $('#vdAdj').onclick = () => {
+    const v = vdVar, cov = [...$('#vdCov').selectedOptions].map(o => o.value); if (!cov.length) { toast('Choose one or more covariates'); return; }
+    state.cfg.advanced.push({ type: 'ancova', outcome: v.cols[0].col, predictors: cov, positive: '', univariable: false, include: true });
+    toast(`ANCOVA of ${v.label} adjusted for ${cov.join(', ')} added to step 8`);
+  };
+  // selection and the bulk actions on it
+  state.varSel = new Set();
+  function renderSelBar() {
+    const n = state.varSel.size; $('#varSelBar').style.display = n ? '' : 'none'; $('#varSelN').textContent = `${n} selected:`;
+    $('#vsFrom').innerHTML = state.cfg.variables.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
+  }
+  $('#varsTbl').addEventListener('change', e => { const c = e.target.closest('[data-vsel]'); if (!c) return; c.checked ? state.varSel.add(c.dataset.vsel) : state.varSel.delete(c.dataset.vsel); renderSelBar(); });
+  const selVars = () => state.cfg.variables.filter(v => state.varSel.has(v.id));
+  $('#vsTableGo').onclick = () => { readUiIntoCfg(); const t = $('#vsTable').value.trim(); if (!t) return; selVars().forEach(v => { if (v.kind === 'repeated') { v.split = true; v.splitTable = t; } else v.table = t; }); renderVariables(); toast(`Table “${t}” set for ${state.varSel.size} variables`); };
+  $('#vsType').onchange = e => { readUiIntoCfg(); const t = e.target.value; if (!t) return; selVars().filter(v => v.kind === 'single').forEach(v => { v.type = t; if (t === 'categorical' && !v.levels.length) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); e.target.value = ''; renderVariables(); };
+  $('#vsCopyGo').onclick = () => { readUiIntoCfg(); const src = state.cfg.variables.find(v => v.id === $('#vsFrom').value); if (!src) return;
+    let n = 0; selVars().filter(v => v !== src).forEach(v => { ['dist', 'table', 'dec', 'unit', 'role', 'ordinal', 'ordTest', 'transform', 'chart'].forEach(k => { if (src[k] === undefined) delete v[k]; else if (k !== 'table' || v.kind === 'single') v[k] = src[k]; }); n++; });
+    renderVariables(); toast(`Settings of ${src.label} copied to ${n} variable${n === 1 ? '' : 's'}`); };
+  $('#vsClear').onclick = () => { state.varSel.clear(); renderVariables(); };
+  // drag and drop: the order of the list is the order in the tables
+  let dragId = null;
+  $('#varsTbl').addEventListener('dragstart', e => { const tr = e.target.closest('tr[data-vid]'); if (!tr) return; dragId = tr.dataset.vid; e.dataTransfer.effectAllowed = 'move'; tr.classList.add('dragging'); });
+  $('#varsTbl').addEventListener('dragover', e => { if (dragId) { e.preventDefault(); const tr = e.target.closest('tr[data-vid]'); document.querySelectorAll('#varsTbl tr.dropto').forEach(x => x.classList.remove('dropto')); if (tr) tr.classList.add('dropto'); } });
+  $('#varsTbl').addEventListener('drop', e => {
+    const tr = e.target.closest('tr[data-vid]'); if (!dragId || !tr) return; e.preventDefault(); readUiIntoCfg();
+    const vs = state.cfg.variables, a = vs.findIndex(v => v.id === dragId), b = vs.findIndex(v => v.id === tr.dataset.vid);
+    if (a >= 0 && b >= 0 && a !== b) { const [m] = vs.splice(a, 1); vs.splice(b, 0, m); vs.forEach((v, i) => { v.pos = i; }); }
+    dragId = null; renderVariables();
+  });
+  $('#varsTbl').addEventListener('dragend', () => { dragId = null; document.querySelectorAll('#varsTbl tr.dragging,#varsTbl tr.dropto').forEach(x => x.classList.remove('dragging', 'dropto')); });
+  // tables by the variable names
+  const TABLE_RULES = [['Demographic data', /^(age|sex|gender|bmi|weight|height|wt|ht|occupation|education|residence|marital|smok|parity|gravid|income)/i],
+    ['Medical history', /(diabet|dm\b|htn|hypertens|ihd|cardiac|asthma|copd|ckd|renal|liver|comorbid|history|duration|asa\b|previous)/i],
+    ['Vital signs', /^(sbp|dbp|map|hr|rr|spo2|temp|pulse|systolic|diastolic|heart.?rate|resp)/i],
+    ['Laboratory investigations', /^(hb|wbc|tlc|plt|platelet|crp|esr|alt|ast|alb|bilirubin|creat|urea|na|k|ca|glucose|fbg|rbs|hba1c|ldl|hdl|tg|chol|tsh|t3|t4|inr|pt|ptt|ferritin|vit|d.?dimer|troponin|procalcitonin)/i]];
+  $('#autoTables').onclick = () => {
+    readUiIntoCfg(); let n = 0;
+    state.cfg.variables.filter(v => v.kind === 'single').forEach(v => { const name = v.cols[0].col + ' ' + v.label, hit = TABLE_RULES.find(([, re]) => re.test(v.cols[0].col) || re.test(v.label));
+      const t = hit ? hit[0] : 'Outcomes'; if (v.table !== t) { v.table = t; n++; } });
+    renderVariables(); toast(`${n} variable${n === 1 ? '' : 's'} assigned to tables by their names — adjust any of them in the Table column`);
+  };
+  // a numeric variable cut at its median, tertiles or quartiles into a new column
+  $('#qGo').onclick = () => {
+    readUiIntoCfg(); const v = state.cfg.variables.find(x => x.id === $('#qVar').value); if (!v) return;
+    const k = +$('#qHow').value, col = v.cols[0].col, x = state.data.rows.map(r => Analysis.toNum(r[col])).filter(isFinite).sort((a, b) => a - b);
+    const cuts = Array.from({ length: k - 1 }, (_, i) => Stats.quantile(x, (i + 1) / k)), f = c => Analysis.fmt(c, 2);
+    const names = k === 2 ? [`≤ ${f(cuts[0])}`, `> ${f(cuts[0])}`] : Array.from({ length: k }, (_, i) => `${['Q', 'T'][k === 3 ? 1 : 0]}${i + 1} (${i === 0 ? `≤ ${f(cuts[0])}` : i === k - 1 ? `> ${f(cuts[k - 2])}` : `${f(cuts[i - 1])}–${f(cuts[i])}`})`);
+    let name = `${col}_${k === 2 ? 'median_split' : k === 3 ? 'tertiles' : 'quartiles'}`, j = 2; while (state.data.headers.includes(name)) name = `${name}_${j++}`;
+    editSheet(() => { const { headers, rows } = state.data; headers.splice(headers.indexOf(col) + 1, 0, name);
+      rows.forEach(r => { const n = Analysis.toNum(r[col]); r[name] = isFinite(n) ? names[cuts.filter(c => n > c).length] : null; });
+      state.cfg.variables.push({ ...singleVariable(rows, name, headers.indexOf(name), v.table || 'Other outcomes'), id: 'q' + Date.now().toString(36), type: 'categorical', levels: names, label: `${v.label.replace(/\s*\([^)]*\)\s*$/, '')} ${k === 2 ? 'groups (median split)' : k === 3 ? 'tertiles' : 'quartiles'}` }); }, `New column ${name}`);
+    renderVariables(); toast(`${name} added: ${names.join(', ')}`);
+  };
+  // the setup as CSV (edit in Excel, read back by column)
+  const SETUP_COLS = ['column', 'include', 'label', 'type', 'table', 'levels', 'valueLabels', 'unit', 'dec', 'role', 'ordinal', 'transform', 'note', 'memo'];
+  $('#setupCsv').onclick = () => { readUiIntoCfg();
+    const aoa = [SETUP_COLS, ...state.cfg.variables.filter(v => v.kind === 'single').map(v => [v.cols[0].col, v.include ? 'yes' : 'no', v.label, v.type, v.table, (v.levels || []).join('; '), v.valueLabels || '', v.unit || '', v.dec ?? '', v.role || '', v.ordinal ? (v.ordTest || 'rank') : '', v.transform || '', v.note || '', v.memo || ''])];
+    const csv = XLSX.utils.sheet_to_csv(XLSX.utils.aoa_to_sheet(aoa)), url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); saveUrl(url, `${baseName()} - Variable setup.csv`); setTimeout(() => URL.revokeObjectURL(url), 5000); };
+  $('#setupCsvIn').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    const p = parseDelimited(new TextDecoder().decode(await f.arrayBuffer()), 'auto', '.'), head = p.aoa[0].map(h => String(h).trim());
+    let n = 0;
+    p.aoa.slice(1).forEach(r => { const o = Object.fromEntries(head.map((h, i) => [h, r[i] === null || r[i] === undefined ? '' : String(r[i]).trim()]));
+      const v = state.cfg.variables.find(x => x.kind === 'single' && x.cols[0].col === o.column); if (!v) return;
+      if (o.include) v.include = /^(yes|1|true|y)$/i.test(o.include); if (o.label) v.label = o.label; if (/^(numeric|categorical)$/.test(o.type)) v.type = o.type; if (o.table) v.table = o.table;
+      if (o.levels) v.levels = o.levels.split(';').map(x => x.trim()).filter(Boolean); v.valueLabels = o.valueLabels || v.valueLabels;
+      ['unit', 'dec', 'role', 'transform', 'note', 'memo'].forEach(k => { if (o[k] !== undefined) { if (o[k] === '') delete v[k]; else v[k] = o[k]; } });
+      if (o.ordinal !== undefined) { if (o.ordinal) { v.ordinal = true; v.ordTest = o.ordinal === 'trend' ? 'trend' : 'rank'; } else { delete v.ordinal; delete v.ordTest; } }
+      n++; });
+    renderVariables(); toast(`Setup read: ${n} variable${n === 1 ? '' : 's'} updated`);
+  };
+  // groups: merge one into another, and the control group first
+  $('#groupsTbl').addEventListener('change', e => {
+    const m = e.target.closest('[data-gmerge]'), c = e.target.closest('[data-gctrl]'), cfg = state.cfg;
+    if (m) { readUiIntoCfg(); if (m.value) cfg.groupMerge[m.dataset.gmerge] = m.value; else delete cfg.groupMerge[m.dataset.gmerge]; cfg.consort = null; renderVariables(); toast(m.value ? `${cfg.groupLabels[m.dataset.gmerge]} is analysed as part of ${cfg.groupLabels[m.value]}` : 'Groups kept apart'); }
+    if (c) { readUiIntoCfg(); const g = c.dataset.gctrl; cfg.groupOrder = [g, ...cfg.groupOrder.filter(x => x !== g)]; cfg.consort = null; renderVariables(); toast(`${cfg.groupLabels[g]} is the control group (first in tables)`); }
+  });
+  // subgroup analysis
+  function renderSubgroup() {
+    const cfg = state.cfg, rows = state.data.rows, sg = cfg.subgroup || {};
+    const cands = state.data.headers.filter(h => h !== cfg.groupCol && !cfg.idCols.includes(h) && (n => n >= 2 && n <= 6)(columnInfo(rows, h).distinct.length));
+    $('#subCol').innerHTML = `<option value="">— none —</option>` + cands.map(h => `<option ${h === sg.col ? 'selected' : ''}>${esc(h)}</option>`).join('');
+    $('#subOverall').checked = sg.overall !== false;
+    const qv = cfg.variables.filter(v => v.kind === 'single' && v.type === 'numeric');
+    $('#qVar').innerHTML = qv.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
+    renderSelBar();
+  }
+  $('#subCol').onchange = $('#subOverall').onchange = () => { state.cfg.subgroup = { col: $('#subCol').value, overall: $('#subOverall').checked }; state.cfg.consort = null; };
   /* ---------- defaults for one step: every option whose control is on that step ---------- */
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-reset]'); if (!b || !state.cfg) return;
@@ -1417,10 +1563,13 @@
     $('#groupMode').onchange = e => { readUiIntoCfg(); setNoGroups(cfg, e.target.value === 'one'); renderVariables(); renderStepper();
       toast(cfg.noGroups ? 'All patients are analysed as one group: descriptive tables and changes over time' : 'Groups are compared again'); };
     $('#groupCol').onchange = e => { readUiIntoCfg(); cfg.groupCol = e.target.value; cfg.variables.forEach(v => { if (v.cols[0].col === cfg.groupCol) v.include = false; }); setGroups(cfg); renderVariables(); };
-    $('#groupsTbl').innerHTML = `<thead><tr><th>Use</th><th>Value in Excel</th><th>Label in report</th><th>n</th><th>Order</th></tr></thead><tbody>${
+    cfg.groupMerge = cfg.groupMerge || {};
+    $('#groupsTbl').innerHTML = `<thead><tr><th>Use</th><th>Value in Excel</th><th>Label in report</th><th>n</th><th>Order</th><th title="Analyse this group as part of another group">Merge into</th><th title="The control (reference) group comes first in tables and comparisons">Control</th></tr></thead><tbody>${
       cfg.groupOrder.map((g, i) => `<tr><td><input type="checkbox" data-ginc="${esc(g)}" ${cfg.groupInclude[g] !== false ? 'checked' : ''} ${cfg.noGroups ? 'disabled' : ''}></td><td class="mono">${g === Analysis.ALL_GROUP ? '(every row)' : esc(g)}</td>
       <td><input type="text" data-glabel="${esc(g)}" value="${esc(cfg.groupLabels[g])}"></td><td>${groupN(g)}</td>
-      <td><button class="btn ghost small" data-gmove="${i},-1">↑</button> <button class="btn ghost small" data-gmove="${i},1">↓</button></td></tr>`).join('')}</tbody>`;
+      <td><button class="btn ghost small" data-gmove="${i},-1">↑</button> <button class="btn ghost small" data-gmove="${i},1">↓</button></td>
+      <td>${cfg.noGroups ? '' : `<select data-gmerge="${esc(g)}" style="width:auto"><option value="">—</option>${cfg.groupOrder.filter(x => x !== g).map(x => `<option value="${esc(x)}" ${cfg.groupMerge[g] === x ? 'selected' : ''}>${esc(cfg.groupLabels[x] || x)}</option>`).join('')}</select>`}</td>
+      <td>${cfg.noGroups ? '' : `<input type="radio" name="gctrl" data-gctrl="${esc(g)}" ${i === 0 ? 'checked' : ''}>`}</td></tr>`).join('')}</tbody>`;
     if (cfg.groupOrder.length > 6 && !cfg.noGroups) toast('The group column has many values — is it the right column?');
 
     const groups = activeGroups();
@@ -1437,8 +1586,10 @@
       if (nonNormal) return `<span class="chip warn" ${tip}>non-normal (${fail}/${total})</span>`;
       return fail ? `<span class="chip ok" ${tip}>normal (${fail}/${total} failed)</span>` : '<span class="chip ok">normal</span>';
     };
-    $('#varsTbl').innerHTML = `<thead><tr><th>Use</th><th>Label</th><th>Column(s)</th><th>Type</th><th>Distribution</th><th>Table</th><th>Levels (categories)</th><th title="Labels for coded values, e.g. 1=Male, 2=Female. The report shows the labels; the sheet keeps its codes.">Value labels</th><th>Footnote (abbreviations)</th></tr></thead><tbody>${
-      cfg.variables.map(v => `<tr data-vid="${v.id}">
+    const warn = varWarnings(byGroup);
+    $('#varsTbl').innerHTML = `<thead><tr><th title="Drag to reorder · tick to select">⋮⋮</th><th>Use</th><th>Label</th><th>Column(s)</th><th>Type</th><th>Distribution</th><th>Table</th><th>Levels (categories)</th><th title="Labels for coded values, e.g. 1=Male, 2=Female. The report shows the labels; the sheet keeps its codes.">Value labels</th><th>Footnote (abbreviations)</th><th>More</th></tr></thead><tbody>${
+      cfg.variables.map(v => `<tr data-vid="${v.id}" draggable="true">
+        <td class="vdrag"><span class="grip" title="Drag to reorder">⋮⋮</span><input type="checkbox" data-vsel="${v.id}" ${state.varSel && state.varSel.has(v.id) ? 'checked' : ''} title="Select for the bulk actions"></td>
         <td><input type="checkbox" data-k="include" ${v.include ? 'checked' : ''}></td>
         <td><input type="text" data-k="label" value="${esc(v.label)}"></td>
         <td class="mono" title="${esc(v.cols.map(c => c.col).join('\n'))}">${v.kind === 'repeated' ? `<span class="chip info">repeated × ${v.cols.length}</span><div class="tpchks">${v.cols.map((c, i) =>
@@ -1449,8 +1600,9 @@
         <td>${v.type === 'categorical' ? `<input type="text" data-k="levels" value="${esc(v.levels.join(', '))}">` : '<span class="legend-note">—</span>'}</td>
         <td>${v.type === 'categorical' ? `<input type="text" data-k="valueLabels" value="${esc(v.valueLabels || '')}" placeholder="${esc(v.levels.slice(0, 3).map(l => `${l}=…`).join(', ') || 'e.g. 1=Male, 2=Female')}" title="Code=label pairs separated by commas, e.g. 1=Male, 2=Female">` : '<span class="legend-note" title="Set the type to categorical to label coded values">—</span>'}</td>
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
+        <td style="white-space:nowrap"><button class="btn ghost small" data-vgear="${v.id}" type="button" title="Unit, decimals, role, ordinal, transformation, Arabic label, merging categories, adjusted comparison">⚙${varBadges(v)}</button>${(warn[v.id] || []).map(w => `<span class="chip warn" title="${esc(w[1])}">${w[0]}</span>`).join('')}</td>
       </tr>`).join('')}</tbody>`;
-    renderRepeated(); filterVars();
+    renderRepeated(); filterVars(); renderSubgroup();
   }
   function filterVars() {
     const q = ($('#varSearch').value || '').trim().toLowerCase(), trs = [...document.querySelectorAll('#varsTbl tr[data-vid]')];
@@ -1863,7 +2015,7 @@
     [['#fbNum', 'numeric'], ['#fbCat', 'categorical'], ['#fbRep', 'repeated']].forEach(([id, kind]) => { $(id).innerHTML = `<option value="">${kind}…</option>` + CHART_TYPES[kind].map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); });
     const vars = state.cfg.variables.filter(v => v.include);
     $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th>Y axis from – to</th><th>Reference line (value, label)</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
-      <td><b>${esc(v.label)}</b><div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
+      <td><b>${esc(v.label)}</b>${v.memo ? ` <span title="${esc(v.memo)}" style="cursor:help">ℹ</span>` : ''}<div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
       <td><select data-fv="${v.id}" data-fk="chart">${CHART_TYPES[chartKind(v)].map(([k, l]) => `<option value="${k}" ${(v.chart || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input type="text" data-fv="${v.id}" data-fk="caption" value="${esc(v.caption || '')}" placeholder="${esc(v.label)} of the studied groups"></td>
       <td><input type="text" data-fv="${v.id}" data-fk="ylabel" value="${esc(v.ylabel || '')}" placeholder="${esc(v.type === 'categorical' ? '% of the studied patients' : v.label)}"></td>
@@ -2520,7 +2672,8 @@
     }
     const html = list.map(it => {
       const u = figUrl(it), img = u ? `<img class="xp-fig" src="${u}" alt="">` : '';
-      const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3><span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>`;
+      const memo = (state.cfg.variables.find(q => q.id === it.id || it.id.startsWith(q.id + '_')) || {}).memo;
+      const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3>${memo ? `<span class="chip" title="${esc(memo)}" style="cursor:help">ℹ note</span>` : ''}<span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>`;
       // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
       if (view === 'side') return `<div class="report-sec xp-item">${headRow}
         <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
@@ -2733,6 +2886,17 @@
         syncAssessed(ensureConsort());
         const cfg = { ...state.cfg, options: effOptions() };
         const res = Analysis.run(state.data, cfg);
+        // subgroup analysis: every table again within each category of the chosen column
+        const sg = state.cfg.subgroup;
+        if (sg && sg.col && state.data.headers.includes(sg.col)) {
+          const lab = Analysis.columnLabel(state.cfg, sg.col), lv = Analysis.levelsOf(state.cfg, Analysis.filterRows(state.cfg, state.data.rows), sg.col), subs = [];
+          lv.forEach(l => {
+            const r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: sg.col, op: 'eq', val: l, on: true }], advanced: [] }), name = `${lab}: ${valueLabel(sg.col, l)}`;
+            r2.sections.forEach(s => { s.title = `${s.title} — ${name}`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (${name})`; }); subs.push(s); });
+          });
+          res.sections = [...(sg.overall !== false ? res.sections : []), ...subs];
+          res.methods += ` Subgroup analyses were performed within each category of ${lowerFirstApp(lab)} (${lv.map(l => valueLabel(sg.col, l)).join(', ')}).`;
+        }
         // a journal style's P wording also goes into the table footnotes
         if (report().style !== 'none' && cfg.options.pWord !== 'P value') res.sections.forEach(s => { s.footnote = s.footnote.replace(/\bP value\b/g, cfg.options.pWord); });
         // P values without the leading zero: also the significance level in the footnotes

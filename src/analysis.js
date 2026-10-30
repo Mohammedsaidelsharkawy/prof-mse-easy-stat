@@ -75,7 +75,7 @@ const Analysis = (() => {
   }
   // test names as written in the descriptive comments
   const TEST_NAME = { 't-test': 'independent t-test', 'Welch t-test': "Welch's t-test", ANOVA: 'one-way ANOVA', 'Welch ANOVA': "Welch's ANOVA", 'Mann-Whitney': 'Mann-Whitney U test',
-    'Kruskal-Wallis': 'Kruskal-Wallis test', 'Chi-square': 'Chi-square test', "Fisher's exact": "Fisher's exact test" };
+    'Kruskal-Wallis': 'Kruskal-Wallis test', 'Chi-square': 'Chi-square test', "Fisher's exact": "Fisher's exact test", 'Linear-by-linear': 'Chi-square test for trend (linear-by-linear association)' };
   const testNames = rs => listJoin([...new Set(rs.map(r => TEST_NAME[r.test]).filter(Boolean))]);
   const amongTxt = k => k === 2 ? 'between the two groups' : `among the ${nWord(k)} groups`;
 
@@ -150,7 +150,23 @@ const Analysis = (() => {
   }
 
   /* ---------- categorical analysis between groups ---------- */
-  function analyzeCategorical(groupVals, levels, used, opts) {
+  // ordered categories: Mann-Whitney / Kruskal-Wallis on the category ranks, or the linear-by-linear (trend) Chi-square — scores 1, 2, 3 …
+  function ordinalTest(groupVals, levels, how, used, opts) {
+    const k = groupVals.length, codes = groupVals.map(g => g.map(x => levels.indexOf(x) + 1).filter(x => x > 0));
+    if (codes.filter(c => c.length).length < 2) return null;
+    if (how === 'trend') {
+      const xs = codes.flatMap((c, gi) => c.map(() => gi + 1)), ys = codes.flat(), N = ys.length, mx = S.mean(xs), my = S.mean(ys);
+      let sxy = 0, sxx = 0, syy = 0; xs.forEach((x, i) => { sxy += (x - mx) * (ys[i] - my); sxx += (x - mx) ** 2; syy += (ys[i] - my) ** 2; });
+      const r = sxx && syy ? sxy / Math.sqrt(sxx * syy) : 0, M2 = (N - 1) * r * r;
+      used.add('ordTrend');
+      return { p: 1 - jStat.chisquare.cdf(M2, 1), test: 'Linear-by-linear', stat: `M² = ${fmt(M2, 2)}`, pairs: null };
+    }
+    if (k === 2) { const m = S.mannWhitney(codes[0], codes[1]); used.add('ordRank'); return { p: m.p, test: 'Mann-Whitney', stat: `U = ${fmt(m.U, 1)}`, pairs: null }; }
+    const kw = S.kruskalWallis(codes); used.add('ordRank');
+    const pairs = kw.p <= opts.alpha ? S.dunn(codes) : null; if (pairs) used.add('ordDunn');
+    return { p: kw.p, test: 'Kruskal-Wallis', stat: `H = ${fmt(kw.H, 2)}`, pairs };
+  }
+  function analyzeCategorical(groupVals, levels, used, opts, ord) {
     const k = groupVals.length;
     const table = levels.map(l => groupVals.map(g => g.filter(v => v === l).length));
     const ns = groupVals.map(g => g.length);
@@ -173,7 +189,9 @@ const Analysis = (() => {
     // optional Bonferroni-adjusted pairwise comparisons once the overall test is significant (3+ groups)
     let catPairs = null;
     if (opts.chiPost && k > 2 && p <= opts.alpha) { catPairs = S.chiSquarePairwise(table, opts.fisher, opts.chiAdjust || 'bonferroni'); used.add('chiPost'); if (opts.chiAdjust === 'holm') used.add('chiHolm'); if (opts.chiAdjust === 'none') used.add('chiNone'); }
-    return { table, pct, ns, p, test, stat, rr, binary, pairs: catPairs };
+    const out = { table, pct, ns, p, test, stat, rr, binary, pairs: catPairs };
+    if (ord) { const o = ordinalTest(groupVals, levels, ord, used, opts); if (o) Object.assign(out, o); }
+    return out;
   }
 
   /* ---------- within-group repeated measures ---------- */
@@ -1186,7 +1204,7 @@ const Analysis = (() => {
             ['Missing', ...byGroup.map(rs => String(rs.filter(r => toCat(r[col]) === null).length)), ...(k > 1 ? [String(byGroup.flat().filter(r => toCat(r[col]) === null).length)] : [])]] });
         const nonEmpty = tab.filter(r => S.sum(r) > 0);
         if (k > 1 && nonEmpty.length >= 2) {
-          const cs = S.chiSquare(nonEmpty), cres = analyzeCategorical(gv, levels, used, opts), chosen = cres.test, out = [];
+          const cs = S.chiSquare(nonEmpty), cres = analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null), chosen = cres.test, out = [];
           it.sig = cres.p <= alpha;
           Object.assign(it, { test: TEST_NAME[cres.test] || cres.test, p: cres.p });
           out.push(['Chi-square test', `χ² = ${F(cs.chi, 2)}`, String(cs.df), P(cs.p), `smallest expected count ${F(cs.minE, 1)}; ${F(100 * cs.pctSmall, 0)}% of cells < 5`, chosen === 'Chi-square' ? yes : '']);
@@ -1299,7 +1317,38 @@ const Analysis = (() => {
   const filterText = cfg => [activeFilters(cfg).map(f => `${columnLabel(cfg, f.col)} ${FILTER_OPS[f.op]}${['blank', 'notblank'].includes(f.op) ? '' : ' ' + f.val}`).join(' and '),
     sampleOn(cfg) ? `${activeFilters(cfg).length ? 'from whom ' : ''}a random sample of ${+cfg.sample.n} patients was drawn (seed ${+cfg.sample.seed || 1})` : ''].filter(Boolean).join(', ');
 
+  // abbreviations that explain themselves in a footnote when the option is on
+  const ABBR = { BMI: 'Body mass index', VAS: 'Visual analogue scale', NRS: 'Numeric rating scale', SBP: 'Systolic blood pressure', DBP: 'Diastolic blood pressure', MAP: 'Mean arterial pressure',
+    HR: 'Heart rate', RR: 'Respiratory rate', SpO2: 'Peripheral oxygen saturation', CRP: 'C-reactive protein', ESR: 'Erythrocyte sedimentation rate', WBC: 'White blood cells', TLC: 'Total leucocytic count',
+    Hb: 'Haemoglobin', HbA1c: 'Glycated haemoglobin', FBG: 'Fasting blood glucose', RBS: 'Random blood sugar', ALT: 'Alanine aminotransferase', AST: 'Aspartate aminotransferase', eGFR: 'Estimated glomerular filtration rate',
+    LDL: 'Low-density lipoprotein', HDL: 'High-density lipoprotein', TG: 'Triglycerides', TSH: 'Thyroid-stimulating hormone', INR: 'International normalised ratio', PT: 'Prothrombin time', ASA: 'American Society of Anesthesiologists',
+    ICU: 'Intensive care unit', LOS: 'Length of stay', PONV: 'Postoperative nausea and vomiting', GCS: 'Glasgow coma scale', APACHE: 'Acute Physiology and Chronic Health Evaluation', SOFA: 'Sequential Organ Failure Assessment',
+    WOMAC: 'Western Ontario and McMaster Universities Osteoarthritis Index', KL: 'Kellgren-Lawrence', FEV1: 'Forced expiratory volume in 1 second', FVC: 'Forced vital capacity', EF: 'Ejection fraction', LVEF: 'Left ventricular ejection fraction',
+    PRP: 'Platelet-rich plasma', HA: 'Hyaluronic acid', DM: 'Diabetes mellitus', HTN: 'Hypertension', IHD: 'Ischaemic heart disease', CKD: 'Chronic kidney disease', COPD: 'Chronic obstructive pulmonary disease' };
+  // what the analysis sees of a variable: unit after the label, Arabic or both labels, a transformation of its values, explained abbreviations
+  function prepareVariables(data, cfg) {
+    const o = cfg.options || {}, lang = o.labelLang || 'en';
+    const tf = { log: v => v > 0 ? Math.log(v) : NaN, log10: v => v > 0 ? Math.log10(v) : NaN, sqrt: v => v >= 0 ? Math.sqrt(v) : NaN };
+    let rows = null;
+    const variables = cfg.variables.map(v => {
+      let w = v;
+      if (v.unit && !/\([^)]*\)\s*$/.test(v.label)) w = { ...w, label: `${v.label} (${v.unit})` };
+      if (v.labelAr && lang !== 'en') w = { ...w, label: lang === 'ar' ? v.labelAr : `${w.label} / ${v.labelAr}` };
+      if (o.autoAbbr && !v.note) { const found = Object.keys(ABBR).filter(a => new RegExp(`(^|[^A-Za-z])${a}([^A-Za-z]|$)`).test(w.label)); if (found.length) w = { ...w, note: found.map(a => `${a}: ${ABBR[a]}`).join(', ') }; }
+      if (v.transform && tf[v.transform] && w.type === 'numeric') {
+        rows = rows || data.rows.map(r => ({ ...r }));
+        v.cols.forEach(c => rows.forEach(r => { const n = toNum(r[c.col]); r[c.col] = isFinite(n) ? tf[v.transform](n) : null; if (!isFinite(r[c.col])) r[c.col] = null; }));
+        w = { ...w, label: `${w.label}, ${v.transform === 'log' ? 'log' : v.transform === 'log10' ? 'log₁₀' : '√'}-transformed`, note: [w.note, `Values were ${v.transform === 'sqrt' ? 'square-root' : v.transform === 'log10' ? 'log₁₀' : 'natural-log'} transformed before analysis`].filter(Boolean).join('; ') };
+      }
+      return w;
+    });
+    // groups merged into another (e.g. two doses into one arm)
+    const mg = cfg.groupMerge || {}, srcs = Object.keys(mg).filter(g => mg[g] && mg[g] !== g && !cfg.noGroups);
+    if (srcs.length) { rows = rows || data.rows.map(r => ({ ...r })); rows.forEach(r => { const g = toCat(r[cfg.groupCol]); if (g !== null && srcs.includes(g)) r[cfg.groupCol] = mg[g]; }); }
+    return [rows ? { ...data, rows } : data, { ...cfg, variables, ...(srcs.length ? { groupOrder: cfg.groupOrder.filter(g => !srcs.includes(g)) } : {}) }];
+  }
   function withValueLabels(data, cfg) {
+    [data, cfg] = prepareVariables(data, cfg);
     if (activeFilters(cfg).length || sampleOn(cfg)) data = { ...data, rows: filterRows(cfg, data.rows) };
     const maps = {};
     (cfg.variables || []).forEach(v => {
@@ -1711,6 +1760,7 @@ const Analysis = (() => {
         });
       } else {
         // a table of single-measurement variables (baseline or other outcomes)
+        const d0 = d;
         const res = b.vars.map(v => {
           if (v.type === 'numeric') {
             const gv = byGroup.map(rs => rs.map(r => toNum(r[v.cols[0].col])).filter(isFinite));
@@ -1720,7 +1770,7 @@ const Analysis = (() => {
           const present = [...new Set(gv.flat())];
           let levels = (v.levels && v.levels.length ? v.levels.filter(l => present.includes(l)) : []);
           present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
-          return { v, cat: analyzeCategorical(gv, levels, used, opts), levels, gv };
+          return { v, cat: analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null), levels, gv };
         });
         const anySig = res.some(r => (r.num || r.cat).p <= alpha);
         const showPost = numbered && res.some(r => r.num ? r.num.p <= alpha : !!r.cat.pairs);
@@ -1747,7 +1797,7 @@ const Analysis = (() => {
         };
         for (const r of res) {
           if (r.num) {
-            const n = r.num, P = n.param;
+            const n = r.num, P = n.param, d = r.v.dec !== undefined && r.v.dec !== null && r.v.dec !== '' ? +r.v.dec : d0; // decimals: the variable's own, else the report's
             if (opts.secondRow === 'none') {
               // one row: "Mean ± SD" or "Median (IQR)" in a single cell
               trows.push([{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] },
@@ -1798,8 +1848,11 @@ const Analysis = (() => {
           sent.push(`${cap(withValues(r, plain(r.v.label)))} was insignificantly different ${amongTxt(k)}${isFinite(p) ? ` (P value ${pTxt(p)})` : ''}.`);
         });
         else if (nsRes.length) {
-          const nsLabels = nsRes.map(r => lowerFirst(plain(r.v.label)));
-          sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`);
+          // baseline characteristics read as "comparable"; outcomes as "insignificantly different"
+          const base = nsRes.filter(r => r.v.role === 'baseline'), rest = nsRes.filter(r => r.v.role !== 'baseline');
+          if (base.length) sent.push(`The groups were comparable regarding ${listJoin(base.map(r => lowerFirst(plain(r.v.label))))} (P value > ${opts.alpha}).`);
+          if (rest.length) { const nsLabels = rest.map(r => lowerFirst(plain(r.v.label)));
+            sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`); }
         }
         for (const r of res.filter(r => !descriptive && (r.num || r.cat).p <= alpha)) {
           // compact categorical sentences already quote their percentages
@@ -2257,6 +2310,8 @@ const Analysis = (() => {
       s.push(`Quantitative non-parametric data were presented as median and interquartile range (IQR) and were analyzed by ${t}.`);
     }
     if (used.has('cat')) s.push(`Qualitative variables were presented as frequency and percentage (%) and were analyzed utilizing the Chi-square test${used.has('fisher') ? " or Fisher's exact test when appropriate" : ''}.`);
+    if (used.has('ordRank')) s.push(`Ordinal variables were compared with the ${used.has('ordDunn') ? "Mann-Whitney U or Kruskal-Wallis test (Dunn's post hoc test with Bonferroni correction)" : 'Mann-Whitney U or Kruskal-Wallis test'} on the order of their categories.`);
+    if (used.has('ordTrend')) s.push('Ordinal variables were compared with the Chi-square test for trend (linear-by-linear association).');
     if (used.has('chiPost')) s.push(`When significant, qualitative variables were compared between each two groups ${used.has('chiNone') ? 'without correction for multiple comparisons' : `with ${used.has('chiHolm') ? 'Holm' : 'Bonferroni'} correction`}.`);
     if (o.effect) {
       const e = [];
