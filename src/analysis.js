@@ -2445,6 +2445,8 @@ const Analysis = (() => {
       }
     }
 
+    // enrolment over time: patients per month from a date column (step 9)
+    if (cfg.timeline && cfg.timeline.col) { const sec = timelineSection(cfg, rows, groups, gl); if (sec) sections.unshift(sec); }
     if (opts.correlation) {
       const sec = correlationSection(vars, rows, cfg, alpha, d);
       if (sec) {
@@ -2860,9 +2862,33 @@ const Analysis = (() => {
     return s.join(' ');
   }
 
+  // dates as ISO text, d/m/y text or Excel serial numbers → [year, month]
+  function ymOf(v) {
+    if (v === null || v === undefined || v === '') return null;
+    if (typeof v === 'number' && v > 20000 && v < 80000) { const d = new Date(Date.UTC(1899, 11, 30) + v * 864e5); return [d.getUTCFullYear(), d.getUTCMonth()]; }
+    const s = String(v).trim(); let m = /^(\d{4})[-/.](\d{1,2})/.exec(s); if (m) return [+m[1], +m[2] - 1];
+    m = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/.exec(s); if (m) { const y = +m[3] < 100 ? 2000 + +m[3] : +m[3]; return [y, +m[2] - 1]; }
+    const t = Date.parse(s); if (isFinite(t)) { const d = new Date(t); return [d.getFullYear(), d.getMonth()]; }
+    return null;
+  }
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function timelineSection(cfg, rows, groups, gl) {
+    const col = cfg.timeline.col, ym = rows.map(r => ({ r, m: ymOf(r[col]) })).filter(x => x.m); if (ym.length < 3) return null;
+    const key = m => m[0] * 12 + m[1], k0 = Math.min(...ym.map(x => key(x.m))), k1 = Math.max(...ym.map(x => key(x.m))); if (k1 - k0 > 120) return null;
+    const months = Array.from({ length: k1 - k0 + 1 }, (_, i) => k0 + i), lab = k => `${MONTHS[k % 12]} ${Math.floor(k / 12)}`;
+    const per = (groups.length > 1 ? groups : [null]).map(g => months.map(k => ym.filter(x => key(x.m) === k && (g === null || groupOf(cfg, x.r) === g)).length));
+    let cum = 0; const tot = months.map((_, i) => per.reduce((t, p) => t + p[i], 0)), cumul = tot.map(v => (cum += v));
+    const names = groups.length > 1 ? gl : ['Patients'];
+    return { kind: 'timeline', title: `Enrolment of the patients over time (${lab(k0)} to ${lab(k1)})`, head: ['Month', ...names, ...(names.length > 1 ? ['Total'] : []), 'Cumulative'],
+      rows: months.map((k, i) => [{ t: [lab(k)], b: true }, ...per.map(p => ({ t: [String(p[i])] })), ...(names.length > 1 ? [{ t: [String(tot[i])] }] : []), { t: [String(cumul[i])] }]),
+      footnote: `Patients by the month of ${lowerFirst(plain(columnLabel(cfg, col)))}; ${rows.length - ym.length ? `${rows.length - ym.length} without a date` : 'every patient had a date'}.`,
+      comment: `The ${ym.length} patients were enrolled over ${months.length} month${months.length > 1 ? 's' : ''}, from ${lab(k0)} to ${lab(k1)}, with a median of ${fmt(S.median(tot), 1)} patients per month.`,
+      figures: [{ sig: true, caption: 'Number of patients enrolled per month', spec: { type: 'bar', categories: months.map(lab), yLabel: 'Patients enrolled', integer: true, series: per.map((p, i) => ({ name: names[i], values: p })), ...(names.length < 2 ? { legend: false } : {}) } }], meta: {} };
+  }
   // caption of the flow diagram figure
   const FLOW_CAPTIONS = { consort: 'CONSORT flowchart of the enrolled patients', strobe: 'STROBE flow diagram of the study participants',
-    stard: 'STARD flow diagram of the study participants', simple: 'Flowchart of the study participants' };
+    stard: 'STARD flow diagram of the study participants', simple: 'Flowchart of the study participants', prisma: 'PRISMA 2020 flow diagram of the study selection',
+    crossover: 'CONSORT flowchart of the crossover trial', cluster: 'CONSORT flowchart of the cluster-randomized trial' };
   const flowCaption = cfg => FLOW_CAPTIONS[(cfg.consort && cfg.consort.type) || 'consort'];
 
   function introText(cfg, gl, gN) {
@@ -2871,6 +2897,21 @@ const Analysis = (() => {
     const type = c.type || 'consort';
     const ex = c.excluded.filter(e => +e.n > 0), exTotal = ex.reduce((s, e) => s + +e.n, 0);
     const exTxt = exTotal ? `; ${exTotal} were excluded (${ex.map(e => `${lowerFirst(e.text.trim())}: ${e.n}`).join('; ')})` : '';
+    if (type === 'prisma') {
+      const p = c.prisma || {}, v = x => +p[x] || 0, idf = v('db') + v('reg'), rem = v('dup') + v('auto') + v('other'), scr = idf - rem, sought = scr - v('scrExcl'), as = sought - v('notRetrieved');
+      const rs = (p.reasons || []).filter(r => String(r.text).trim() && +r.n);
+      return `The search identified ${idf} records (${v('db')} from databases and ${v('reg')} from registers); ${rem} were removed before screening${v('dup') ? ` (${v('dup')} duplicates)` : ''}. Of the ${scr} records screened, ${v('scrExcl')} were excluded. `
+        + `${sought} reports were sought for retrieval${v('notRetrieved') ? `, of which ${v('notRetrieved')} could not be retrieved` : ''}, and ${as} were assessed for eligibility${rs.length ? `; ${rs.reduce((t, r) => t + +r.n, 0)} were excluded (${rs.map(r => `${lowerFirst(r.text.trim())}: ${r.n}`).join('; ')})` : ''}. `
+        + `Finally, ${v('studies')} studies${v('reports') ? ` (${v('reports')} reports)` : ''} were included in the review.`;
+    }
+    if (type === 'crossover' || type === 'cluster') {
+      const n = c.groups.map(g => +g.allocated || 0), cl = type === 'cluster' ? c.groups.map(g => +g.clusters || 0) : null;
+      let t = `In this study, ${c.assessed} patients were assessed for eligibility${exTxt}. ${S.sum(n)} patients were randomized${cl ? ` in ${S.sum(cl)} clusters` : ''} to ${type === 'crossover' ? 'the treatment sequences' : 'the study groups'}: ${listJoin(gl.map((g, i) => `${n[i]} to ${g}${cl ? ` (${cl[i]} clusters)` : ''}`))}.`;
+      if (type === 'crossover' && c.groups.some(g => g.p1 || g.p2)) t += ` ${gl.map((g, i) => `In sequence ${g}, patients received ${c.groups[i].p1 || 'the first treatment'} then, after ${c.washout ? `a washout of ${c.washout}` : 'a washout period'}, ${c.groups[i].p2 || 'the second treatment'}.`).join(' ')}`;
+      const lost = c.groups.reduce((t2, g) => t2 + (+g.lost || 0), 0);
+      if (lost) t += ` ${lost} patient${lost > 1 ? 's were' : ' was'} lost to follow-up.`;
+      return t + ` Finally, ${listJoin(c.groups.map((g, i) => `${g.analysed} patients in ${gl[i]}`))} were analyzed.`;
+    }
     if (type === 'simple') {
       const steps = c.steps.filter(st => String(st.text).trim());
       if (!steps.length) return '';

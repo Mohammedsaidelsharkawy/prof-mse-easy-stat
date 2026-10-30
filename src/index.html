@@ -1048,7 +1048,10 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="row"><h2>9 · Flowchart</h2><span class="spacer"></span><button class="btn ghost small" id="cRebuild" type="button" title="Take the group sizes from the data again, keeping the type, style and labels">↺ Numbers from the data</button><label class="check"><input type="checkbox" id="cEnabled" checked><span>Include in report</span></label></div>
       <div class="grid g3" style="margin:6px 0 4px"><div><label class="f">Flowchart type</label><select id="cType">
         <option value="consort">CONSORT 2010 — randomized trial</option><option value="strobe">STROBE — observational study</option>
-        <option value="stard">STARD 2015 — diagnostic accuracy</option><option value="simple">Simple flowchart — custom steps</option></select></div></div>
+        <option value="stard">STARD 2015 — diagnostic accuracy</option><option value="simple">Simple flowchart — custom steps</option>
+        <option value="crossover">CONSORT — crossover trial (sequences, periods, washout)</option><option value="cluster">CONSORT — cluster-randomized trial</option><option value="prisma">PRISMA 2020 — systematic review</option></select></div>
+        <div class="row" style="gap:6px;align-items:flex-end"><button class="btn ghost small" id="cUndo" type="button" title="Undo the last change of the flowchart">↶ Undo</button><button class="btn ghost small" id="cRedo" type="button" title="Redo">↷ Redo</button></div>
+        <div class="row" style="gap:6px;align-items:flex-end;flex-wrap:wrap"><select id="cStyleList"><option value="">— saved flowchart styles —</option></select><button class="btn ghost small" id="cStyleApply" type="button">Apply</button><button class="btn ghost small" id="cStyleSave" type="button">💾 Save style…</button></div></div>
       <details class="fl-style"><summary><b>Appearance</b> — colours, corners, lines, text</summary>
         <div class="grid g4" style="margin-top:8px">
           <div><label class="f">Colour theme</label><select data-fs="theme"><option value="classic">Classic — white boxes, coloured labels</option><option value="tinted">Tinted — lightly coloured boxes</option><option value="filled">Filled — main boxes in colour</option><option value="bw">Black and white</option></select></div>
@@ -1064,6 +1067,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Image resolution</label><select data-fs="res"><option value="1">Standard</option><option value="2">High (2×)</option><option value="3">Very high (3×)</option></select></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="pct"><span>Percentages beside the numbers</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="emph"><span>Highlight the final (analysed) boxes</span></label></div>
+          <div><label class="f">Box width</label><select data-fs="boxWidth"><option value="narrow">Narrow</option><option value="normal">Normal</option><option value="wide">Wide</option></select></div>
+          <div><label class="f">Arrow heads</label><select data-fs="arrowHead"><option value="filled">Filled</option><option value="open">Open</option><option value="none">None (lines)</option></select></div>
+          <div><label class="f">Arrow colour</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select data-fs="arrowMode" style="width:auto"><option value="theme">As the theme</option><option value="custom">Custom</option></select><input type="color" data-fs="arrowColor" value="#222222" style="width:52px;padding:2px"></div></div>
+          <div><label class="f">Text of the exclusion boxes</label><select data-fs="sideText"><option value="small">Smaller</option><option value="normal">Same</option><option value="large">Larger</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="legend"><span>Legend of the box colours (tinted / filled themes)</span></label></div>
         </div>
         <div id="flLabels">
           <h3 style="margin:12px 0 4px">Section labels</h3>
@@ -1077,10 +1085,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
             <div><label class="f">Label 3</label><input type="text" data-fsl="2"></div>
             <div><label class="f">Label 4</label><input type="text" data-fsl="3"></div>
           </div>
-          <p class="legend-note">Leave a label empty to use the standard text shown in it.</p>
+          <p class="legend-note">Leave a label empty to use the standard text shown in it. <button class="btn ghost small" id="cArabic" type="button">Arabic labels</button> <button class="btn ghost small" id="cEnglish" type="button">Standard labels</button></p>
         </div>
       </details>
       <p class="hint" id="cHint"></p>
+      <div id="cWarn"></div>
       <div class="grid g2">
         <div id="cForm"></div>
         <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="flowCopy" type="button" title="Copy the flowchart, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button></div></div>

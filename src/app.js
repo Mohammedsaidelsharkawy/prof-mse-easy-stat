@@ -2508,7 +2508,10 @@
     consort: 'CONSORT 2010 — for randomized controlled trials. Numbers randomized and analysed are pre-filled from your data.',
     strobe: 'STROBE — for observational studies (cohort, case-control, cross-sectional). Numbers included and analysed are pre-filled from your data.',
     stard: 'STARD 2015 — for diagnostic accuracy studies: index test results and the reference standard (final diagnosis).',
-    simple: 'A simple flowchart: a chain of steps, each with an optional exclusion box, optionally split into the study groups at the end.'
+    simple: 'A simple flowchart: a chain of steps, each with an optional exclusion box, optionally split into the study groups at the end.',
+    crossover: 'CONSORT for crossover trials: each group is a treatment sequence, with its two periods and the washout between them.',
+    cluster: 'CONSORT for cluster-randomized trials: clusters and participants allocated and analysed in each group.',
+    prisma: 'PRISMA 2020 — for systematic reviews and meta-analyses: records identified, screened, assessed and included. Later numbers follow from those entered.'
   };
   function ensureConsort() {
     const cfg = state.cfg, groups = activeGroups();
@@ -2526,12 +2529,14 @@
     c.stard = c.stard || { tested: total, branches: [branch('Positive'), branch('Negative'), branch('Inconclusive')] };
     c.steps = c.steps || [{ text: 'Assessed for eligibility', n: total, exText: 'Excluded', exN: 0 }, { text: 'Included in the study', n: total, exText: '', exN: 0 }];
     if (c.splitGroups === undefined) c.splitGroups = true;
+    c.prisma = c.prisma || { db: 0, reg: 0, dup: 0, auto: 0, other: 0, scrExcl: 0, notRetrieved: 0, reasons: [{ text: 'Wrong population', n: 0 }, { text: 'Wrong outcome', n: 0 }], studies: 0, reports: 0 };
+    c.pre = c.pre || { on: false, text: 'Screened', n: 0, exText: 'Not eligible at screening', exN: 0 };
     return c;
   }
   const num = (attrs, v) => `<input type="number" min="0" ${attrs} value="${+v || 0}">`;
   // assessed / potentially eligible = all excluded + all groups (CONSORT, STROBE) or + those who received the index test (STARD)
   function syncAssessed(c) {
-    if (c.type === 'simple') return;
+    if (c.type === 'simple' || c.type === 'prisma') return;
     const ex = c.excluded.reduce((s, e) => s + (+e.n || 0), 0);
     c.assessed = ex + (c.type === 'stard' ? +c.stard.tested || 0 : c.groups.reduce((s, g) => s + (+g.allocated || 0), 0));
     const el = document.querySelector('#cForm [data-calc="assessed"]'); if (el) el.value = c.assessed;
@@ -2546,7 +2551,8 @@
     const accent0 = chartPalette(state.cfg.options)[0] || '#7B2FBE';
     document.querySelectorAll('#p9 [data-fs]').forEach(el => {
       const k = el.dataset.fs, v = k === 'colorMode' ? (fsv.color ? 'custom' : 'palette') : k === 'color' ? (fsv.color || accent0)
-        : k === 'pillMode' ? (fsv.pillColor ? 'custom' : 'theme') : k === 'pillColor' ? (fsv.pillColor || fsv.color || accent0) : fsv[k];
+        : k === 'pillMode' ? (fsv.pillColor ? 'custom' : 'theme') : k === 'pillColor' ? (fsv.pillColor || fsv.color || accent0)
+        : k === 'arrowMode' ? (fsv.arrowColor ? 'custom' : 'theme') : k === 'arrowColor' ? (fsv.arrowColor || '#222222') : fsv[k];
       el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v);
     });
     // section labels: own text per flowchart type, the standard text as placeholder
@@ -2557,7 +2563,14 @@
     const excluded = `<h3>Excluded (reasons)</h3>${c.excluded.map((e, i) => `<div class="row" style="margin-bottom:6px"><input type="text" data-ex="${i}" data-f="text" value="${esc(e.text)}" style="flex:3">${num(`data-ex="${i}" data-f="n" style="flex:1;max-width:100px"`, e.n)}<button class="btn ghost small" data-exdel="${i}" type="button">✕</button></div>`).join('')}
       <button class="btn ghost small" data-cact="addEx" type="button">+ Add reason</button>`;
     let html = '';
-    if (t === 'consort' || t === 'strobe') {
+    const pr = c.prisma, prNum = (k, label) => `<div><label class="f">${label}</label>${num(`data-pr="${k}"`, pr[k])}</div>`;
+    if (t === 'prisma') {
+      html = `<h3>Identification</h3><div class="grid g2">${prNum('db', 'Records from databases')}${prNum('reg', 'Records from registers')}${prNum('dup', 'Duplicate records removed')}${prNum('auto', 'Marked ineligible by automation tools')}${prNum('other', 'Removed for other reasons')}</div>
+        <h3>Screening</h3><div class="grid g2">${prNum('scrExcl', 'Records excluded (title / abstract)')}${prNum('notRetrieved', 'Reports not retrieved')}</div>
+        <h3>Reports excluded at full text (reasons)</h3>${pr.reasons.map((r, i) => `<div class="row" style="margin-bottom:6px"><input type="text" data-prr="${i}" data-f="text" value="${esc(r.text)}" style="flex:3">${num(`data-prr="${i}" data-f="n" style="flex:1;max-width:110px"`, r.n)}<button class="btn ghost small" data-prdel="${i}" type="button">✕</button></div>`).join('')}
+        <button class="btn ghost small" data-cact="addPr" type="button">+ Add reason</button>
+        <h3>Included</h3><div class="grid g2">${prNum('studies', 'Studies included')}${prNum('reports', 'Reports of included studies')}</div>`;
+    } else if (t === 'consort' || t === 'strobe' || t === 'crossover' || t === 'cluster') {
       const S = t === 'strobe';
       html = `<h3>${S ? 'Identification' : 'Enrollment'}</h3><div class="grid g2">${calcBox(S ? 'Potentially eligible individuals' : 'Assessed for eligibility', c.assessed, `= excluded + total ${S ? 'included' : 'allocated'} in the groups`)}</div>
         ${excluded}<h3>Per group</h3><div class="grid">${c.groups.map((g, i) => `<div class="gcard"><h4>${esc(gl[i])}</h4>
@@ -2568,6 +2581,8 @@
           <div><label class="f">Reason</label><input type="text" data-cg="${i}" data-f="lostReason" value="${esc(g.lostReason)}"></div>
           <div><label class="f">Excluded from analysis (n)</label>${num(`data-cg="${i}" data-f="excludedAnalysis"`, g.excludedAnalysis)}</div>
           <div><label class="f">Reason excluded</label><input type="text" data-cg="${i}" data-f="excludedReason" value="${esc(g.excludedReason)}"></div>
+          ${t === 'crossover' ? `<div><label class="f">Period 1 treatment</label><input type="text" data-cg="${i}" data-f="p1" value="${esc(g.p1 || '')}" placeholder="e.g. Drug A"></div><div><label class="f">Period 2 treatment</label><input type="text" data-cg="${i}" data-f="p2" value="${esc(g.p2 || '')}" placeholder="e.g. Placebo"></div>` : ''}
+          ${t === 'cluster' ? `<div><label class="f">Clusters allocated</label>${num(`data-cg="${i}" data-f="clusters"`, g.clusters)}</div><div><label class="f">Clusters analysed</label>${num(`data-cg="${i}" data-f="clustersAnalysed"`, g.clustersAnalysed)}</div>` : ''}
         </div>
         <label class="f" style="margin-top:8px">${S ? 'Group description (optional, e.g. "Exposed", "Cases")' : 'Intervention description (optional)'}</label><textarea data-cg="${i}" data-f="description" style="min-height:60px">${esc(g.description)}</textarea></div>`).join('')}</div>`;
     } else if (t === 'stard') {
@@ -2594,10 +2609,44 @@
         <h3>Groups</h3><label class="check"><input type="checkbox" data-c="splitGroups" ${c.splitGroups ? 'checked' : ''}><span>Split into the study groups at the end</span></label>
         <div class="grid g3">${c.groups.map((g, i) => `<div><label class="f">${esc(gl[i])} — analysed (n)</label>${num(`data-cg="${i}" data-f="analysed"`, g.analysed)}</div>`).join('')}</div>`;
     }
+    // more for every type: an earlier stage, randomisation details, ITT / per-protocol, a footnote, reasons read from the data, the enrolment timeline
+    const trial = ['consort', 'crossover', 'cluster'].includes(t), cols = state.data.headers;
+    html += `<details class="gcard" style="margin-top:10px"><summary><b>More</b> — earlier stage, randomisation, populations, footnote, reasons from the data, enrolment timeline</summary>
+      ${['consort', 'strobe', 'crossover', 'cluster'].includes(t) ? `<label class="check"><input type="checkbox" data-cp="on" ${c.pre.on ? 'checked' : ''}><span><b>Earlier stage</b> above the eligibility assessment (e.g. screened)</span></label>
+      <div class="grid g4"><div><label class="f">Text</label><input type="text" data-cp="text" value="${esc(c.pre.text)}"></div><div><label class="f">n</label>${num('data-cp="n"', c.pre.n)}</div>
+        <div><label class="f">Excluded text</label><input type="text" data-cp="exText" value="${esc(c.pre.exText)}"></div><div><label class="f">Excluded (n)</label>${num('data-cp="exN"', c.pre.exN)}</div></div>` : ''}
+      ${trial ? `<div><label class="f">Randomisation details (under “Randomized”)</label><input type="text" data-c="randInfo" value="${esc(c.randInfo || '')}" placeholder="e.g. 1:1, blocks of 4, stratified by sex and centre" style="width:100%"></div>
+      <label class="check"><input type="checkbox" data-c="itt" ${c.itt ? 'checked' : ''}><span><b>Intention-to-treat and per-protocol</b> populations instead of “Analysed”</span></label>` : ''}
+      ${t === 'crossover' ? `<div><label class="f">Washout</label><input type="text" data-c="washout" value="${esc(c.washout || '')}" placeholder="e.g. 2 weeks"></div>` : ''}
+      <div><label class="f">Footnote under the flowchart</label><textarea data-c="footnote" style="min-height:44px">${esc(c.footnote || '')}</textarea></div>
+      ${t !== 'prisma' && t !== 'stard' ? `<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><label class="f" style="margin:0">Reasons from a column</label><select id="cReasonCol">${cols.map(h => `<option>${esc(h)}</option>`).join('')}</select>
+        <select id="cReasonTo"><option value="excluded">→ Excluded (enrolment)</option><option value="lost">→ Lost to follow-up (per group)</option><option value="exAnalysis">→ Excluded from analysis (per group)</option></select><button class="btn ghost small" id="cReasonGo" type="button">Fill</button></div>
+        <p class="legend-note" style="margin:2px 0 0">Every non-empty value of the column is a reason; patients are counted per reason (and per group).</p>` : ''}
+      <div class="row" style="gap:6px;margin-top:6px"><label class="f" style="margin:0">Enrolment timeline (report table and chart) from the date column</label><select id="cTimeline"><option value="">— none —</option>${cols.map(h => `<option ${state.cfg.timeline && state.cfg.timeline.col === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>
+    </details>`;
     $('#cForm').innerHTML = html;
     drawConsortPreview();
   }
-  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {}, nFmt: 'tight', spacing: 'normal', exSide: 'right', res: '1', pct: false, emph: false };
+  // checks that the numbers of the flowchart add up
+  function flowWarnings(c) {
+    const w = [], n = v => +v || 0;
+    if (['consort', 'strobe', 'crossover', 'cluster', 'simple'].includes(c.type)) {
+      const N = activeGroups().map(groupN);
+      c.groups.forEach((g, i) => { const gl = state.cfg.groupLabels[activeGroups()[i]] || `Group ${i + 1}`;
+        if (c.type !== 'simple' && n(g.allocated) - n(g.lost) - n(g.excludedAnalysis) !== n(g.analysed)) w.push(`${gl}: allocated (${n(g.allocated)}) − lost (${n(g.lost)}) − excluded (${n(g.excludedAnalysis)}) ≠ analysed (${n(g.analysed)})`);
+        if (N[i] !== undefined && n(g.analysed) !== N[i] && !c.itt) w.push(`${gl}: analysed ${n(g.analysed)}, but the data have ${N[i]} patients`);
+        if (c.type === 'cluster' && n(g.clustersAnalysed) > n(g.clusters)) w.push(`${gl}: more clusters analysed than allocated`); });
+      if (c.pre && c.pre.on && n(c.pre.n) && n(c.pre.n) - n(c.pre.exN) !== n(c.assessed)) w.push(`Screened (${n(c.pre.n)}) − not eligible (${n(c.pre.exN)}) ≠ assessed for eligibility (${n(c.assessed)})`);
+    }
+    if (c.type === 'simple') c.steps.forEach((s2, i) => { const nx = c.steps[i + 1]; if (nx && n(s2.n) - n(s2.exN) !== n(nx.n)) w.push(`Step ${i + 1}: ${n(s2.n)} − ${n(s2.exN)} excluded ≠ ${n(nx.n)} in step ${i + 2}`); });
+    if (c.type === 'stard') { const b = c.stard.branches; if (b.reduce((t, x) => t + n(x.n), 0) !== n(c.stard.tested)) w.push('The index test results do not add up to those who received the test');
+      b.forEach(x => { if (n(x.n) && n(x.noRef) + n(x.present) + n(x.absent) + n(x.inconclusive) !== n(x.n)) w.push(`Index test ${x.name.toLowerCase()}: no reference + present + absent + inconclusive ≠ ${n(x.n)}`); }); }
+    if (c.type === 'prisma') { const p = c.prisma, as = n(p.db) + n(p.reg) - n(p.dup) - n(p.auto) - n(p.other) - n(p.scrExcl) - n(p.notRetrieved), ex = p.reasons.reduce((t, r) => t + n(r.n), 0);
+      if (as < 0) w.push('More records removed or excluded than identified');
+      if (as - ex !== n(p.studies) && n(p.studies)) w.push(`Reports assessed (${as}) − excluded (${ex}) = ${as - ex}, but ${n(p.studies)} studies are included (fine when several reports belong to one study)`); }
+    return w;
+  }
+  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {}, nFmt: 'tight', spacing: 'normal', exSide: 'right', res: '1', pct: false, emph: false, boxWidth: 'normal', arrowHead: 'filled', arrowColor: '', sideText: 'normal', legend: false };
   function readConsort() {
     const c = state.cfg && state.cfg.consort; if (!c || !$('#cForm').innerHTML) return;
     c.enabled = $('#cEnabled').checked;
@@ -2607,8 +2656,13 @@
     if (c.type !== 'simple') labels[c.type] = [...document.querySelectorAll('#p9 [data-fsl]')].map(el => el.value);
     c.style = { theme: st.theme, color: st.colorMode === 'custom' ? st.color : '', corners: st.corners, lines: st.lines, textSize: st.textSize, font: st.font, pills: st.pills, shadow: st.shadow,
       pillColor: st.pillMode === 'custom' ? st.pillColor : '', pillTextColor: st.pillTextColor, labels,
-      nFmt: st.nFmt, spacing: st.spacing, exSide: st.exSide, res: st.res, pct: st.pct, emph: st.emph };
+      nFmt: st.nFmt, spacing: st.spacing, exSide: st.exSide, res: st.res, pct: st.pct, emph: st.emph,
+      boxWidth: st.boxWidth, arrowHead: st.arrowHead, arrowColor: st.arrowMode === 'custom' ? st.arrowColor : '', sideText: st.sideText, legend: st.legend };
     const val = el => el.type === 'checkbox' ? el.checked : el.type === 'number' ? (+el.value || 0) : el.value;
+    document.querySelectorAll('#cForm [data-pr]').forEach(el => { c.prisma[el.dataset.pr] = val(el); });
+    document.querySelectorAll('#cForm [data-prr]').forEach(el => { c.prisma.reasons[+el.dataset.prr][el.dataset.f] = val(el); });
+    document.querySelectorAll('#cForm [data-cp]').forEach(el => { c.pre[el.dataset.cp] = val(el); });
+    if ($('#cTimeline')) { const tl = $('#cTimeline').value; if (tl) state.cfg.timeline = { col: tl }; else delete state.cfg.timeline; }
     document.querySelectorAll('#cForm [data-c]').forEach(el => { c[el.dataset.c] = val(el); });
     document.querySelectorAll('#cForm [data-ex]').forEach(el => { c.excluded[+el.dataset.ex][el.dataset.f] = val(el); });
     document.querySelectorAll('#cForm [data-cg]').forEach(el => { const g = c.groups[+el.dataset.cg]; if (g) g[el.dataset.f] = val(el); });
@@ -2626,6 +2680,8 @@
   };
   function drawConsortPreview() {
     const c = state.cfg.consort, gl = activeGroups().map(g => state.cfg.groupLabels[g]);
+    flowPush(c);
+    const wn = flowWarnings(c); $('#cWarn').innerHTML = wn.length ? `<div class="chip warn" style="display:block;white-space:normal;padding:6px 10px"><b>Check the numbers:</b><br>${wn.map(esc).join('<br>')}</div>` : '';
     const cv = Charts.consort(c, gl, chartPalette(state.cfg.options));
     const tgt = $('#consortCanvas');
     tgt.width = cv.width; tgt.height = cv.height; tgt.getContext('2d').drawImage(cv, 0, 0);
@@ -2642,12 +2698,42 @@
     }
     drawConsortPreview();
   });
+  // exclusion or loss counts from a "reason" column: one line per distinct reason
+  function fillReasons(col, to) {
+    const c = state.cfg.consort, cfg = state.cfg, groups = activeGroups(), rows = state.data.rows, val = r => r[col] === null || r[col] === undefined ? '' : String(r[col]).trim();
+    const count = rs => { const m = new Map(); rs.forEach(r => { const v = val(r); if (v) m.set(v, (m.get(v) || 0) + 1); }); return [...m.entries()].sort((a, b) => b[1] - a[1]); };
+    if (to === 'excluded') { const cs = count(rows); if (!cs.length) { toast('The column has no values'); return; } c.excluded = cs.map(([text, n]) => ({ text, n })); }
+    else groups.forEach((g, i) => { const cs = count(rows.filter(r => Analysis.groupOf(cfg, r) === g)), tot = cs.reduce((t, x) => t + x[1], 0), why = cs.map(([t, n]) => `${t} (n=${n})`).join(', '), G = c.groups[i]; if (!G) return;
+      if (to === 'lost') { G.lost = tot; G.lostReason = why; } else { G.excludedAnalysis = tot; G.excludedReason = why; } G.analysed = Math.max(0, G.allocated - G.lost - G.excludedAnalysis); });
+    renderConsortForm(); toast(`Reasons taken from “${col}”`);
+  }
+  // undo / redo of the flowchart: snapshots of its settings
+  const flowHist = { past: [], future: [], last: '' };
+  function flowPush(c) { const j = JSON.stringify(c); if (j === flowHist.last) return; if (flowHist.last) { flowHist.past.push(flowHist.last); if (flowHist.past.length > 60) flowHist.past.shift(); } flowHist.future = []; flowHist.last = j; }
+  const flowGo = back => { const from = back ? flowHist.past : flowHist.future, to = back ? flowHist.future : flowHist.past; if (!from.length) { toast(back ? 'Nothing to undo' : 'Nothing to redo'); return; }
+    to.push(flowHist.last); flowHist.last = from.pop(); state.cfg.consort = JSON.parse(flowHist.last); const keep = flowHist.last; renderConsortForm(); flowHist.last = keep; };
+  $('#cUndo').onclick = () => flowGo(true); $('#cRedo').onclick = () => flowGo(false);
+  // section labels in Arabic, or back to the standard text
+  const AR_LABELS = { consort: ['التسجيل', 'التوزيع', 'المتابعة', 'التحليل'], crossover: ['التسجيل', 'التوزيع', 'المتابعة', 'التحليل'], cluster: ['التسجيل', 'التوزيع', 'المتابعة', 'التحليل'],
+    strobe: ['التحديد', 'الإدراج', 'المتابعة', 'التحليل'], stard: ['التسجيل', 'الاختبار', 'المرجع', 'التشخيص'], prisma: ['التحديد', 'الفرز', 'المُدرَجة'] };
+  $('#cArabic').onclick = () => { const t = state.cfg.consort.type; document.querySelectorAll('#p9 [data-fsl]').forEach((el, i) => { el.value = (AR_LABELS[t] || [])[i] || ''; }); readConsort(); drawConsortPreview(); };
+  $('#cEnglish').onclick = () => { document.querySelectorAll('#p9 [data-fsl]').forEach(el => { el.value = ''; }); readConsort(); drawConsortPreview(); };
+  // flowchart styles saved in this browser
+  const FS_KEY = 'pmse-flow-styles', flowStyles = () => { try { return JSON.parse(localStorage.getItem(FS_KEY) || '{}'); } catch (e) { return {}; } };
+  const renderFlowStyles = () => { $('#cStyleList').innerHTML = '<option value="">— saved flowchart styles —</option>' + Object.keys(flowStyles()).map(n => `<option>${esc(n)}</option>`).join(''); };
+  $('#cStyleSave').onclick = () => { readConsort(); const name = (prompt('Name of this flowchart style:', 'My flowchart style') || '').trim(); if (!name) return; const all = flowStyles(); all[name] = state.cfg.consort.style;
+    try { localStorage.setItem(FS_KEY, JSON.stringify(all)); } catch (e) { toast('This browser does not allow saving'); return; } renderFlowStyles(); $('#cStyleList').value = name; toast(`Flowchart style “${name}” saved`); };
+  $('#cStyleApply').onclick = () => { const st = flowStyles()[$('#cStyleList').value]; if (!st) return; state.cfg.consort.style = JSON.parse(JSON.stringify(st)); renderConsortForm(); toast('Flowchart style applied'); };
+  renderFlowStyles();
   $('#cType').addEventListener('change', e => { readConsort(); state.cfg.consort.type = e.target.value; renderConsortForm(); });
   $('#cForm').addEventListener('click', e => {
-    const c = state.cfg.consort, b = e.target.closest('[data-cact],[data-exdel],[data-stdel]'); if (!b) return;
+    if (e.target.id === 'cReasonGo') { readConsort(); fillReasons($('#cReasonCol').value, $('#cReasonTo').value); return; }
+    const c = state.cfg.consort, b = e.target.closest('[data-cact],[data-exdel],[data-stdel],[data-prdel]'); if (!b) return;
     readConsort();
     if (b.dataset.cact === 'addEx') c.excluded.push({ text: 'Other reasons', n: 0 });
     else if (b.dataset.cact === 'addStep') c.steps.push({ text: 'Next step', n: 0, exText: '', exN: 0 });
+    else if (b.dataset.cact === 'addPr') c.prisma.reasons.push({ text: 'Other reason', n: 0 });
+    else if (b.dataset.prdel !== undefined) c.prisma.reasons.splice(+b.dataset.prdel, 1);
     else if (b.dataset.exdel !== undefined) c.excluded.splice(+b.dataset.exdel, 1);
     else if (b.dataset.stdel !== undefined) c.steps.splice(+b.dataset.stdel, 1);
     renderConsortForm();
@@ -3517,7 +3603,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   };
   const flowItem = (c, gl, name) => {
     const pal = chartPalette(state.cfg.options), cv = Charts.consort(c, gl, pal, 1);
-    return { name, w: cv.width, h: cv.height, pt: flowPt(), draw: res => Charts.consort(c, gl, pal, res) };
+    return { name, w: cv.width, h: cv.height, pt: flowPt(), draw: res => Charts.consort(c, gl, pal, res), svg: () => Charts.flowSVG(c, gl, pal) };
   };
   let fxItems = [];
   function openFigExport(items, preselect) {

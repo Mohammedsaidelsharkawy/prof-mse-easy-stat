@@ -99,6 +99,8 @@ const Charts = (() => {
   SP.lineTo = function (x, y) { this.path += (this.cur ? 'L' : 'M') + this.pt(x, y); this.cur = [x, y]; };
   SP.closePath = function () { this.path += 'Z'; };
   SP.rect = function (x, y, w, h) { this.path += `M${this.pt(x, y)}L${this.pt(x + w, y)}L${this.pt(x + w, y + h)}L${this.pt(x, y + h)}Z`; this.cur = [x, y]; };
+  SP.roundRect = function (x, y, w, h, r) { r = Math.min(+r || 0, w / 2, h / 2); this.moveTo(x + r, y); this.lineTo(x + w - r, y); this.arc(x + w - r, y + r, r, -Math.PI / 2, 0); this.lineTo(x + w, y + h - r);
+    this.arc(x + w - r, y + h - r, r, 0, Math.PI / 2); this.lineTo(x + r, y + h); this.arc(x + r, y + h - r, r, Math.PI / 2, Math.PI); this.lineTo(x, y + r); this.arc(x + r, y + r, r, Math.PI, 1.5 * Math.PI); this.closePath(); };
   SP.quadraticCurveTo = function (a, b, x, y) { this.path += `Q${this.pt(a, b)} ${this.pt(x, y)}`; this.cur = [x, y]; };
   SP.bezierCurveTo = function (a, b, c, d, x, y) { this.path += `C${this.pt(a, b)} ${this.pt(c, d)} ${this.pt(x, y)}`; this.cur = [x, y]; };
   SP.arc = function (cx, cy, r, a0, a1, ccw) {
@@ -1091,7 +1093,19 @@ const Charts = (() => {
   // section labels and shadows; roles: main path boxes, side (exclusion) boxes and the group columns
   const mix = (hex, to, a) => { const h = n => parseInt(hex.slice(n, n + 2), 16), t = n => parseInt(to.slice(n, n + 2), 16);
     return '#' + [1, 3, 5].map(n => Math.round(h(n) + (t(n) - h(n)) * a).toString(16).padStart(2, '0')).join(''); };
-  const FLOW_LABELS = { consort: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], strobe: ['Identification', 'Inclusion', 'Follow-Up', 'Analysis'], stard: ['Enrollment', 'Index test', 'Reference', 'Diagnosis'] };
+  // PRISMA 2020: the numbers of each stage follow from what was entered
+  function prismaSteps(p, S) {
+    const v = k => +p[k] || 0, N = x => `(${S.N(x)})`, idf = v('db') + v('reg'), removed = v('dup') + v('auto') + v('other'), screened = idf - removed, sought = screened - v('scrExcl'), assessed = sought - v('notRetrieved');
+    const reasons = (p.reasons || []).filter(r => String(r.text).trim() && +r.n), exElig = reasons.reduce((t, r) => t + +r.n, 0);
+    return [
+      { full: `Records identified from:\nDatabases ${N(v('db'))}\nRegisters ${N(v('reg'))}`, n: idf, exN: removed, exFull: `Records removed before screening:\nDuplicate records ${N(v('dup'))}\nMarked as ineligible by automation tools ${N(v('auto'))}\nRemoved for other reasons ${N(v('other'))}` },
+      { text: 'Records screened', n: screened, exN: v('scrExcl'), exText: 'Records excluded' },
+      { text: 'Reports sought for retrieval', n: sought, exN: v('notRetrieved'), exText: 'Reports not retrieved' },
+      { text: 'Reports assessed for eligibility', n: assessed, exN: exElig, exFull: `Reports excluded:${reasons.map(r => `\n${r.text} ${N(r.n)}`).join('')}` },
+      { full: `Studies included in review ${N(v('studies'))}${v('reports') ? `\nReports of included studies ${N(v('reports'))}` : ''}`, n: v('studies'), exN: 0 }
+    ];
+  }
+  const FLOW_LABELS = { prisma: ['Identification', 'Screening', 'Included'], consort: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], crossover: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], cluster: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], strobe: ['Identification', 'Inclusion', 'Follow-Up', 'Analysis'], stard: ['Enrollment', 'Index test', 'Reference', 'Diagnosis'] };
   function flowStyle(c, pal) {
     const st = c.style || {}, theme = st.theme || 'classic';
     const accent = theme === 'bw' ? '#444444' : /^#[0-9a-f]{6}$/i.test(st.color || '') ? st.color : pal[0];
@@ -1110,7 +1124,10 @@ const Charts = (() => {
       // numbers: "n=30" (default), "n = 30" or "N=30", optional percentages, exclusion box side, final boxes emphasised, spacing, resolution
       N: v => `${{ spaced: 'n = ', upper: 'N=' }[st.nFmt] || 'n='}${v}`, pct: !!st.pct, exLeft: st.exSide === 'left', emph: !!st.emph,
       gap: { compact: 40, roomy: 85 }[st.spacing] || 60, res: Math.min(3, Math.max(1, +st.res || 1)),
-      pill: /^#[0-9a-f]{6}$/i.test(st.pillColor || '') ? st.pillColor : accent, pillText: /^#[0-9a-f]{6}$/i.test(st.pillTextColor || '') ? st.pillTextColor : '#fff'
+      pill: /^#[0-9a-f]{6}$/i.test(st.pillColor || '') ? st.pillColor : accent, pillText: /^#[0-9a-f]{6}$/i.test(st.pillTextColor || '') ? st.pillTextColor : '#fff',
+      // box widths, arrow colour and head, text size of the exclusion boxes, a legend of the box colours
+      wScale: { narrow: 0.85, wide: 1.2 }[st.boxWidth] || 1, arrowColor: /^#[0-9a-f]{6}$/i.test(st.arrowColor || '') ? st.arrowColor : null, head: st.arrowHead || 'filled',
+      sideFs: { small: 0.85, large: 1.15 }[st.sideText] || 1, legend: !!st.legend, theme
     };
   }
   function flowBox(ctx, S, x, y, w, h, role) {
@@ -1130,19 +1147,20 @@ const Charts = (() => {
     if (res) S.res = res; // export at a chosen resolution
     FONT = S.font;
     if (c.type === 'simple') return simpleFlow(c, groupLabels, palName, S);
+    if (c.type === 'prisma') { const own = ((c.style || {}).labels || {}).prisma || [], L = FLOW_LABELS.prisma.map((d, i) => String(own[i] || '').trim() || d);
+      return simpleFlow({ ...c, steps: prismaSteps(c.prisma || {}, S), splitGroups: false, sections: [[L[0], 0, 0], [L[1], 1, 3], [L[2], 4, 4]] }, [], palName, S); }
     const pal = palette(palName), type = c.type || 'consort';
     const branches = type === 'stard' ? stardBranches(c) : null;
     const k = branches ? branches.length : groupLabels.length;
-    const cv = document.createElement('canvas');
     const CW = 1200;
-    const ctx = cv.getContext('2d');
+    let cv = makeCanvas(CW, 100), ctx = cv.getContext('2d');
     const gutter = S.pills ? 80 : 0, pad = 18, colW = (CW - gutter - pad * (k + 1)) / k;
     const fs = S.fs, lh = S.lh, MIN_ROW = S.pills ? 175 : 0; // rows tall enough for the rotated section labels
-    const boxH = (lines) => lines.reduce((h, ln) => { ctx.font = `${ln.b ? 700 : 400} ${fs}px ${FONT}`; return h + measureLines(ctx, ln.t, ln.w - 28) * lh; }, 0) + 26;
+    const boxH = (lines, k = 1) => lines.reduce((h, ln) => { ctx.font = `${ln.b ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`; return h + measureLines(ctx, ln.t, ln.w - 28) * Math.round(lh * k); }, 0) + 26;
 
     const ex = c.excluded.filter(e => +e.n > 0);
     const exTotal = ex.reduce((s, e) => s + +e.n, 0);
-    const topW = 440, exW = 500;
+    const topW = Math.round(440 * S.wScale), exW = S.wScale > 1 ? Math.max(500, Math.round((CW - (S.pills ? 80 : 0)) / 2 - 60)) : Math.round(500 * S.wScale);
     // "(n=12)" or with a percentage of its base: "(n=12, 9.5%)"
     const NP = (v, base) => `(${S.N(+v || 0)}${S.pct && +base > 0 ? `, ${Math.round(1000 * (+v || 0) / base) / 10}%` : ''})`;
     const strobe = type === 'strobe';
@@ -1150,28 +1168,44 @@ const Charts = (() => {
     const assessed = [{ t: `${topText} ${NP(c.assessed)}`, b: true, w: topW }];
     const excluded = [{ t: `Excluded ${NP(exTotal, c.assessed)}`, b: true, w: exW }, ...ex.map(e => ({ t: `• ${e.text} ${NP(e.n, c.assessed)}`, w: exW }))];
     const midN = branches ? +c.stard.tested || 0 : c.groups.reduce((s, g) => s + (+g.allocated || 0), 0);
-    const randomized = [{ t: `${type === 'stard' ? 'Received index test' : strobe ? 'Included in the study' : 'Randomized'} ${NP(midN)}`, b: true, w: topW }];
+    const randomized = [{ t: `${type === 'stard' ? 'Received index test' : strobe ? 'Included in the study' : 'Randomized'} ${NP(midN)}${type === 'cluster' && c.groups.some(g => +g.clusters) ? ` in ${c.groups.reduce((t, g) => t + (+g.clusters || 0), 0)} clusters` : ''}`, b: true, w: topW },
+      ...(c.randInfo && !strobe && type !== 'stard' ? [{ t: c.randInfo, w: topW }] : [])];
+    // an optional earlier stage (e.g. screened) above the eligibility assessment
+    const pre = c.pre && c.pre.on && +c.pre.n ? [{ t: `${c.pre.text || 'Screened'} ${NP(c.pre.n)}`, b: true, w: topW }] : null;
+    const preEx = pre && +c.pre.exN ? [{ t: `${c.pre.exText || 'Not eligible at screening'} ${NP(c.pre.exN, c.pre.n)}`, w: exW }] : null;
     let alloc, follow, anal;
     if (branches) {
       alloc = branches.map(b => [{ t: `Index test ${b.name.toLowerCase()} ${NP(b.n, midN)}`, b: true, w: colW }]);
       follow = branches.map(b => [{ t: `No reference standard ${NP(b.noRef, b.n)}`, b: true, w: colW }, { t: `Reference standard ${NP((+b.present || 0) + (+b.absent || 0) + (+b.inconclusive || 0), b.n)}`, w: colW }]);
       anal = branches.map(b => [{ t: 'Final diagnosis', b: true, w: colW }, { t: `Target condition present ${NP(b.present)}\nTarget condition absent ${NP(b.absent)}${+b.inconclusive ? `\nInconclusive ${NP(b.inconclusive)}` : ''}`, w: colW }]);
     } else {
-      alloc = c.groups.map((g, i) => [{ t: `${groupLabels[i]} ${NP(g.allocated, midN)}`, b: true, w: colW }, { t: g.description || (strobe ? `Included ${NP(g.allocated)}` : `Received allocated intervention ${NP(g.allocated)}`), w: colW }]);
+      // crossover: each sequence with its two periods and the washout; cluster trials: clusters and participants
+      alloc = c.groups.map((g, i) => type === 'crossover'
+        ? [{ t: `Sequence ${groupLabels[i]} ${NP(g.allocated, midN)}`, b: true, w: colW }, { t: `Period 1: ${g.p1 || '—'}\nWashout${c.washout ? `: ${c.washout}` : ''}\nPeriod 2: ${g.p2 || '—'}`, w: colW }]
+        : type === 'cluster'
+        ? [{ t: `${groupLabels[i]}: ${+g.clusters || 0} clusters ${NP(g.allocated, midN)}`, b: true, w: colW }, { t: g.description || `Received allocated intervention ${NP(g.allocated)}`, w: colW }]
+        : [{ t: `${groupLabels[i]} ${NP(g.allocated, midN)}`, b: true, w: colW }, { t: g.description || (strobe ? `Included ${NP(g.allocated)}` : `Received allocated intervention ${NP(g.allocated)}`), w: colW }]);
       follow = c.groups.map(g => [{ t: `${strobe ? 'Lost to follow-up / missing data' : 'Lost to follow-up'} ${NP(g.lost, g.allocated)}`, b: true, w: colW }, ...(g.lostReason && +g.lost ? [{ t: g.lostReason, w: colW }] : [{ t: strobe ? 'None' : 'No drop out', w: colW }])]);
-      anal = c.groups.map(g => [{ t: `Analysed ${NP(g.analysed, g.allocated)}`, b: true, w: colW }, { t: `Excluded from analysis ${NP(g.excludedAnalysis, g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
+      // intention-to-treat and per-protocol populations, or one "Analysed" box
+      anal = c.groups.map(g => c.itt
+        ? [{ t: `Intention-to-treat ${NP(g.allocated)}`, b: true, w: colW }, { t: `Per-protocol ${NP(g.analysed, g.allocated)}`, b: true, w: colW }, { t: `Excluded from per-protocol ${NP((+g.allocated || 0) - (+g.analysed || 0), g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]
+        : [{ t: `Analysed ${NP(g.analysed, g.allocated)}${type === 'cluster' && +g.clustersAnalysed ? ` in ${g.clustersAnalysed} clusters` : ''}`, b: true, w: colW }, { t: `Excluded from analysis ${NP(g.excludedAnalysis, g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
     }
     // section labels: the user's own text where given, else the defaults of the flowchart type
     const own = ((c.style || {}).labels || {})[type] || [];
-    const PILLS = FLOW_LABELS[type].map((d, i) => String(own[i] || '').trim() || d);
+    const PILLS = (FLOW_LABELS[type] || FLOW_LABELS.consort).map((d, i) => String(own[i] || '').trim() || d);
 
-    const hA = boxH(assessed), hE = boxH(excluded), hR = boxH(randomized);
-    const hAl = Math.max(MIN_ROW, ...alloc.map(boxH)), hF = Math.max(MIN_ROW, ...follow.map(boxH)), hAn = Math.max(MIN_ROW, ...anal.map(boxH));
-    const gap = S.gap;
-    const yA = 30, yE = yA + hA + 20, yR = Math.max(yE + hE + 20, yA + hA + gap);
+    const hA = boxH(assessed), hE = boxH(excluded, S.sideFs), hR = boxH(randomized);
+    const hAl = Math.max(MIN_ROW, ...alloc.map(l => boxH(l))), hF = Math.max(MIN_ROW, ...follow.map(l => boxH(l))), hAn = Math.max(MIN_ROW, ...anal.map(l => boxH(l)));
+    const gap = S.gap, hP = pre ? boxH(pre) : 0, hPE = preEx ? boxH(preEx, S.sideFs) : 0, y0 = pre ? 30 + hP + Math.max(gap, hPE + 40) : 30;
+    const yA = y0, yE = yA + hA + 20, yR = Math.max(yE + hE + 20, yA + hA + gap);
     const yAl = yR + hR + gap + 20, yF = yAl + hAl + gap, yAn = yF + hF + gap;
-    cv.width = CW * S.res; cv.height = (yAn + hAn + 30) * S.res; ctx.scale(S.res, S.res);
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, yAn + hAn + 30);
+    // footnote and legend below the boxes
+    ctx.font = `400 ${Math.round(fs * 0.8)}px ${FONT}`;
+    const foot = String(c.footnote || '').trim(), footH = foot ? measureLines(ctx, foot, CW - 60) * Math.round(lh * 0.8) + 16 : 0, legH = S.legend && S.theme !== 'classic' && S.theme !== 'bw' ? 50 : 0;
+    const Htot = yAn + hAn + 30 + footH + legH;
+    cv = makeCanvas(CW * S.res, Htot * S.res); const ctx0 = ctx; ctx = cv.getContext('2d'); ctx.scale(S.res, S.res);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, Htot);
 
     const midX = gutter + (CW - gutter) / 2;
     const box = (x, y, w, h, lines, align = 'center', role = 'main') => {
@@ -1179,22 +1213,15 @@ const Charts = (() => {
       let yy = y + 14;
       ctx.textBaseline = 'top';
       lines.forEach(ln => {
-        ctx.font = `${ln.b ? 700 : 400} ${fs}px ${FONT}`;
+        const k = role === 'side' ? S.sideFs : 1; ctx.font = `${ln.b ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`;
         ln.t.split('\n').forEach(par => {
           ctx.textAlign = align;
-          const n = wrapText(ctx, par, align === 'center' ? x + w / 2 : x + 14, yy, w - 28, lh);
-          yy += n * lh;
+          const n = wrapText(ctx, par, align === 'center' ? x + w / 2 : x + 14, yy, w - 28, Math.round(lh * k));
+          yy += n * Math.round(lh * k);
         });
       });
     };
-    const arrow = (x1, y1, x2, y2) => {
-      ctx.strokeStyle = S.arrow; ctx.fillStyle = S.arrow; ctx.lineWidth = S.lw;
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-      const a = Math.atan2(y2 - y1, x2 - x1);
-      ctx.beginPath(); ctx.moveTo(x2, y2);
-      ctx.lineTo(x2 - 16 * Math.cos(a - 0.4), y2 - 16 * Math.sin(a - 0.4));
-      ctx.lineTo(x2 - 16 * Math.cos(a + 0.4), y2 - 16 * Math.sin(a + 0.4)); ctx.fill();
-    };
+    const arrow = (x1, y1, x2, y2) => flowArrow(ctx, S, x1, y1, x2, y2);
     const pill = (label, y1, y2) => {
       if (!S.pills) return;
       ctx.fillStyle = S.pill;
@@ -1208,7 +1235,10 @@ const Charts = (() => {
       ctx.fillText(label, 0, 0); ctx.restore();
     };
 
-    pill(PILLS[0], yA, yR + hR);
+    pill(PILLS[0], pre ? 30 : yA, yR + hR);
+    if (pre) { box(midX - topW / 2, 30, topW, hP, pre);
+      if (preEx) { const exX = S.exLeft ? Math.max(gutter + 6, midX - 60 - exW) : midX + 60, ey = 30 + hP + (yA - 30 - hP - hPE) / 2; box(exX, ey, exW, hPE, preEx, 'left', 'side'); arrow(midX, ey + hPE / 2, S.exLeft ? exX + exW : exX, ey + hPE / 2); }
+      arrow(midX, 30 + hP, midX, yA); }
     pill(PILLS[1], yAl, yAl + hAl);
     pill(PILLS[2], yF, yF + hF);
     pill(PILLS[3], yAn, yAn + hAn);
@@ -1225,7 +1255,7 @@ const Charts = (() => {
 
     const colX = i => gutter + pad + i * (colW + pad);
     const busY = yR + hR + gap / 2 + 10;
-    ctx.strokeStyle = S.arrow; ctx.lineWidth = S.lw;
+    ctx.strokeStyle = S.arrowColor || S.arrow; ctx.lineWidth = S.lw;
     ctx.beginPath(); ctx.moveTo(midX, yR + hR); ctx.lineTo(midX, busY);
     ctx.moveTo(colX(0) + colW / 2, busY); ctx.lineTo(colX(k - 1) + colW / 2, busY); ctx.stroke();
     for (let i = 0; i < k; i++) {
@@ -1237,7 +1267,24 @@ const Charts = (() => {
       arrow(cx, yF + hF, cx, yAn);
       box(x, yAn, colW, hAn, anal[i], 'center', S.emph ? 'final' : 'col');
     }
+    flowFoot(ctx, S, foot, legH, CW, yAn + hAn + 30, fs, lh);
     return cv;
+  }
+  // arrows: filled head (default), open head or none, in the theme's or a chosen colour
+  function flowArrow(ctx, S, x1, y1, x2, y2) {
+    const col = S.arrowColor || S.arrow; ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = S.lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    if (S.head === 'none') return;
+    const a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x2 - 16 * Math.cos(a - 0.4), y2 - 16 * Math.sin(a - 0.4)); ctx.lineTo(x2, y2); ctx.lineTo(x2 - 16 * Math.cos(a + 0.4), y2 - 16 * Math.sin(a + 0.4));
+    if (S.head === 'open') ctx.stroke(); else { ctx.closePath(); ctx.fill(); }
+  }
+  // the footnote under the flowchart and a legend of the box colours (tinted / filled themes)
+  function flowFoot(ctx, S, foot, legH, CW, y, fs, lh) {
+    if (legH) { const items = [['main', 'Main path'], ['side', 'Excluded'], ['col', 'Groups']], sw = 34; let x = 40; ctx.font = `600 ${Math.round(fs * 0.8)}px ${FONT}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      items.forEach(([r, t]) => { ctx.fillStyle = S.fill(r); ctx.fillRect(x, y + 8, sw, 24); ctx.strokeStyle = S.stroke(r); ctx.lineWidth = 2; ctx.strokeRect(x, y + 8, sw, 24); ctx.fillStyle = '#222'; ctx.fillText(t, x + sw + 10, y + 20); x += sw + 30 + ctx.measureText(t).width; });
+      y += legH; }
+    if (foot) { ctx.font = `400 ${Math.round(fs * 0.8)}px ${FONT}`; ctx.fillStyle = '#333'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; let yy = y; foot.split('\n').forEach(par => { yy += wrapText(ctx, par, 30, yy, CW - 60, Math.round(lh * 0.8)) * Math.round(lh * 0.8); }); }
   }
 
   // STARD columns: positive and negative always, inconclusive only when used
@@ -1245,16 +1292,18 @@ const Charts = (() => {
 
   /* ---------- simple flowchart: a chain of steps with optional exclusions, optionally split into the groups ---------- */
   function simpleFlow(c, groupLabels, palName, S) {
-    const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
-    const CW = 1200, fs = S.fs, lh = S.lh, boxW = 520, exW = 420, gap = S.gap - 4;
-    const boxH = (text, w, bold) => { ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; return text.split('\n').reduce((h, par) => h + measureLines(ctx, par, w - 28) * lh, 0) + 26; };
-    const steps = c.steps.filter(s => String(s.text).trim());
-    const midX = CW / 2 - (steps.some(s => +s.exN > 0) ? 160 : 0);
+    let cv = makeCanvas(1200, 100), ctx = cv.getContext('2d');
+    const CW = 1200, fs = S.fs, lh = S.lh, boxW = Math.round(520 * S.wScale), exW = Math.round(420 * S.wScale), gap = S.gap - 4;
+    const boxH = (text, w, bold, k = 1) => { ctx.font = `${bold ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`; return text.split('\n').reduce((h, par) => h + measureLines(ctx, par, w - 28) * Math.round(lh * k), 0) + 26; };
+    const steps = c.steps.filter(s => String(s.full || s.text).trim());
+    // PRISMA: section labels at the side (Identification, Screening, Included)
+    const secs = c.sections && S.pills ? c.sections : null, gut = secs ? 80 : 0;
+    const midX = gut / 2 + CW / 2 - (steps.some(s => +s.exN > 0) ? 160 : 0);
     let y = 30;
     const layout = steps.map(s => {
-      const text = `${s.text} (${S.N(+s.n || 0)})`, h = boxH(text, boxW, true);
-      const ex = +s.exN > 0 ? { text: `${s.exText || 'Excluded'} (${S.N(s.exN)}${S.pct && +s.n > 0 ? `, ${Math.round(1000 * s.exN / s.n) / 10}%` : ''})`, h: 0 } : null;
-      if (ex) ex.h = boxH(ex.text, exW, false);
+      const text = s.full || `${s.text} (${S.N(+s.n || 0)})`, h = boxH(text, boxW, true);
+      const ex = +s.exN > 0 ? { text: s.exFull || `${s.exText || 'Excluded'} (${S.N(s.exN)}${S.pct && +s.n > 0 ? `, ${Math.round(1000 * s.exN / s.n) / 10}%` : ''})`, h: 0 } : null;
+      if (ex) ex.h = boxH(ex.text, exW, false, S.sideFs);
       const box = { text, y, h, ex };
       y += h + gap + (ex ? ex.h + 24 : 0);
       return box;
@@ -1263,21 +1312,23 @@ const Charts = (() => {
     const pad = 18, colW = split ? Math.min(360, (CW - pad * (k + 1)) / k) : 0;
     const gH = split ? Math.max(...groupLabels.map((g, i) => boxH(`${g}\n(${S.N(c.groups[i].analysed)})`, colW, true))) : 0;
     const busY = y - gap / 2;
-    const Hc = split ? y + gH + 30 : y - gap + 30;
-    cv.width = CW * S.res; cv.height = Hc * S.res; ctx.scale(S.res, S.res);
+    ctx.font = `400 ${Math.round(fs * 0.8)}px ${FONT}`;
+    const foot = String(c.footnote || '').trim(), footH = foot ? measureLines(ctx, foot, CW - 60) * Math.round(lh * 0.8) + 16 : 0, legH = S.legend && S.theme !== 'classic' && S.theme !== 'bw' ? 50 : 0;
+    const H0 = split ? y + gH + 30 : y - gap + 30, Hc = H0 + footH + legH;
+    cv = makeCanvas(CW * S.res, Hc * S.res); ctx = cv.getContext('2d'); ctx.scale(S.res, S.res);
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, Hc);
     const box = (x, yy, w, h, text, bold, align = 'center', role = 'main') => {
       flowBox(ctx, S, x, yy, w, h, role);
-      ctx.textBaseline = 'top'; ctx.font = `${bold ? 700 : 400} ${fs}px ${FONT}`; ctx.textAlign = align;
+      const k = role === 'side' ? S.sideFs : 1, L2 = Math.round(lh * k);
+      ctx.textBaseline = 'top'; ctx.font = `${bold ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`; ctx.textAlign = align;
       let ty = yy + 13;
-      text.split('\n').forEach(par => { ty += wrapText(ctx, par, align === 'center' ? x + w / 2 : x + 14, ty, w - 28, lh) * lh; });
+      text.split('\n').forEach(par => { ty += wrapText(ctx, par, align === 'center' ? x + w / 2 : x + 14, ty, w - 28, L2) * L2; });
     };
-    const arrow = (x1, y1, x2, y2) => {
-      ctx.strokeStyle = S.arrow; ctx.fillStyle = S.arrow; ctx.lineWidth = S.lw;
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-      const a = Math.atan2(y2 - y1, x2 - x1);
-      ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - 16 * Math.cos(a - 0.4), y2 - 16 * Math.sin(a - 0.4)); ctx.lineTo(x2 - 16 * Math.cos(a + 0.4), y2 - 16 * Math.sin(a + 0.4)); ctx.fill();
-    };
+    const arrow = (x1, y1, x2, y2) => flowArrow(ctx, S, x1, y1, x2, y2);
+    if (secs) secs.forEach(([lab, a, b]) => { const l0 = layout[a], l1 = layout[Math.min(b, layout.length - 1)]; if (!l0 || !l1) return;
+      const y1 = l0.y, y2 = l1.y + l1.h + (l1.ex ? l1.ex.h + 24 : 0); ctx.fillStyle = S.pill; ctx.beginPath(); ctx.roundRect(10, y1, 54, y2 - y1, 18); ctx.fill();
+      ctx.save(); ctx.translate(37, (y1 + y2) / 2); ctx.rotate(-Math.PI / 2); ctx.fillStyle = S.pillText; ctx.font = `700 24px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const room = y2 - y1 - 16, tw = ctx.measureText(lab).width; if (tw > room) ctx.font = `700 ${Math.max(14, Math.floor(24 * room / tw))}px ${FONT}`; ctx.fillText(lab, 0, 0); ctx.restore(); });
     layout.forEach((b, i) => {
       box(midX - boxW / 2, b.y, boxW, b.h, b.text, true);
       if (b.ex) {
@@ -1293,6 +1344,7 @@ const Charts = (() => {
       ctx.beginPath(); ctx.moveTo(midX, last.y + last.h); ctx.lineTo(midX, busY); ctx.moveTo(cx(0), busY); ctx.lineTo(cx(k - 1), busY); ctx.stroke();
       groupLabels.forEach((g, i) => { arrow(cx(i), busY, cx(i), y); box(cx(i) - colW / 2, y, colW, gH, `${g}\n(${S.N(c.groups[i].analysed)})`, true, 'center', S.emph ? 'final' : 'col'); });
     }
+    flowFoot(ctx, S, foot, legH, CW, H0, fs, lh);
     return cv;
   }
 
@@ -1377,5 +1429,7 @@ const Charts = (() => {
     return new Blob([jpg ? jpegDpi(b, dpi) : pngDpi(b, dpi)], { type: jpg ? 'image/jpeg' : 'image/png' });
   }
 
-  return { draw, drawSVG, makeCanvas, hits: () => hitsOf, consort, exportImage, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
+  // the flowchart as SVG
+  function flowSVG(c, gl, pal) { VECTOR = true; try { return consort(c, gl, pal, 1).toSVG(); } finally { VECTOR = false; } }
+  return { draw, drawSVG, flowSVG, makeCanvas, hits: () => hitsOf, consort, exportImage, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
 })();
