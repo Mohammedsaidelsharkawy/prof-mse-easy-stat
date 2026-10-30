@@ -872,6 +872,28 @@ const Stats = (() => {
     const f = 1 - (2 * p * p + p + 2) / (6 * p * (n - 1)), chi = -(n - 1) * f * Math.log(W), df = p * (p + 1) / 2 - 1;
     return { W, chi, df, p: 1 - jStat.chisquare.cdf(chi, df) };
   }
+  // profile analysis of repeated measures in g groups: parallelism (Wilks' Λ on consecutive differences), levels (ANOVA of each patient's mean)
+  // and flatness (Hotelling's T² that the mean consecutive differences are zero, within-group covariance)
+  function profileAnalysis(groupsY) {
+    const G = groupsY.filter(Y => Y.length), g = G.length, T = G[0][0].length, p = T - 1, N = G.reduce((a, Y) => a + Y.length, 0); if (T < 2 || N - g < p + 1) return null;
+    const D = G.map(Y => Y.map(r => r.slice(1).map((v, i) => v - r[i]))), all = D.flat(), mAll = Array.from({ length: p }, (_, j) => mean(all.map(r => r[j])));
+    const mG = D.map(Dg => Array.from({ length: p }, (_, j) => mean(Dg.map(r => r[j]))));
+    const E = Array.from({ length: p }, () => new Array(p).fill(0)), Hm = Array.from({ length: p }, () => new Array(p).fill(0));
+    D.forEach((Dg, gi) => { Dg.forEach(r => { for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) E[a][b] += (r[a] - mG[gi][a]) * (r[b] - mG[gi][b]); });
+      for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) Hm[a][b] += Dg.length * (mG[gi][a] - mAll[a]) * (mG[gi][b] - mAll[b]); });
+    const det = M => { const A = M.map(r => r.slice()); let d = 1; for (let c = 0; c < A.length; c++) { let pv = c; for (let r = c + 1; r < A.length; r++) if (Math.abs(A[r][c]) > Math.abs(A[pv][c])) pv = r; if (Math.abs(A[pv][c]) < 1e-300) return 0; if (pv !== c) { [A[c], A[pv]] = [A[pv], A[c]]; d = -d; } d *= A[c][c]; for (let r = c + 1; r < A.length; r++) { const f = A[r][c] / A[c][c]; for (let q = c; q < A.length; q++) A[r][q] -= f * A[c][q]; } } return d; };
+    let parallel = null;
+    if (g > 1) { const q = g - 1, ne = N - g, L = det(E) / det(E.map((r, a) => r.map((v, b) => v + Hm[a][b]))), t = p * p + q * q - 5 > 0 ? Math.sqrt((p * p * q * q - 4) / (p * p + q * q - 5)) : 1;
+      const df1 = p * q, df2 = (ne - (p - q + 1) / 2) * t - (p * q - 2) / 2, Lt = L ** (1 / t), F = (1 - Lt) / Lt * df2 / df1;
+      parallel = { wilks: L, F, df1, df2, p: 1 - jStat.centralF.cdf(F, df1, df2) }; }
+    // flatness: the unweighted mean of the group means (effect coding, as SPSS MANOVA), var = S × Σ(1/n_g) / g²
+    const Si = invert(E.map(r => r.map(v => v / (N - g)))); if (!Si) return null;
+    const mu = Array.from({ length: p }, (_, j) => mean(mG.map(m => m[j]))), cc = sum(G.map(Y => 1 / Y.length)) / (g * g);
+    const T2 = mu.reduce((acc, v, a) => acc + v * mu.reduce((u, w, b) => u + Si[a][b] * w, 0), 0) / cc, fdf2 = N - g - p + 1, fF = fdf2 / (p * (N - g)) * T2;
+    const flat = { T2, F: fF, df1: p, df2: fdf2, p: 1 - jStat.centralF.cdf(fF, p, fdf2) };
+    const lev = g > 1 ? anova(G.map(Y => Y.map(r => mean(r)))) : null;
+    return { parallel, flatness: flat, levels: lev ? { F: lev.F, df1: lev.df1, df2: lev.df2, p: lev.p } : null, N, g, T };
+  }
   // Holm step-down adjustment of a list of P values (same order back)
   function holm(ps) {
     const m = ps.length, idx = ps.map((p, i) => i).sort((a, b) => ps[a] - ps[b]), out = new Array(m);
@@ -1580,7 +1602,7 @@ const Stats = (() => {
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
   return {
-    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, nMargin, gee, glmmLogit, gaussHermite,
+    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, nMargin, gee, glmmLogit, gaussHermite,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,

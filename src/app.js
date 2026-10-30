@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmImpute: 'none', panelStyle: 'classic', axisSize: 'normal', titleSize: 'normal', valueSize: 'normal', boxMeanVal: false, figHeat: false, figForestAll: false, figPanels: false, capAbove: false, commentTpl: false, tplSig: '{Variable} differed significantly {groups} (P value {P}), being highest in {highest}.', tplNs: '{Variable} did not differ significantly {groups} (P value {P}).', varyWording: false, commentTone: 'standard', trendWord: false, nsCI: false, comMaxWords: '', boldSigText: false, phraseDict: '', keyFindings: false, absMaxWords: '', effConv: 'cohen', figRef: false, commentMerge: 'table', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmAncova: false, rmSphReport: false, rmProfile: false, rmImpute: 'none', panelStyle: 'classic', axisSize: 'normal', titleSize: 'normal', valueSize: 'normal', boxMeanVal: false, figHeat: false, figForestAll: false, figPanels: false, capAbove: false, commentTpl: false, tplSig: '{Variable} differed significantly {groups} (P value {P}), being highest in {highest}.', tplNs: '{Variable} did not differ significantly {groups} (P value {P}).', varyWording: false, commentTone: 'standard', trendWord: false, nsCI: false, comMaxWords: '', boldSigText: false, phraseDict: '', keyFindings: false, absMaxWords: '', effConv: 'cohen', figRef: false, commentMerge: 'table', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,7 +47,7 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], panelStyle: ['optPanelStyle'], axisSize: ['optAxisSize'], titleSize: ['optTitleSize'], valueSize: ['optValueSize'], boxMeanVal: ['optBoxMeanVal', true], figHeat: ['optFigHeat', true], figForestAll: ['optFigForestAll', true], figPanels: ['optFigPanels', true], capAbove: ['optCapAbove', true], commentTpl: ['optCommentTpl', true], tplSig: ['optTplSig'], tplNs: ['optTplNs'], varyWording: ['optVaryWording', true], commentTone: ['optCommentTone'], trendWord: ['optTrendWord', true], nsCI: ['optNsCI', true], comMaxWords: ['optComMaxWords'], boldSigText: ['optBoldSigText', true], phraseDict: ['optPhraseDict'], keyFindings: ['optKeyFindings', true], absMaxWords: ['optAbsMaxWords'], effConv: ['optEffConv'], figRef: ['optFigRef', true], commentMerge: ['optCommentMerge'], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], panelStyle: ['optPanelStyle'], axisSize: ['optAxisSize'], titleSize: ['optTitleSize'], valueSize: ['optValueSize'], boxMeanVal: ['optBoxMeanVal', true], figHeat: ['optFigHeat', true], figForestAll: ['optFigForestAll', true], figPanels: ['optFigPanels', true], capAbove: ['optCapAbove', true], commentTpl: ['optCommentTpl', true], tplSig: ['optTplSig'], tplNs: ['optTplNs'], varyWording: ['optVaryWording', true], commentTone: ['optCommentTone'], trendWord: ['optTrendWord', true], nsCI: ['optNsCI', true], comMaxWords: ['optComMaxWords'], boldSigText: ['optBoldSigText', true], phraseDict: ['optPhraseDict'], keyFindings: ['optKeyFindings', true], absMaxWords: ['optAbsMaxWords'], effConv: ['optEffConv'], figRef: ['optFigRef', true], commentMerge: ['optCommentMerge'], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmAncova: ['optRmAncova', true], rmSphReport: ['optRmSphReport', true], rmProfile: ['optRmProfile', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -1421,6 +1421,7 @@
     $('#tpWarn').textContent = uneq ? '⚠ The outcomes do not all use the same timepoints — check that this is intended.' : reps.length > 1 ? '✓ Every outcome uses the same timepoints.' : '';
     // missing values per timepoint and group
     const groups = activeGroups();
+    { const cur = $('#mpVar').value; $('#mpVar').innerHTML = reps.map(v => `<option value="${esc(v.id)}" ${v.id === cur ? 'selected' : ''}>${esc(v.label)}</option>`).join(''); renderPatterns(); }
     $('#tpMissing').innerHTML = reps.length ? `<thead><tr><th>Outcome · timepoint</th>${groups.map(g => `<th>${esc(cfg.groupLabels[g] || g)}</th>`).join('')}</tr></thead><tbody>${reps.flatMap(v => v.cols.filter(c => c.include !== false).map(c => `<tr><td>${esc(v.label)} · ${esc(colTp(c))}</td>${groups.map(g => { const rs = rows.filter(r => Analysis.groupOf(cfg, r) === g), m = rs.filter(r => isMissing(r[c.col])).length; return `<td class="${m ? 'miss-n' : ''}">${m} of ${rs.length}</td>`; }).join('')}</tr>`)).join('')}</tbody>` : '';
     drawSpaghetti();
   }
@@ -1434,12 +1435,21 @@
     try { $('#spImg').src = Charts.draw(spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png'); } catch (e) { console.error(e); }
   }
   $('#spVar').onchange = drawSpaghetti;
-  $('#drKind').onchange = () => { $('#drThrBox').style.display = $('#drKind').value === 'ttt' ? '' : 'none'; };
+  // missing-visit patterns of one outcome: each combination of measured / missing timepoints, counted per group
+  function renderPatterns() {
+    const cfg = state.cfg, v = cfg.variables.find(x => x.id === $('#mpVar').value); if (!v) { $('#tpPattern').innerHTML = ''; return; }
+    const cols = v.cols.filter(c => c.include !== false), groups = activeGroups(), rows = state.data.rows, cnt = new Map();
+    rows.forEach(r => { const g = Analysis.groupOf(cfg, r); if (!groups.includes(g)) return; const k = cols.map(c => isMissing(r[c.col]) ? '○' : '●').join(''); if (!cnt.has(k)) cnt.set(k, {}); cnt.get(k)[g] = (cnt.get(k)[g] || 0) + 1; });
+    const list = [...cnt.entries()].sort((a, b) => Object.values(b[1]).reduce((x, y) => x + y, 0) - Object.values(a[1]).reduce((x, y) => x + y, 0));
+    $('#tpPattern').innerHTML = `<thead><tr><th>Pattern (${cols.map(colTp).map(esc).join(' · ')})</th>${groups.map(g => `<th>${esc(cfg.groupLabels[g] || g)}</th>`).join('')}<th>All</th></tr></thead><tbody>${list.map(([k, o]) => `<tr><td class="mono" style="letter-spacing:3px">${k}${k.includes('○') ? '' : ' <span class="legend-note">complete</span>'}</td>${groups.map(g => `<td>${o[g] || 0}</td>`).join('')}<td><b>${Object.values(o).reduce((x, y) => x + y, 0)}</b></td></tr>`).join('')}</tbody>`;
+  }
+  $('#mpVar').onchange = renderPatterns;
+  $('#drKind').onchange = () => { $('#drThrBox').style.display = ['ttt', 'above', 'below'].includes($('#drKind').value) ? '' : 'none'; };
   $('#drGo').onclick = () => {
     readUiIntoCfg(); const cfg = state.cfg, v = cfg.variables.find(x => x.id === $('#drVar').value); if (!v) return;
     const cols = v.cols.filter(c => c.include !== false), kind = $('#drKind').value, tv = cols.map(c => cfg.tpTime[c.tp]), real = tv.every(x => x !== undefined && isFinite(x)), tt = real ? tv : cols.map((_, i) => i);
     const thr = +$('#drThr').value, le = $('#drDir').value === 'le';
-    const NAME = { auc: 'AUC', max: 'peak', min: 'lowest', tmax: 'time_of_peak', mean: 'mean', change: 'change_last_first', ttt: `time_to_${le ? 'le' : 'ge'}_${thr}` }[kind];
+    const NAME = { auc: 'AUC', max: 'peak', min: 'lowest', tmax: 'time_of_peak', mean: 'mean', change: 'change_last_first', ttt: `time_to_${le ? 'le' : 'ge'}_${thr}`, slope: 'slope', above: `area_above_${thr}`, below: `area_below_${thr}` }[kind];
     const base = tokens(cols[0].col).filter(t => !TP_RE.test(t)).join('_') || 'outcome';
     let name = `${base}_${NAME}`, k = 2; while (state.data.headers.includes(name)) name = `${base}_${NAME}_${k++}`;
     const calc = a => { const ok = a.map((x, i) => [tt[i], x]).filter(p => isFinite(p[1])); if (!ok.length) return null;
@@ -1448,10 +1458,18 @@
       if (kind === 'tmax') { const m = Math.max(...ok.map(p => p[1])); return ok.find(p => p[1] === m)[0]; }
       if (kind === 'mean') return +(ok.reduce((s2, p) => s2 + p[1], 0) / ok.length).toFixed(3);
       if (kind === 'change') return ok.length >= 2 ? +(ok[ok.length - 1][1] - ok[0][1]).toFixed(3) : null;
+      if (kind === 'slope') { if (ok.length < 2) return null; const mx = ok.reduce((s2, p) => s2 + p[0], 0) / ok.length, my = ok.reduce((s2, p) => s2 + p[1], 0) / ok.length, sxx = ok.reduce((s2, p) => s2 + (p[0] - mx) ** 2, 0);
+        return sxx > 0 ? +(ok.reduce((s2, p) => s2 + (p[0] - mx) * (p[1] - my), 0) / sxx).toFixed(4) : null; }
+      if (kind === 'above' || kind === 'below') { if (ok.length < cols.length) return null;
+        // the trapezoid area between the curve and the threshold, only where the curve is beyond it (crossings interpolated)
+        const f = y => kind === 'above' ? y - thr : thr - y; let area = 0;
+        for (let i = 0; i + 1 < a.length; i++) { const y0 = f(a[i]), y1 = f(a[i + 1]), dt = tt[i + 1] - tt[i];
+          if (y0 >= 0 && y1 >= 0) area += (y0 + y1) / 2 * dt; else if (y0 > 0 || y1 > 0) { const pos = Math.max(y0, y1), frac = pos / (Math.abs(y0) + Math.abs(y1)); area += pos * frac * dt / 2; } }
+        return +area.toFixed(3); }
       const hit = ok.find(p => le ? p[1] <= thr : p[1] >= thr); return hit ? hit[0] : null; };
     editSheet(() => { const { headers, rows } = state.data; headers.splice(headers.indexOf(cols[cols.length - 1].col) + 1, 0, name);
       rows.forEach(r => { r[name] = calc(cols.map(c => Analysis.toNum(r[c.col]))); });
-      cfg.variables.push({ ...singleVariable(rows, name, headers.indexOf(name), 'Other outcomes'), id: 'dr' + Date.now().toString(36), type: 'numeric', label: `${v.label}: ${{ auc: 'area under the curve', max: 'peak value', min: 'lowest value', tmax: 'time of the peak', mean: 'mean over time', change: 'change (last − first)', ttt: `time to reach ${le ? '≤' : '≥'} ${thr}` }[kind]}` }); }, `New column ${name}`);
+      cfg.variables.push({ ...singleVariable(rows, name, headers.indexOf(name), 'Other outcomes'), id: 'dr' + Date.now().toString(36), type: 'numeric', label: `${v.label}: ${{ auc: 'area under the curve', max: 'peak value', min: 'lowest value', tmax: 'time of the peak', mean: 'mean over time', change: 'change (last − first)', ttt: `time to reach ${le ? '≤' : '≥'} ${thr}`, slope: 'slope per unit of time', above: `area above ${thr}`, below: `area below ${thr}` }[kind]}` }); }, `New column ${name}`);
     $('#drInfo').textContent = `${name} added (${real ? 'with the time values' : 'timepoints numbered 0, 1, 2 …'}); it is analysed as a single variable in step 2.`;
   };
   $('#mgGo').onclick = () => {
@@ -2139,6 +2157,7 @@
         <span class="legend-note">Reference for change</span><select data-vset="${v.id}" data-vk="refTp" style="width:auto">${v.cols.map((c, i) => `<option value="${i}" ${+(v.refTp || 0) === i ? 'selected' : ''}>${esc(colTp(c))}</option>`).join('')}</select>
         <span class="legend-note">Primary endpoint</span><select data-vset="${v.id}" data-vk="primaryTp" style="width:auto"><option value="">—</option>${v.cols.map((c, i) => `<option value="${i}" ${v.primaryTp !== undefined && +v.primaryTp === i ? 'selected' : ''}>${esc(colTp(c))}</option>`).join('')}</select>
         <span class="legend-note">Responders: a</span><select data-vset="${v.id}" data-vk="respDir" style="width:auto"><option value="fall" ${(v.resp || {}).dir !== 'rise' ? 'selected' : ''}>fall</option><option value="rise" ${(v.resp || {}).dir === 'rise' ? 'selected' : ''}>rise</option></select><span class="legend-note">of ≥</span><input type="number" data-vset="${v.id}" data-vk="respPct" value="${esc((v.resp || {}).pct || '')}" placeholder="e.g. 50" style="width:70px"><span class="legend-note">% from the reference</span>
+        <span class="legend-note">· Improved / worse when the change exceeds</span><input type="number" step="any" data-vset="${v.id}" data-vk="iuwThr" value="${esc((v.iuw || {}).thr ?? '')}" placeholder="e.g. 2" style="width:70px"><select data-vset="${v.id}" data-vk="iuwBetter" style="width:auto"><option value="lower" ${(v.iuw || {}).better !== 'higher' ? 'selected' : ''}>lower is better</option><option value="higher" ${(v.iuw || {}).better === 'higher' ? 'selected' : ''}>higher is better</option></select>
         <button class="btn ghost small" data-tpcopy="${v.id}" type="button" title="The timepoints used, their labels and order, the reference and the primary endpoint — to every other outcome with the same timepoints">Copy to other outcomes</button>
       </div>
       <table class="t" style="margin-top:6px"><thead><tr><th>Use</th><th>Column</th><th>Timepoint label for this outcome</th><th>Order</th></tr></thead><tbody>${v.cols.map((c, i) => `<tr>
@@ -2164,7 +2183,7 @@
     if (cp) { readUiIntoCfg(); const src = state.cfg.variables.find(x => x.id === cp.dataset.tpcopy), toks = src.cols.map(c => c.tp); let n = 0;
       state.cfg.variables.filter(v => v.kind === 'repeated' && v !== src && v.cols.length === src.cols.length && v.cols.every(c => toks.includes(c.tp))).forEach(v => {
         v.cols = src.cols.map(sc => { const c = v.cols.find(x => x.tp === sc.tp); return { ...c, include: sc.include, ...(sc.label ? { label: sc.label } : {}) }; });
-        v.ownOrder = src.ownOrder; ['refTp', 'primaryTp'].forEach(k => { if (src[k] === undefined) delete v[k]; else v[k] = src[k]; }); if (src.resp) v.resp = { ...src.resp }; else delete v.resp; n++; });
+        v.ownOrder = src.ownOrder; ['refTp', 'primaryTp'].forEach(k => { if (src[k] === undefined) delete v[k]; else v[k] = src[k]; }); if (src.resp) v.resp = { ...src.resp }; else delete v.resp; if (src.iuw) v.iuw = { ...src.iuw }; else delete v.iuw; n++; });
       renderTpVars(); toast(n ? `Copied to ${n} outcome${n > 1 ? 's' : ''}` : 'No other outcome has the same timepoints'); return; }
     const b = e.target.closest('[data-tvmove]'); if (!b) return;
     readUiIntoCfg();
@@ -2635,12 +2654,12 @@
     tost: 'Equivalence (TOST, two one-sided t-tests)', mh: 'Mantel-Haenszel (stratified odds ratio)', clogit: 'Conditional logistic regression (matched sets)',
     cif: 'Competing risks (cumulative incidence)', tdroc: 'Time-dependent ROC (AUC at set times)', quantreg: 'Quantile (median) regression', fleiss: "Fleiss' kappa (agreement of 3+ raters)",
     rmcorr: 'Repeated-measures correlation (long data)', firth: 'Firth logistic regression (small samples, separation)', mi: 'Regression with multiple imputation',
-    noninf: 'Non-inferiority / equivalence / superiority trial', gee: 'GEE / mixed-effects logistic (repeated binary, count or numeric outcome)' };
+    noninf: 'Non-inferiority / equivalence / superiority trial', crossover: 'Crossover trial (AB/BA)', gee: 'GEE / mixed-effects logistic (repeated binary, count or numeric outcome)' };
   // the analyses by category: the add buttons, the headings of the list and the order of "group by category"
   const ADV_GROUPS = [
     ['Compare groups', 'Adjusted, stratified and matched comparisons of the study groups', [['ancova', 'ANCOVA'], ['anova2', 'Two-way ANOVA'], ['mh', 'Mantel-Haenszel'], ['psm', 'Propensity score']]],
     ['Non-inferiority & equivalence trials', 'A margin for the difference: non-inferiority, equivalence or superiority, ITT and per-protocol', [['noninf', 'Non-inferiority / equivalence / superiority'], ['tost', 'Equivalence of means (TOST)']]],
-    ['Paired & repeated measurements', 'The same patients measured twice or more', [['paired', 'Paired comparison'], ['mcnemar', 'McNemar (paired categorical)'], ['cochran', "Cochran's Q (repeated yes/no)"], ['lmm', 'Linear mixed model'], ['gee', 'GEE / mixed logistic (binary repeated)'], ['rmcorr', 'Repeated-measures correlation']]],
+    ['Paired & repeated measurements', 'The same patients measured twice or more', [['paired', 'Paired comparison'], ['crossover', 'Crossover (AB/BA)'], ['mcnemar', 'McNemar (paired categorical)'], ['cochran', "Cochran's Q (repeated yes/no)"], ['lmm', 'Linear mixed model'], ['gee', 'GEE / mixed logistic (binary repeated)'], ['rmcorr', 'Repeated-measures correlation']]],
     ['Correlation & mediation', 'Associations between numeric variables', [['correlation', 'Correlation'], ['partial', 'Partial correlation'], ['mediation', 'Mediation']]],
     ['Regression models', 'Predictors of an outcome', [['linear', 'Linear'], ['logistic', 'Logistic'], ['firth', 'Firth logistic'], ['mi', 'With multiple imputation'], ['quantreg', 'Quantile (median)'], ['count', 'Poisson / negative binomial'], ['ordinal', 'Ordinal logistic'], ['multinom', 'Multinomial logistic'], ['clogit', 'Conditional logistic']]],
     ['Survival & time to event', 'Follow-up time with an event', [['survival', 'Kaplan-Meier'], ['cox', 'Cox regression'], ['cif', 'Competing risks'], ['tdroc', 'Time-dependent ROC']]],
@@ -2736,6 +2755,10 @@
           + sl('conf', 'Confidence interval', [['', 'Automatic (95% non-inferiority / superiority, 90% equivalence)'], ['95', '95% (one-sided α = 0.025)'], ['90', '90% (one-sided α = 0.05)'], ['99', '99%']], a.conf)
           + select('ppCol', 'Per-protocol population column (optional)', cats.filter(c => c.col !== a.outcome && c.col !== cfg.groupCol), a.ppCol) + (a.ppCol ? levelSelect('Per-protocol when', a.ppCol, a.ppVal, 'ppVal') : '<div></div>');
         predLabel = 'Adjust the mean difference for (ANCOVA, numeric outcome only)'; preds = isC ? [] : num.filter(c => c.col !== a.outcome); }
+      if (t === 'crossover') fields = select('outcome', 'Outcome in period 1', num, a.outcome) + select('second', 'Outcome in period 2', num.filter(c => c.col !== a.outcome), a.second)
+        + select('seqCol', 'Sequence column (e.g. AB / BA)', cat, a.seqCol) + (a.seqCol ? levelSelect('Sequence that got treatment A first', a.seqCol, a.seqA, 'seqA') : '<div></div>')
+        + `<div><label class="f">Treatment A / B names</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="text" data-af="trtA" value="${esc(a.trtA || '')}" placeholder="A, e.g. Drug"><input type="text" data-af="trtB" value="${esc(a.trtB || '')}" placeholder="B, e.g. Placebo"></div></div>`
+        + `<div><label class="f">Test</label><select data-af="test"><option value="param" ${a.test !== 'nonparam' ? 'selected' : ''}>t-tests (Hills-Armitage)</option><option value="nonparam" ${a.test === 'nonparam' ? 'selected' : ''}>Mann-Whitney tests (Koch)</option></select></div>`;
       if (t === 'gee') { const reps = cfg.variables.filter(v => v.kind === 'repeated'), rv = reps.find(v => v.id === a.rvar), isB = rv && rv.type === 'categorical';
         const sl = (key, label, opts, v) => `<div><label class="f">${label}</label><select data-af="${key}">${opts.map(([k, l]) => `<option value="${k}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
         fields = `<div><label class="f">Repeated outcome (binary, count or numeric)</label><select data-af="rvar"><option value="">— choose —</option>${reps.map(v => `<option value="${esc(v.id)}" ${v.id === a.rvar ? 'selected' : ''}>${esc(v.label)} (${v.type === 'categorical' ? 'categorical' : 'numeric'})</option>`).join('')}</select></div>`
@@ -2807,7 +2830,7 @@
       `<div><label class="f">Text before the comment (optional)</label><input type="text" data-af="commentPre" value="${esc(a.commentPre || '')}" placeholder="e.g. To identify the predictors of …"></div>`,
       `<div><label class="f">Text after the comment (optional)</label><input type="text" data-af="commentPost" value="${esc(a.commentPost || '')}" placeholder="e.g. This supports the hypothesis that …"></div>`,
       `<div style="grid-column:1/-1"><label class="f">Your own comment (optional — replaces the automatic one)</label><textarea data-af="commentCustom" rows="2" placeholder="Leave empty for the automatic comment">${esc(a.commentCustom || '')}</textarea></div>`].join('')}</div></details>`); }
-    if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm', 'noninf', 'gee'].includes(t))
+    if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm', 'noninf', 'gee', 'crossover'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
       out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
@@ -2898,12 +2921,13 @@
   $('#advList').addEventListener('change', e => {
     const f = e.target.dataset.af;
     if (f === 'cutoff') { readUiIntoCfg(); renderAdvanced(); return; }
-    if (!['outcome', 'event', 'second', 'rvar', 'ppCol', 'design'].includes(f)) return;
+    if (!['outcome', 'event', 'second', 'rvar', 'ppCol', 'design', 'seqCol'].includes(f)) return;
     readUiIntoCfg();
     const a = state.cfg.advanced[+e.target.closest('[data-adv]').dataset.adv];
     if (f === 'rvar') { const rv = state.cfg.variables.find(v => v.id === a.rvar); a.positive = rv && rv.type === 'categorical' ? defaultPositive(rv.cols[0].col) : ''; renderAdvanced(); return; }
     if (f === 'ppCol') { a.ppVal = a.ppCol ? defaultPositive(a.ppCol) : ''; renderAdvanced(); return; }
     if (f === 'design') { renderAdvanced(); return; }
+    if (f === 'seqCol') { const lv = a.seqCol ? Analysis.levelsOf(state.cfg, analysedRows(), a.seqCol) : []; a.seqA = lv.find(l => /^ab$|^a.?b|a.?first/i.test(l)) || lv[0] || ''; renderAdvanced(); return; }
     a.predictors = (a.predictors || []).filter(c => c !== a.outcome);
     // the positive value belongs to the outcome (logistic, ROC) or to the event column (survival)
     if (a.type === 'survival' || a.type === 'cox' || a.type === 'tdroc') { if (f === 'event') a.positive = defaultPositive(a.event); }
@@ -3212,6 +3236,7 @@
       document.querySelectorAll('[data-tpphase]').forEach(el => { if (el.value.trim()) cfg.tpPhase[el.dataset.tpphase] = el.value.trim(); else delete cfg.tpPhase[el.dataset.tpphase]; });
       document.querySelectorAll('[data-vset]').forEach(el => { const v = cfg.variables.find(x => x.id === el.dataset.vset); if (!v) return; const k = el.dataset.vk;
         if (k === 'respPct' || k === 'respDir') { v.resp = v.resp || {}; v.resp[k === 'respPct' ? 'pct' : 'dir'] = el.value; if (!+v.resp.pct) delete v.resp; }
+        else if (k === 'iuwThr' || k === 'iuwBetter') { v.iuw = v.iuw || {}; v.iuw[k === 'iuwThr' ? 'thr' : 'better'] = el.value; if (v.iuw.thr === '' || v.iuw.thr === undefined) delete v.iuw; }
         else if (el.value === '') delete v[k]; else v[k] = +el.value; });
       document.querySelectorAll('[data-tpinc]').forEach(el => { cfg.tpInclude[el.dataset.tpinc] = el.checked; });
       readTpVars();

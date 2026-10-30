@@ -265,9 +265,9 @@ const Analysis = (() => {
   // their adjustment (Bonferroni, Holm or none), sphericity correction (Greenhouse-Geisser, Huynh-Feldt or none), post hoc even when the overall test is not significant
   let RO = { post: 'first', adjust: 'bonferroni', sph: 'gg', always: false };
   const setRO = o => { RO = { post: o.rmPost || 'first', adjust: o.rmAdjust || 'bonferroni', sph: o.rmSph || 'gg', always: !!o.rmPostAlways }; };
-  const rmPairs = T => RO.post === 'all' ? pairs(T) : RO.post === 'consecutive' ? Array.from({ length: T - 1 }, (_, t) => [t, t + 1]) : Array.from({ length: T - 1 }, (_, t) => [0, t + 1]);
+  const rmPairs = T => RO.post === 'all' ? pairs(T) : RO.post === 'consecutive' ? Array.from({ length: T - 1 }, (_, t) => [t, t + 1]) : RO.post === 'last' ? [[0, T - 1]] : Array.from({ length: T - 1 }, (_, t) => [0, t + 1]);
   const ADJ_NAME = { bonferroni: 'Bonferroni-adjusted', holm: 'Holm-adjusted', none: 'unadjusted' };
-  const POST_WHAT = (tps) => RO.post === 'all' ? 'between each pair of timepoints' : RO.post === 'consecutive' ? 'between consecutive timepoints' : `versus ${tps[0]}`;
+  const POST_WHAT = (tps) => RO.post === 'all' ? 'between each pair of timepoints' : RO.post === 'consecutive' ? 'between consecutive timepoints' : RO.post === 'last' ? `between ${tps[0]} and ${tps[tps.length - 1]}` : `versus ${tps[0]}`;
   const adjust = ps => RO.adjust === 'holm' ? S.holm(ps) : RO.adjust === 'none' ? ps : ps.map(p => S.bonferroni(p, ps.length));
   // Two timepoints → paired t / Wilcoxon; more → RM ANOVA / Friedman with post hoc paired comparisons (by default Bonferroni, against the first timepoint)
   function analyzeWithin(matrixByGroup, param, used, alpha) {
@@ -1566,6 +1566,31 @@ const Analysis = (() => {
         spec: { type: 'margin', rows: res.map(r => ({ label: r.pop.name, est: r.est * sc, lo: r.lo * sc, hi: r.hi * sc })), margin: M * sc, design, better, xLabel: `${binary ? 'Risk difference (percentage points)' : 'Difference'}: ${tl} − ${rl}`, favNew: `Favours ${tl}`, favRef: `Favours ${rl}` } }],
       meta: { res } };
   }
+  /* ---------- AB/BA crossover trial (Hills-Armitage): treatment, period and carry-over effects ---------- */
+  function crossoverSection(a, cfg, rows, alpha, d, used) {
+    if (!a.second || !a.seqCol || !a.seqA) return null;
+    const seqs = levelsOf(cfg, rows, a.seqCol); if (seqs.length !== 2 || !seqs.includes(a.seqA)) return null;
+    const sB = seqs.find(x => x !== a.seqA), tA = (a.trtA || 'A').trim() || 'A', tB = (a.trtB || 'B').trim() || 'B';
+    const pick = sq => rows.filter(r => toCat(r[a.seqCol]) === sq).map(r => [toNum(r[a.outcome]), toNum(r[a.second])]).filter(([x, y]) => isFinite(x) && isFinite(y));
+    const AB = pick(a.seqA), BA = pick(sB); if (AB.length < 2 || BA.length < 2) return null;
+    const dAB = AB.map(([x, y]) => x - y), dBA = BA.map(([x, y]) => x - y), sAB = AB.map(([x, y]) => x + y), sBA = BA.map(([x, y]) => x + y);
+    const np = a.test === 'nonparam', lab = plain(columnLabel(cfg, a.outcome).replace(/\s*\(?(period|p)\s*1\)?/i, '')) || 'the outcome', u = '';
+    // treatment A − B: half the difference of the period differences; period 2 − 1: from d_AB and −d_BA; carry-over: the patient totals
+    const tt = S.tTest(dAB, dBA), tp = S.tTest(dAB, dBA.map(x => -x)), tc = S.tTest(sAB, sBA);
+    const trt = { est: tt.diff / 2, lo: tt.lo / 2, hi: tt.hi / 2, p: np ? S.mannWhitney(dAB, dBA).p : tt.p }, per = { est: -tp.diff / 2, lo: -tp.hi / 2, hi: -tp.lo / 2, p: np ? S.mannWhitney(dAB, dBA.map(x => -x)).p : tp.p };
+    const car = { est: tc.diff, lo: tc.lo, hi: tc.hi, p: np ? S.mannWhitney(sAB, sBA).p : tc.p };
+    used.add('crossover');
+    const ms = v => `${fmt(S.mean(v), d)} ± ${fmt(S.sd(v), d)}`, E = q => `${fmt(q.est, d)} (${fmt(q.lo, d)} to ${fmt(q.hi, d)})`;
+    const rowsT = [[{ t: [`Sequence ${a.seqA} (${tA} then ${tB}), n=${AB.length}`], b: true }, { t: [ms(AB.map(x => x[0]))] }, { t: [ms(AB.map(x => x[1]))] }, { t: [''] }],
+      [{ t: [`Sequence ${sB} (${tB} then ${tA}), n=${BA.length}`], b: true }, { t: [ms(BA.map(x => x[0]))] }, { t: [ms(BA.map(x => x[1]))] }, { t: [''] }],
+      [{ t: [`Treatment effect (${tA} − ${tB})`], b: true }, { t: [E(trt)], span: 2 }, { t: [fmtP(trt.p, alpha)] }],
+      [{ t: ['Period effect (period 2 − period 1)'], b: true }, { t: [E(per)], span: 2 }, { t: [fmtP(per.p, alpha)] }],
+      [{ t: ['Carry-over (difference in patient totals)'], b: true }, { t: [E(car)], span: 2 }, { t: [fmtP(car.p, 0.1)] }]];
+    const sent = [`${cap(lab)} was ${trt.p <= alpha ? 'significantly' : 'not significantly'} different between ${tA} and ${tB} (treatment effect ${tA} − ${tB} = ${fmt(trt.est, d)}, 95% CI ${fmt(trt.lo, d)} to ${fmt(trt.hi, d)}, P value ${pTxt(trt.p)}).`,
+      `The period effect was ${per.p <= alpha ? 'significant' : 'insignificant'} (P value ${pTxt(per.p)}), and there was ${car.p <= 0.1 ? 'evidence of a carry-over effect' : 'no evidence of a carry-over effect'} (P value ${pTxt(car.p)}${car.p <= 0.1 ? '; the first-period comparison may be more reliable' : ''}).`];
+    return { kind: 'crossover', title: `Crossover analysis of ${lowerFirst(lab)} (${tA} vs ${tB})`, head: ['', 'Period 1 (mean ± SD)', 'Period 2 (mean ± SD)', 'P value'], rows: rowsT,
+      footnote: `Hills-Armitage analysis of the AB/BA design: treatment and period effects from each patient's period difference (${np ? 'Mann-Whitney test' : 't-test'}), carry-over from each patient's total (judged at P ≤ 0.10); estimates with 95% CI.`, comment: sent.join(' '), figures: [], meta: { trt, per, car } };
+  }
   /* ---------- GEE and generalised mixed models of a repeated outcome (binary, count or numeric) ---------- */
   function geeSection(a, cfg, rows, alpha, d, used, G) {
     const { gl, groups } = G, v = cfg.variables.find(x => x.id === a.rvar && x.kind === 'repeated'); if (!v) return null;
@@ -2396,7 +2421,46 @@ const Analysis = (() => {
           }
           if (resp.length) extraNote.push(`Responders: ${fall ? 'fall' : 'rise'} of at least ${thr}% from ${tps[r0]}, n (%) of the patients with both values, compared by ${testNames(resp.map(x => x.cr)) || 'the Chi-square test'}`);
         }
+        const fillTail = () => head.length - 2 - k > 0 ? [{ t: [''], span: head.length - 2 - k }] : [];
+        const matsC = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
+        // ANCOVA at each later timepoint, adjusted for the reference (baseline) value
+        let anc = null;
+        if (opts.rmAncova && k > 1 && tps.length > 1) { anc = [];
+          for (let t = 0; t < tps.length; t++) { if (t === r0) continue;
+            const y = [], g = [], cv = []; byGroup.forEach((rs, gi) => rs.forEach(r => { const b0 = toNum(r[v.cols[r0].col]), x = toNum(r[v.cols[t].col]); if (isFinite(b0) && isFinite(x)) { y.push(x); g.push(gi); cv.push([b0]); } }));
+            const a = y.length > k + 3 ? S.ancova(y, g, cv, k) : null; if (!a) continue; anc.push({ t, a });
+            trows.push([{ t: [`${tps[t]}, adjusted for ${tps[r0]}`], b: true }, ...a.adj.map(m => ({ t: [`${fmt(m.mean, d)} ± ${fmt(m.se, d)}`] })), { t: [fmtP(a.p, alpha)] }, ...fillTail()]); }
+          if (anc.length) { used.add('rmAncova'); extraNote.push(`Adjusted for ${tps[r0]}: adjusted mean ± SE by ANCOVA with the ${tps[r0]} value as covariate`); } }
+        // improved / unchanged / worse at each timepoint: a change beyond the chosen amount in the better direction
+        let iuw = null;
+        if (v.iuw && isFinite(+v.iuw.thr) && v.iuw.thr !== '' && k > 1) { const thr = Math.abs(+v.iuw.thr), low = v.iuw.better !== 'higher'; iuw = [];
+          for (let t = 0; t < tps.length; t++) { if (t === r0) continue;
+            const gv = byGroup.map(rs => rs.map(r => [toNum(r[v.cols[r0].col]), toNum(r[v.cols[t].col])]).filter(([a2, b2]) => isFinite(a2) && isFinite(b2)).map(([a2, b2]) => { const gain = low ? a2 - b2 : b2 - a2; return gain > thr ? 'Improved' : gain < -thr ? 'Worse' : 'Unchanged'; }));
+            if (gv.some(x => !x.length)) continue; const cr = analyzeCategorical(gv, ['Improved', 'Unchanged', 'Worse'], used, opts); iuw.push({ t, cr });
+            trows.push([{ t: [`Improved / unchanged / worse at ${tps[t]}`], b: true }, ...cr.ns.map((_, j) => ({ t: [cr.table.map(row => row[j]).join(' / ')] })), { t: [fmtP(cr.p, alpha)] }, ...fillTail()]); }
+          if (iuw.length) { used.add('rmIuw'); extraNote.push(`Improved / unchanged / worse: a change of more than ${fmt(thr, d)}${U(v)} from ${tps[r0]} (${low ? 'lower' : 'higher'} values are better), number of patients`); } }
+        // sphericity: Mauchly's test with the Greenhouse-Geisser and Huynh-Feldt epsilons
+        let sph = null;
+        if (opts.rmSphReport && tps.length >= 3) { const M = matsC.filter(m => m.length), mc = M.length ? S.mauchly(M) : null, mx = M.length ? S.mixedAnova(M) : null;
+          if (mc && mx) { const N2 = M.reduce((a2, m) => a2 + m.length, 0), g2 = M.length, T1 = tps.length - 1, gg = mx.eps, hf = Math.min(1, ((N2 - g2 + 1) * T1 * gg - 2) / (T1 * (N2 - g2 - T1 * gg)));
+            sph = { mc, gg, hf }; used.add('rmSph'); extraNote.push(`Sphericity: Mauchly's W = ${fmt(mc.W, 3)}, χ²(${mc.df}) = ${fmt(mc.chi, 2)}, P ${pTxt(mc.p)}; Greenhouse-Geisser ε = ${fmt(gg, 3)}, Huynh-Feldt ε = ${fmt(hf, 3)}`); } }
+        // profile analysis: parallelism (group × time), levels (groups) and flatness (time)
+        let prof = null;
+        if (opts.rmProfile && tps.length >= 2) { const pa = S.profileAnalysis(matsC.filter(m => m.length));
+          if (pa) { prof = pa; used.add('rmProfile'); const row = (n, txt, p) => [{ t: [n], b: true }, { t: [txt], span: k }, { t: [fmtP(p, alpha)] }, ...fillTail()];
+            if (pa.parallel) trows.push(row('Profile analysis: parallelism (group × time)', `Wilks' Λ = ${fmt(pa.parallel.wilks, 3)}, F(${pa.parallel.df1}, ${fmt(pa.parallel.df2, 1)}) = ${fmt(pa.parallel.F, 2)}`, pa.parallel.p));
+            if (pa.levels) trows.push(row('Profile analysis: levels (groups)', `F(${pa.levels.df1}, ${pa.levels.df2}) = ${fmt(pa.levels.F, 2)}`, pa.levels.p));
+            trows.push(row('Profile analysis: flatness (time)', `Hotelling's T² = ${fmt(pa.flatness.T2, 2)}, F(${pa.flatness.df1}, ${pa.flatness.df2}) = ${fmt(pa.flatness.F, 2)}`, pa.flatness.p));
+            extraNote.push(`Profile analysis of the patients with every measurement (n=${pa.N}): parallelism by MANOVA of consecutive differences, levels by ANOVA of each patient's mean, flatness by Hotelling's T²`); } }
         let comment = repeatedComment(plain(v.label), tps, results, gl, alpha, detailed);
+        if (anc && anc.length) { const sg = anc.filter(x => x.a.p <= alpha); comment += sg.length ? ` After adjustment for the ${lowerFirst(tps[r0])} value, ${lowerFirst(plain(v.label))} differed significantly between the groups at ${listJoin(sg.map(x => `${lowerFirst(tps[x.t])} (P value ${pTxt(x.a.p)})`))}.` : ` After adjustment for the ${lowerFirst(tps[r0])} value, the groups did not differ significantly at any later timepoint.`; }
+        if (iuw && iuw.length) { const sg = iuw.filter(x => x.cr.p <= alpha); if (sg.length) comment += ` The proportions of improved, unchanged and worse patients differed significantly at ${listJoin(sg.map(x => `${lowerFirst(tps[x.t])} (P value ${pTxt(x.cr.p)})`))}.`; }
+        if (sph && sph.mc.p <= 0.05) comment += ` The assumption of sphericity was violated (Mauchly's test P value ${pTxt(sph.mc.p)}), so the degrees of freedom were corrected (ε = ${fmt(opts.rmSph === 'hf' ? sph.hf : sph.gg, 2)}).`;
+        if (prof) { const parts = [];
+          if (prof.parallel) parts.push(`the profiles of the groups were ${prof.parallel.p <= alpha ? 'not parallel' : 'parallel'} (P value ${pTxt(prof.parallel.p)})`);
+          if (prof.levels) parts.push(`their overall levels ${prof.levels.p <= alpha ? 'differed significantly' : 'did not differ significantly'} (P value ${pTxt(prof.levels.p)})`);
+          parts.push(`${lowerFirst(plain(v.label))} ${prof.flatness.p <= alpha ? 'changed significantly' : 'did not change significantly'} over time (flatness P value ${pTxt(prof.flatness.p)})`);
+          comment += ` In profile analysis, ${listJoin(parts)}.`; }
         if (lmm) comment += ` In the linear mixed model, the group × time interaction was ${lmm.inter.p <= alpha ? 'significant' : 'insignificant'} (P value ${pTxt(lmm.inter.p)}).`;
         if (trend) { const sg = trend.map((x, i) => x && x.p <= alpha ? `${gl[i]} (P value ${pTxt(x.p)})` : '').filter(Boolean); if (sg.length) comment += ` ${cap(plain(v.label))} showed a significant linear trend over time in ${listJoin(sg)}.`; }
         if (resp) { const sg = resp.filter(x => x.cr.p <= alpha); if (sg.length) comment += ` The proportion of responders differed significantly at ${listJoin(sg.map(x => `${tps[x.t]} (P value ${pTxt(x.cr.p)})`))}.`; }
@@ -2794,14 +2858,14 @@ const Analysis = (() => {
         methodcomp: () => a.second, pca: () => (a.predictors || []).length >= 3, partial: () => a.second && (a.predictors || []).length, anova2: () => a.second, mediation: () => a.second && a.xvar, psm: () => (a.predictors || []).length, lmm: () => a.rvar, tost: () => a.margin !== undefined && a.margin !== '', mh: () => a.positive && a.second, clogit: () => a.positive && a.second && (a.predictors || []).length,
         correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second,
         cif: () => a.event && a.positive && a.competing, tdroc: () => a.event && a.positive && (a.predictors || []).length, quantreg: () => (a.predictors || []).length, fleiss: () => (a.predictors || []).length >= 2,
-        rmcorr: () => a.second && a.idcol, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
+        rmcorr: () => a.second && a.idcol, crossover: () => a.second && a.seqCol, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
         agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, count: countSection, ordinal: ordinalSection, multinom: ordinalSection, methodcomp: methodSection, pca: pcaSection, partial: partialSection, anova2: anova2Section, mediation: mediationSection, psm: psmSection, lmm: lmmSection, tost: tostSection, mh: mhSection, clogit: clogitSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection,
-        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection }[a.type];
+        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
       const compares = ['ancova', 'survival', 'cif', 'noninf', 'gee', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
@@ -3066,7 +3130,7 @@ const Analysis = (() => {
     const w = [];
     if (used.has('pairedt')) w.push('paired t-test'); if (used.has('wilcoxon')) w.push('Wilcoxon signed-rank test');
     if (used.has('rmanova')) w.push('repeated-measures ANOVA'); if (used.has('friedman')) w.push('Friedman test');
-    if (w.length || used.has('mixed')) s.push(`Changes over time were assessed with the ${listJoin(w.length ? w : ['mixed ANOVA'])}${used.has('postPairedt') || used.has('postWilcoxon') ? `, with ${used.has('rmAdj:holm') ? 'Holm' : used.has('rmAdj:none') ? 'uncorrected' : 'Bonferroni'}-corrected comparisons ${used.has('rmPost:all') ? 'between all timepoints' : used.has('rmPost:consecutive') ? 'between consecutive timepoints' : 'against baseline'}`.replace('uncorrected-corrected', 'uncorrected') : ''}${used.has('mixed') && w.length ? ', and the group × time interaction with mixed ANOVA' : ''}.`);
+    if (w.length || used.has('mixed')) s.push(`Changes over time were assessed with the ${listJoin(w.length ? w : ['mixed ANOVA'])}${used.has('postPairedt') || used.has('postWilcoxon') ? `, with ${used.has('rmAdj:holm') ? 'Holm' : used.has('rmAdj:none') ? 'uncorrected' : 'Bonferroni'}-corrected comparisons ${used.has('rmPost:all') ? 'between all timepoints' : used.has('rmPost:consecutive') ? 'between consecutive timepoints' : used.has('rmPost:last') ? 'between the first and the last timepoint' : 'against baseline'}`.replace('uncorrected-corrected', 'uncorrected') : ''}${used.has('mixed') && w.length ? ', and the group × time interaction with mixed ANOVA' : ''}.`);
     if (used.has('pearson') || used.has('spearman')) s.push(`Correlations were assessed with ${[used.has('pearson') ? "Pearson's" : '', used.has('spearman') ? "Spearman's" : ''].filter(Boolean).join(' or ')} coefficient.`);
     const adv = [['linear', 'multiple linear regression'], ['logistic', 'binary logistic regression'], ['cox', 'Cox proportional hazards regression'], ['ancova', 'ANCOVA'],
       ['roc', 'ROC curve analysis'], ['rocClosest', 'ROC curve analysis'], ['survival', k > 1 ? 'Kaplan-Meier analysis with the log-rank test' : 'Kaplan-Meier analysis'], ['mcnemar', 'the McNemar test'], ['kappa', "Cohen's kappa"],
@@ -3140,7 +3204,7 @@ const Analysis = (() => {
     if (used.has('postPairedt')) post.push('paired t-tests');
     if (used.has('postWilcoxon')) post.push('Wilcoxon signed-rank tests');
     if (post.length) {
-      const what = used.has('rmPost:all') ? 'all pairs of measurements were compared' : used.has('rmPost:consecutive') ? 'consecutive measurements were compared' : 'each measurement was compared with the first one';
+      const what = used.has('rmPost:all') ? 'all pairs of measurements were compared' : used.has('rmPost:consecutive') ? 'consecutive measurements were compared' : used.has('rmPost:last') ? 'the last measurement was compared with the first' : 'each measurement was compared with the first one';
       const adj = used.has('rmAdj:holm') ? ' with Holm correction' : used.has('rmAdj:none') ? ' without correction for multiple comparisons' : ' with Bonferroni correction';
       s.push(`${RO.always ? 'In addition' : 'When significant'}, ${what} using ${listJoin(post)}${adj}.`);
     }
@@ -3172,6 +3236,11 @@ const Analysis = (() => {
       lmmAdv: 'Repeated outcomes were analysed with linear mixed models with a random intercept per patient, adjusted for covariates.', interaction: 'Interaction terms were added to the regression models where stated.',
       optimism: 'Models were internally validated by bootstrapping (200 resamples) with optimism-corrected AUC.', nri: 'The added value of a predictor was assessed with the continuous net reclassification improvement (NRI) and the integrated discrimination improvement (IDI).',
       dca: 'Clinical usefulness was assessed with decision curve analysis (net benefit).',
+      rmAncova: 'Later measurements were also compared between the groups by analysis of covariance (ANCOVA) adjusted for the baseline value.',
+      rmIuw: 'Patients were classified as improved, unchanged or worse according to a prespecified change from baseline, and the groups were compared with the Chi-square or Fisher\'s exact test.',
+      rmSph: "Sphericity was tested with Mauchly's test, and the Greenhouse-Geisser and Huynh-Feldt epsilons were reported.",
+      rmProfile: "Profile analysis tested parallelism (MANOVA of consecutive differences, Wilks' lambda), levels and flatness (Hotelling's T²).",
+      crossover: 'The crossover trial was analysed by the Hills-Armitage approach: the treatment and period effects from the within-patient period differences, and carry-over from the patient totals.',
       cif: 'In the presence of competing events, the cumulative incidence of the event was estimated with the Aalen-Johansen method, and groups were compared with the cause-specific log-rank test.',
       tdroc: "Time-dependent discrimination was assessed with the cumulative/dynamic AUC(t) using Uno's inverse-probability-of-censoring weights, with bootstrap 95% CI.",
       quantreg: 'Quantile regression with robust (kernel) standard errors was used to model the median (and other quantiles) of skewed outcomes.',
