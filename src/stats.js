@@ -911,7 +911,48 @@ const Stats = (() => {
     df -= p;
     return { chi2: d2, df, p: df > 0 ? 1 - jStat.chisquare.cdf(d2, df) : NaN, patterns: groups.size, n, mu, S };
   }
+  /* ---------- linear mixed model with a random intercept per subject, REML ----------
+     y = Xβ + u(subject) + e; V = σe²(I + γJ) within a subject; γ = σu²/σe² is found by maximising the REML profile likelihood */
+  function lmmRandomIntercept(y, X, subj) {
+    const N = y.length, p = X[0].length, ids = [...new Set(subj)], idx = ids.map(s => subj.map((x, i) => x === s ? i : -1).filter(i => i >= 0));
+    const fit = g => {
+      const A = Array.from({ length: p }, () => new Array(p).fill(0)), b = new Array(p).fill(0);
+      idx.forEach(I => { const c = g / (1 + I.length * g), sx = new Array(p).fill(0); let sy = 0;
+        I.forEach(i => { sy += y[i]; for (let a = 0; a < p; a++) sx[a] += X[i][a]; });
+        I.forEach(i => { for (let a = 0; a < p; a++) { b[a] += X[i][a] * y[i]; for (let q = 0; q < p; q++) A[a][q] += X[i][a] * X[i][q]; } });
+        for (let a = 0; a < p; a++) { b[a] -= c * sx[a] * sy; for (let q = 0; q < p; q++) A[a][q] -= c * sx[a] * sx[q]; } });
+      const Ai = invert(A); if (!Ai) return null;
+      const beta = Ai.map(r => r.reduce((t, v, q) => t + v * b[q], 0));
+      let rss = 0, logdetV = 0;
+      idx.forEach(I => { const c = g / (1 + I.length * g); let sr = 0, s2 = 0; I.forEach(i => { const r = y[i] - X[i].reduce((t, v, a) => t + v * beta[a], 0); sr += r; s2 += r * r; }); rss += s2 - c * sr * sr; logdetV += Math.log(1 + I.length * g); });
+      const s2e = rss / (N - p);
+      // log det of A by its LU (Cholesky-free): use the inverse's determinant through Gaussian elimination
+      const M = A.map(r => r.slice()); let logdetA = 0;
+      for (let c2 = 0; c2 < p; c2++) { let pv = c2; for (let r = c2 + 1; r < p; r++) if (Math.abs(M[r][c2]) > Math.abs(M[pv][c2])) pv = r; [M[c2], M[pv]] = [M[pv], M[c2]]; logdetA += Math.log(Math.abs(M[c2][c2]));
+        for (let r = c2 + 1; r < p; r++) { const f = M[r][c2] / M[c2][c2]; for (let j = c2; j < p; j++) M[r][j] -= f * M[c2][j]; } }
+      return { beta, Ai, s2e, ll: -0.5 * ((N - p) * Math.log(s2e) + logdetV + logdetA) };
+    };
+    // golden-section search on log γ, with γ = 0 as a candidate
+    let lo = -12, hi = 8; const f = t => { const r = fit(Math.exp(t)); return r ? r.ll : -Infinity; };
+    for (let it = 0; it < 120; it++) { const m1 = lo + (hi - lo) * 0.382, m2 = lo + (hi - lo) * 0.618; if (f(m1) < f(m2)) lo = m1; else hi = m2; }
+    let g = Math.exp((lo + hi) / 2), best = fit(g); const zero = fit(0); if (zero && best && zero.ll > best.ll) { g = 0; best = zero; }
+    if (!best) return null;
+    const cov = best.Ai.map(r => r.map(v => v * best.s2e)), se = cov.map((r, i) => Math.sqrt(r[i]));
+    // joint Wald test of a set of coefficients
+    const wald = cols => { const b = cols.map(i => best.beta[i]), C = invert(cols.map(i => cols.map(j => cov[i][j]))); if (!C) return null;
+      const chi = b.reduce((t, v, a) => t + v * b.reduce((u, w, q) => u + C[a][q] * w, 0), 0); return { chi, df: cols.length, p: 1 - jStat.chisquare.cdf(chi, cols.length) }; };
+    return { beta: best.beta, se, cov, s2e: best.s2e, s2u: g * best.s2e, icc: g / (1 + g), nSubj: ids.length, nObs: N, wald, ll: best.ll };
+  }
+  // Cochran's Q: k binary measurements of the same patients (rows with every value)
+  function cochranQ(M) {
+    const R = M.filter(r => r.every(v => v === 0 || v === 1)), k = R[0] ? R[0].length : 0, N = R.reduce((t, r) => t + r.reduce((a, b) => a + b, 0), 0);
+    if (R.length < 2 || k < 2) return null;
+    const C = Array.from({ length: k }, (_, j) => R.reduce((t, r) => t + r[j], 0)), Ri = R.map(r => r.reduce((a, b) => a + b, 0));
+    const den = k * N - Ri.reduce((t, v) => t + v * v, 0), Q = den ? (k - 1) * (k * C.reduce((t, v) => t + v * v, 0) - N * N) / den : 0;
+    return { Q, df: k - 1, p: den ? 1 - jStat.chisquare.cdf(Q, k - 1) : 1, n: R.length, counts: C };
+  }
   return {
+    lmmRandomIntercept, cochranQ,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,

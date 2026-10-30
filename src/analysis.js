@@ -150,6 +150,9 @@ const Analysis = (() => {
   }
 
   /* ---------- categorical analysis between groups ---------- */
+  // the time of each timepoint of an outcome: its value from step 3 (e.g. hours) when every one has a value, else 0, 1, 2 …
+  let TP_TIME = {};
+  const timesOf = v => { const t = v.cols.map(c => TP_TIME[c.tp]), real = t.every(x => x !== undefined && x !== '' && isFinite(+x)); const out = real ? t.map(Number) : v.cols.map((_, i) => i); out.real = real; return out; };
   // ordered categories: Mann-Whitney / Kruskal-Wallis on the category ranks, or the linear-by-linear (trend) Chi-square — scores 1, 2, 3 …
   function ordinalTest(groupVals, levels, how, used, opts) {
     const k = groupVals.length, codes = groupVals.map(g => g.map(x => levels.indexOf(x) + 1).filter(x => x > 0));
@@ -1047,6 +1050,21 @@ const Analysis = (() => {
   }
 
   // Cronbach's alpha for a set of numeric items (questionnaire reliability)
+  // Cochran's Q: the same yes/no outcome measured several times in the same patients (each study group, and all patients)
+  function cochranSection(a, cfg, rows, alpha, d, used, G) {
+    const cols = (a.predictors || []).filter(c => rows.some(r => toCat(r[c]) !== null)); if (cols.length < 2) return null;
+    const pos = a.positive || 'Yes', is = v => toCat(v) === null ? NaN : +(toCat(v).toLowerCase() === String(pos).toLowerCase());
+    const sets = [...(G.groups.length > 1 ? G.groups.map((g, i) => [G.gl[i], rows.filter(r => groupOf(cfg, r) === g)]) : []), ['All patients', rows]];
+    const head = ['', ...cols.map(c => columnLabel(cfg, c)), 'n', "Cochran's Q", 'P value'], trows = [], sent = [];
+    sets.forEach(([name, rs]) => {
+      const M = rs.map(r => cols.map(c => is(r[c]))).filter(m => m.every(x => x === 0 || x === 1)), q = S.cochranQ(M); if (!q) return;
+      trows.push([{ t: [name], b: true }, ...q.counts.map(c => ({ t: [npc(c, 100 * c / q.n, q.n)] })), { t: [String(q.n)] }, { t: [`Q(${q.df}) = ${fmt(q.Q, 2)}`] }, { t: [fmtP(q.p, alpha)] }]);
+      sent.push(`${name === 'All patients' ? 'Among all patients' : `In ${name}`}, the proportion of “${pos}” ${q.p <= alpha ? 'changed significantly' : 'did not change significantly'} across ${listJoin(cols.map(c => columnLabel(cfg, c)))} (Cochran's Q = ${fmt(q.Q, 2)}, P value ${pTxt(q.p)}).`);
+    });
+    if (!trows.length) return null; used.add('cochran');
+    return { kind: 'cochran', title: `“${pos}” across ${cols.length} repeated measurements (${listJoin(cols.map(c => columnLabel(cfg, c)))})`, head, rows: trows,
+      footnote: `Data are n (%) of the patients with “${pos}” among those with every measurement, Cochran's Q test.`, comment: sent.join(' '), figures: [], meta: {} };
+  }
   function cronbachSection(a, cfg, rows, alpha, d, used) {
     const cols = (a.predictors || []).filter(c => isNumberColumn(rows, c));
     if (cols.length < 2) return null;
@@ -1093,6 +1111,7 @@ const Analysis = (() => {
   }
   function explore(data, cfg, xo = {}) {
     [data, cfg] = withValueLabels(data, cfg);
+    TP_TIME = cfg.tpTime || {};
     const opts = cfg.options, alpha = opts.alpha, d = xo.dec !== undefined && xo.dec !== '' ? +xo.dec : opts.decimals;
     setRO(opts);
     normality = normalityTest(opts.normality);
@@ -1342,10 +1361,15 @@ const Analysis = (() => {
       }
       return w;
     });
+    // last observation carried forward over each outcome's timepoints
+    if (o.rmImpute === 'locf') { rows = rows || data.rows.map(r => ({ ...r }));
+      variables.filter(v => v.kind === 'repeated').forEach(v => rows.forEach(r => { let last = null; v.cols.forEach(c => { const n = toNum(r[c.col]); if (isFinite(n)) last = r[c.col]; else if (last !== null) r[c.col] = last; }); })); }
+    // timepoint phases: "Intra-operative: 30 min"
+    const ph = cfg.tpPhase || {}, tpLabels = Object.keys(ph).some(t => ph[t]) ? Object.fromEntries(Object.entries(cfg.tpLabels || {}).map(([t, l]) => [t, ph[t] ? `${ph[t]}: ${l}` : l])) : cfg.tpLabels;
     // groups merged into another (e.g. two doses into one arm)
     const mg = cfg.groupMerge || {}, srcs = Object.keys(mg).filter(g => mg[g] && mg[g] !== g && !cfg.noGroups);
     if (srcs.length) { rows = rows || data.rows.map(r => ({ ...r })); rows.forEach(r => { const g = toCat(r[cfg.groupCol]); if (g !== null && srcs.includes(g)) r[cfg.groupCol] = mg[g]; }); }
-    return [rows ? { ...data, rows } : data, { ...cfg, variables, ...(srcs.length ? { groupOrder: cfg.groupOrder.filter(g => !srcs.includes(g)) } : {}) }];
+    return [rows ? { ...data, rows } : data, { ...cfg, variables, tpLabels, ...(srcs.length ? { groupOrder: cfg.groupOrder.filter(g => !srcs.includes(g)) } : {}) }];
   }
   function withValueLabels(data, cfg) {
     [data, cfg] = prepareVariables(data, cfg);
@@ -1376,6 +1400,7 @@ const Analysis = (() => {
   /* ---------- main ---------- */
   function run(data, cfg) {
     [data, cfg] = withValueLabels(data, cfg);
+    TP_TIME = cfg.tpTime || {};
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
     setRO(opts);
     // descriptive: the detailed comment plus the test used, effect sizes, values of every group and an overview of each table
@@ -1615,7 +1640,7 @@ const Analysis = (() => {
           ? { type: ct === 'bar' ? 'bar' : 'line', categories: tps, yLabel: v.ylabel || v.label, xLabel: 'Time', legend: false, ...marks, ...(ct === 'bar' ? valueLabels : {}), ...(opts.rmIndividual && ct !== 'bar' ? { individual: [Y] } : {}),
               series: [{ name: G, values: desc.map(x => param ? x.mean : x.median), err: desc.map(x => param ? errOf(x) : null), lo: param ? null : desc.map(x => x.q1), hi: param ? null : desc.map(x => x.q3) }] }
           : { type: 'box', categories: tps, yLabel: v.ylabel || v.label, legend: false, points: opts.points || ct === 'dot', ...marks, series: [{ name: G, data: tps.map((_, t) => col(t)) }] } }];
-      return { kind: 'repeated', title: `${v.label} of the studied patients over time`, head, rows: trows, footnote: f.join(', ') + '.', comment: wording(sent.join(' ')),
+      return { kind: 'repeated', vid: v.id, title: `${v.label} of the studied patients over time`, head, rows: trows, footnote: f.join(', ') + '.', comment: wording(sent.join(' ')),
         brief: opts.paperStyle ? wording(sent[0] || '') : '', briefSig: !!sig, figures, meta: { param, tps, within: [w] } };
     }
 
@@ -1660,23 +1685,26 @@ const Analysis = (() => {
           if (opts.effect) cells.push({ t: effectLines(r), small: true });
           return cells;
         };
+        // the reference of the change: the outcome's own reference timepoint (step 3), else the first
+        const r0 = Math.min(tps.length - 1, Math.max(0, +(v.refTp || 0) || 0));
         if ((opts.rmChange === 'abs' || opts.rmChange === 'pct') && k > 1 && tps.length > 1) {
           const pct = opts.rmChange === 'pct';
-          for (let t = 1; t < tps.length; t++) {
-            const gv = byGroup.map(rs => rs.map(r => [toNum(r[v.cols[0].col]), toNum(r[v.cols[t].col])]).filter(([a, b]) => isFinite(a) && isFinite(b) && (!pct || a !== 0)).map(([a, b]) => pct ? (b - a) / Math.abs(a) * 100 : b - a));
+          for (let t = 0; t < tps.length; t++) {
+            if (t === r0) continue;
+            const gv = byGroup.map(rs => rs.map(r => [toNum(r[v.cols[r0].col]), toNum(r[v.cols[t].col])]).filter(([a, b]) => isFinite(a) && isFinite(b) && (!pct || a !== 0)).map(([a, b]) => pct ? (b - a) / Math.abs(a) * 100 : b - a));
             if (gv.some(x => x.length < 2)) continue;
             const r = analyzeNumeric(gv, v.dist, used, opts);
-            extraRes.push({ kind: 'change', t, r }); trows.push(extraRow(`${pct ? '% change' : 'Change'} ${tps[t]} − ${tps[0]}`, r));
+            extraRes.push({ kind: 'change', t, r }); trows.push(extraRow(`${pct ? '% change' : 'Change'} ${tps[t]} − ${tps[r0]}`, r));
           }
-          extraNote.push(pct ? `% change: (later − ${tps[0]}) / ${tps[0]} × 100 in patients with both values` : `Change: later value − ${tps[0]} in patients with both values`);
+          extraNote.push(pct ? `% change: (later − ${tps[r0]}) / ${tps[r0]} × 100 in patients with both values` : `Change: value − ${tps[r0]} in patients with both values`);
         }
         if (opts.rmAuc && k > 1 && tps.length > 1) {
           // area under the curve over the timepoints by the trapezoid rule, timepoints one unit apart
-          const gv = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)).map(a => a.slice(1).reduce((s2, y, i) => s2 + (y + a[i]) / 2, 0)));
+          const tt = timesOf(v), gv = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)).map(a => a.slice(1).reduce((s2, y, i) => s2 + (y + a[i]) / 2 * (tt[i + 1] - tt[i]), 0)));
           if (gv.every(x => x.length >= 2)) {
             const r = analyzeNumeric(gv, 'auto', used, opts);
             extraRes.push({ kind: 'auc', r }); trows.push(extraRow('AUC over time', r));
-            extraNote.push('AUC: area under the curve over all timepoints (trapezoid rule, equal spacing; patients with every measurement)');
+            extraNote.push(`AUC: area under the curve over all timepoints (trapezoid rule, ${tt.real ? 'with the real time between the timepoints' : 'equal spacing'}; patients with every measurement)`);
           }
         }
         let within = null, withinNote = '';
@@ -1701,7 +1729,47 @@ const Analysis = (() => {
             withinNote = [withinNote, 'Group × time interaction: mixed ANOVA (Greenhouse-Geisser)'].filter(Boolean).join(', ');
           }
         }
+        // linear mixed model: group, time (continuous) and group × time, a random intercept per patient, every available value (REML; Wald tests)
+        let lmm = null;
+        if (opts.rmLmm && k > 1 && v.cols.length >= 2) {
+          const tt = timesOf(v), y = [], X = [], sid = [];
+          byGroup.forEach((rs, gi) => rs.forEach((r, ri) => v.cols.forEach((c, t) => { const val = toNum(r[c.col]); if (!isFinite(val)) return;
+            y.push(val); sid.push(gi + ':' + ri); const gd = gl.slice(1).map((_, q) => +(gi === q + 1)); X.push([1, ...gd, tt[t], ...gd.map(g => g * tt[t])]); })));
+          const m = y.length > k * 2 + 4 ? S.lmmRandomIntercept(y, X, sid) : null;
+          if (m) {
+            const G = gl.slice(1).map((_, q) => 1 + q), Tm = k, I = gl.slice(1).map((_, q) => k + 1 + q), wg = m.wald(G), wt = m.wald([Tm]), wi = m.wald(I);
+            lmm = { group: wg, time: wt, inter: wi, m }; used.add('lmm');
+            const fill = () => ({ t: [''], span: head.length - 1 - k });
+            trows.push([{ t: ['Mixed model: group'], b: true }, { t: [fmtP(wg.p, alpha)], span: k }, fill()], [{ t: ['Mixed model: time'], b: true }, { t: [fmtP(wt.p, alpha)], span: k }, fill()], [{ t: ['Mixed model: group × time'], b: true }, { t: [fmtP(wi.p, alpha)], span: k }, fill()]);
+            withinNote = [withinNote, `Mixed model: linear mixed model with a random intercept per patient (${m.nSubj} patients, ${m.nObs} measurements; time as ${timesOf(v).real ? 'its real value' : 'the timepoint number'}; Wald tests)`].filter(Boolean).join(', ');
+          }
+        }
+        // linear trend over time within each group: the linear contrast of each patient's values, tested against zero
+        let trend = null;
+        if (opts.rmTrend && v.cols.length >= 3) {
+          const tt = timesOf(v), mt = S.mean(tt), cw = tt.map(x => x - mt), mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
+          trend = mats.map(Y => { if (Y.length < 3) return null; const sc = Y.map(a => a.reduce((t, x, i) => t + x * cw[i], 0)), m0 = S.mean(sc), se = S.sd(sc) / Math.sqrt(sc.length), tv = m0 / se; return { slope: m0 / cw.reduce((t, x) => t + x * x, 0), p: se > 0 ? 2 * (1 - jStat.studentt.cdf(Math.abs(tv), sc.length - 1)) : 1 }; });
+          trows.push([{ t: ['P (linear trend over time)'], b: true }, ...trend.map(x => ({ t: [x ? fmtP(x.p, alpha) : '—'] })), { t: [''], span: head.length - 1 - k }]);
+          withinNote = [withinNote, 'P (linear trend over time): linear contrast of each patient\'s values against zero (one-sample t-test)'].filter(Boolean).join(', ');
+        }
+        // responders: patients whose value fell (or rose) by at least the chosen % from the reference timepoint
+        let resp = null;
+        if (v.resp && +v.resp.pct > 0 && k > 1) {
+          const fall = v.resp.dir !== 'rise', thr = +v.resp.pct; resp = [];
+          for (let t = 0; t < tps.length; t++) {
+            if (t === r0) continue;
+            const gv = byGroup.map(rs => rs.map(r => [toNum(r[v.cols[r0].col]), toNum(r[v.cols[t].col])]).filter(([a, b]) => isFinite(a) && isFinite(b) && a !== 0)
+              .map(([a, b]) => (fall ? (a - b) : (b - a)) / Math.abs(a) * 100 >= thr ? 'Responder' : 'Non-responder'));
+            if (gv.some(x => !x.length)) continue;
+            const cr = analyzeCategorical(gv, ['Responder', 'Non-responder'], used, opts); resp.push({ t, cr });
+            trows.push([{ t: [`Responders at ${tps[t]}`], b: true }, ...cr.table[0].map((c, j) => ({ t: [npc(c, cr.pct[0][j], cr.ns[j])] })), { t: [fmtP(cr.p, alpha) + (isFinite(cr.p) ? tm.mark(cr.test) : '')] }, ...(head.length - 2 - k > 0 ? [{ t: [''], span: head.length - 2 - k }] : [])]);
+          }
+          if (resp.length) extraNote.push(`Responders: ${fall ? 'fall' : 'rise'} of at least ${thr}% from ${tps[r0]}, n (%) of the patients with both values, compared by ${testNames(resp.map(x => x.cr)) || 'the Chi-square test'}`);
+        }
         let comment = repeatedComment(plain(v.label), tps, results, gl, alpha, detailed);
+        if (lmm) comment += ` In the linear mixed model, the group × time interaction was ${lmm.inter.p <= alpha ? 'significant' : 'insignificant'} (P value ${pTxt(lmm.inter.p)}).`;
+        if (trend) { const sg = trend.map((x, i) => x && x.p <= alpha ? `${gl[i]} (P value ${pTxt(x.p)})` : '').filter(Boolean); if (sg.length) comment += ` ${cap(plain(v.label))} showed a significant linear trend over time in ${listJoin(sg)}.`; }
+        if (resp) { const sg = resp.filter(x => x.cr.p <= alpha); if (sg.length) comment += ` The proportion of responders differed significantly at ${listJoin(sg.map(x => `${tps[x.t]} (P value ${pTxt(x.cr.p)})`))}.`; }
         // the change from the first timepoint and the area under the curve
         if (extraRes.length) {
           const lab = lowerFirst(plain(v.label)), nsT = [];
@@ -1732,7 +1800,7 @@ const Analysis = (() => {
         const sigAny = anySig || (within && within.some(w => w.p <= alpha)) || (mixed && mixed.interaction.p <= alpha);
         const marks = opts.sigMarks ? { sigCat: results.map(r => r.p), alpha } : {};
         sections.push({
-          kind: 'repeated', title: `${v.label} of the studied groups`, head, rows: trows,
+          kind: 'repeated', vid: v.id, title: `${v.label} of the studied groups`, head, rows: trows,
           footnote: footnote({ sig: sigAny, param, nonparam: !param, effect: opts.effect, posthoc: showPost, stats: results.map(r => r.stat),
             missing: v.cols.map((c, t) => [tps[t], missingIn(c.col, true)]).filter(x => x[1]).map(([t, m]) => `${t} (n=${m})`) }, [tm.note, ...extraNote, withinNote, v.note].filter(Boolean).join(', ')),
           comment: wording(comment), brief: opts.paperStyle ? wording(briefRepeated(plain(v.label), tps, results, within, gl, alpha, param, d)) : '', briefSig: !!sigAny,
@@ -1997,20 +2065,20 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (a.include === false || (!a.outcome && a.type !== 'cronbach' && a.type !== 'correlation')) continue;
+      if (a.include === false || (!a.outcome && a.type !== 'cronbach' && a.type !== 'correlation' && a.type !== 'cochran')) continue;
       const needs = {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
-        mcnemar: () => a.second, kappa: () => a.second, agreement: () => a.second, diagnostic: () => a.positive && a.event && a.eventPositive, cronbach: () => true,
+        mcnemar: () => a.second, kappa: () => a.second, agreement: () => a.second, diagnostic: () => a.positive && a.event && a.eventPositive, cronbach: () => true, cochran: () => (a.predictors || []).length >= 2,
         correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
-        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection }[a.type];
+        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
-      const compares = ['ancova', 'survival', 'mcnemar'].includes(a.type);
+      const compares = ['ancova', 'survival', 'mcnemar', 'cochran'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
         : a.subset === 'each' ? groups.map(g => ({ g, rows: rows.filter(r => groupOf(cfg, r) === g) }))
         : groups.includes(a.subset) ? [{ g: a.subset, rows: rows.filter(r => groupOf(cfg, r) === a.subset) }] : [{ g: null, rows }];
@@ -2310,6 +2378,7 @@ const Analysis = (() => {
       s.push(`Quantitative non-parametric data were presented as median and interquartile range (IQR) and were analyzed by ${t}.`);
     }
     if (used.has('cat')) s.push(`Qualitative variables were presented as frequency and percentage (%) and were analyzed utilizing the Chi-square test${used.has('fisher') ? " or Fisher's exact test when appropriate" : ''}.`);
+    if (used.has('lmm')) s.push('Repeated measures were also analysed with a linear mixed model (group, time and their interaction as fixed effects, a random intercept per patient, restricted maximum likelihood), which uses every available measurement.');
     if (used.has('ordRank')) s.push(`Ordinal variables were compared with the ${used.has('ordDunn') ? "Mann-Whitney U or Kruskal-Wallis test (Dunn's post hoc test with Bonferroni correction)" : 'Mann-Whitney U or Kruskal-Wallis test'} on the order of their categories.`);
     if (used.has('ordTrend')) s.push('Ordinal variables were compared with the Chi-square test for trend (linear-by-linear association).');
     if (used.has('chiPost')) s.push(`When significant, qualitative variables were compared between each two groups ${used.has('chiNone') ? 'without correction for multiple comparisons' : `with ${used.has('chiHolm') ? 'Holm' : 'Bonferroni'} correction`}.`);
@@ -2350,6 +2419,7 @@ const Analysis = (() => {
     if (used.has('kappa')) s.push(`Agreement between qualitative ratings was assessed using Cohen's kappa (κ) coefficient${used.has('kappaW') ? ', and the weighted kappa (κw) for ordered categories' : ''}.`);
     if (used.has('icc')) s.push(`Agreement between quantitative measurements was assessed using the intraclass correlation coefficient (ICC; ${used.has('iccC') ? 'two-way mixed effects, consistency' : 'two-way random effects, absolute agreement'}) and Bland-Altman analysis with 95% limits of agreement.`);
     if (used.has('diagnostic')) s.push('Diagnostic accuracy was expressed as sensitivity, specificity, positive and negative predictive values, likelihood ratios and accuracy, with exact (Clopper-Pearson) 95% CI.');
+    if (used.has('cochran')) s.push("Repeated yes/no outcomes were compared across the measurements with Cochran's Q test.");
     if (used.has('cronbach')) s.push(`Internal consistency was assessed using Cronbach's alpha (α) coefficient${used.has('splitHalf') ? ' and split-half reliability with the Spearman-Brown correction' : ''}.`);
     if (used.has('ancovaSlopes')) s.push('The homogeneity of regression slopes was checked by the group × covariate interaction.');
     if (used.has('survPair')) s.push('When more than two groups were compared, pairwise log-rank tests were Bonferroni-adjusted.');

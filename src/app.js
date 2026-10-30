@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmImpute: 'none', autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,7 +47,7 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], rmTrend: ['optRmTrend', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -1291,6 +1291,81 @@
     renderSelBar();
   }
   $('#subCol').onchange = $('#subOverall').onchange = () => { state.cfg.subgroup = { col: $('#subCol').value, overall: $('#subOverall').checked }; state.cfg.consort = null; };
+
+  /* ---------- step 3 tools: time values, templates, derived outcomes, merging timepoints, overview tables, every patient over time ---------- */
+  function guessTime(t) { const s = String(t).toLowerCase(); if (/^(baseline|base|bl|pre|preop|before|t0|v0|d0|day0)$/.test(s)) return '0';
+    let m = /^(\d+(?:\.\d+)?)([a-z]+)$/.exec(s); if (m) return m[1]; m = /^([a-z]+)(\d+(?:\.\d+)?)$/.exec(s); return m ? m[2] : ''; }
+  const TPL = { T: i => `T${i}`, prepost: i => ['Before', 'After'][i] || `After ${i}`, periop: i => ['Pre-op', 'Intra-op', 'Post-op'][i] || `Day ${i - 2}`, visit: i => i ? `Visit ${i}` : 'Baseline', month: i => ['Baseline', 'Month 1', 'Month 3', 'Month 6', 'Month 12'][i] || `Month ${i}` };
+  $('#tpTemplate').onchange = e => { const f = TPL[e.target.value]; if (!f) return; readUiIntoCfg(); state.cfg.tpOrder.forEach((t, i) => { state.cfg.tpLabels[t] = f(i); }); e.target.value = ''; renderTimepoints(); toast('Labels set in order — adjust any of them'); };
+  $('#tpReverse').onclick = () => { readUiIntoCfg(); state.cfg.tpOrder.reverse(); state.cfg.variables.filter(v => v.kind === 'repeated' && v.ownOrder).forEach(v => v.cols.reverse()); renderTimepoints(); };
+  function renderTpTools() {
+    const cfg = state.cfg, reps = cfg.variables.filter(v => v.kind === 'repeated'), rows = state.data.rows;
+    const opt = (list, sel) => list.map(v => `<option value="${v.id}" ${v.id === sel ? 'selected' : ''}>${esc(v.label)}</option>`).join('');
+    $('#drVar').innerHTML = opt(reps, $('#drVar').value); $('#spVar').innerHTML = opt(reps, $('#spVar').value);
+    $('#mgFrom').innerHTML = $('#mgTo').innerHTML = cfg.tpOrder.map(t => `<option value="${esc(t)}">${esc(cfg.tpLabels[t] || t)}</option>`).join('');
+    if (cfg.tpOrder.length > 1) $('#mgTo').selectedIndex = 1;
+    // outcomes × timepoints, and outcomes that do not share the same timepoints
+    $('#tpMatrix').innerHTML = reps.length ? `<thead><tr><th>Outcome</th>${cfg.tpOrder.map(t => `<th>${esc(cfg.tpLabels[t] || t)}</th>`).join('')}</tr></thead><tbody>${reps.map(v => `<tr><td class="b">${esc(v.label)}</td>${cfg.tpOrder.map(t => { const i = v.cols.findIndex(c => c.tp === t); return `<td style="text-align:center">${i < 0 ? '' : `<input type="checkbox" data-mx="${v.id}:${i}" ${v.cols[i].include !== false ? 'checked' : ''}>`}</td>`; }).join('')}</tr>`).join('')}</tbody>` : '';
+    const sets = reps.map(v => v.cols.filter(c => c.include !== false).map(c => c.tp).join('|')), uneq = new Set(sets).size > 1;
+    $('#tpWarn').textContent = uneq ? '⚠ The outcomes do not all use the same timepoints — check that this is intended.' : reps.length > 1 ? '✓ Every outcome uses the same timepoints.' : '';
+    // missing values per timepoint and group
+    const groups = activeGroups();
+    $('#tpMissing').innerHTML = reps.length ? `<thead><tr><th>Outcome · timepoint</th>${groups.map(g => `<th>${esc(cfg.groupLabels[g] || g)}</th>`).join('')}</tr></thead><tbody>${reps.flatMap(v => v.cols.filter(c => c.include !== false).map(c => `<tr><td>${esc(v.label)} · ${esc(colTp(c))}</td>${groups.map(g => { const rs = rows.filter(r => Analysis.groupOf(cfg, r) === g), m = rs.filter(r => isMissing(r[c.col])).length; return `<td class="${m ? 'miss-n' : ''}">${m} of ${rs.length}</td>`; }).join('')}</tr>`)).join('')}</tbody>` : '';
+    drawSpaghetti();
+  }
+  $('#tpMatrix').addEventListener('change', e => { const c = e.target.closest('[data-mx]'); if (!c) return; const [id, i] = c.dataset.mx.split(':'), v = state.cfg.variables.find(x => x.id === id); v.cols[+i].include = c.checked; renderTpVars(); renderTpTools(); });
+  function drawSpaghetti() {
+    const cfg = state.cfg, v = cfg.variables.find(x => x.id === $('#spVar').value); if (!v) { $('#spImg').removeAttribute('src'); return; }
+    const cols = v.cols.filter(c => c.include !== false), groups = activeGroups(), o = cfg.options;
+    const mats = groups.map(g => state.data.rows.filter(r => Analysis.groupOf(cfg, r) === g).map(r => cols.map(c => Analysis.toNum(r[c.col]))).filter(a => a.filter(isFinite).length >= 2).map(a => a.map(x => isFinite(x) ? x : NaN)));
+    const spec = { type: 'line', categories: cols.map(colTp), yLabel: v.label, xLabel: 'Time', individual: mats.map(Y => Y.filter(a => a.every(isFinite))), legend: groups.length > 1,
+      series: groups.map((g, i) => ({ name: cfg.groupLabels[g] || g, values: cols.map((_, t) => Stats.mean(mats[i].map(a => a[t]).filter(isFinite))), err: cols.map(() => null) })) };
+    try { $('#spImg').src = Charts.draw(spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png'); } catch (e) { console.error(e); }
+  }
+  $('#spVar').onchange = drawSpaghetti;
+  $('#drKind').onchange = () => { $('#drThrBox').style.display = $('#drKind').value === 'ttt' ? '' : 'none'; };
+  $('#drGo').onclick = () => {
+    readUiIntoCfg(); const cfg = state.cfg, v = cfg.variables.find(x => x.id === $('#drVar').value); if (!v) return;
+    const cols = v.cols.filter(c => c.include !== false), kind = $('#drKind').value, tv = cols.map(c => cfg.tpTime[c.tp]), real = tv.every(x => x !== undefined && isFinite(x)), tt = real ? tv : cols.map((_, i) => i);
+    const thr = +$('#drThr').value, le = $('#drDir').value === 'le';
+    const NAME = { auc: 'AUC', max: 'peak', min: 'lowest', tmax: 'time_of_peak', mean: 'mean', change: 'change_last_first', ttt: `time_to_${le ? 'le' : 'ge'}_${thr}` }[kind];
+    const base = tokens(cols[0].col).filter(t => !TP_RE.test(t)).join('_') || 'outcome';
+    let name = `${base}_${NAME}`, k = 2; while (state.data.headers.includes(name)) name = `${base}_${NAME}_${k++}`;
+    const calc = a => { const ok = a.map((x, i) => [tt[i], x]).filter(p => isFinite(p[1])); if (!ok.length) return null;
+      if (kind === 'auc') { if (ok.length < cols.length) return null; return +a.slice(1).reduce((s2, y, i) => s2 + (y + a[i]) / 2 * (tt[i + 1] - tt[i]), 0).toFixed(3); }
+      if (kind === 'max') return Math.max(...ok.map(p => p[1])); if (kind === 'min') return Math.min(...ok.map(p => p[1]));
+      if (kind === 'tmax') { const m = Math.max(...ok.map(p => p[1])); return ok.find(p => p[1] === m)[0]; }
+      if (kind === 'mean') return +(ok.reduce((s2, p) => s2 + p[1], 0) / ok.length).toFixed(3);
+      if (kind === 'change') return ok.length >= 2 ? +(ok[ok.length - 1][1] - ok[0][1]).toFixed(3) : null;
+      const hit = ok.find(p => le ? p[1] <= thr : p[1] >= thr); return hit ? hit[0] : null; };
+    editSheet(() => { const { headers, rows } = state.data; headers.splice(headers.indexOf(cols[cols.length - 1].col) + 1, 0, name);
+      rows.forEach(r => { r[name] = calc(cols.map(c => Analysis.toNum(r[c.col]))); });
+      cfg.variables.push({ ...singleVariable(rows, name, headers.indexOf(name), 'Other outcomes'), id: 'dr' + Date.now().toString(36), type: 'numeric', label: `${v.label}: ${{ auc: 'area under the curve', max: 'peak value', min: 'lowest value', tmax: 'time of the peak', mean: 'mean over time', change: 'change (last − first)', ttt: `time to reach ${le ? '≤' : '≥'} ${thr}` }[kind]}` }); }, `New column ${name}`);
+    $('#drInfo').textContent = `${name} added (${real ? 'with the time values' : 'timepoints numbered 0, 1, 2 …'}); it is analysed as a single variable in step 2.`;
+  };
+  $('#mgGo').onclick = () => {
+    readUiIntoCfg(); const a = $('#mgFrom').value, b = $('#mgTo').value, cfg = state.cfg; if (a === b) { toast('Choose two different timepoints'); return; }
+    let n = 0;
+    editSheet(() => { cfg.variables.filter(v => v.kind === 'repeated').forEach(v => { const ca = v.cols.find(c => c.tp === a), cb = v.cols.find(c => c.tp === b); if (!ca) return;
+      if (!cb) { ca.tp = b; return; }
+      state.data.rows.forEach(r => { if (isMissing(r[cb.col]) && !isMissing(r[ca.col])) { r[cb.col] = r[ca.col]; n++; } });
+      v.cols = v.cols.filter(c => c !== ca); }); cfg.tpOrder = cfg.tpOrder.filter(t => t !== a || cfg.variables.some(v => v.kind === 'repeated' && v.cols.some(c => c.tp === a))); }, `Merged timepoint ${a} into ${b}`);
+    renderTimepoints(); toast(`${a} merged into ${b}: ${n} empty cell${n === 1 ? '' : 's'} filled`);
+  };
+  // after the analysis: the primary endpoint in bold, and line charts spaced by the real time between timepoints
+  function postRepeated(res, cfg) {
+    res.sections.forEach(s => {
+      const v = s.vid && cfg.variables.find(x => x.id === s.vid); if (!v) return;
+      const cols = v.cols.filter(c => c.include !== false && (cfg.tpInclude || {})[c.tp] !== false);
+      if (v.primaryTp !== undefined && v.primaryTp !== '' && v.cols[+v.primaryTp]) {
+        const c = v.cols[+v.primaryTp], lab = c.label || cfg.tpLabels[c.tp] || c.tp;
+        let hit = false; s.rows.forEach(r => { if ((r[0].t || []).join(' ') === lab || (r[0].t || []).join(' ').endsWith(': ' + lab)) { r.forEach(cell => { cell.b = true; }); hit = true; } });
+        if (hit) s.footnote = s.footnote.replace(/\.$/, '') + `, Bold: ${lab}, the primary endpoint.`;
+      }
+      const tv = cols.map(c => (cfg.tpTime || {})[c.tp]);
+      if (tv.length > 1 && tv.every(x => x !== undefined && isFinite(x))) s.figures.forEach(f => { if (f.spec && f.spec.type === 'line' && f.spec.categories && f.spec.categories.length === tv.length) f.spec.xValues = tv.map(Number); });
+    });
+  }
   /* ---------- defaults for one step: every option whose control is on that step ---------- */
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-reset]'); if (!b || !state.cfg) return;
@@ -1397,12 +1472,15 @@
     const id = $('#rsId').value, time = $('#rsTime').value, vals = [...document.querySelectorAll('[data-rsv]:checked')].map(el => el.dataset.rsv);
     if (id === time) { toast('Choose different ID and visit columns'); return; }
     if (!vals.length) { toast('Tick the values measured at each visit'); return; }
-    const rows = state.data.rows, times = [...new Set(rows.map(r => r[time]).filter(v => !isMissing(v)).map(String))];
+    // visit windows: "0=Baseline; 25-35=Month 1" turn a day number into a visit; values outside every window are left out
+    const wins = $('#rsWin').value.split(';').map(p => p.trim()).filter(Boolean).map(p => { const m = /^(-?[\d.]+)\s*(?:-\s*(-?[\d.]+))?\s*=\s*(.+)$/.exec(p); return m ? { lo: +m[1], hi: m[2] !== undefined ? +m[2] : +m[1], label: m[3].trim() } : null; }).filter(Boolean);
+    const tl = r => { if (!wins.length) return isMissing(r[time]) ? '' : String(r[time]); const n = Analysis.toNum(r[time]); const w = wins.find(x => n >= x.lo && n <= x.hi); return w ? w.label : ''; };
+    const rows = state.data.rows, times = wins.length ? wins.map(w => w.label).filter((l, i, a) => a.indexOf(l) === i && rows.some(r => tl(r) === l)) : [...new Set(rows.map(r => r[time]).filter(v => !isMissing(v)).map(String))];
     const keep = state.data.headers.filter(x => x !== time && !vals.includes(x)), by = new Map();
     let clash = 0;
     rows.forEach(r => { const k = String(r[id] ?? '').trim(); if (!k) return;
       if (!by.has(k)) by.set(k, Object.fromEntries(keep.map(x => [x, r[x]])));
-      const o = by.get(k), t = String(r[time] ?? '');
+      const o = by.get(k), t = tl(r);
       keep.forEach(x => { if (isMissing(o[x]) && !isMissing(r[x])) o[x] = r[x]; });
       if (t) vals.forEach(v => { const c = `${v}_${t}`; if (!isMissing(o[c]) && !isMissing(r[v])) clash++; if (!isMissing(r[v])) o[c] = r[v]; }); });
     const headers = [...keep, ...vals.flatMap(v => times.map(t => `${v}_${t}`))];
@@ -1746,12 +1824,15 @@
   /* ---------- step 3: timepoints & options ---------- */
   function renderTimepoints() {
     const cfg = state.cfg;
-    $('#tpTbl').innerHTML = cfg.tpOrder.length ? `<thead><tr><th>Use</th><th>Token in column names</th><th>Label in report</th><th>Order</th></tr></thead><tbody>${
+    cfg.tpTime = cfg.tpTime || {}; cfg.tpPhase = cfg.tpPhase || {};
+    $('#tpTbl').innerHTML = cfg.tpOrder.length ? `<thead><tr><th>Use</th><th>Token in column names</th><th>Label in report</th><th title="For proportional spacing in line charts, the area under the curve, the mixed model and the trend test">Time value</th><th title="Shown before the label, e.g. Intra-operative: 30 min">Phase</th><th>Order</th></tr></thead><tbody>${
       cfg.tpOrder.map((t, i) => `<tr><td><input type="checkbox" data-tpinc="${esc(t)}" ${cfg.tpInclude[t] !== false ? 'checked' : ''}></td><td class="mono">${esc(t)}</td>
         <td><input type="text" data-tp="${esc(t)}" value="${esc(cfg.tpLabels[t])}"></td>
+        <td><input type="number" data-tptime="${esc(t)}" value="${esc(cfg.tpTime[t] ?? '')}" style="width:80px" placeholder="${esc(guessTime(t))}"></td>
+        <td><input type="text" data-tpphase="${esc(t)}" value="${esc(cfg.tpPhase[t] || '')}" style="width:130px"></td>
         <td><button class="btn ghost small" data-tpmove="${i},-1">↑</button> <button class="btn ghost small" data-tpmove="${i},1">↓</button></td></tr>`).join('')}</tbody>`
       : '<tbody><tr><td>No repeated measures detected.</td></tr></tbody>';
-    renderTpVars();
+    renderTpVars(); renderTpTools();
   }
   // option controls of steps 4–8 show the saved options
   function renderOptions() {
@@ -1796,6 +1877,12 @@
     const reps = state.cfg.variables.filter(v => v.kind === 'repeated');
     $('#tpVars').innerHTML = reps.length ? reps.map(v => `<div class="gcard" style="margin-bottom:10px"><div class="row"><h4 style="margin:0">${esc(v.label)}</h4><span class="spacer"></span>
         <span class="legend-note">${v.include ? '' : 'not included (step 2) · '}${v.split ? 'analysed as separate variables · ' : ''}${v.ownOrder ? 'own order' : 'shared order'}</span></div>
+      <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center">
+        <span class="legend-note">Reference for change</span><select data-vset="${v.id}" data-vk="refTp" style="width:auto">${v.cols.map((c, i) => `<option value="${i}" ${+(v.refTp || 0) === i ? 'selected' : ''}>${esc(colTp(c))}</option>`).join('')}</select>
+        <span class="legend-note">Primary endpoint</span><select data-vset="${v.id}" data-vk="primaryTp" style="width:auto"><option value="">—</option>${v.cols.map((c, i) => `<option value="${i}" ${v.primaryTp !== undefined && +v.primaryTp === i ? 'selected' : ''}>${esc(colTp(c))}</option>`).join('')}</select>
+        <span class="legend-note">Responders: a</span><select data-vset="${v.id}" data-vk="respDir" style="width:auto"><option value="fall" ${(v.resp || {}).dir !== 'rise' ? 'selected' : ''}>fall</option><option value="rise" ${(v.resp || {}).dir === 'rise' ? 'selected' : ''}>rise</option></select><span class="legend-note">of ≥</span><input type="number" data-vset="${v.id}" data-vk="respPct" value="${esc((v.resp || {}).pct || '')}" placeholder="e.g. 50" style="width:70px"><span class="legend-note">% from the reference</span>
+        <button class="btn ghost small" data-tpcopy="${v.id}" type="button" title="The timepoints used, their labels and order, the reference and the primary endpoint — to every other outcome with the same timepoints">Copy to other outcomes</button>
+      </div>
       <table class="t" style="margin-top:6px"><thead><tr><th>Use</th><th>Column</th><th>Timepoint label for this outcome</th><th>Order</th></tr></thead><tbody>${v.cols.map((c, i) => `<tr>
         <td><input type="checkbox" data-tv="${v.id}:${i}" data-tf="include" ${c.include !== false ? 'checked' : ''}></td><td class="mono">${esc(c.col)}</td>
         <td><input type="text" data-tv="${v.id}:${i}" data-tf="label" value="${esc(colTp(c))}"></td>
@@ -1815,6 +1902,12 @@
     });
   }
   $('#tpVars').addEventListener('click', e => {
+    const cp = e.target.closest('[data-tpcopy]');
+    if (cp) { readUiIntoCfg(); const src = state.cfg.variables.find(x => x.id === cp.dataset.tpcopy), toks = src.cols.map(c => c.tp); let n = 0;
+      state.cfg.variables.filter(v => v.kind === 'repeated' && v !== src && v.cols.length === src.cols.length && v.cols.every(c => toks.includes(c.tp))).forEach(v => {
+        v.cols = src.cols.map(sc => { const c = v.cols.find(x => x.tp === sc.tp); return { ...c, include: sc.include, ...(sc.label ? { label: sc.label } : {}) }; });
+        v.ownOrder = src.ownOrder; ['refTp', 'primaryTp'].forEach(k => { if (src[k] === undefined) delete v[k]; else v[k] = src[k]; }); if (src.resp) v.resp = { ...src.resp }; else delete v.resp; n++; });
+      renderTpVars(); toast(n ? `Copied to ${n} outcome${n > 1 ? 's' : ''}` : 'No other outcome has the same timepoints'); return; }
     const b = e.target.closest('[data-tvmove]'); if (!b) return;
     readUiIntoCfg();
     const [id, i, d] = b.dataset.tvmove.split(':'), v = state.cfg.variables.find(x => x.id === id), a = v.cols, j = +i + +d;
@@ -2137,7 +2230,7 @@
   /* ---------- advanced analyses (regression, ROC) ---------- */
   const ADV_TYPES = { paired: 'Paired comparison (two measurements)', correlation: 'Correlation (Pearson / Spearman)', linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
     cox: 'Cox regression (hazard ratios)', mcnemar: 'McNemar test (paired categorical)', kappa: "Cohen's kappa (agreement, categorical)",
-    agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)" };
+    agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)", cochran: "Cochran's Q (the same yes/no outcome measured repeatedly)" };
   const analysedRows = () => { const g = activeGroups(); return Analysis.filterRows(state.cfg, state.data.rows).filter(r => g.includes(Analysis.groupOf(state.cfg, r))); };
   function advColumns() {
     const cfg = state.cfg, rows = analysedRows();
@@ -2181,7 +2274,8 @@
       if (t === 'correlation') { fields = select('outcome', 'Main variable (optional — correlated with each ticked variable)', cols.filter(c => Analysis.isNumberColumn(rows, c.col)), a.outcome)
         + '<p class="legend-note" style="margin:22px 0 0">Leave the main variable empty to correlate every pair of the ticked variables.</p>'; predLabel = 'Variables (numeric or ordinal scores)'; preds = cols.filter(c => Analysis.isNumberColumn(rows, c.col)); }
       if (t === 'cronbach') { fields = '<p class="legend-note" style="margin:0">Tick the questionnaire items (numeric scores). Patients with any missing item are left out.</p>'; predLabel = 'Items'; preds = cols.filter(c => Analysis.isNumberColumn(rows, c.col)); }
-      const withPreds = ['linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation'].includes(t);
+      if (t === 'cochran') { fields = `<p class="legend-note" style="margin:0">Tick the measurements in time order (e.g. Complication_D1, _D3, _D7). Patients with every measurement are used.</p><div><label class="f">Counted as</label><input type="text" data-af="positive" value="${esc(a.positive || 'Yes')}" style="width:120px"></div>`; predLabel = 'Measurements'; preds = cols.filter(c => c.kind === 'categorical'); }
+      const withPreds = ['linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran'].includes(t);
       const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
       return `<div class="gcard" data-adv="${ai}">
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
@@ -2469,6 +2563,11 @@
     if (isActive(2)) readVariables();
     if (isActive(3)) {
       document.querySelectorAll('[data-tp]').forEach(el => cfg.tpLabels[el.dataset.tp] = el.value.trim() || el.dataset.tp);
+      document.querySelectorAll('[data-tptime]').forEach(el => { if (el.value === '') delete cfg.tpTime[el.dataset.tptime]; else cfg.tpTime[el.dataset.tptime] = +el.value; });
+      document.querySelectorAll('[data-tpphase]').forEach(el => { if (el.value.trim()) cfg.tpPhase[el.dataset.tpphase] = el.value.trim(); else delete cfg.tpPhase[el.dataset.tpphase]; });
+      document.querySelectorAll('[data-vset]').forEach(el => { const v = cfg.variables.find(x => x.id === el.dataset.vset); if (!v) return; const k = el.dataset.vk;
+        if (k === 'respPct' || k === 'respDir') { v.resp = v.resp || {}; v.resp[k === 'respPct' ? 'pct' : 'dir'] = el.value; if (!+v.resp.pct) delete v.resp; }
+        else if (el.value === '') delete v[k]; else v[k] = +el.value; });
       document.querySelectorAll('[data-tpinc]').forEach(el => { cfg.tpInclude[el.dataset.tpinc] = el.checked; });
       readTpVars();
     }
@@ -2886,6 +2985,8 @@
         syncAssessed(ensureConsort());
         const cfg = { ...state.cfg, options: effOptions() };
         const res = Analysis.run(state.data, cfg);
+        postRepeated(res, state.cfg);
+        if (cfg.options.rmImpute === 'locf') res.methods += ' Missing follow-up values were replaced by the last observation carried forward.';
         // subgroup analysis: every table again within each category of the chosen column
         const sg = state.cfg.subgroup;
         if (sg && sg.col && state.data.headers.includes(sg.col)) {

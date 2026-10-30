@@ -321,9 +321,12 @@ const Charts = (() => {
 
     const nc = spec.categories.length, ns = spec.series.length;
     const cw = pw / nc;
+    // line charts with real times: each timepoint at its time (e.g. 0, 2, 6, 24 h) instead of equal spacing
+    const xv = spec.type === 'line' && Array.isArray(spec.xValues) && spec.xValues.length === nc && nc > 1 ? spec.xValues : null;
+    const xAt = ci => xv ? L + cw / 2 + (xv[ci] - xv[0]) / ((xv[nc - 1] - xv[0]) || 1) * (pw - cw) : L + cw * (ci + 0.5);
     ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = F(700, 26); ctx.fillStyle = '#333';
     const catLines = Math.max(1, ...spec.categories.map(cat => measureLines(ctx, cat, cw - 10)));
-    spec.categories.forEach((cat, i) => wrapText(ctx, cat, L + cw * (i + 0.5), T + ph + 16, cw - 10, 30 * ts));
+    spec.categories.forEach((cat, i) => wrapText(ctx, cat, xAt(i), T + ph + 16, cw - 10, 30 * ts));
     if (spec.xLabel) { ctx.font = F(700, 26); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + (catLines * 30 + 24) * ts); }
 
     // error bars: both directions with caps (default), without caps, or upward only from the mean (mid)
@@ -358,12 +361,12 @@ const Charts = (() => {
       if (spec.individual) spec.series.forEach((s, si) => {
         const off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
         ctx.strokeStyle = pal[si % pal.length]; ctx.globalAlpha = 0.22; ctx.lineWidth = 2; ctx.setLineDash([]);
-        (spec.individual[si] || []).forEach(p => { ctx.beginPath(); p.forEach((v, ci) => { const x = L + cw * (ci + 0.5) + off; ci ? ctx.lineTo(x, y(v)) : ctx.moveTo(x, y(v)); }); ctx.stroke(); });
+        (spec.individual[si] || []).forEach(p => { ctx.beginPath(); p.forEach((v, ci) => { const x = xAt(ci) + off; ci ? ctx.lineTo(x, y(v)) : ctx.moveTo(x, y(v)); }); ctx.stroke(); });
         ctx.globalAlpha = 1;
       });
       spec.series.forEach((s, si) => {
         const color = pal[si % pal.length], off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
-        const xs = s.values.map((_, ci) => L + cw * (ci + 0.5) + off);
+        const xs = s.values.map((_, ci) => xAt(ci) + off);
         s.values.forEach((v, ci) => {
           if (s.err && s.err[ci] != null) errBar(xs[ci], v - s.err[ci], v + s.err[ci], 9, v, color);
           else if (s.lo && s.hi) errBar(xs[ci], s.lo[ci], s.hi[ci], 9, v, color);
@@ -503,7 +506,7 @@ const Charts = (() => {
       fillSig(ctx, sigMark(q.p, spec.alpha, st), (x1 + x2) / 2, yy - 2);
     });
     if (st.sigLabel === 'p' || st.sigLabel === 'both') ctx.font = F(700, 22);
-    catStars.forEach((s, ci) => { if (s) fillSig(ctx, sigMark(spec.sigCat[ci], spec.alpha, st), L + cw * (ci + 0.5), y(dataHi) - 24); });
+    catStars.forEach((s, ci) => { if (s) fillSig(ctx, sigMark(spec.sigCat[ci], spec.alpha, st), xAt(ci), y(dataHi) - 24); });
 
     drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2, ...(shapes ? { dashArr: DASHES[i % 6], marker: spec.type === 'line' ? i : null } : {}) })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
     return c;
