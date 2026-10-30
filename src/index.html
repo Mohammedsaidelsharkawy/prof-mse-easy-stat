@@ -770,7 +770,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Percentage decimals</label><select id="optPctDec"><option value="0">0 — 33%</option><option value="1" selected>1 — 33.3%</option><option value="2">2 — 33.33%</option></select></div>
         <div><label class="f">Mean and SD</label><select id="optMeanStyle"><option value="pm" selected>Mean ± SD</option><option value="paren">Mean (SD)</option></select></div>
         <div><label class="f">Median and IQR</label><select id="optIqrStyle"><option value="dash" selected>25 - 30</option><option value="endash">25–30</option><option value="bracket">[25, 30]</option></select></div>
-        <div><label class="f">Second row of numeric variables</label><select id="optSecondRow"><option value="auto" selected>Range (mean) / IQR (median)</option><option value="ci">95% CI of the mean / IQR</option><option value="none">None — one row per variable</option></select></div>
+        <div><label class="f">Second row of numeric variables</label><select id="optSecondRow"><option value="auto" selected>Range (mean) / IQR (median)</option><option value="ci">95% CI of the mean / IQR</option><option value="none">None — one row per variable</option><option value="both">Mean ± SD and median (IQR) together</option></select></div>
         <div><label class="f">Leading zero of P values</label><select id="optPLead"><option value="1" selected>0.013</option><option value="0">.013 (APA / AMA)</option></select></div>
         <div><label class="f">Tests in the footnote</label><select id="optTestNote"><option value="none" selected>Not named</option><option value="list">Listed — “Tests used: …”</option><option value="marks">Letters after each P value (0.013ᵃ)</option></select></div>
         <div><label class="f">P values</label><select id="optPDigits"><option value="3" selected>3 decimals (&lt;0.001)</option><option value="4">4 decimals (&lt;0.0001)</option></select></div>
@@ -790,11 +790,35 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optShadeSig"><span><b>Shade the rows of significant results</b> (light yellow)</span></label>
         </div>
       </div>
+      <h3>Layout of the rows and columns</h3>
+      <div class="grid g4">
+        <div><label class="f">Categorical variables</label><select id="optCatLayout"><option value="merged" selected>Name in a merged cell beside its categories</option><option value="indent">Journal style — name on its own row, categories indented</option></select></div>
+        <div><label class="f">Effect column shows</label><select id="optEffectShow"><option value="all" selected>Mean / median differences and RR / OR</option><option value="num">Mean / median differences only</option><option value="cat">RR / OR only</option></select></div>
+        <div><label class="f">Colour of significant P values</label><select id="optPColor"><option value="none" selected>Black</option><option value="red">Red</option><option value="green">Green</option><option value="blue">Blue</option></select></div>
+        <div><label class="f">Font of the tables</label><select id="optTableFont"><option value="same" selected>Same as the text</option><option>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option><option>Arial Narrow</option></select></div>
+        <div><label class="f">Long tables (Word)</label><select id="optSplitRows"><option value="0" selected>One table, header repeated on each page</option><option value="25">Split every 25 rows — “Table 3 (continued)”</option><option value="40">Split every 40 rows — “Table 3 (continued)”</option></select></div>
+        <div style="grid-column:span 2"><label class="f">Order of the group columns in the tables (labels, comma-separated; empty = as elsewhere)</label><input type="text" id="optTableGroupOrder" placeholder="e.g. HA group, PRP group"></div>
+      </div>
+      <div class="grid g2" style="margin-top:8px">
+        <div>
+          <label class="check"><input type="checkbox" id="optBaselineNoP"><span><b>No P values in the baseline table</b> (CONSORT) — tables named “Baseline …” / “Demographic …”, or whose variables all have the baseline role</span></label>
+          <label class="check"><input type="checkbox" id="optPostLetters"><span><b>Post hoc letters</b> (a, b, c) after the group values instead of a post hoc column, 3+ groups</span></label>
+          <label class="check"><input type="checkbox" id="optCatTotal"><span><b>Total row</b> under each categorical variable (n = 100%)</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optNCol"><span><b>“n” column</b> — patients analysed for each variable</span></label>
+          <label class="check"><input type="checkbox" id="optMissCol"><span><b>“Missing” column</b> — missing values of each variable</span></label>
+          <label class="check"><input type="checkbox" id="optDecAlign"><span><b>Align numbers on the decimal point</b> in the Word tables</span></label>
+        </div>
+      </div>
+      <h3>Headings of the group columns</h3>
+      <p class="hint" style="margin-top:0">Optional: a heading for each group in the tables only, e.g. “Group A (PRP)”. Empty keeps the group's label.</p>
+      <div class="grid g4" id="tableHeadsBox"></div>
       <h3>Word document</h3>
       <div class="grid g4">
         <div><label class="f">Table style</label><select id="optTable"><option value="grid" selected>Grid (all borders, shaded header)</option><option value="apa">Three-line academic (APA)</option></select></div>
         <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
-        <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option></select></div>
+        <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option><option value="auto">Portrait, landscape pages for wide tables only</option></select></div>
         <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
         <div><label class="f">Labels in the report</label><select id="optLabelLang"><option value="en" selected>English</option><option value="ar">Arabic (where given in step 2 ⚙)</option><option value="both">Both (English / Arabic)</option></select></div>
         <div><label class="check" style="margin-top:22px"><input type="checkbox" id="optAutoAbbr"><span>Explain known abbreviations (BMI, CRP, ASA …) in the footnotes</span></label></div>
@@ -821,6 +845,13 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       </div>
       <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand"><span><b>Prof MSE branding</b> in the Word header</span></label></div>
       <p class="legend-note">Table titles can be edited in the report preview (step 11).</p>
+      <h3>Tools</h3>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <label class="f" style="margin:0">Merge table</label><select id="mtFrom"></select><label class="f" style="margin:0">into</label><select id="mtInto"></select><button class="btn ghost small" id="mtGo" type="button">⇉ Merge</button>
+        <span class="spacer"></span>
+        <label class="f" style="margin:0">Style templates</label><select id="tsList"><option value="">— saved table styles —</option></select>
+        <button class="btn ghost small" id="tsApply" type="button">Apply</button><button class="btn ghost small" id="tsSave" type="button">💾 Save current…</button><button class="btn ghost small" id="tsDel" type="button">✕</button>
+      </div>
     </div>
     <div class="card">
       <div class="row"><h2 style="margin:0">Design preview</h2><span class="spacer"></span><span class="legend-note">A table from your own data, redrawn as you change any option above — as it will look in the Word file.</span></div>
@@ -1136,6 +1167,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div><label class="f">Test between the groups</label><select id="vdTest"></select></div>
       <div><label class="f">Arabic label (optional)</label><input type="text" id="vdAr" dir="rtl"></div>
       <div id="vdShowBox"><label class="f">Row shows (two categories)</label><select id="vdShow"></select></div>
+      <div id="vdNoSecondBox"><label class="check" style="margin-top:22px"><input type="checkbox" id="vdNoSecond"><span>One row in the table (no Range / IQR row)</span></label></div>
     </div>
     <label class="f">Private note (shown as ℹ in later steps, not in the report)</label><input type="text" id="vdMemo" style="width:100%">
     <div id="vdMerge" style="margin-top:10px"></div>

@@ -10,7 +10,7 @@ const Report = (() => {
   // text runs of a paragraph; with ITALIC_P the letter P of "P = 0.01", "p < .001" or a "P" heading is set in italics
   function runs(text, o = {}) {
     const { TextRun } = D();
-    const mk = (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || 24, font: BODY_FONT, color: o.color });
+    const mk = (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || 24, font: o.font || BODY_FONT, color: o.color });
     if (!ITALIC_P || !text) return [mk(text || '')];
     if (/^[pP]( value| Value)?$/.test(text)) return [mk(text[0], true), ...(text.length > 1 ? [mk(text.slice(1))] : [])];
     const out = [], re = /(?<![A-Za-z])[pP](?=\s?(?:value\s?)?[=<>≤])/g;
@@ -100,10 +100,14 @@ const Report = (() => {
     const apaBorders = (isHead, isLast) => ({ top: isHead ? rule(12) : none, bottom: isHead ? rule(8) : isLast ? rule(12) : none, left: none, right: none });
     const sz = 2 * (+look.size || 10), [padV, padH] = PAD[look.pad] || [40, 50];
     const headFill = !look.head || look.head === 'auto' ? (brand ? 'EBDDF6' : 'D9D9D9') : HEAD_FILL[look.head];
+    // significant P values in colour; numbers aligned on the decimal point (a decimal tab in the middle of the cell)
+    const sigRe = look.sigSym ? new RegExp(`^<?\\.?\\d[\\d.]*${look.sigSym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[a-z\u1d43-\u1dbf]*$`) : null;
+    const PCOL = { red: 'C00000', green: '2E7D32', blue: '1F4E9A' }[look.pColor];
     const mkCell = (cell, colIdx, isHead, isLast, band) => {
       const lines = Array.isArray(cell.t) ? cell.t : [cell.t ?? ''];
       let w = 0;
       for (let s = 0; s < (cell.span || 1); s++) w += widths[colIdx + s] || 0;
+      const dec = look.decAlign && !isHead && colIdx > 0 && !cell.ind && lines.length === 1 && /^[<>≤-]?\d/.test(String(lines[0])) && /\./.test(String(lines[0]));
       return new TableCell({
         width: { size: w, type: WidthType.DXA },
         columnSpan: cell.span, rowSpan: cell.rs,
@@ -111,8 +115,10 @@ const Report = (() => {
         margins: { top: padV, bottom: padV, left: padH, right: padH },
         shading: isHead && !apa ? (headFill ? { type: ShadingType.CLEAR, color: 'auto', fill: headFill } : undefined) : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : band ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F2F2F2' } : undefined,
         children: lines.map(l => new Paragraph({
-          alignment: look.left && !isHead && colIdx === 0 ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 },
-          children: runs(String(l), { bold: isHead || cell.b, size: cell.small ? sz - 3 : sz, color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : undefined })
+          alignment: dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 },
+          ...(dec ? { tabStops: [{ type: D().TabStopType.DECIMAL, position: Math.max(200, Math.round(w / 2 - padH)) }] } : {}),
+          children: runs((dec ? '\t' : '') + String(l), { bold: isHead || cell.b, size: cell.small ? sz - 3 : sz, font: look.font,
+            color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : PCOL && sigRe && !isHead && sigRe.test(String(l)) ? PCOL : undefined })
         }))
       });
     };
@@ -126,7 +132,7 @@ const Report = (() => {
       let col = 0;
       const cells = [];
       // banded rows: a new band starts with each variable (a row whose first column is not covered by a row span)
-      if (!(occupied[ri] && occupied[ri][0])) bandNo++;
+      if (!(occupied[ri] && occupied[ri][0]) && !(r[0] && r[0].ind)) bandNo++;
       const band = !!look.bands && bandNo % 2 === 1;
       for (const cell of r) {
         while (occupied[ri] && occupied[ri][col]) col++;
@@ -203,7 +209,7 @@ const Report = (() => {
       children.push(heading(opts.paper ? 'Statistical analysis' : 'Statistical Analysis', brand));
       children.push(para(model.methods));
     }
-    if (model.consort || model.sections.length) children.push(heading('Results', brand));
+    if (!opts.bare && (model.consort || model.sections.length)) children.push(heading('Results', brand));
     let fig = opts.figStart || 1, tab = opts.tabStart || 1; // numbering may continue from an earlier chapter or paper
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
@@ -230,20 +236,33 @@ const Report = (() => {
       }
     };
     const atEnd = arrangeFigures(model.sections, opts.figPlacement);
+    // orientation "auto": wide tables (more than 7 columns) on landscape pages of their own
+    const turns = [], portraitW = PAGE_W, landW = ph0 - 2 * mg, nColsOf = h => h.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0);
+    // long tables split into parts of at most N rows (never inside a variable), each part after the first captioned "(continued)"
+    const chunks = rows => { const N = +opts.splitRows; if (!N || rows.length <= N) return [rows];
+      const blocks = []; let cover = 0; // a block is one variable: a row and the rows its row spans cover
+      rows.forEach(r => { if (cover === 0) blocks.push([]); blocks[blocks.length - 1].push(r); cover = Math.max(cover - 1, ...r.map(c => (c.rs || 1) - 1)); });
+      const out = [[]]; blocks.forEach(bk => { const cur = out[out.length - 1]; if (cur.length && cur.length + bk.length > N) out.push([...bk]); else cur.push(...bk); }); return out; };
     for (const s of model.sections) {
       if (s.tableOn !== false) {
         // thesis: each table starts on a new page (from its subheading, comment or caption, whichever comes first)
         let brk = !!opts.tableNewPage;
         const first = () => { const b = brk; brk = false; return b; };
+        const wideT = opts.orientation === 'auto' && nColsOf(s.head) > 7;
+        if (wideT) { turns.push({ at: children.length, land: true }); PAGE_W = landW; brk = false; }
         if (opts.sectionHeads) children.push(subheading(s.title, brand, first()));
         if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment, { pageBreakBefore: first() }));
         const num = `Table ${pre}${tab++}`;
         listTabs.push(`${num}${opts.tableCaption === 'period' || opts.tableCaption === 'apa' ? '.' : ':'} ${s.title}`);
         if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
         else children.push(caption(`${num}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`, { pageBreakBefore: first(), align: { justify: D().AlignmentType.JUSTIFIED, left: D().AlignmentType.LEFT }[opts.tableCapAlign] || D().AlignmentType.CENTER }));
-        children.push(table(s.head, s.rows, brand, opts.tableStyle, opts.tableLook));
+        chunks(s.rows).forEach((part, pi) => {
+          if (pi > 0) { const cont = `${num} (continued)`; children.push(opts.tableCaption === 'apa' ? para(cont, { bold: true, align: D().AlignmentType.LEFT, after: 120, line: 276, keepNext: true, before: 200 }) : caption(cont, { before: 200, align: D().AlignmentType.LEFT })); }
+          children.push(table(s.head, part, brand, opts.tableStyle, opts.tableLook));
+        });
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));
+        if (wideT) { turns.push({ at: children.length, land: false }); PAGE_W = portraitW; }
       }
       if (!atEnd) placeFigures(s.figures);
     }
@@ -262,6 +281,7 @@ const Report = (() => {
       if (listFigs.length) lst.push(heading('List of figures', brand), ...listFigs.map(t => para(t, { line: 276, after: 60, align: AlignmentType.LEFT })));
       lst.push(new Paragraph({ children: [new (D().PageBreak)()] }));
       children.splice(listAt, 0, ...lst);
+      turns.forEach(t => { if (t.at >= listAt) t.at += lst.length; });
     }
     const headerKids = [];
     if (opts.headerText) headerKids.push(new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: opts.headerText, italics: true, size: 18, font: BODY_FONT, color: '555555' })] }));
@@ -275,13 +295,17 @@ const Report = (() => {
         ]
       }));
     }
+    // the document's sections: one, or portrait / landscape stretches when wide tables turn the page
+    const parts = []; let from = 0, land = landscape;
+    turns.forEach(t => { if (t.at > from) parts.push({ land, kids: children.slice(from, t.at) }); from = t.at; land = t.land; });
+    parts.push({ land, kids: children.slice(from) });
     const doc = new Document({
       creator: 'Prof MSE Easy Stat',
       title: opts.title || 'Statistical report',
       styles: { default: { document: { run: { font: BODY_FONT, size: 24 } } } },
-      sections: [{
-        properties: { page: { size: landscape ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 }, margin: { top: mg, bottom: mg, left: mg, right: mg } } },
-        headers: { default: new Header({ children: headerKids }) },
+      sections: parts.filter(pt => pt.kids.length).map(pt => ({
+        properties: { page: { size: pt.land ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 }, margin: { top: mg, bottom: mg, left: mg, right: mg } } },
+        headers: { default: new Header({ children: headerKids.map(k => k) }) },
         footers: {
           // page numbers: centred (default), right, "Page 3 of 12" or none
           default: new Footer({
@@ -291,8 +315,8 @@ const Report = (() => {
             })]
           })
         },
-        children
-      }]
+        children: pt.kids
+      }))
     });
     return Packer.toBlob(doc);
   }

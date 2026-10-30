@@ -770,7 +770,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Percentage decimals</label><select id="optPctDec"><option value="0">0 — 33%</option><option value="1" selected>1 — 33.3%</option><option value="2">2 — 33.33%</option></select></div>
         <div><label class="f">Mean and SD</label><select id="optMeanStyle"><option value="pm" selected>Mean ± SD</option><option value="paren">Mean (SD)</option></select></div>
         <div><label class="f">Median and IQR</label><select id="optIqrStyle"><option value="dash" selected>25 - 30</option><option value="endash">25–30</option><option value="bracket">[25, 30]</option></select></div>
-        <div><label class="f">Second row of numeric variables</label><select id="optSecondRow"><option value="auto" selected>Range (mean) / IQR (median)</option><option value="ci">95% CI of the mean / IQR</option><option value="none">None — one row per variable</option></select></div>
+        <div><label class="f">Second row of numeric variables</label><select id="optSecondRow"><option value="auto" selected>Range (mean) / IQR (median)</option><option value="ci">95% CI of the mean / IQR</option><option value="none">None — one row per variable</option><option value="both">Mean ± SD and median (IQR) together</option></select></div>
         <div><label class="f">Leading zero of P values</label><select id="optPLead"><option value="1" selected>0.013</option><option value="0">.013 (APA / AMA)</option></select></div>
         <div><label class="f">Tests in the footnote</label><select id="optTestNote"><option value="none" selected>Not named</option><option value="list">Listed — “Tests used: …”</option><option value="marks">Letters after each P value (0.013ᵃ)</option></select></div>
         <div><label class="f">P values</label><select id="optPDigits"><option value="3" selected>3 decimals (&lt;0.001)</option><option value="4">4 decimals (&lt;0.0001)</option></select></div>
@@ -790,11 +790,35 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optShadeSig"><span><b>Shade the rows of significant results</b> (light yellow)</span></label>
         </div>
       </div>
+      <h3>Layout of the rows and columns</h3>
+      <div class="grid g4">
+        <div><label class="f">Categorical variables</label><select id="optCatLayout"><option value="merged" selected>Name in a merged cell beside its categories</option><option value="indent">Journal style — name on its own row, categories indented</option></select></div>
+        <div><label class="f">Effect column shows</label><select id="optEffectShow"><option value="all" selected>Mean / median differences and RR / OR</option><option value="num">Mean / median differences only</option><option value="cat">RR / OR only</option></select></div>
+        <div><label class="f">Colour of significant P values</label><select id="optPColor"><option value="none" selected>Black</option><option value="red">Red</option><option value="green">Green</option><option value="blue">Blue</option></select></div>
+        <div><label class="f">Font of the tables</label><select id="optTableFont"><option value="same" selected>Same as the text</option><option>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option><option>Arial Narrow</option></select></div>
+        <div><label class="f">Long tables (Word)</label><select id="optSplitRows"><option value="0" selected>One table, header repeated on each page</option><option value="25">Split every 25 rows — “Table 3 (continued)”</option><option value="40">Split every 40 rows — “Table 3 (continued)”</option></select></div>
+        <div style="grid-column:span 2"><label class="f">Order of the group columns in the tables (labels, comma-separated; empty = as elsewhere)</label><input type="text" id="optTableGroupOrder" placeholder="e.g. HA group, PRP group"></div>
+      </div>
+      <div class="grid g2" style="margin-top:8px">
+        <div>
+          <label class="check"><input type="checkbox" id="optBaselineNoP"><span><b>No P values in the baseline table</b> (CONSORT) — tables named “Baseline …” / “Demographic …”, or whose variables all have the baseline role</span></label>
+          <label class="check"><input type="checkbox" id="optPostLetters"><span><b>Post hoc letters</b> (a, b, c) after the group values instead of a post hoc column, 3+ groups</span></label>
+          <label class="check"><input type="checkbox" id="optCatTotal"><span><b>Total row</b> under each categorical variable (n = 100%)</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optNCol"><span><b>“n” column</b> — patients analysed for each variable</span></label>
+          <label class="check"><input type="checkbox" id="optMissCol"><span><b>“Missing” column</b> — missing values of each variable</span></label>
+          <label class="check"><input type="checkbox" id="optDecAlign"><span><b>Align numbers on the decimal point</b> in the Word tables</span></label>
+        </div>
+      </div>
+      <h3>Headings of the group columns</h3>
+      <p class="hint" style="margin-top:0">Optional: a heading for each group in the tables only, e.g. “Group A (PRP)”. Empty keeps the group's label.</p>
+      <div class="grid g4" id="tableHeadsBox"></div>
       <h3>Word document</h3>
       <div class="grid g4">
         <div><label class="f">Table style</label><select id="optTable"><option value="grid" selected>Grid (all borders, shaded header)</option><option value="apa">Three-line academic (APA)</option></select></div>
         <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
-        <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option></select></div>
+        <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option><option value="auto">Portrait, landscape pages for wide tables only</option></select></div>
         <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
         <div><label class="f">Labels in the report</label><select id="optLabelLang"><option value="en" selected>English</option><option value="ar">Arabic (where given in step 2 ⚙)</option><option value="both">Both (English / Arabic)</option></select></div>
         <div><label class="check" style="margin-top:22px"><input type="checkbox" id="optAutoAbbr"><span>Explain known abbreviations (BMI, CRP, ASA …) in the footnotes</span></label></div>
@@ -821,6 +845,13 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       </div>
       <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand"><span><b>Prof MSE branding</b> in the Word header</span></label></div>
       <p class="legend-note">Table titles can be edited in the report preview (step 11).</p>
+      <h3>Tools</h3>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <label class="f" style="margin:0">Merge table</label><select id="mtFrom"></select><label class="f" style="margin:0">into</label><select id="mtInto"></select><button class="btn ghost small" id="mtGo" type="button">⇉ Merge</button>
+        <span class="spacer"></span>
+        <label class="f" style="margin:0">Style templates</label><select id="tsList"><option value="">— saved table styles —</option></select>
+        <button class="btn ghost small" id="tsApply" type="button">Apply</button><button class="btn ghost small" id="tsSave" type="button">💾 Save current…</button><button class="btn ghost small" id="tsDel" type="button">✕</button>
+      </div>
     </div>
     <div class="card">
       <div class="row"><h2 style="margin:0">Design preview</h2><span class="spacer"></span><span class="legend-note">A table from your own data, redrawn as you change any option above — as it will look in the Word file.</span></div>
@@ -1136,6 +1167,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div><label class="f">Test between the groups</label><select id="vdTest"></select></div>
       <div><label class="f">Arabic label (optional)</label><input type="text" id="vdAr" dir="rtl"></div>
       <div id="vdShowBox"><label class="f">Row shows (two categories)</label><select id="vdShow"></select></div>
+      <div id="vdNoSecondBox"><label class="check" style="margin-top:22px"><input type="checkbox" id="vdNoSecond"><span>One row in the table (no Range / IQR row)</span></label></div>
     </div>
     <label class="f">Private note (shown as ℹ in later steps, not in the report)</label><input type="text" id="vdMemo" style="width:100%">
     <div id="vdMerge" style="margin-top:10px"></div>
@@ -22516,6 +22548,20 @@ const Analysis = (() => {
     const thr = 10 ** -FMT.pDig, s = p < thr ? '<' + pNum(thr) : pNum(p);
     return s + (p <= alpha ? FMT.sig : '');
   }
+  // compact letter display (insert-absorb): groups that share a letter do not differ significantly
+  function compactLetters(k, sigPairs) {
+    let sets = [new Set(Array.from({ length: k }, (_, i) => i))];
+    for (const { i, j } of sigPairs) {
+      const next = [];
+      sets.forEach(st => { if (st.has(i) && st.has(j)) { const a = new Set(st), b2 = new Set(st); a.delete(i); b2.delete(j); next.push(a, b2); } else next.push(st); });
+      sets = next.filter((st, si) => st.size && !next.some((o, oi) => oi !== si && [...st].every(x => o.has(x)) && (o.size > st.size || oi < si)));
+    }
+    sets.sort((a, b) => Math.min(...a) - Math.min(...b) || b.size - a.size);
+    const ab = 'abcdefghijklmnopqrstuvwxyz';
+    return Array.from({ length: k }, (_, g) => sets.map((st, si) => st.has(g) ? ab[si] : '').join(''));
+  }
+  const SUP = { a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ', g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ', m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ' };
+  const toSup = t => [...t].map(c => SUP[c] || c).join('');
   // p-value as used inside sentences: "= 0.013" or "< 0.001"
   const pTxt = p => { const thr = 10 ** -FMT.pDig; return p < thr ? '< ' + pNum(thr) : '= ' + pNum(p); };
   const msd = (m, sdv, d) => FMT.mean === 'paren' ? `${fmt(m, d)} (${fmt(sdv, d)})` : `${fmt(m, d)} ± ${fmt(sdv, d)}`;
@@ -24063,8 +24109,8 @@ const Analysis = (() => {
       const f = [];
       if (flags.sig) f.push(`*: Significant as P value ≤ ${alpha}`);
       const dp = [];
-      if (flags.param) dp.push(meanSdName(true));
-      if (flags.nonparam) dp.push(FMT.iqr === 'bracket' ? 'median [IQR]' : 'median (IQR)');
+      if (flags.param || flags.both) dp.push(meanSdName(true));
+      if (flags.nonparam || flags.both) dp.push(FMT.iqr === 'bracket' ? 'median [IQR]' : 'median (IQR)');
       if (flags.cat) dp.push('frequency (%)');
       if (dp.length) f.push(`Data are presented as ${listJoin(dp)}`);
       if (flags.effect) {
@@ -24093,7 +24139,9 @@ const Analysis = (() => {
     // missing values of one column among the analysed patients
     const missingIn = (col, numeric) => byGroup.flat().filter(r => numeric ? !isFinite(toNum(r[col])) : toCat(r[col]) === null).length;
 
-    const groupHeads = gl.map((g, i) => opts.nHead === false ? g : `${g} (n=${gN[i]})`);
+    // table headings: a group can be given its own heading for the tables (e.g. "Group A (PRP)")
+    const TH = cfg.tableHeads || {}, headName = (g, i) => (TH[groups[i]] || '').trim() || g;
+    const groupHeads = gl.map((g, i) => opts.nHead === false ? headName(g, i) : `${headName(g, i)} (n=${gN[i]})`);
 
     /* ---------- one group (no group column): description of the patients and change over time ---------- */
     const WITHIN_NAME = { 'Paired t-test': 'paired t-test', Wilcoxon: 'Wilcoxon signed-rank test', 'RM ANOVA': 'repeated-measures ANOVA', Friedman: 'Friedman test' };
@@ -24431,63 +24479,96 @@ const Analysis = (() => {
           present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
           return { v, cat: analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null, v.test), levels, gv };
         });
-        const anySig = res.some(r => (r.num || r.cat).p <= alpha);
-        const showPost = numbered && res.some(r => r.num ? r.num.p <= alpha : !!r.cat.pairs);
+        // CONSORT: a baseline table of a randomised trial is described without P values
+        const noP = !!opts.baselineNoP && (res.every(r => r.v.role === 'baseline') || /baseline|demograph/i.test(b.table));
+        if (noP) used.add('noPBaseline');
+        const anySig = !noP && res.some(r => (r.num || r.cat).p <= alpha);
+        // post hoc results as letters (a, b, c) after the group values instead of a column of pairwise P values
+        const letters = !noP && opts.postLetters && k > 2;
+        const showPost = !noP && !letters && numbered && res.some(r => r.num ? r.num.p <= alpha : !!r.cat.pairs);
+        const cldOf = r => { const x = r.num || r.cat; if (!letters || !(x.p <= alpha) || !x.pairs) return null; return compactLetters(k, x.pairs.filter(q => q.p <= alpha)); };
+        // the order of the group columns in the tables (by label, comma-separated), else as elsewhere
+        const ord = (() => { const want = String(opts.tableGroupOrder || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean), o = [];
+          want.forEach(w => { const i = gl.findIndex((g, gi) => !o.includes(gi) && (g.toLowerCase() === w || String(groups[gi]).toLowerCase() === w || headName(g, gi).toLowerCase() === w)); if (i >= 0) o.push(i); });
+          gl.forEach((_, i) => { if (!o.includes(i)) o.push(i); }); return opts.tableGroupOrder === 'reverse' ? gl.map((_, i) => k - 1 - i) : o; })();
+        const O = a => ord.map(i => a[i]);
         const hasNum = res.some(r => r.num), hasCat = res.some(r => r.cat);
         const hasRR = opts.effect && res.some(r => r.cat && r.cat.binary);
         const twoCol = res.some(r => r.num || (r.cat && !isCompact(r)));
-        const effHead = hasNum && hasRR ? `MD/${EF} (95% CI)` : hasRR ? `${EF} (95% CI)` : 'MD (95% CI)';
+        // the effect column: mean / median differences and RR / OR, or only one of them
+        const effNum = opts.effectShow !== 'cat', effCat = opts.effectShow !== 'num';
+        const effOn = !noP && opts.effect && ((hasNum && effNum) || (hasRR && effCat));
+        const effHead = hasNum && effNum && hasRR && effCat ? `MD/${EF} (95% CI)` : hasRR && effCat ? `${EF} (95% CI)` : 'MD (95% CI)';
         const totalCol = !!opts.totalCol, tm = testMarker(res.map(r => (r.num || r.cat).test));
-        const head = [{ t: '', span: twoCol ? 2 : 1 }, ...groupHeads, ...(totalCol ? [opts.nHead === false ? 'Total' : `Total (n=${rows.length})`] : []), 'P value'];
+        const nCol = !!opts.nCol, missCol = !!opts.missCol;
+        const head = [{ t: '', span: twoCol ? 2 : 1 }, ...(nCol ? ['n'] : []), ...(missCol ? ['Missing'] : []), ...O(groupHeads), ...(totalCol ? [opts.nHead === false ? 'Total' : `Total (n=${rows.length})`] : []), ...(noP ? [] : ['P value'])];
+        // the n analysed and missing values of each variable, spanning its rows
+        const pre = (r, span) => [...(nCol ? [{ t: [String(r.num ? S.sum(r.num.desc.map(x => x.n)) : S.sum(r.cat.ns))], rs: span }] : []),
+          ...(missCol ? [{ t: [String(missingIn(r.v.cols[0].col, !!r.num))], rs: span }] : [])];
+        const supOf = (L, j) => L && L[j] ? toSup(L[j]) : '';
         // ordered groups (e.g. doses): a P value for trend — Jonckheere-Terpstra (numeric), Cochran-Armitage (yes/no) or linear-by-linear (more categories)
-        const trendOn = !!opts.groupTrend && k > 2;
+        const trendOn = !noP && !!opts.groupTrend && k > 2;
         const trendP = r => { if (r.num) return S.jonckheere(r.gv).p; const t = r.cat.table; if (t.length === 2) return S.cochranArmitage(t[0], r.cat.ns).p;
           const o = ordinalTest(r.gv, r.levels, 'trend', new Set(), opts); return o ? o.p : NaN; };
         if (trendOn) { head.push('P for trend'); used.add('groupTrend'); res.forEach(r => { r.trend = trendP(r); }); }
-        if (opts.showStat) head.push('Test');
+        if (opts.showStat && !noP) head.push('Test');
         // the Total column: every analysed patient, whatever the group
         const totDesc = r => S.describe(r.gv.flat());
         const totCat = (r, li) => { const cnt = S.sum(r.cat.table[li]), n = S.sum(r.cat.ns); return npc(cnt, n ? 100 * cnt / n : 0, n); };
         const tot = (on, f) => totalCol ? [{ t: [on ? f() : ''] }] : [];
         if (showPost) head.push('Post hoc');
-        if (opts.effect) head.push(effHead);
+        if (effOn) head.push(effHead);
         const trows = [];
         const tail = (r, span) => {
+          if (noP) return [];
           const x = r.num || r.cat, cells = [{ t: [fmtP(x.p, alpha) + (isFinite(x.p) ? tm.mark(x.test) : '')], rs: span }];
           if (trendOn) cells.push({ t: [fmtP(r.trend, alpha)], rs: span });
           if (opts.showStat) cells.push({ t: [(r.num || r.cat).stat], rs: span, small: true });
           if (showPost) cells.push({ t: r.num && r.num.p <= alpha ? postHocLines(r.num) : r.cat && r.cat.pairs ? postHocLines(r.cat) : ['---'], rs: span, small: true });
-          if (opts.effect) cells.push({ t: r.num ? effectLines(r.num) : (r.cat.binary ? rrLines(r.cat) : ['---']), rs: span, small: true });
+          if (effOn) cells.push({ t: r.num ? (effNum ? effectLines(r.num) : ['---']) : (r.cat.binary && effCat ? rrLines(r.cat) : ['---']), rs: span, small: true });
           return cells;
         };
         for (const r of res) {
           if (r.num) {
             const n = r.num, P = n.param, d = r.v.dec !== undefined && r.v.dec !== null && r.v.dec !== '' ? +r.v.dec : d0; // decimals: the variable's own, else the report's
-            if (opts.secondRow === 'none') {
+            const L = cldOf(r), gcell = (dd, j, txt) => ({ t: [txt + supOf(L, j)] });
+            if (opts.secondRow === 'none' || r.v.noSecond) {
               // one row: "Mean ± SD" or "Median (IQR)" in a single cell
-              trows.push([{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] },
-                ...n.desc.map(dd => ({ t: [P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)] })), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d); }), ...tail(r, 1)]);
+              trows.push([{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] }, ...pre(r, 1),
+                ...O(n.desc.map((dd, j) => gcell(dd, j, P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)))), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d); }), ...tail(r, 1)]);
+            } else if (opts.secondRow === 'both') {
+              // both summaries: the one the test used first, the other below it
+              const ms = dd => msd(dd.mean, dd.sd, d), mi = dd => medIqr(dd, d), mName = meanSdName(), iName = FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)';
+              const [f1, f2, n1, n2] = P ? [ms, mi, mName, iName] : [mi, ms, iName, mName];
+              trows.push([{ t: [r.v.label], b: true, rs: 2 }, { t: [n1] }, ...pre(r, 2), ...O(n.desc.map((dd, j) => gcell(dd, j, f1(dd)))), ...tot(true, () => f1(totDesc(r))), ...tail(r, 2)],
+                [{ t: [n2] }, ...O(n.desc.map(dd => ({ t: [f2(dd)] }))), ...tot(true, () => f2(totDesc(r)))]);
             } else {
-              const first = [{ t: [r.v.label], b: true, rs: 2 }, { t: [P ? meanSdName() : 'Median'] },
-                ...n.desc.map(dd => ({ t: [P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d)] })), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d); }), ...tail(r, 2)];
+              const first = [{ t: [r.v.label], b: true, rs: 2 }, { t: [P ? meanSdName() : 'Median'] }, ...pre(r, 2),
+                ...O(n.desc.map((dd, j) => gcell(dd, j, P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d)))), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d); }), ...tail(r, 2)];
               const ci = dd => { const h = jStat.studentt.inv(S.QU(), dd.n - 1) * dd.sd / Math.sqrt(dd.n); return `${fmt(dd.mean - h, d)} to ${fmt(dd.mean + h, d)}`; };
               const second = [{ t: [P ? (opts.secondRow === 'ci' ? '95% CI' : 'Range') : 'IQR'] },
-                ...n.desc.map(dd => ({ t: [P ? (opts.secondRow === 'ci' ? ci(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d)] })),
+                ...O(n.desc.map(dd => ({ t: [P ? (opts.secondRow === 'ci' ? ci(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d)] }))),
                 ...tot(true, () => { const dd = totDesc(r); return P ? (opts.secondRow === 'ci' ? ci(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d); })];
               trows.push(first, second);
             }
           } else if (isCompact(r)) {
-            const c = r.cat;
-            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...c.table[0].map((cnt, j) => ({ t: [npc(cnt, c.pct[0][j], c.ns[j])] })), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
+            const c = r.cat, Lt = cldOf(r);
+            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...pre(r, 1), ...O(c.table[0].map((cnt, j) => ({ t: [npc(cnt, c.pct[0][j], c.ns[j]) + supOf(Lt, j)] }))), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
           } else {
-            const c = r.cat, L = r.levels.length;
+            const c = r.cat, Lt = cldOf(r), indent = opts.catLayout === 'indent', totRow = !!opts.catTotal;
+            const L = r.levels.length + (totRow ? 1 : 0) + (indent ? 1 : 0);
+            // journal style: the variable on its own row, its categories indented below it
+            if (indent) trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1, left: true }, ...pre(r, L), ...O(c.ns.map(() => ({ t: [''] }))), ...tot(true, () => ''), ...tail(r, L)]);
             r.levels.forEach((lv, li) => {
               const row = [];
-              if (li === 0) row.push({ t: [r.v.label], b: true, rs: L });
-              row.push({ t: [lv] }, ...c.table[li].map((cnt, j) => ({ t: [npc(cnt, c.pct[li][j], c.ns[j])] })), ...tot(true, () => totCat(r, li)));
-              if (li === 0) row.push(...tail(r, L));
+              if (indent) row.push({ t: ['\u2003' + lv], span: twoCol ? 2 : 1, ind: true });
+              else { if (li === 0) row.push({ t: [r.v.label], b: true, rs: L }); row.push({ t: [lv] }); if (li === 0) row.push(...pre(r, L)); }
+              row.push(...O(c.table[li].map((cnt, j) => ({ t: [npc(cnt, c.pct[li][j], c.ns[j]) + (li === 0 ? supOf(Lt, j) : '')] }))), ...tot(true, () => totCat(r, li)));
+              if (li === 0 && !indent) row.push(...tail(r, L));
               trows.push(row);
             });
+            // a Total row: every patient with a value of the variable (100%)
+            if (totRow) trows.push([indent ? { t: ['\u2003Total'], span: twoCol ? 2 : 1, ind: true } : { t: ['Total'] }, ...O(c.ns.map(n => ({ t: [npc(n, 100, n)] }))), ...tot(true, () => { const n = S.sum(c.ns); return npc(n, 100, n); })]);
           }
         }
         // comment
@@ -24507,7 +24588,10 @@ const Analysis = (() => {
         };
         const nsRes = res.filter(r => !((r.num || r.cat).p <= alpha));
         const sent = [];
-        if (descriptive) sent.push(...descriptiveSentences(res, b.table));
+        if (noP) { const vals = r => r.num ? r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)}`).join(', ')
+            : isCompact(r) ? r.cat.pct[0].map((p, i) => `${gl[i]}: ${fmt(p, 1)}%`).join(', ') : r.levels.map((lv, li) => `${lv} ${r.cat.pct[li].map(p => fmt(p, 1) + '%').join(' vs ')}`).join('; ');
+          sent.push(`The ${lowerFirst(plain(b.table))} of the studied groups are shown in the table: ${listJoin(res.map(r => `${lowerFirst(plain(r.v.label))} (${vals(r)})`))}.`); }
+        else if (descriptive) sent.push(...descriptiveSentences(res, b.table));
         else if (detailed) nsRes.forEach(r => {
           const p = (r.num || r.cat).p;
           sent.push(`${cap(withValues(r, plain(r.v.label)))} was insignificantly different ${amongTxt(k)}${isFinite(p) ? ` (P value ${pTxt(p)})` : ''}.`);
@@ -24519,7 +24603,7 @@ const Analysis = (() => {
           if (rest.length) { const nsLabels = rest.map(r => lowerFirst(plain(r.v.label)));
             sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`); }
         }
-        for (const r of res.filter(r => !descriptive && (r.num || r.cat).p <= alpha)) {
+        for (const r of res.filter(r => !descriptive && !noP && (r.num || r.cat).p <= alpha)) {
           // compact categorical sentences already quote their percentages
           const lab = isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label));
           if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps).replace(/\)$/, effTxt(r) + ')')}.`); }
@@ -24579,14 +24663,15 @@ const Analysis = (() => {
           return out;
         }
         // optional: the size of each significant effect, with its conventional magnitude
-        if (opts.commentMagnitude) {
+        if (opts.commentMagnitude && !noP) {
           const parts = res.filter(r => (r.num || r.cat).p <= alpha).map(r => { const m = effectMagnitude(r, k, opts); return m && `${lowerFirst(plain(r.v.label))} (${m})`; }).filter(Boolean);
           if (parts.length) sent.push(`The effect size was ${parts.length > 1 ? 'as follows: ' : 'for '}${listJoin(parts)}.`);
         }
-        const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: opts.effect, rr: hasRR, posthoc: showPost,
+        const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: effOn, rr: hasRR && effCat, posthoc: showPost, both: opts.secondRow === 'both' && res.some(r => r.num && !r.v.noSecond),
           stats: res.map(r => (r.num || r.cat).stat), ci: opts.secondRow === 'ci' && res.some(r => r.num && r.num.param),
           missing: res.map(r => [plain(r.v.label), missingIn(r.v.cols[0].col, !!r.num)]).filter(x => x[1]).map(([l, m]) => `${l} (n=${m})`) };
-        const notes = [tm.note, ...b.vars.map(v => v.note)].filter(Boolean).join(', ');
+        const lettersUsed = letters && res.some(r => cldOf(r));
+        const notes = [noP ? '' : tm.note, lettersUsed ? `Values in a row with no superscript letter in common differ significantly (post hoc, P value ≤ ${alpha})` : '', ...b.vars.map(v => v.note)].filter(Boolean).join(', ');
         // significance brackets between groups: pairwise P values once the overall test is significant
         const brackets = x => {
           if (!opts.sigMarks || !(x.p <= alpha)) return {};
@@ -25017,6 +25102,7 @@ const Analysis = (() => {
     if (used.has('icc')) s.push(`Agreement between quantitative measurements was assessed using the intraclass correlation coefficient (ICC; ${used.has('iccC') ? 'two-way mixed effects, consistency' : 'two-way random effects, absolute agreement'}) and Bland-Altman analysis with 95% limits of agreement.`);
     if (used.has('diagnostic')) s.push('Diagnostic accuracy was expressed as sensitivity, specificity, positive and negative predictive values, likelihood ratios and accuracy, with exact (Clopper-Pearson) 95% CI.');
     if (used.has('cochran')) s.push("Repeated yes/no outcomes were compared across the measurements with Cochran's Q test.");
+    if (used.has('noPBaseline')) s.push('As recommended by the CONSORT statement, baseline characteristics were described without significance tests.');
     if (used.has('tost')) s.push('Equivalence was tested with two one-sided t-tests (TOST) against the stated margin, using the 90% confidence interval of the mean difference.');
     if (used.has('mh')) s.push('Odds ratios stratified by a third variable were pooled with the Mantel-Haenszel method, and their homogeneity checked with the Breslow-Day test.');
     if (used.has('clogit')) s.push('Matched case-control sets were analysed with conditional logistic regression.');
@@ -26324,7 +26410,7 @@ const Report = (() => {
   // text runs of a paragraph; with ITALIC_P the letter P of "P = 0.01", "p < .001" or a "P" heading is set in italics
   function runs(text, o = {}) {
     const { TextRun } = D();
-    const mk = (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || 24, font: BODY_FONT, color: o.color });
+    const mk = (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || 24, font: o.font || BODY_FONT, color: o.color });
     if (!ITALIC_P || !text) return [mk(text || '')];
     if (/^[pP]( value| Value)?$/.test(text)) return [mk(text[0], true), ...(text.length > 1 ? [mk(text.slice(1))] : [])];
     const out = [], re = /(?<![A-Za-z])[pP](?=\s?(?:value\s?)?[=<>≤])/g;
@@ -26414,10 +26500,14 @@ const Report = (() => {
     const apaBorders = (isHead, isLast) => ({ top: isHead ? rule(12) : none, bottom: isHead ? rule(8) : isLast ? rule(12) : none, left: none, right: none });
     const sz = 2 * (+look.size || 10), [padV, padH] = PAD[look.pad] || [40, 50];
     const headFill = !look.head || look.head === 'auto' ? (brand ? 'EBDDF6' : 'D9D9D9') : HEAD_FILL[look.head];
+    // significant P values in colour; numbers aligned on the decimal point (a decimal tab in the middle of the cell)
+    const sigRe = look.sigSym ? new RegExp(`^<?\\.?\\d[\\d.]*${look.sigSym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[a-z\u1d43-\u1dbf]*$`) : null;
+    const PCOL = { red: 'C00000', green: '2E7D32', blue: '1F4E9A' }[look.pColor];
     const mkCell = (cell, colIdx, isHead, isLast, band) => {
       const lines = Array.isArray(cell.t) ? cell.t : [cell.t ?? ''];
       let w = 0;
       for (let s = 0; s < (cell.span || 1); s++) w += widths[colIdx + s] || 0;
+      const dec = look.decAlign && !isHead && colIdx > 0 && !cell.ind && lines.length === 1 && /^[<>≤-]?\d/.test(String(lines[0])) && /\./.test(String(lines[0]));
       return new TableCell({
         width: { size: w, type: WidthType.DXA },
         columnSpan: cell.span, rowSpan: cell.rs,
@@ -26425,8 +26515,10 @@ const Report = (() => {
         margins: { top: padV, bottom: padV, left: padH, right: padH },
         shading: isHead && !apa ? (headFill ? { type: ShadingType.CLEAR, color: 'auto', fill: headFill } : undefined) : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : band ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F2F2F2' } : undefined,
         children: lines.map(l => new Paragraph({
-          alignment: look.left && !isHead && colIdx === 0 ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 },
-          children: runs(String(l), { bold: isHead || cell.b, size: cell.small ? sz - 3 : sz, color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : undefined })
+          alignment: dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 },
+          ...(dec ? { tabStops: [{ type: D().TabStopType.DECIMAL, position: Math.max(200, Math.round(w / 2 - padH)) }] } : {}),
+          children: runs((dec ? '\t' : '') + String(l), { bold: isHead || cell.b, size: cell.small ? sz - 3 : sz, font: look.font,
+            color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : PCOL && sigRe && !isHead && sigRe.test(String(l)) ? PCOL : undefined })
         }))
       });
     };
@@ -26440,7 +26532,7 @@ const Report = (() => {
       let col = 0;
       const cells = [];
       // banded rows: a new band starts with each variable (a row whose first column is not covered by a row span)
-      if (!(occupied[ri] && occupied[ri][0])) bandNo++;
+      if (!(occupied[ri] && occupied[ri][0]) && !(r[0] && r[0].ind)) bandNo++;
       const band = !!look.bands && bandNo % 2 === 1;
       for (const cell of r) {
         while (occupied[ri] && occupied[ri][col]) col++;
@@ -26517,7 +26609,7 @@ const Report = (() => {
       children.push(heading(opts.paper ? 'Statistical analysis' : 'Statistical Analysis', brand));
       children.push(para(model.methods));
     }
-    if (model.consort || model.sections.length) children.push(heading('Results', brand));
+    if (!opts.bare && (model.consort || model.sections.length)) children.push(heading('Results', brand));
     let fig = opts.figStart || 1, tab = opts.tabStart || 1; // numbering may continue from an earlier chapter or paper
     if (model.consort) {
       if (model.intro) children.push(para(model.intro));
@@ -26544,20 +26636,33 @@ const Report = (() => {
       }
     };
     const atEnd = arrangeFigures(model.sections, opts.figPlacement);
+    // orientation "auto": wide tables (more than 7 columns) on landscape pages of their own
+    const turns = [], portraitW = PAGE_W, landW = ph0 - 2 * mg, nColsOf = h => h.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0);
+    // long tables split into parts of at most N rows (never inside a variable), each part after the first captioned "(continued)"
+    const chunks = rows => { const N = +opts.splitRows; if (!N || rows.length <= N) return [rows];
+      const blocks = []; let cover = 0; // a block is one variable: a row and the rows its row spans cover
+      rows.forEach(r => { if (cover === 0) blocks.push([]); blocks[blocks.length - 1].push(r); cover = Math.max(cover - 1, ...r.map(c => (c.rs || 1) - 1)); });
+      const out = [[]]; blocks.forEach(bk => { const cur = out[out.length - 1]; if (cur.length && cur.length + bk.length > N) out.push([...bk]); else cur.push(...bk); }); return out; };
     for (const s of model.sections) {
       if (s.tableOn !== false) {
         // thesis: each table starts on a new page (from its subheading, comment or caption, whichever comes first)
         let brk = !!opts.tableNewPage;
         const first = () => { const b = brk; brk = false; return b; };
+        const wideT = opts.orientation === 'auto' && nColsOf(s.head) > 7;
+        if (wideT) { turns.push({ at: children.length, land: true }); PAGE_W = landW; brk = false; }
         if (opts.sectionHeads) children.push(subheading(s.title, brand, first()));
         if (s.comment && opts.commentPlace === 'before') children.push(para(s.comment, { pageBreakBefore: first() }));
         const num = `Table ${pre}${tab++}`;
         listTabs.push(`${num}${opts.tableCaption === 'period' || opts.tableCaption === 'apa' ? '.' : ':'} ${s.title}`);
         if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
         else children.push(caption(`${num}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`, { pageBreakBefore: first(), align: { justify: D().AlignmentType.JUSTIFIED, left: D().AlignmentType.LEFT }[opts.tableCapAlign] || D().AlignmentType.CENTER }));
-        children.push(table(s.head, s.rows, brand, opts.tableStyle, opts.tableLook));
+        chunks(s.rows).forEach((part, pi) => {
+          if (pi > 0) { const cont = `${num} (continued)`; children.push(opts.tableCaption === 'apa' ? para(cont, { bold: true, align: D().AlignmentType.LEFT, after: 120, line: 276, keepNext: true, before: 200 }) : caption(cont, { before: 200, align: D().AlignmentType.LEFT })); }
+          children.push(table(s.head, part, brand, opts.tableStyle, opts.tableLook));
+        });
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
         if (s.comment && (opts.commentPlace || 'after') === 'after') children.push(para(s.comment));
+        if (wideT) { turns.push({ at: children.length, land: false }); PAGE_W = portraitW; }
       }
       if (!atEnd) placeFigures(s.figures);
     }
@@ -26576,6 +26681,7 @@ const Report = (() => {
       if (listFigs.length) lst.push(heading('List of figures', brand), ...listFigs.map(t => para(t, { line: 276, after: 60, align: AlignmentType.LEFT })));
       lst.push(new Paragraph({ children: [new (D().PageBreak)()] }));
       children.splice(listAt, 0, ...lst);
+      turns.forEach(t => { if (t.at >= listAt) t.at += lst.length; });
     }
     const headerKids = [];
     if (opts.headerText) headerKids.push(new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: opts.headerText, italics: true, size: 18, font: BODY_FONT, color: '555555' })] }));
@@ -26589,13 +26695,17 @@ const Report = (() => {
         ]
       }));
     }
+    // the document's sections: one, or portrait / landscape stretches when wide tables turn the page
+    const parts = []; let from = 0, land = landscape;
+    turns.forEach(t => { if (t.at > from) parts.push({ land, kids: children.slice(from, t.at) }); from = t.at; land = t.land; });
+    parts.push({ land, kids: children.slice(from) });
     const doc = new Document({
       creator: 'Prof MSE Easy Stat',
       title: opts.title || 'Statistical report',
       styles: { default: { document: { run: { font: BODY_FONT, size: 24 } } } },
-      sections: [{
-        properties: { page: { size: landscape ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 }, margin: { top: mg, bottom: mg, left: mg, right: mg } } },
-        headers: { default: new Header({ children: headerKids }) },
+      sections: parts.filter(pt => pt.kids.length).map(pt => ({
+        properties: { page: { size: pt.land ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 }, margin: { top: mg, bottom: mg, left: mg, right: mg } } },
+        headers: { default: new Header({ children: headerKids.map(k => k) }) },
         footers: {
           // page numbers: centred (default), right, "Page 3 of 12" or none
           default: new Footer({
@@ -26605,8 +26715,8 @@ const Report = (() => {
             })]
           })
         },
-        children
-      }]
+        children: pt.kids
+      }))
     });
     return Packer.toBlob(doc);
   }
@@ -27226,7 +27336,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmImpute: 'none', confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmImpute: 'none', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -27247,7 +27357,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -27305,7 +27415,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (n === 7) { renderFigureTable(); renderFigDesign(); }
     if (n === 4) renderTestPlan();
     if (n === 6) renderCommentPreview();
-    if (n === 5) renderTablePreview();
+    if (n === 5) { renderTableTools(); renderTablePreview(); }
     if (n === 8) renderAdvanced();
     if (n === 9) renderConsortForm();
     if (n === 10) renderExplore();
@@ -28377,7 +28487,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     $('#vdTitle').textContent = v.label; $('#vdUnit').value = v.unit || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
     $('#vdTf').value = v.transform || ''; $('#vdTf').disabled = v.type !== 'numeric';
     $('#vdOrd').checked = !!v.ordinal; $('#vdOrd').disabled = v.type !== 'categorical'; $('#vdOrdTest').value = v.ordTest || 'rank';
-    $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || '';
+    $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || ''; $('#vdNoSecond').checked = !!v.noSecond; $('#vdNoSecondBox').style.display = v.type === 'numeric' && v.kind === 'single' ? '' : 'none';
     const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis']]
       : [['chi', 'Chi-square'], ['fisher', "Fisher's exact (2×2)"], ['ffh', 'Fisher-Freeman-Halton (larger tables)']];
     $('#vdTest').innerHTML = `<option value="">Automatic (step 4 settings)</option>` + tests.map(([k, l]) => `<option value="${k}" ${v.test === k ? 'selected' : ''}>${esc(l)}</option>`).join('');
@@ -28400,7 +28510,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const set = (k, val) => { if (val === '' || val === false || val === null) delete v[k]; else v[k] = val; };
     set('unit', $('#vdUnit').value.trim()); set('dec', $('#vdDec').value); set('role', $('#vdRole').value); set('transform', v.type === 'numeric' ? $('#vdTf').value : '');
     set('ordinal', v.type === 'categorical' && $('#vdOrd').checked); set('ordTest', $('#vdOrd').checked ? $('#vdOrdTest').value : '');
-    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('test', $('#vdTest').value);
+    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('test', $('#vdTest').value); set('noSecond', v.type === 'numeric' && $('#vdNoSecond').checked);
     if (v.type === 'categorical' && $('#vdShowBox').style.display !== 'none') { const first = $('#vdShow').value, lv = v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct; v.levels = [first, ...lv.filter(l => l !== first)]; }
     const m = [...document.querySelectorAll('[data-vdm]')].filter(el => el.value.trim()).map(el => `${el.dataset.vdm}=${el.value.trim()}`);
     if (document.querySelector('[data-vdm]')) v.valueLabels = m.join(', ');
@@ -29349,6 +29459,35 @@ if (typeof module !== 'undefined') module.exports = Sav;
   /* ---------- design previews: a real table (step 5) and four sample figures (step 7), redrawn as the options change ---------- */
   let designTimer = null;
   const scheduleDesign = fn => () => { clearTimeout(designTimer); designTimer = setTimeout(() => { if (!state.cfg) return; readUiIntoCfg(); fn(); }, 250); };
+  // step 5 tools: headings of the group columns, merging two tables, saved table styles
+  function renderTableTools() {
+    const cfg = state.cfg; if (!cfg || !state.data) return;
+    const th = cfg.tableHeads || {}, groups = cfg.noGroups ? [] : activeGroups();
+    $('#tableHeadsBox').innerHTML = groups.length > 1 ? groups.map(g => `<div><label class="f">${esc(cfg.groupLabels[g] || g)}</label><input type="text" data-thead="${esc(g)}" value="${esc(th[g] || '')}" placeholder="${esc(cfg.groupLabels[g] || g)}"></div>`).join('') : '<p class="legend-note">No study groups.</p>';
+    const tabs = [...new Set(cfg.variables.filter(v => v.include !== false && v.kind === 'single' && v.table).map(v => v.table))];
+    $('#mtFrom').innerHTML = tabs.map(t => `<option>${esc(t)}</option>`).join(''); $('#mtInto').innerHTML = tabs.map((t, i) => `<option ${i === 1 ? 'selected' : ''}>${esc(t)}</option>`).join('');
+    const ts = tableStyles(); $('#tsList').innerHTML = '<option value="">— saved table styles —</option>' + Object.keys(ts).map(n => `<option>${esc(n)}</option>`).join('');
+  }
+  $('#tableHeadsBox').addEventListener('input', e => { const g = e.target.dataset.thead; if (g === undefined) return; const th = state.cfg.tableHeads = state.cfg.tableHeads || {};
+    if (e.target.value.trim()) th[g] = e.target.value; else delete th[g]; });
+  $('#mtGo').onclick = () => {
+    const from = $('#mtFrom').value, into = $('#mtInto').value; if (!from || !into || from === into) { toast('Choose two different tables'); return; }
+    let n = 0; state.cfg.variables.forEach(v => { if (v.table === from) { v.table = into; n++; } });
+    renderTableTools(); renderTablePreview(); toast(`${n} variable${n === 1 ? '' : 's'} moved from “${from}” into “${into}”`);
+  };
+  // table styles: every option of step 5, saved in this browser under a name
+  const TS_KEY = 'pmse-table-styles';
+  const tableStyles = () => { try { return JSON.parse(localStorage.getItem(TS_KEY) || '{}'); } catch (e) { return {}; } };
+  const step5Keys = () => Object.entries(OPTION_FIELDS).filter(([, [id]]) => { const el = $('#' + id); return el && $('#p5').contains(el); }).map(([k]) => k);
+  $('#tsSave').onclick = () => {
+    readUiIntoCfg(); const name = (prompt('Name of this table style:', 'My journal style') || '').trim(); if (!name) return;
+    const ts = tableStyles(); ts[name] = Object.fromEntries(step5Keys().map(k => [k, state.cfg.options[k]]));
+    try { localStorage.setItem(TS_KEY, JSON.stringify(ts)); } catch (e) { toast('This browser does not allow saving'); return; }
+    renderTableTools(); $('#tsList').value = name; toast(`Table style “${name}” saved`);
+  };
+  $('#tsApply').onclick = () => { const st = tableStyles()[$('#tsList').value]; if (!st) return; Object.assign(state.cfg.options, st); renderOptions(); renderTablePreview(); toast(`Table style “${$('#tsList').value}” applied`); };
+  $('#tsDel').onclick = () => { const n = $('#tsList').value, ts = tableStyles(); if (!n || !ts[n] || !confirm(`Delete the table style “${n}”?`)) return; delete ts[n];
+    try { localStorage.setItem(TS_KEY, JSON.stringify(ts)); } catch (e) { } renderTableTools(); };
   $('#p5').addEventListener('change', scheduleDesign(() => renderTablePreview()));
   $('#p5').addEventListener('input', scheduleDesign(() => renderTablePreview()));
   $('#p7').addEventListener('change', scheduleDesign(() => renderFigDesign()));
@@ -29837,11 +29976,14 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const o = state.cfg.options, bg = HEAD_BG[o.tableHead] || '', thStyle = bg ? `style="background:${bg};${o.tableHead === 'navy' ? 'color:#fff' : ''}"` : '';
     // banded rows and left-aligned names follow the variables: a row starts a new variable unless a row span covers its first column
     let cover = 0, band = -1;
+    // significant P values in colour (as in the Word file)
+    const pcol = { red: '#C00000', green: '#2E7D32', blue: '#1F4E9A' }[o.pColor], sym = o.sigSym || '', sigRe = new RegExp(`^<?\\.?\\d[\\d.]*${sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[a-z\u1d43-\u1dbf]*$`);
+    const pcolOn = pcol && sym;
     const body = rows.map((r, ri) => {
-      const first = cover === 0; if (first) { band++; cover = Math.max(0, (r[0] && r[0].rs || 1) - 1); } else cover--;
-      return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${o.firstColLeft && first && ci === 0 ? 'left' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
+      const first = cover === 0; if (first) { if (!(r[0] && r[0].ind)) band++; cover = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); } else cover--;
+      return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${(o.firstColLeft && first && ci === 0) || c.ind || c.left ? 'left' : ''}"${pcolOn && (c.t || []).length === 1 && sigRe.test(String(c.t[0])) ? ` style="color:${pcol}"` : ''}>${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
     }).join('');
-    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.tableFont && o.tableFont !== 'same' ? o.tableFont : o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
@@ -30413,7 +30555,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const tk = exKey.table(s), tOut = isOut(tk), place = o.commentPlace || 'after';
       const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
-        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button></div>
+        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button></div>
         <div class="foot">${esc(s.footnote)}</div>
         ${place !== 'before' ? comment : ''}</div>
         ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
@@ -30437,10 +30579,28 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const rg = document.createRange(); rg.selectNodeContents(d); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg); document.execCommand('copy'); sel.removeAllRanges(); d.remove(); }
     toast('Table copied — paste it into Word');
   }
+  // a table as a picture: its HTML with the page's table styles, drawn through an SVG foreignObject at 2× resolution
+  function tableImage(tbl, cap, foot) {
+    const css = [...document.styleSheets].flatMap(sh => { try { return [...sh.cssRules]; } catch (e) { return []; } }).map(r => r.cssText).filter(t => /table\.rt|\.rt[ .{]/.test(t)).join('\n');
+    const o = effOptions(), w = Math.max(400, Math.ceil(tbl.getBoundingClientRect().width) + 24), font = o.tableFont && o.tableFont !== 'same' ? o.tableFont : o.font;
+    const html = `<div xmlns="http://www.w3.org/1999/xhtml" style="background:#fff;color:#000;padding:12px;width:${w - 24}px;font-family:'${font}',serif"><style>${css}</style>`
+      + `<p style="font-weight:bold;margin:0 0 6px">${esc(cap)}</p>${new XMLSerializer().serializeToString(tbl)}<p style="font-size:11px;margin:6px 0 0">${esc(foot || '')}</p></div>`;
+    const probe = document.createElement('div'); probe.style.cssText = 'position:absolute;left:-9999px;top:0'; probe.innerHTML = html; document.body.appendChild(probe);
+    const h = Math.ceil(probe.firstChild.getBoundingClientRect().height) + 4; probe.remove();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
+    return new Promise((ok, bad) => { const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = 2 * w; c.height = 2 * h; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.scale(2, 2); x.drawImage(img, 0, 0); ok(c.toDataURL('image/png')); };
+      img.onerror = () => bad(new Error('drawing failed')); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); });
+  }
   $('#figPrevCopy').onclick = () => { const f = state.prevFig; if (f) copyImage(f.url); };
   $('#flowCopy').onclick = () => copyImage($('#consortCanvas').toDataURL('image/png'));
   $('#report').addEventListener('click', e => {
-    const fc = e.target.closest('[data-copyfig]'), tc = e.target.closest('[data-copytbl]');
+    const fc = e.target.closest('[data-copyfig]'), tc = e.target.closest('[data-copytbl]'), wt = e.target.closest('[data-wordtbl]'), pt = e.target.closest('[data-pngtbl]');
+    if (wt) { syncEdits(); const s = state.result.sections[+wt.dataset.wordtbl], plan = exportPlan(state.result), n = plan.tabNum.get(s) || 1;
+      Report.build({ sections: [{ ...s, tableOn: true, figures: [] }], methods: '', consort: null }, { ...wordOptions(), tabStart: n, listTF: false, title: '', sectionHeads: false, tableNewPage: false, bare: true })
+        .then(blob => saveUrl(URL.createObjectURL(blob), `${baseName()} - Table ${n}.docx`)); }
+    if (pt) { syncEdits(); const s = state.result.sections[+pt.dataset.pngtbl], plan = exportPlan(state.result), n = plan.tabNum.get(s) || 1;
+      tableImage(pt.closest('.report-sec').querySelector('table.rt'), `Table ${n}${effOptions().tableCaption === 'period' ? '.' : ':'} ${s.title}`, s.footnote)
+        .then(url => saveUrl(url, `${baseName()} - Table ${n}.png`)).catch(err => toast('The picture could not be made: ' + err.message)); }
     if (fc) { const [si, fi] = fc.dataset.copyfig.split(':').map(Number); copyImage(state.result.sections[si].figures[fi].url); }
     if (tc) {
       syncEdits(); const s = state.result.sections[+tc.dataset.copytbl], o = effOptions(), plan = exportPlan(state.result);
@@ -30494,6 +30654,13 @@ if (typeof module !== 'undefined') module.exports = Sav;
     };
   }
   $('#btnRerun').onclick = () => runAnalysis();
+  // the options of the Word file, from the steps and the report format
+  function wordOptions() {
+    const o = effOptions(), rp = report();
+    return { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
+        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace };
+  }
   const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
   const saveUrl = (url, name) => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
   const safeName = t => String(t).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
@@ -30623,9 +30790,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const r = exportModel(state.result);
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
-      const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
-        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad }, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
-        orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
+      const blob = await Report.build(r, wordOptions());
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;

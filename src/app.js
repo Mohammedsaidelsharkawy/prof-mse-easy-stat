@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmImpute: 'none', confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmImpute: 'none', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,7 +47,7 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -105,7 +105,7 @@
     if (n === 7) { renderFigureTable(); renderFigDesign(); }
     if (n === 4) renderTestPlan();
     if (n === 6) renderCommentPreview();
-    if (n === 5) renderTablePreview();
+    if (n === 5) { renderTableTools(); renderTablePreview(); }
     if (n === 8) renderAdvanced();
     if (n === 9) renderConsortForm();
     if (n === 10) renderExplore();
@@ -1177,7 +1177,7 @@
     $('#vdTitle').textContent = v.label; $('#vdUnit').value = v.unit || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
     $('#vdTf').value = v.transform || ''; $('#vdTf').disabled = v.type !== 'numeric';
     $('#vdOrd').checked = !!v.ordinal; $('#vdOrd').disabled = v.type !== 'categorical'; $('#vdOrdTest').value = v.ordTest || 'rank';
-    $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || '';
+    $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || ''; $('#vdNoSecond').checked = !!v.noSecond; $('#vdNoSecondBox').style.display = v.type === 'numeric' && v.kind === 'single' ? '' : 'none';
     const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis']]
       : [['chi', 'Chi-square'], ['fisher', "Fisher's exact (2×2)"], ['ffh', 'Fisher-Freeman-Halton (larger tables)']];
     $('#vdTest').innerHTML = `<option value="">Automatic (step 4 settings)</option>` + tests.map(([k, l]) => `<option value="${k}" ${v.test === k ? 'selected' : ''}>${esc(l)}</option>`).join('');
@@ -1200,7 +1200,7 @@
     const set = (k, val) => { if (val === '' || val === false || val === null) delete v[k]; else v[k] = val; };
     set('unit', $('#vdUnit').value.trim()); set('dec', $('#vdDec').value); set('role', $('#vdRole').value); set('transform', v.type === 'numeric' ? $('#vdTf').value : '');
     set('ordinal', v.type === 'categorical' && $('#vdOrd').checked); set('ordTest', $('#vdOrd').checked ? $('#vdOrdTest').value : '');
-    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('test', $('#vdTest').value);
+    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('test', $('#vdTest').value); set('noSecond', v.type === 'numeric' && $('#vdNoSecond').checked);
     if (v.type === 'categorical' && $('#vdShowBox').style.display !== 'none') { const first = $('#vdShow').value, lv = v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct; v.levels = [first, ...lv.filter(l => l !== first)]; }
     const m = [...document.querySelectorAll('[data-vdm]')].filter(el => el.value.trim()).map(el => `${el.dataset.vdm}=${el.value.trim()}`);
     if (document.querySelector('[data-vdm]')) v.valueLabels = m.join(', ');
@@ -2149,6 +2149,35 @@
   /* ---------- design previews: a real table (step 5) and four sample figures (step 7), redrawn as the options change ---------- */
   let designTimer = null;
   const scheduleDesign = fn => () => { clearTimeout(designTimer); designTimer = setTimeout(() => { if (!state.cfg) return; readUiIntoCfg(); fn(); }, 250); };
+  // step 5 tools: headings of the group columns, merging two tables, saved table styles
+  function renderTableTools() {
+    const cfg = state.cfg; if (!cfg || !state.data) return;
+    const th = cfg.tableHeads || {}, groups = cfg.noGroups ? [] : activeGroups();
+    $('#tableHeadsBox').innerHTML = groups.length > 1 ? groups.map(g => `<div><label class="f">${esc(cfg.groupLabels[g] || g)}</label><input type="text" data-thead="${esc(g)}" value="${esc(th[g] || '')}" placeholder="${esc(cfg.groupLabels[g] || g)}"></div>`).join('') : '<p class="legend-note">No study groups.</p>';
+    const tabs = [...new Set(cfg.variables.filter(v => v.include !== false && v.kind === 'single' && v.table).map(v => v.table))];
+    $('#mtFrom').innerHTML = tabs.map(t => `<option>${esc(t)}</option>`).join(''); $('#mtInto').innerHTML = tabs.map((t, i) => `<option ${i === 1 ? 'selected' : ''}>${esc(t)}</option>`).join('');
+    const ts = tableStyles(); $('#tsList').innerHTML = '<option value="">— saved table styles —</option>' + Object.keys(ts).map(n => `<option>${esc(n)}</option>`).join('');
+  }
+  $('#tableHeadsBox').addEventListener('input', e => { const g = e.target.dataset.thead; if (g === undefined) return; const th = state.cfg.tableHeads = state.cfg.tableHeads || {};
+    if (e.target.value.trim()) th[g] = e.target.value; else delete th[g]; });
+  $('#mtGo').onclick = () => {
+    const from = $('#mtFrom').value, into = $('#mtInto').value; if (!from || !into || from === into) { toast('Choose two different tables'); return; }
+    let n = 0; state.cfg.variables.forEach(v => { if (v.table === from) { v.table = into; n++; } });
+    renderTableTools(); renderTablePreview(); toast(`${n} variable${n === 1 ? '' : 's'} moved from “${from}” into “${into}”`);
+  };
+  // table styles: every option of step 5, saved in this browser under a name
+  const TS_KEY = 'pmse-table-styles';
+  const tableStyles = () => { try { return JSON.parse(localStorage.getItem(TS_KEY) || '{}'); } catch (e) { return {}; } };
+  const step5Keys = () => Object.entries(OPTION_FIELDS).filter(([, [id]]) => { const el = $('#' + id); return el && $('#p5').contains(el); }).map(([k]) => k);
+  $('#tsSave').onclick = () => {
+    readUiIntoCfg(); const name = (prompt('Name of this table style:', 'My journal style') || '').trim(); if (!name) return;
+    const ts = tableStyles(); ts[name] = Object.fromEntries(step5Keys().map(k => [k, state.cfg.options[k]]));
+    try { localStorage.setItem(TS_KEY, JSON.stringify(ts)); } catch (e) { toast('This browser does not allow saving'); return; }
+    renderTableTools(); $('#tsList').value = name; toast(`Table style “${name}” saved`);
+  };
+  $('#tsApply').onclick = () => { const st = tableStyles()[$('#tsList').value]; if (!st) return; Object.assign(state.cfg.options, st); renderOptions(); renderTablePreview(); toast(`Table style “${$('#tsList').value}” applied`); };
+  $('#tsDel').onclick = () => { const n = $('#tsList').value, ts = tableStyles(); if (!n || !ts[n] || !confirm(`Delete the table style “${n}”?`)) return; delete ts[n];
+    try { localStorage.setItem(TS_KEY, JSON.stringify(ts)); } catch (e) { } renderTableTools(); };
   $('#p5').addEventListener('change', scheduleDesign(() => renderTablePreview()));
   $('#p5').addEventListener('input', scheduleDesign(() => renderTablePreview()));
   $('#p7').addEventListener('change', scheduleDesign(() => renderFigDesign()));
@@ -2637,11 +2666,14 @@
     const o = state.cfg.options, bg = HEAD_BG[o.tableHead] || '', thStyle = bg ? `style="background:${bg};${o.tableHead === 'navy' ? 'color:#fff' : ''}"` : '';
     // banded rows and left-aligned names follow the variables: a row starts a new variable unless a row span covers its first column
     let cover = 0, band = -1;
+    // significant P values in colour (as in the Word file)
+    const pcol = { red: '#C00000', green: '#2E7D32', blue: '#1F4E9A' }[o.pColor], sym = o.sigSym || '', sigRe = new RegExp(`^<?\\.?\\d[\\d.]*${sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[a-z\u1d43-\u1dbf]*$`);
+    const pcolOn = pcol && sym;
     const body = rows.map((r, ri) => {
-      const first = cover === 0; if (first) { band++; cover = Math.max(0, (r[0] && r[0].rs || 1) - 1); } else cover--;
-      return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${o.firstColLeft && first && ci === 0 ? 'left' : ''}">${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
+      const first = cover === 0; if (first) { if (!(r[0] && r[0].ind)) band++; cover = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); } else cover--;
+      return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${(o.firstColLeft && first && ci === 0) || c.ind || c.left ? 'left' : ''}"${pcolOn && (c.t || []).length === 1 && sigRe.test(String(c.t[0])) ? ` style="color:${pcol}"` : ''}>${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
     }).join('');
-    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.tableFont && o.tableFont !== 'same' ? o.tableFont : o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
@@ -3213,7 +3245,7 @@
       const tk = exKey.table(s), tOut = isOut(tk), place = o.commentPlace || 'after';
       const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}">${esc(s.comment)}</textarea>`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
-        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button></div>
+        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button></div>
         <div class="foot">${esc(s.footnote)}</div>
         ${place !== 'before' ? comment : ''}</div>
         ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
@@ -3237,10 +3269,28 @@
       const rg = document.createRange(); rg.selectNodeContents(d); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg); document.execCommand('copy'); sel.removeAllRanges(); d.remove(); }
     toast('Table copied — paste it into Word');
   }
+  // a table as a picture: its HTML with the page's table styles, drawn through an SVG foreignObject at 2× resolution
+  function tableImage(tbl, cap, foot) {
+    const css = [...document.styleSheets].flatMap(sh => { try { return [...sh.cssRules]; } catch (e) { return []; } }).map(r => r.cssText).filter(t => /table\.rt|\.rt[ .{]/.test(t)).join('\n');
+    const o = effOptions(), w = Math.max(400, Math.ceil(tbl.getBoundingClientRect().width) + 24), font = o.tableFont && o.tableFont !== 'same' ? o.tableFont : o.font;
+    const html = `<div xmlns="http://www.w3.org/1999/xhtml" style="background:#fff;color:#000;padding:12px;width:${w - 24}px;font-family:'${font}',serif"><style>${css}</style>`
+      + `<p style="font-weight:bold;margin:0 0 6px">${esc(cap)}</p>${new XMLSerializer().serializeToString(tbl)}<p style="font-size:11px;margin:6px 0 0">${esc(foot || '')}</p></div>`;
+    const probe = document.createElement('div'); probe.style.cssText = 'position:absolute;left:-9999px;top:0'; probe.innerHTML = html; document.body.appendChild(probe);
+    const h = Math.ceil(probe.firstChild.getBoundingClientRect().height) + 4; probe.remove();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
+    return new Promise((ok, bad) => { const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = 2 * w; c.height = 2 * h; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.scale(2, 2); x.drawImage(img, 0, 0); ok(c.toDataURL('image/png')); };
+      img.onerror = () => bad(new Error('drawing failed')); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); });
+  }
   $('#figPrevCopy').onclick = () => { const f = state.prevFig; if (f) copyImage(f.url); };
   $('#flowCopy').onclick = () => copyImage($('#consortCanvas').toDataURL('image/png'));
   $('#report').addEventListener('click', e => {
-    const fc = e.target.closest('[data-copyfig]'), tc = e.target.closest('[data-copytbl]');
+    const fc = e.target.closest('[data-copyfig]'), tc = e.target.closest('[data-copytbl]'), wt = e.target.closest('[data-wordtbl]'), pt = e.target.closest('[data-pngtbl]');
+    if (wt) { syncEdits(); const s = state.result.sections[+wt.dataset.wordtbl], plan = exportPlan(state.result), n = plan.tabNum.get(s) || 1;
+      Report.build({ sections: [{ ...s, tableOn: true, figures: [] }], methods: '', consort: null }, { ...wordOptions(), tabStart: n, listTF: false, title: '', sectionHeads: false, tableNewPage: false, bare: true })
+        .then(blob => saveUrl(URL.createObjectURL(blob), `${baseName()} - Table ${n}.docx`)); }
+    if (pt) { syncEdits(); const s = state.result.sections[+pt.dataset.pngtbl], plan = exportPlan(state.result), n = plan.tabNum.get(s) || 1;
+      tableImage(pt.closest('.report-sec').querySelector('table.rt'), `Table ${n}${effOptions().tableCaption === 'period' ? '.' : ':'} ${s.title}`, s.footnote)
+        .then(url => saveUrl(url, `${baseName()} - Table ${n}.png`)).catch(err => toast('The picture could not be made: ' + err.message)); }
     if (fc) { const [si, fi] = fc.dataset.copyfig.split(':').map(Number); copyImage(state.result.sections[si].figures[fi].url); }
     if (tc) {
       syncEdits(); const s = state.result.sections[+tc.dataset.copytbl], o = effOptions(), plan = exportPlan(state.result);
@@ -3294,6 +3344,13 @@
     };
   }
   $('#btnRerun').onclick = () => runAnalysis();
+  // the options of the Word file, from the steps and the report format
+  function wordOptions() {
+    const o = effOptions(), rp = report();
+    return { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
+        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace };
+  }
   const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
   const saveUrl = (url, name) => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
   const safeName = t => String(t).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
@@ -3423,9 +3480,7 @@
       const r = exportModel(state.result);
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
-      const blob = await Report.build(r, { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
-        tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad }, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
-        orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace });
+      const blob = await Report.build(r, wordOptions());
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;

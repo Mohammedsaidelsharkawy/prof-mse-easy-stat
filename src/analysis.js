@@ -29,6 +29,20 @@ const Analysis = (() => {
     const thr = 10 ** -FMT.pDig, s = p < thr ? '<' + pNum(thr) : pNum(p);
     return s + (p <= alpha ? FMT.sig : '');
   }
+  // compact letter display (insert-absorb): groups that share a letter do not differ significantly
+  function compactLetters(k, sigPairs) {
+    let sets = [new Set(Array.from({ length: k }, (_, i) => i))];
+    for (const { i, j } of sigPairs) {
+      const next = [];
+      sets.forEach(st => { if (st.has(i) && st.has(j)) { const a = new Set(st), b2 = new Set(st); a.delete(i); b2.delete(j); next.push(a, b2); } else next.push(st); });
+      sets = next.filter((st, si) => st.size && !next.some((o, oi) => oi !== si && [...st].every(x => o.has(x)) && (o.size > st.size || oi < si)));
+    }
+    sets.sort((a, b) => Math.min(...a) - Math.min(...b) || b.size - a.size);
+    const ab = 'abcdefghijklmnopqrstuvwxyz';
+    return Array.from({ length: k }, (_, g) => sets.map((st, si) => st.has(g) ? ab[si] : '').join(''));
+  }
+  const SUP = { a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ', g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ', m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ' };
+  const toSup = t => [...t].map(c => SUP[c] || c).join('');
   // p-value as used inside sentences: "= 0.013" or "< 0.001"
   const pTxt = p => { const thr = 10 ** -FMT.pDig; return p < thr ? '< ' + pNum(thr) : '= ' + pNum(p); };
   const msd = (m, sdv, d) => FMT.mean === 'paren' ? `${fmt(m, d)} (${fmt(sdv, d)})` : `${fmt(m, d)} ± ${fmt(sdv, d)}`;
@@ -1576,8 +1590,8 @@ const Analysis = (() => {
       const f = [];
       if (flags.sig) f.push(`*: Significant as P value ≤ ${alpha}`);
       const dp = [];
-      if (flags.param) dp.push(meanSdName(true));
-      if (flags.nonparam) dp.push(FMT.iqr === 'bracket' ? 'median [IQR]' : 'median (IQR)');
+      if (flags.param || flags.both) dp.push(meanSdName(true));
+      if (flags.nonparam || flags.both) dp.push(FMT.iqr === 'bracket' ? 'median [IQR]' : 'median (IQR)');
       if (flags.cat) dp.push('frequency (%)');
       if (dp.length) f.push(`Data are presented as ${listJoin(dp)}`);
       if (flags.effect) {
@@ -1606,7 +1620,9 @@ const Analysis = (() => {
     // missing values of one column among the analysed patients
     const missingIn = (col, numeric) => byGroup.flat().filter(r => numeric ? !isFinite(toNum(r[col])) : toCat(r[col]) === null).length;
 
-    const groupHeads = gl.map((g, i) => opts.nHead === false ? g : `${g} (n=${gN[i]})`);
+    // table headings: a group can be given its own heading for the tables (e.g. "Group A (PRP)")
+    const TH = cfg.tableHeads || {}, headName = (g, i) => (TH[groups[i]] || '').trim() || g;
+    const groupHeads = gl.map((g, i) => opts.nHead === false ? headName(g, i) : `${headName(g, i)} (n=${gN[i]})`);
 
     /* ---------- one group (no group column): description of the patients and change over time ---------- */
     const WITHIN_NAME = { 'Paired t-test': 'paired t-test', Wilcoxon: 'Wilcoxon signed-rank test', 'RM ANOVA': 'repeated-measures ANOVA', Friedman: 'Friedman test' };
@@ -1944,63 +1960,96 @@ const Analysis = (() => {
           present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
           return { v, cat: analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null, v.test), levels, gv };
         });
-        const anySig = res.some(r => (r.num || r.cat).p <= alpha);
-        const showPost = numbered && res.some(r => r.num ? r.num.p <= alpha : !!r.cat.pairs);
+        // CONSORT: a baseline table of a randomised trial is described without P values
+        const noP = !!opts.baselineNoP && (res.every(r => r.v.role === 'baseline') || /baseline|demograph/i.test(b.table));
+        if (noP) used.add('noPBaseline');
+        const anySig = !noP && res.some(r => (r.num || r.cat).p <= alpha);
+        // post hoc results as letters (a, b, c) after the group values instead of a column of pairwise P values
+        const letters = !noP && opts.postLetters && k > 2;
+        const showPost = !noP && !letters && numbered && res.some(r => r.num ? r.num.p <= alpha : !!r.cat.pairs);
+        const cldOf = r => { const x = r.num || r.cat; if (!letters || !(x.p <= alpha) || !x.pairs) return null; return compactLetters(k, x.pairs.filter(q => q.p <= alpha)); };
+        // the order of the group columns in the tables (by label, comma-separated), else as elsewhere
+        const ord = (() => { const want = String(opts.tableGroupOrder || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean), o = [];
+          want.forEach(w => { const i = gl.findIndex((g, gi) => !o.includes(gi) && (g.toLowerCase() === w || String(groups[gi]).toLowerCase() === w || headName(g, gi).toLowerCase() === w)); if (i >= 0) o.push(i); });
+          gl.forEach((_, i) => { if (!o.includes(i)) o.push(i); }); return opts.tableGroupOrder === 'reverse' ? gl.map((_, i) => k - 1 - i) : o; })();
+        const O = a => ord.map(i => a[i]);
         const hasNum = res.some(r => r.num), hasCat = res.some(r => r.cat);
         const hasRR = opts.effect && res.some(r => r.cat && r.cat.binary);
         const twoCol = res.some(r => r.num || (r.cat && !isCompact(r)));
-        const effHead = hasNum && hasRR ? `MD/${EF} (95% CI)` : hasRR ? `${EF} (95% CI)` : 'MD (95% CI)';
+        // the effect column: mean / median differences and RR / OR, or only one of them
+        const effNum = opts.effectShow !== 'cat', effCat = opts.effectShow !== 'num';
+        const effOn = !noP && opts.effect && ((hasNum && effNum) || (hasRR && effCat));
+        const effHead = hasNum && effNum && hasRR && effCat ? `MD/${EF} (95% CI)` : hasRR && effCat ? `${EF} (95% CI)` : 'MD (95% CI)';
         const totalCol = !!opts.totalCol, tm = testMarker(res.map(r => (r.num || r.cat).test));
-        const head = [{ t: '', span: twoCol ? 2 : 1 }, ...groupHeads, ...(totalCol ? [opts.nHead === false ? 'Total' : `Total (n=${rows.length})`] : []), 'P value'];
+        const nCol = !!opts.nCol, missCol = !!opts.missCol;
+        const head = [{ t: '', span: twoCol ? 2 : 1 }, ...(nCol ? ['n'] : []), ...(missCol ? ['Missing'] : []), ...O(groupHeads), ...(totalCol ? [opts.nHead === false ? 'Total' : `Total (n=${rows.length})`] : []), ...(noP ? [] : ['P value'])];
+        // the n analysed and missing values of each variable, spanning its rows
+        const pre = (r, span) => [...(nCol ? [{ t: [String(r.num ? S.sum(r.num.desc.map(x => x.n)) : S.sum(r.cat.ns))], rs: span }] : []),
+          ...(missCol ? [{ t: [String(missingIn(r.v.cols[0].col, !!r.num))], rs: span }] : [])];
+        const supOf = (L, j) => L && L[j] ? toSup(L[j]) : '';
         // ordered groups (e.g. doses): a P value for trend — Jonckheere-Terpstra (numeric), Cochran-Armitage (yes/no) or linear-by-linear (more categories)
-        const trendOn = !!opts.groupTrend && k > 2;
+        const trendOn = !noP && !!opts.groupTrend && k > 2;
         const trendP = r => { if (r.num) return S.jonckheere(r.gv).p; const t = r.cat.table; if (t.length === 2) return S.cochranArmitage(t[0], r.cat.ns).p;
           const o = ordinalTest(r.gv, r.levels, 'trend', new Set(), opts); return o ? o.p : NaN; };
         if (trendOn) { head.push('P for trend'); used.add('groupTrend'); res.forEach(r => { r.trend = trendP(r); }); }
-        if (opts.showStat) head.push('Test');
+        if (opts.showStat && !noP) head.push('Test');
         // the Total column: every analysed patient, whatever the group
         const totDesc = r => S.describe(r.gv.flat());
         const totCat = (r, li) => { const cnt = S.sum(r.cat.table[li]), n = S.sum(r.cat.ns); return npc(cnt, n ? 100 * cnt / n : 0, n); };
         const tot = (on, f) => totalCol ? [{ t: [on ? f() : ''] }] : [];
         if (showPost) head.push('Post hoc');
-        if (opts.effect) head.push(effHead);
+        if (effOn) head.push(effHead);
         const trows = [];
         const tail = (r, span) => {
+          if (noP) return [];
           const x = r.num || r.cat, cells = [{ t: [fmtP(x.p, alpha) + (isFinite(x.p) ? tm.mark(x.test) : '')], rs: span }];
           if (trendOn) cells.push({ t: [fmtP(r.trend, alpha)], rs: span });
           if (opts.showStat) cells.push({ t: [(r.num || r.cat).stat], rs: span, small: true });
           if (showPost) cells.push({ t: r.num && r.num.p <= alpha ? postHocLines(r.num) : r.cat && r.cat.pairs ? postHocLines(r.cat) : ['---'], rs: span, small: true });
-          if (opts.effect) cells.push({ t: r.num ? effectLines(r.num) : (r.cat.binary ? rrLines(r.cat) : ['---']), rs: span, small: true });
+          if (effOn) cells.push({ t: r.num ? (effNum ? effectLines(r.num) : ['---']) : (r.cat.binary && effCat ? rrLines(r.cat) : ['---']), rs: span, small: true });
           return cells;
         };
         for (const r of res) {
           if (r.num) {
             const n = r.num, P = n.param, d = r.v.dec !== undefined && r.v.dec !== null && r.v.dec !== '' ? +r.v.dec : d0; // decimals: the variable's own, else the report's
-            if (opts.secondRow === 'none') {
+            const L = cldOf(r), gcell = (dd, j, txt) => ({ t: [txt + supOf(L, j)] });
+            if (opts.secondRow === 'none' || r.v.noSecond) {
               // one row: "Mean ± SD" or "Median (IQR)" in a single cell
-              trows.push([{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] },
-                ...n.desc.map(dd => ({ t: [P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)] })), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d); }), ...tail(r, 1)]);
+              trows.push([{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] }, ...pre(r, 1),
+                ...O(n.desc.map((dd, j) => gcell(dd, j, P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)))), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d); }), ...tail(r, 1)]);
+            } else if (opts.secondRow === 'both') {
+              // both summaries: the one the test used first, the other below it
+              const ms = dd => msd(dd.mean, dd.sd, d), mi = dd => medIqr(dd, d), mName = meanSdName(), iName = FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)';
+              const [f1, f2, n1, n2] = P ? [ms, mi, mName, iName] : [mi, ms, iName, mName];
+              trows.push([{ t: [r.v.label], b: true, rs: 2 }, { t: [n1] }, ...pre(r, 2), ...O(n.desc.map((dd, j) => gcell(dd, j, f1(dd)))), ...tot(true, () => f1(totDesc(r))), ...tail(r, 2)],
+                [{ t: [n2] }, ...O(n.desc.map(dd => ({ t: [f2(dd)] }))), ...tot(true, () => f2(totDesc(r)))]);
             } else {
-              const first = [{ t: [r.v.label], b: true, rs: 2 }, { t: [P ? meanSdName() : 'Median'] },
-                ...n.desc.map(dd => ({ t: [P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d)] })), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d); }), ...tail(r, 2)];
+              const first = [{ t: [r.v.label], b: true, rs: 2 }, { t: [P ? meanSdName() : 'Median'] }, ...pre(r, 2),
+                ...O(n.desc.map((dd, j) => gcell(dd, j, P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d)))), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : fmt(dd.median, d); }), ...tail(r, 2)];
               const ci = dd => { const h = jStat.studentt.inv(S.QU(), dd.n - 1) * dd.sd / Math.sqrt(dd.n); return `${fmt(dd.mean - h, d)} to ${fmt(dd.mean + h, d)}`; };
               const second = [{ t: [P ? (opts.secondRow === 'ci' ? '95% CI' : 'Range') : 'IQR'] },
-                ...n.desc.map(dd => ({ t: [P ? (opts.secondRow === 'ci' ? ci(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d)] })),
+                ...O(n.desc.map(dd => ({ t: [P ? (opts.secondRow === 'ci' ? ci(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d)] }))),
                 ...tot(true, () => { const dd = totDesc(r); return P ? (opts.secondRow === 'ci' ? ci(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d); })];
               trows.push(first, second);
             }
           } else if (isCompact(r)) {
-            const c = r.cat;
-            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...c.table[0].map((cnt, j) => ({ t: [npc(cnt, c.pct[0][j], c.ns[j])] })), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
+            const c = r.cat, Lt = cldOf(r);
+            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...pre(r, 1), ...O(c.table[0].map((cnt, j) => ({ t: [npc(cnt, c.pct[0][j], c.ns[j]) + supOf(Lt, j)] }))), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
           } else {
-            const c = r.cat, L = r.levels.length;
+            const c = r.cat, Lt = cldOf(r), indent = opts.catLayout === 'indent', totRow = !!opts.catTotal;
+            const L = r.levels.length + (totRow ? 1 : 0) + (indent ? 1 : 0);
+            // journal style: the variable on its own row, its categories indented below it
+            if (indent) trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1, left: true }, ...pre(r, L), ...O(c.ns.map(() => ({ t: [''] }))), ...tot(true, () => ''), ...tail(r, L)]);
             r.levels.forEach((lv, li) => {
               const row = [];
-              if (li === 0) row.push({ t: [r.v.label], b: true, rs: L });
-              row.push({ t: [lv] }, ...c.table[li].map((cnt, j) => ({ t: [npc(cnt, c.pct[li][j], c.ns[j])] })), ...tot(true, () => totCat(r, li)));
-              if (li === 0) row.push(...tail(r, L));
+              if (indent) row.push({ t: ['\u2003' + lv], span: twoCol ? 2 : 1, ind: true });
+              else { if (li === 0) row.push({ t: [r.v.label], b: true, rs: L }); row.push({ t: [lv] }); if (li === 0) row.push(...pre(r, L)); }
+              row.push(...O(c.table[li].map((cnt, j) => ({ t: [npc(cnt, c.pct[li][j], c.ns[j]) + (li === 0 ? supOf(Lt, j) : '')] }))), ...tot(true, () => totCat(r, li)));
+              if (li === 0 && !indent) row.push(...tail(r, L));
               trows.push(row);
             });
+            // a Total row: every patient with a value of the variable (100%)
+            if (totRow) trows.push([indent ? { t: ['\u2003Total'], span: twoCol ? 2 : 1, ind: true } : { t: ['Total'] }, ...O(c.ns.map(n => ({ t: [npc(n, 100, n)] }))), ...tot(true, () => { const n = S.sum(c.ns); return npc(n, 100, n); })]);
           }
         }
         // comment
@@ -2020,7 +2069,10 @@ const Analysis = (() => {
         };
         const nsRes = res.filter(r => !((r.num || r.cat).p <= alpha));
         const sent = [];
-        if (descriptive) sent.push(...descriptiveSentences(res, b.table));
+        if (noP) { const vals = r => r.num ? r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)}`).join(', ')
+            : isCompact(r) ? r.cat.pct[0].map((p, i) => `${gl[i]}: ${fmt(p, 1)}%`).join(', ') : r.levels.map((lv, li) => `${lv} ${r.cat.pct[li].map(p => fmt(p, 1) + '%').join(' vs ')}`).join('; ');
+          sent.push(`The ${lowerFirst(plain(b.table))} of the studied groups are shown in the table: ${listJoin(res.map(r => `${lowerFirst(plain(r.v.label))} (${vals(r)})`))}.`); }
+        else if (descriptive) sent.push(...descriptiveSentences(res, b.table));
         else if (detailed) nsRes.forEach(r => {
           const p = (r.num || r.cat).p;
           sent.push(`${cap(withValues(r, plain(r.v.label)))} was insignificantly different ${amongTxt(k)}${isFinite(p) ? ` (P value ${pTxt(p)})` : ''}.`);
@@ -2032,7 +2084,7 @@ const Analysis = (() => {
           if (rest.length) { const nsLabels = rest.map(r => lowerFirst(plain(r.v.label)));
             sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`); }
         }
-        for (const r of res.filter(r => !descriptive && (r.num || r.cat).p <= alpha)) {
+        for (const r of res.filter(r => !descriptive && !noP && (r.num || r.cat).p <= alpha)) {
           // compact categorical sentences already quote their percentages
           const lab = isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label));
           if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps).replace(/\)$/, effTxt(r) + ')')}.`); }
@@ -2092,14 +2144,15 @@ const Analysis = (() => {
           return out;
         }
         // optional: the size of each significant effect, with its conventional magnitude
-        if (opts.commentMagnitude) {
+        if (opts.commentMagnitude && !noP) {
           const parts = res.filter(r => (r.num || r.cat).p <= alpha).map(r => { const m = effectMagnitude(r, k, opts); return m && `${lowerFirst(plain(r.v.label))} (${m})`; }).filter(Boolean);
           if (parts.length) sent.push(`The effect size was ${parts.length > 1 ? 'as follows: ' : 'for '}${listJoin(parts)}.`);
         }
-        const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: opts.effect, rr: hasRR, posthoc: showPost,
+        const flags = { sig: anySig, param: res.some(r => r.num && r.num.param), nonparam: res.some(r => r.num && !r.num.param), cat: hasCat, effect: effOn, rr: hasRR && effCat, posthoc: showPost, both: opts.secondRow === 'both' && res.some(r => r.num && !r.v.noSecond),
           stats: res.map(r => (r.num || r.cat).stat), ci: opts.secondRow === 'ci' && res.some(r => r.num && r.num.param),
           missing: res.map(r => [plain(r.v.label), missingIn(r.v.cols[0].col, !!r.num)]).filter(x => x[1]).map(([l, m]) => `${l} (n=${m})`) };
-        const notes = [tm.note, ...b.vars.map(v => v.note)].filter(Boolean).join(', ');
+        const lettersUsed = letters && res.some(r => cldOf(r));
+        const notes = [noP ? '' : tm.note, lettersUsed ? `Values in a row with no superscript letter in common differ significantly (post hoc, P value ≤ ${alpha})` : '', ...b.vars.map(v => v.note)].filter(Boolean).join(', ');
         // significance brackets between groups: pairwise P values once the overall test is significant
         const brackets = x => {
           if (!opts.sigMarks || !(x.p <= alpha)) return {};
@@ -2530,6 +2583,7 @@ const Analysis = (() => {
     if (used.has('icc')) s.push(`Agreement between quantitative measurements was assessed using the intraclass correlation coefficient (ICC; ${used.has('iccC') ? 'two-way mixed effects, consistency' : 'two-way random effects, absolute agreement'}) and Bland-Altman analysis with 95% limits of agreement.`);
     if (used.has('diagnostic')) s.push('Diagnostic accuracy was expressed as sensitivity, specificity, positive and negative predictive values, likelihood ratios and accuracy, with exact (Clopper-Pearson) 95% CI.');
     if (used.has('cochran')) s.push("Repeated yes/no outcomes were compared across the measurements with Cochran's Q test.");
+    if (used.has('noPBaseline')) s.push('As recommended by the CONSORT statement, baseline characteristics were described without significance tests.');
     if (used.has('tost')) s.push('Equivalence was tested with two one-sided t-tests (TOST) against the stated margin, using the 90% confidence interval of the mean difference.');
     if (used.has('mh')) s.push('Odds ratios stratified by a third variable were pooled with the Mantel-Haenszel method, and their homogeneity checked with the Breslow-Day test.');
     if (used.has('clogit')) s.push('Matched case-control sets were analysed with conditional logistic regression.');
