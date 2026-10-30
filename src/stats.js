@@ -860,7 +860,59 @@ const Stats = (() => {
     return out;
   }
 
+  /* ---------- Little's MCAR test: EM estimates of the mean and covariance, then d² over the missing-data patterns ---------- */
+  function invert(A) {
+    const n = A.length, M = A.map((r, i) => [...r, ...Array.from({ length: n }, (_, j) => +(i === j))]);
+    for (let c = 0; c < n; c++) {
+      let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+      if (Math.abs(M[p][c]) < 1e-12) return null;
+      [M[c], M[p]] = [M[p], M[c]];
+      const d = M[c][c]; for (let j = 0; j < 2 * n; j++) M[c][j] /= d;
+      for (let r = 0; r < n; r++) if (r !== c) { const f = M[r][c]; if (f) for (let j = 0; j < 2 * n; j++) M[r][j] -= f * M[c][j]; }
+    }
+    return M.map(r => r.slice(n));
+  }
+  function littleMCAR(X, maxIter = 1000, tol = 1e-8) {
+    const rowsAll = X.filter(r => r.some(v => isFinite(v))), n = rowsAll.length, p = X[0] ? X[0].length : 0;
+    if (n < 3 || p < 2) return null;
+    let mu = Array.from({ length: p }, (_, j) => mean(rowsAll.map(r => r[j]).filter(isFinite)));
+    let S = Array.from({ length: p }, (_, i) => Array.from({ length: p }, (_, j) => { if (i !== j) return 0; const v = rowsAll.map(r => r[i]).filter(isFinite); return v.length > 1 ? variance(v) * (v.length - 1) / v.length : 1; }));
+    const pat = r => r.map(v => isFinite(v) ? 1 : 0).join('');
+    for (let it = 0; it < maxIter; it++) {
+      const T1 = new Array(p).fill(0), T2 = Array.from({ length: p }, () => new Array(p).fill(0));
+      for (const r of rowsAll) {
+        const o = [], m = []; r.forEach((v, j) => (isFinite(v) ? o : m).push(j));
+        const x = r.slice();
+        let C = null;
+        if (m.length) {
+          const Soo = invert(o.map(a => o.map(b => S[a][b]))); if (!Soo) return null;
+          const Smo = m.map(a => o.map(b => S[a][b])), dev = o.map(j => r[j] - mu[j]);
+          const B = Smo.map(row => o.map((_, k) => row.reduce((acc, v, q) => acc + v * Soo[q][k], 0)));
+          m.forEach((j, a) => { x[j] = mu[j] + B[a].reduce((acc, v, q) => acc + v * dev[q], 0); });
+          C = m.map((a, i) => m.map((b, j) => S[a][b] - B[i].reduce((acc, v, q) => acc + v * S[o[q]][b], 0)));
+        }
+        for (let i = 0; i < p; i++) { T1[i] += x[i]; for (let j = 0; j < p; j++) T2[i][j] += x[i] * x[j]; }
+        if (C) m.forEach((a, i) => m.forEach((b, j) => { T2[a][b] += C[i][j]; }));
+      }
+      const mu2 = T1.map(v => v / n), S2 = T2.map((row, i) => row.map((v, j) => v / n - mu2[i] * mu2[j]));
+      const diff = Math.max(...mu2.map((v, i) => Math.abs(v - mu[i])), ...S2.flatMap((row, i) => row.map((v, j) => Math.abs(v - S[i][j]))));
+      mu = mu2; S = S2;
+      if (diff < tol) break;
+    }
+    const groups = new Map(); rowsAll.forEach(r => { const k = pat(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); });
+    let d2 = 0, df = 0;
+    for (const [k, rs] of groups) {
+      const o = [...k].map((c, j) => c === '1' ? j : -1).filter(j => j >= 0); if (!o.length) continue;
+      const Soo = invert(o.map(a => o.map(b => S[a][b]))); if (!Soo) return null;
+      const dev = o.map(j => mean(rs.map(r => r[j])) - mu[j]);
+      d2 += rs.length * dev.reduce((acc, v, a) => acc + v * dev.reduce((t, w, b) => t + Soo[a][b] * w, 0), 0);
+      df += o.length;
+    }
+    df -= p;
+    return { chi2: d2, df, p: df > 0 ? 1 - jStat.chisquare.cdf(d2, df) : NaN, patterns: groups.size, n, mu, S };
+  }
   return {
+    littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,
     chiSquare, fisher2x2, relativeRisk, friedman, rmAnova,

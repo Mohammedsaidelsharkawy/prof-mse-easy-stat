@@ -1285,11 +1285,22 @@ const Analysis = (() => {
     return f.op === 'gt' ? a > b : f.op === 'ge' ? a >= b : f.op === 'lt' ? a < b : a <= b;
   }
   const activeFilters = cfg => (cfg.rowFilter || []).filter(f => f && f.on !== false && f.col && f.op && (['blank', 'notblank'].includes(f.op) || String(f.val ?? '').trim() !== ''));
-  function filterRows(cfg, rows) { const fs = activeFilters(cfg); return fs.length ? rows.filter(r => fs.every(f => rowPasses(r, f))) : rows; }
-  const filterText = cfg => activeFilters(cfg).map(f => `${columnLabel(cfg, f.col)} ${FILTER_OPS[f.op]}${['blank', 'notblank'].includes(f.op) ? '' : ' ' + f.val}`).join(' and ');
+  // an optional random sample (seeded, so the same seed gives the same patients), taken after the conditions; the sheet order is kept
+  const sampleOn = cfg => !!(cfg.sample && cfg.sample.on && +cfg.sample.n >= 2);
+  function filterRows(cfg, rows) {
+    const fs = activeFilters(cfg); let out = fs.length ? rows.filter(r => fs.every(f => rowPasses(r, f))) : rows;
+    if (sampleOn(cfg) && out.length > +cfg.sample.n) {
+      let s = (+cfg.sample.seed || 1) >>> 0; const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      const ix = out.map((_, i) => i); for (let i = ix.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [ix[i], ix[j]] = [ix[j], ix[i]]; }
+      const keep = new Set(ix.slice(0, +cfg.sample.n)); out = out.filter((_, i) => keep.has(i));
+    }
+    return out;
+  }
+  const filterText = cfg => [activeFilters(cfg).map(f => `${columnLabel(cfg, f.col)} ${FILTER_OPS[f.op]}${['blank', 'notblank'].includes(f.op) ? '' : ' ' + f.val}`).join(' and '),
+    sampleOn(cfg) ? `${activeFilters(cfg).length ? 'from whom ' : ''}a random sample of ${+cfg.sample.n} patients was drawn (seed ${+cfg.sample.seed || 1})` : ''].filter(Boolean).join(', ');
 
   function withValueLabels(data, cfg) {
-    if (activeFilters(cfg).length) data = { ...data, rows: filterRows(cfg, data.rows) };
+    if (activeFilters(cfg).length || sampleOn(cfg)) data = { ...data, rows: filterRows(cfg, data.rows) };
     const maps = {};
     (cfg.variables || []).forEach(v => {
       if (v.type !== 'categorical' || !v.valueLabels) return;
@@ -1975,7 +1986,7 @@ const Analysis = (() => {
       if (opts.shadeSig) shadeSigRows(sec, opts.pHead || 'P value', alpha);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
     });
-    return { sections, used, groups: gl, gN, k, methods: (opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? ` The analysis included only patients with ${filterText(cfg)}.` : ''), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
+    return { sections, used, groups: gl, gN, k, methods: (opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 

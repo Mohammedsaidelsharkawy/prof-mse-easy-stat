@@ -266,6 +266,17 @@ table.rt.xw td[contenteditable]:focus{outline:2px solid var(--purple);outline-of
 .xp-figcol{display:flex;flex-direction:column;max-width:440px}
 .xp-sum-note{font-size:12.5px;color:var(--muted);margin-top:4px}
 @media (max-width:900px){.xp-half{grid-template-columns:1fr}}
+/* step 1: more tools */
+.fm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 12px;margin-top:10px;max-height:62vh;overflow:auto}
+.fm-grid label{font-size:12px;color:var(--muted);display:block}.fm-grid input{width:100%}
+.colmenu{position:absolute;z-index:40;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:10px;width:300px;font-size:13px}
+.colmenu img{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
+.colmenu .vals{max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin:6px 0}
+table.dgrid thead th{position:sticky;top:0;z-index:2}
+table.dgrid th .cm{cursor:pointer;opacity:.6;margin-left:4px}table.dgrid th .cm:hover{opacity:1}
+table.dgrid th .rsz{position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize}
+table.dgrid th{position:sticky}
+.flt-chip{display:inline-flex;gap:6px;align-items:center}
 /* step 1: data preparation */
 .messy-tasks{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;margin:12px 0;background:var(--soft)}
 .messy-tasks .mt{display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-size:13.5px}
@@ -343,8 +354,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="drop" id="drop">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13l2 2 4-4"/></svg>
         <div class="big">Drop your Excel file here or click to browse</div>
-        <div class="legend-note">.xlsx, .xls or .csv</div>
-        <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
+        <div class="legend-note">Excel (.xlsx, .xls), CSV / text, or SPSS (.sav, .zsav)</div>
+        <input type="file" id="file" accept=".xlsx,.xls,.csv,.txt,.tsv,.sav,.zsav" hidden>
       </div>
       <div class="row" style="margin-top:10px;gap:8px">
         <button class="btn ghost small" id="btnPaste" type="button" title="Copy the cells in Excel (with the header row) and paste them here">📋 Paste from Excel</button>
@@ -386,7 +397,52 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
               <h4>Analyse only some patients</h4>
               <div id="filterList"></div>
               <div class="row" style="gap:8px"><button class="btn ghost small" id="filterAdd" type="button">+ Condition</button><span class="legend-note" id="filterInfo"></span></div>
+              <div class="row" style="gap:8px;margin-top:6px;align-items:center"><label class="check" style="margin:0"><input type="checkbox" id="sampleOn"><span>Only a random sample of</span></label><input type="number" id="sampleN" min="2" value="30" style="width:80px"><span class="legend-note">patients · seed</span><input type="number" id="sampleSeed" value="1" style="width:70px" title="The same seed always gives the same sample"><span class="legend-note">(for a pilot report)</span></div>
               <p class="legend-note">The sheet keeps every row; the tables, figures and comments use only the patients who meet all the conditions (e.g. Age ≥ 18 and Centre = A). The Statistical Analysis section says so.</p>
+            </div>
+            <div class="prep-card wide">
+              <h4>Rules for plausible values</h4>
+              <div id="ruleList"></div>
+              <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn ghost small" id="ruleAdd" type="button">+ Rule</button><button class="btn ghost small" data-rulepreset="bp" type="button" title="Diastolic below systolic">DBP &lt; SBP</button><button class="btn ghost small" data-rulepreset="dates" type="button" title="A later date on or after an earlier one">Discharge ≥ admission</button><button class="btn ghost small" data-rulepreset="age" type="button">Age 0–120</button><span class="legend-note" id="ruleInfo"></span></div>
+              <p class="legend-note">A rule compares a column with another column or with a number (between two numbers for a range). Rows that break a rule are listed in 🩺 Check data and can be shown in the grid.</p>
+            </div>
+            <div class="prep-card">
+              <h4>Duplicates</h4>
+              <div class="row" style="gap:8px;align-items:flex-end"><div style="flex:1"><label class="f">Same patient when these columns match</label><select id="dupCols" multiple size="4" style="width:100%"></select></div></div>
+              <div class="row" style="gap:8px;margin-top:6px"><label class="check" style="margin:0"><input type="checkbox" id="dupFuzzy" checked><span>Near matches (case, spaces, one typo)</span></label><span class="spacer"></span><button class="btn ghost small" id="dupGo" type="button">Find</button></div>
+              <p class="legend-note" id="dupInfo"></p>
+            </div>
+            <div class="prep-card">
+              <h4>Missing data</h4>
+              <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost small" id="missMap" type="button">▦ Missing-data map &amp; MCAR test</button></div>
+              <div class="row" style="gap:6px;margin-top:8px;align-items:center"><span class="legend-note">Delete rows missing more than</span><input type="number" id="missPct" min="1" max="100" value="50" style="width:70px"><span class="legend-note">% of their cells</span><button class="btn ghost small" id="missRows" type="button">Delete</button></div>
+              <p class="legend-note" id="missRowInfo"></p>
+            </div>
+            <div class="prep-card">
+              <h4>Dates</h4>
+              <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
+                <div><label class="f">Column</label><select id="dtCol" style="width:auto"></select></div>
+                <div><label class="f">Written as</label><select id="dtOrder" style="width:auto"><option value="dmy">day/month/year</option><option value="mdy">month/day/year</option><option value="ymd">year-month-day</option></select></div>
+                <button class="btn ghost small" id="dtConvert" type="button" style="margin-bottom:6px" title="Excel date numbers and typed dates become yyyy-mm-dd">To dates</button>
+              </div>
+              <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:6px">
+                <div><label class="f">From</label><select id="dtFrom" style="width:auto"></select></div><div><label class="f">To</label><select id="dtTo" style="width:auto"></select></div>
+                <div><label class="f">In</label><select id="dtUnit" style="width:auto"><option value="days">days</option><option value="weeks">weeks</option><option value="months">months</option><option value="years">years (e.g. age)</option></select></div>
+                <button class="btn ghost small" id="dtDiff" type="button" style="margin-bottom:6px">New column</button>
+              </div>
+              <p class="legend-note" id="dtInfo">E.g. age from the date of birth and the visit date, or length of stay from admission and discharge.</p>
+            </div>
+            <div class="prep-card">
+              <h4>Anonymise</h4>
+              <div class="row" style="gap:8px;align-items:flex-end"><div style="flex:1"><label class="f">Columns with names, phones or file numbers</label><select id="anonCols" multiple size="4" style="width:100%"></select></div></div>
+              <div class="row" style="gap:8px;margin-top:6px"><select id="anonHow" style="width:auto"><option value="code">Replace with codes (P001, P002 …)</option><option value="delete">Delete the columns</option></select><span class="spacer"></span><button class="btn ghost small" id="anonGo" type="button">Anonymise</button></div>
+              <p class="legend-note" id="anonInfo">For sharing the data or the project file safely.</p>
+            </div>
+            <div class="prep-card">
+              <h4>Snapshots &amp; cleaning log</h4>
+              <div class="row" style="gap:6px"><input type="text" id="snapName" placeholder="e.g. after cleaning" style="flex:1"><button class="btn ghost small" id="snapSave" type="button">Save snapshot</button></div>
+              <div id="snapList" style="margin-top:6px"></div>
+              <div class="row" style="gap:6px;margin-top:6px"><button class="btn ghost small" id="logXlsx" type="button" title="Every change made to the data, for the methods or an appendix">⬇ Cleaning log</button><span class="legend-note" id="logInfo"></span></div>
             </div>
             <div class="prep-card wide">
               <h4>Data from another file</h4>
@@ -395,6 +451,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
                 <div id="mergeKeyBox" style="display:none"><label class="f">ID column</label><select id="mergeKey" style="width:auto"></select></div>
                 <div id="mergeSheetBox" style="display:none"><label class="f">From a sheet of this file</label><select id="mergeSheet" style="width:auto"></select></div>
                 <button class="btn ghost small" id="mergeSheetGo" type="button" style="margin-bottom:6px;display:none">Add from sheet</button>
+                <button class="btn ghost small" id="stackSheets" type="button" style="margin-bottom:6px;display:none" title="Every sheet of this file one under another (e.g. one sheet per centre), with a column naming the sheet">Stack all sheets</button>
                 <button class="btn ghost small" id="mergeBtn" type="button" style="margin-bottom:6px">Choose file…</button>
                 <input type="file" id="mergeFile" accept=".xlsx,.xls,.csv" hidden>
               </div>
@@ -424,6 +481,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
             <label class="check" style="margin:0"><input type="checkbox" id="gridStripes" checked><span>Striped rows</span></label>
             <label class="check" style="margin:0" title="Numeric values beyond 1.5 × IQR of their column"><input type="checkbox" id="gridOut"><span>Highlight outliers</span></label>
             <span class="spacer"></span>
+ <button class="btn ghost small" id="gridForm" type="button" title="Type or check the data one patient at a time">📝 Form</button>
             <button class="btn ghost small" id="gridCheck" type="button" title="Look for problems in the sheet">🩺 Check data</button>
             <button class="btn ghost small" id="gridFind" type="button" title="Find and replace values">🔍 Find &amp; replace</button>
         <button class="btn ghost small" id="gridRecode" type="button" title="Rename or merge the categories of a column (M and male → Male), or blank some of them">🏷 Recode values</button>
@@ -484,9 +542,10 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
             <button class="btn ghost small" id="gridRedo" type="button" title="Redo (Ctrl+Y)">↷ Redo</button>
             <button class="btn ghost small" id="gridRedetect" type="button" title="Detect variables again from the edited sheet">⟳ Re-detect variables</button>
             <button class="btn ghost small" id="gridSave" type="button">⬇ Edited Excel</button>
+            <button class="btn ghost small" id="gridCsv" type="button">⬇ CSV</button>
           </div>
           <div class="tbl-wrap" style="max-height:480px"><table class="t dgrid" id="preview"></table></div>
-          <div class="row" style="margin-top:6px"><span id="gridInfo" class="legend-note"></span><span class="spacer"></span>
+          <div class="row" style="margin-top:6px"><span id="gridNotes"></span><span id="gridInfo" class="legend-note"></span><span class="spacer"></span>
             <button class="btn ghost small" id="gridPrev" type="button">‹ Previous</button><button class="btn ghost small" id="gridNext" type="button">Next ›</button></div>
         </div>
       </div>
@@ -976,6 +1035,35 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <p class="legend-note" style="margin:0 0 8px">Single keys work when you are not typing in a box.</p>
     <div class="keys-grid" id="keysList"></div>
     <div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn primary" value="close">Close</button></div>
+  </form>
+</dialog>
+<dialog id="formDlg" class="app-dlg">
+  <form method="dialog">
+    <div class="row"><h3 style="margin:0">Patient <span id="fmPos"></span></h3><span class="spacer"></span><button type="button" class="btn ghost small" id="fmPrev">‹ Previous</button><button type="button" class="btn ghost small" id="fmNext">Next ›</button><button type="button" class="btn ghost small" id="fmNew">+ New patient</button></div>
+    <div class="fm-grid" id="fmFields"></div>
+    <div class="row" style="margin-top:10px"><span class="legend-note">Changes are saved when you move to another patient or close (Undo restores them).</span><span class="spacer"></span><button type="button" class="btn primary" id="fmClose">Save &amp; close</button></div>
+  </form>
+</dialog>
+<dialog id="mapDlg" class="app-dlg" style="width:min(980px,calc(100vw - 32px))">
+  <form method="dialog">
+    <h3>Missing-data map</h3>
+    <p class="legend-note" style="margin:0 0 6px">Each column of the sheet left to right, each patient top to bottom; red = missing. The bars below give the % missing per column.</p>
+    <div style="overflow:auto;max-height:60vh"><canvas id="mapCanvas"></canvas></div>
+    <p id="mcarInfo" style="margin:8px 0"></p>
+    <div class="row"><span class="spacer"></span><button class="btn primary" value="close">Close</button></div>
+  </form>
+</dialog>
+<dialog id="csvDlg" class="app-dlg">
+  <form method="dialog">
+    <h3>Open a CSV / text file</h3>
+    <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div><label class="f">Text encoding</label><select id="csvEnc" style="width:auto"><option value="utf-8">UTF-8 (most files)</option><option value="windows-1256">Arabic (Windows-1256)</option><option value="windows-1252">Western (Windows-1252)</option><option value="utf-16le">UTF-16</option><option value="iso-8859-1">ISO-8859-1</option></select></div>
+      <div><label class="f">Separator</label><select id="csvSep" style="width:auto"><option value="auto">Automatic</option><option value=",">Comma ,</option><option value=";">Semicolon ;</option><option value="	">Tab</option><option value="|">Bar |</option></select></div>
+      <div><label class="f">Decimal mark</label><select id="csvDec" style="width:auto"><option value="auto">Automatic</option><option value=".">Point (1,234.5)</option><option value=",">Comma (1.234,5)</option></select></div>
+    </div>
+    <div class="tbl-wrap" style="max-height:260px;margin-top:10px"><table class="t" id="csvPrev"></table></div>
+    <p class="legend-note" id="csvInfo"></p>
+    <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="csvCancel">Cancel</button> <button type="button" class="btn primary" id="csvGo">Load</button></div>
   </form>
 </dialog>
 <dialog id="pasteDlg" class="app-dlg">

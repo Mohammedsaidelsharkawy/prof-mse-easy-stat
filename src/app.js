@@ -126,12 +126,61 @@
     try {
       busy(true);
       const buf = await f.arrayBuffer();
-      state.messy = null; openWorkbook(XLSX.read(buf, { type: 'array' }), f.name);
+      state.messy = null; state.savMeta = null;
+      if (/\.z?sav$/i.test(f.name)) {
+        // SPSS: the data with its variable labels, value labels and missing values
+        const sv = await Sav.readAny(buf), wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sv.headers, ...sv.rows.map(r => sv.headers.map(h => r[h]))]), 'Data');
+        state.savMeta = sv; state.pendingCfg = null;
+        openWorkbook(wb, f.name);
+        toast(`SPSS file: ${sv.rows.length} cases, ${sv.headers.length} variables, ${Object.keys(sv.varLabels).length} variable labels and ${Object.keys(sv.valueLabels).length} value-label sets read`);
+        return;
+      }
+      if (/\.(csv|txt|tsv)$/i.test(f.name)) { openCsv(buf, f.name); return; }
+      openWorkbook(XLSX.read(buf, { type: 'array' }), f.name);
     } catch (err) { console.error(err); toast('Could not read this file: ' + err.message); }
     finally { busy(false); }
   }
+  /* ---------- CSV / text files: encoding, separator and decimal mark, with a preview ---------- */
+  let csvBuf = null, csvName = '';
+  function parseDelimited(text, sep, decMark) {
+    const lines = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+    if (sep === 'auto') { const first = lines.split('\n').slice(0, 5).join('\n'); sep = ['\t', ';', ',', '|'].map(s => [s, (first.match(new RegExp(s === '|' ? '\\|' : s, 'g')) || []).length]).sort((a, b) => b[1] - a[1])[0][0]; }
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < lines.length; i++) {
+      const ch = lines[i];
+      if (q) { if (ch === '"') { if (lines[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; continue; }
+      if (ch === '"' && cell === '') q = true;
+      else if (ch === sep) { row.push(cell); cell = ''; }
+      else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    const body = rows.filter(r => r.some(c => c.trim() !== ''));
+    if (decMark === 'auto') { const s = body.slice(1, 50).flat().join(' '); decMark = (s.match(/\d,\d{1,2}(?!\d)/g) || []).length > (s.match(/\d\.\d/g) || []).length && sep !== ',' ? ',' : '.'; }
+    const num = c => { const t = c.trim(); if (t === '') return null;
+      const n = decMark === ',' ? t.replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.') : t.replace(/,(?=\d{3}(\D|$))/g, '');
+      return /^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(n) ? Number(n) : t; };
+    return { sep, decMark, aoa: body.map((r, i) => i === 0 ? r.map(c => c.trim()) : r.map(num)) };
+  }
+  function csvPreview() {
+    let text; try { text = new TextDecoder($('#csvEnc').value).decode(csvBuf); } catch (e) { text = new TextDecoder().decode(csvBuf); }
+    const p = parseDelimited(text, $('#csvSep').value, $('#csvDec').value), a = p.aoa;
+    $('#csvPrev').innerHTML = a.length ? `<thead><tr>${a[0].map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${a.slice(1, 7).map(r => `<tr>${r.map(c => `<td>${esc(c ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>` : '';
+    $('#csvInfo').textContent = `${Math.max(0, a.length - 1)} rows × ${a[0] ? a[0].length : 0} columns · separator ${p.sep === '\t' ? 'tab' : `“${p.sep}”`} · decimal mark “${p.decMark}”`;
+    return a;
+  }
+  function openCsv(buf, name) {
+    csvBuf = buf; csvName = name;
+    const u = new Uint8Array(buf.slice(0, 2)); $('#csvEnc').value = u[0] === 0xFF && u[1] === 0xFE ? 'utf-16le' : 'utf-8';
+    try { new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (e) { if ($('#csvEnc').value === 'utf-8') $('#csvEnc').value = 'windows-1256'; }
+    $('#csvSep').value = 'auto'; $('#csvDec').value = 'auto'; csvPreview(); $('#csvDlg').showModal();
+  }
+  ['#csvEnc', '#csvSep', '#csvDec'].forEach(id => { $(id).onchange = csvPreview; });
+  $('#csvCancel').onclick = () => $('#csvDlg').close();
+  $('#csvGo').onclick = () => { const a = csvPreview(); $('#csvDlg').close(); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), 'Data'); state.pendingCfg = null; openWorkbook(wb, csvName); };
   function openWorkbook(wb, name) {
-    state.wb = wb; state.file = name; state.hdr = { row: 1, two: false, auto: true };
+    state.wb = wb; state.file = name; state.hdr = { row: 1, two: false, auto: true }; state.cleanLog = [{ time: new Date().toLocaleString(), what: `Opened ${name}` }]; state.snapshots = []; if (state.grid) { state.grid.cf = {}; state.grid.rowsOnly = null; }
     $('#fileName').textContent = name;
     $('#sheetSel').innerHTML = wb.SheetNames.map(s => `<option>${esc(s)}</option>`).join('');
     $('#sheetBox').style.display = '';
@@ -302,6 +351,7 @@
     const prevCfg = state.pendingCfg;
     state.cfg = detect(state.data);
     if (prevCfg) applySavedCfg(prevCfg);
+    if (state.savMeta) applySavMeta(state.cfg, state.savMeta);
     renderGrid();
     $('#to2').disabled = false;
     renderStepper(); renderPrep();
@@ -327,7 +377,13 @@
     const typeTag = h => g.types ? `<span class="ty" title="${kinds[h] === 'num' ? 'Numeric' : 'Text / categories'}">${kinds[h] === 'num' ? '123' : 'abc'}</span>` : '';
     $('#dims').textContent = `${rows.length} rows × ${headers.length} columns`;
     const q = g.q.trim().toLowerCase();
-    const idx = rows.map((_, i) => i).filter(i => (!q || headers.some(h => String(rows[i][h] ?? '').toLowerCase().includes(q))) && (!g.onlyMissing || headers.some(h => isMissing(rows[i][h]))));
+    // column filters of the column menus, and a set of rows (rule breaks, duplicates) to show alone
+    g.cf = g.cf || {}; Object.keys(g.cf).forEach(h => { if (!allHeaders.includes(h)) delete g.cf[h]; });
+    const cfPass = i => Object.entries(g.cf).every(([h, f]) => { const v = rows[i][h];
+      if (f.vals) return f.vals.includes(isMissing(v) ? '(blank)' : String(v).trim());
+      const n = Analysis.toNum(v); return isFinite(n) && (f.min === '' || f.min == null || n >= +f.min) && (f.max === '' || f.max == null || n <= +f.max); });
+    const only = g.rowsOnly ? new Set(g.rowsOnly.rows) : null;
+    const idx = rows.map((_, i) => i).filter(i => (!only || only.has(i)) && cfPass(i) && (!q || headers.some(h => String(rows[i][h] ?? '').toLowerCase().includes(q))) && (!g.onlyMissing || headers.some(h => isMissing(rows[i][h]))));
     const per = g.per === 'all' ? Math.max(1, idx.length) : +g.per, pages = Math.max(1, Math.ceil(idx.length / per));
     g.page = Math.min(g.page, pages - 1);
     const shown = idx.slice(g.page * per, g.page * per + per), cfg = state.cfg;
@@ -339,7 +395,7 @@
     const head = headers.map((h, ci) => g.edit
       ? `<th class="${cc(h, ci)}"><div class="gh"><input type="text" data-hname="${esc(h)}" value="${esc(h)}" title="Rename column">
           <span class="gh-btns"><button data-hmove="${ci},-1" title="Move left" type="button">◀</button><button data-hmove="${ci},1" title="Move right" type="button">▶</button><button data-hsort="${esc(h)}" title="Sort rows" type="button">⇅</button><button data-hdel="${esc(h)}" title="Delete column" type="button">✕</button></span></div>${role(h)}</th>`
-      : `<th data-hsort="${esc(h)}" class="sortable ${cc(h, ci)}" title="Click to sort the rows (Undo in edit mode restores the order)">${esc(h)}${typeTag(h)}${sortMark(h)} ${role(h)}</th>`).join('');
+      : `<th data-hsort="${esc(h)}" class="sortable ${cc(h, ci)}${g.cf[h] ? ' filtered' : ''}" title="Click to sort the rows (Undo in edit mode restores the order)"${g.widths && g.widths[h] ? ` style="min-width:${g.widths[h]}px;max-width:${g.widths[h]}px"` : ''}>${esc(h)}${typeTag(h)}${sortMark(h)} ${role(h)}<span class="cm" data-cmenu="${esc(h)}" title="Chart, statistics and filter of this column">${g.cf[h] ? '⏷' : '▾'}</span><span class="rsz" data-rsz="${esc(h)}"></span></th>`).join('');
     let summary = '';
     if (g.summary) summary = `<tr class="gsum"><td class="rn">Summary</td>${headers.map((h, ci) => {
       const info = columnInfo(rows, h), miss = rows.length - info.n, nums = rows.map(r => Analysis.toNum(r[h])).filter(isFinite);
@@ -349,6 +405,8 @@
       headers.map((h, ci) => `<td class="${cc(h, ci)}${g.hlMissing && isMissing(rows[i][h]) ? ' miss' : ''}${isOut(h, rows[i][h]) ? ' gout' : ''}" title="${esc(rows[i][h] ?? '')}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`).join('')}</tr>`).join('');
     $('#preview').innerHTML = `<thead><tr><th class="rn">#</th>${head}</tr></thead><tbody>${summary}${body || `<tr><td colspan="${headers.length + 1}" class="legend-note">No rows match.</td></tr>`}</tbody>`;
     const rn = tbl.querySelector('th.rn'); if (rn) tbl.style.setProperty('--rnw', rn.getBoundingClientRect().width + 'px');
+    const notes = [Object.keys(g.cf).length ? `<span class="flt-chip chip warn">${Object.keys(g.cf).length} column filter${Object.keys(g.cf).length > 1 ? 's' : ''} <a href="#" data-cfclear="1">clear</a></span>` : '', g.rowsOnly ? `<span class="flt-chip chip warn">${esc(g.rowsOnly.label)} <a href="#" data-roclear="1">show all</a></span>` : ''].join(' ');
+    $('#gridNotes').innerHTML = notes;
     $('#gridInfo').textContent = idx.length ? `Rows ${g.page * per + 1}–${Math.min(idx.length, g.page * per + per)} of ${idx.length}${idx.length < rows.length ? ` (filtered from ${rows.length})` : ''}` : '0 rows';
     $('#gridPrev').disabled = g.page === 0; $('#gridNext').disabled = g.page >= pages - 1;
     $('#gridEditBar').style.display = g.edit ? '' : 'none';
@@ -379,8 +437,11 @@
     const others = state.wb ? state.wb.SheetNames.filter(n => n !== state.sheet) : [];
     $('#mergeSheet').innerHTML = others.map(n => `<option>${esc(n)}</option>`).join('');
     $('#mergeSheetBox').style.display = $('#mergeSheetGo').style.display = others.length ? '' : 'none';
-    renderFilters();
+    $('#stackSheets').style.display = others.length ? '' : 'none';
+    renderFilters(); renderStep1Tools();
   }
+  const filterNote = (cfg, n, kept) => { const sm = cfg.sample && cfg.sample.on, c = (cfg.rowFilter || []).length;
+    return !c && !sm ? 'All patients are analysed.' : `${kept} of ${n} patients analysed${c ? ` (${c > 1 ? 'all the conditions' : 'the condition'})` : ''}${sm ? `${c ? ',' : ' —'} random sample of ${cfg.sample.n}, seed ${cfg.sample.seed}` : ''}`; };
   function renderFilters() {
     const cfg = state.cfg; if (!cfg) return;
     cfg.rowFilter = cfg.rowFilter || [];
@@ -393,7 +454,7 @@
       <datalist id="fltVals${i}">${columnInfo(state.data.rows, f.col).distinct.slice(0, 50).map(v => `<option value="${esc(v)}">`).join('')}</datalist>
       <button class="btn ghost small" data-fdel="${i}" type="button" title="Remove">✕</button></div>`).join('');
     const n = state.data.rows.length, kept = Analysis.filterRows(cfg, state.data.rows).length;
-    $('#filterInfo').textContent = cfg.rowFilter.length ? `${kept} of ${n} patients meet ${cfg.rowFilter.length > 1 ? 'all the conditions' : 'the condition'}` : 'All patients are analysed.';
+    $('#filterInfo').textContent = filterNote(cfg, n, kept);
   }
   $('#filterAdd').onclick = () => { const cfg = state.cfg; if (!cfg) return; cfg.rowFilter = cfg.rowFilter || [];
     cfg.rowFilter.push({ col: state.data.headers.find(h => h !== cfg.groupCol && !cfg.idCols.includes(h)) || state.data.headers[0], op: 'eq', val: '', on: true }); renderFilters(); };
@@ -408,7 +469,7 @@
   function afterFilter(redraw) {
     state.cfg.consort = null; state.result = null;
     if (redraw) renderFilters();
-    else { const n = state.data.rows.length, kept = Analysis.filterRows(state.cfg, state.data.rows).length; $('#filterInfo').textContent = `${kept} of ${n} patients meet ${state.cfg.rowFilter.length > 1 ? 'all the conditions' : 'the condition'}`; }
+    else { const n = state.data.rows.length, kept = Analysis.filterRows(state.cfg, state.data.rows).length; $('#filterInfo').textContent = filterNote(state.cfg, n, kept); }
     renderGrid();
   }
   // missing-value codes (999, NA, "."): blank the matching cells
@@ -434,6 +495,25 @@
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
       mergeSheet(wb.Sheets[wb.SheetNames[0]], f.name);
     } catch (err) { console.error(err); toast('Could not read the other file: ' + err.message); }
+  };
+  // every sheet one under another, matched by column name, with the sheet's name in a new first column
+  $('#stackSheets').onclick = () => {
+    if (!state.wb) return;
+    const col = 'Sheet', names = state.wb.SheetNames;
+    let added = 0;
+    editSheet(() => {
+      const { headers, rows } = state.data;
+      if (!headers.includes(col)) { headers.unshift(col); rows.forEach(r => { r[col] = state.sheet; }); }
+      names.filter(n => n !== state.sheet).forEach(n => {
+        const aoa = XLSX.utils.sheet_to_json(state.wb.Sheets[n], { header: 1, defval: null, raw: true, blankrows: false }); if (aoa.length < 2) return;
+        const oh = aoa[0].map((h, i) => h === null || h === '' ? `Column_${i + 1}` : String(h).trim());
+        oh.forEach(h => { if (!headers.includes(h)) { headers.push(h); rows.forEach(r => { r[h] = null; }); } });
+        aoa.slice(1).filter(r => r.some(v => !isMissing(v))).forEach(r => { const o = Object.fromEntries(headers.map(h => [h, null])); oh.forEach((h, i) => { o[h] = r[i] ?? null; }); o[col] = n; rows.push(o); added++; });
+      });
+      if (!state.cfg.variables.some(v => v.cols[0].col === col)) state.cfg.variables.push({ ...singleVariable(rows, col, 0, 'Demographic and baseline data'), id: 'sheet' + Date.now().toString(36), include: false });
+      refreshGroups();
+    });
+    renderPrep(); toast(`${added} rows from ${names.length - 1} other sheet${names.length > 2 ? 's' : ''} stacked, with their sheet name in “${col}”`);
   };
   $('#mergeSheetGo').onclick = () => { const n = $('#mergeSheet').value; if (state.wb && state.wb.Sheets[n]) mergeSheet(state.wb.Sheets[n], `sheet ${n}`); };
   function mergeSheet(ws, src) {
@@ -485,9 +565,11 @@
     return true;
   }
   // every change to the sheet goes through here: snapshot for undo, apply, keep the setup in step, redraw
-  function editSheet(fn) {
+  function editSheet(fn, what) {
     pushUndo();
+    const before = JSON.parse(state.undo[state.undo.length - 1]).data;
     fn();
+    logChange(what ? `${what} — ${describeChange(before, state.data)}` : describeChange(before, state.data));
     renderGrid(); renderStepper();
   }
   function refreshGroups() {
@@ -720,9 +802,14 @@
         const m = Stats.mean(nums), sd = Stats.sd(nums), ext = vals.filter((v, i) => sd > 0 && Math.abs((nums[i] - m) / sd) > 4);
         if (ext.length) out.push({ ico: '📍', txt: `<b>${esc(h)}</b> has extreme value(s) more than 4 SD from the mean: ${ext.slice(0, 6).map(v => esc(v)).join(', ')} — check for typing errors.`, q: String(ext[0]) });
       }
+      // yes/no written as Y/N, +/−, true/false or positive/negative
+      const yn = [...new Set(vals.map(v => String(v).trim().toLowerCase()))];
+      const ynCol = yn.length >= 2 && yn.every(v => YES_NO[v] !== undefined) && !yn.every(v => v === '0' || v === '1');
+      if (ynCol && !(yn.length === 2 && vals.every(v => /^(Yes|No)$/.test(String(v).trim()))))
+        out.push({ ico: '☑', txt: `<b>${esc(h)}</b> is yes/no written as ${yn.map(v => `“${esc(v)}”`).join(', ')} — write it as Yes / No.`, fix: { col: h, kind: 'yesno' } });
       // words and codes that mean missing
       const missWords = [...new Set(vals.filter(v => MISS_WORD.test(String(v).trim())).map(v => String(v).trim()))];
-      if (missWords.length) out.push({ ico: '∅', txt: `<b>${esc(h)}</b> uses ${missWords.map(v => `“${esc(v)}”`).join(', ')} for missing values (${vals.filter(v => MISS_WORD.test(String(v).trim())).length} cells) — blank cells are clearer.`, q: missWords[0], fix: { col: h, kind: 'missWords' } });
+      if (missWords.length && !ynCol) out.push({ ico: '∅', txt: `<b>${esc(h)}</b> uses ${missWords.map(v => `“${esc(v)}”`).join(', ')} for missing values (${vals.filter(v => MISS_WORD.test(String(v).trim())).length} cells) — blank cells are clearer.`, q: missWords[0], fix: { col: h, kind: 'missWords' } });
       if (numShare >= 0.8) {
         const ok = nums.filter(v => isFinite(v) && !MISS_CODES.includes(v)), lo = Math.min(...ok), hi = Math.max(...ok);
         const codes = [...new Set(nums.filter(v => MISS_CODES.includes(v) && ok.length >= 5 && (v > Math.max(3 * hi, hi + 50) || (v < 0 && lo >= 0) || (new Set(ok).size <= 5 && v >= 7 && v > hi))))];
@@ -738,6 +825,7 @@
   // "54 years", "82 kg", "12,5 mg/dL" → the number; null when the cell is not a number with a unit
   const unitNumber = v => { const m = String(v).trim().match(/^([-+]?\d+(?:[.,]\d+)?)\s*([a-zA-Zµμ%°/²³.]+[a-zA-Zµμ%°/²³. ]*)$/); return m ? Number(m[1].replace(',', '.')) : null; };
   const MISS_WORD = /^(na|n\/a|n\.a\.|nan|null|none|missing|not recorded|not done|unknown|-+|\.|\?|—)$/i;
+  const YES_NO = { y: 'Yes', yes: 'Yes', '+': 'Yes', true: 'Yes', positive: 'Yes', pos: 'Yes', present: 'Yes', '1': 'Yes', n: 'No', no: 'No', '-': 'No', '−': 'No', false: 'No', negative: 'No', neg: 'No', absent: 'No', '0': 'No' };
   const MISS_CODES = [9, 99, 999, 9999, 99999, -9, -99, -999, -9999, 888, 8888, -1];
   const RANGE_RULES = [{ re: /^age/i, lo: 0, hi: 120, what: 'years' }, { re: /bmi/i, lo: 10, hi: 80, what: 'kg/m²' }, { re: /(%|percent|pct|sat)/i, lo: 0, hi: 100, what: '%' },
     { re: /^(sbp|dbp|systolic|diastolic)/i, lo: 30, hi: 300, what: 'mmHg' }, { re: /(heart.?rate|^hr\b|pulse)/i, lo: 20, hi: 250, what: 'beats/min' }, { re: /^(vas|nrs)/i, lo: 0, hi: 10, what: 'on a 0–10 scale' },
@@ -753,6 +841,7 @@
     const rows = state.data.rows;
     if (f.kind === 'trim') rows.forEach(r => { if (typeof r[f.col] === 'string') r[f.col] = parseCell(r[f.col]); });
     if (f.kind === 'units') rows.forEach(r => { const v = r[f.col]; if (typeof v === 'string') { const n = unitNumber(v); r[f.col] = n !== null ? n : parseCell(v); } });
+    if (f.kind === 'yesno') rows.forEach(r => { if (!isMissing(r[f.col])) { const k = YES_NO[String(r[f.col]).trim().toLowerCase()]; if (k) r[f.col] = k; } });
     if (f.kind === 'missWords') rows.forEach(r => { if (!isMissing(r[f.col]) && MISS_WORD.test(String(r[f.col]).trim())) r[f.col] = null; });
     if (f.kind === 'missCodes') rows.forEach(r => { if (f.codes.includes(Analysis.toNum(r[f.col]))) r[f.col] = null; });
     if (f.kind === 'dedupe') { const seen = new Set(), h = state.data.headers; state.data.rows = rows.filter(r => { const k = JSON.stringify(h.map(x => isMissing(r[x]) ? null : String(r[x]).trim())); if (seen.has(k)) return false; seen.add(k); return true; }); }
@@ -791,6 +880,271 @@
     });
     renderRecode(); toast(`${n} cell${n === 1 ? '' : 's'} recoded in ${col}`);
   };
+
+  /* ---------- step 1, more tools: column menu, widths, rules, duplicates, missing data, dates, anonymising, snapshots, log, form ---------- */
+  // dates: Excel day numbers, yyyy-mm-dd, and d/m/y or m/d/y with / - . separators → yyyy-mm-dd
+  function parseDate(v, order = 'dmy') {
+    if (isMissing(v)) return null;
+    const iso = d => isNaN(d) ? null : d.toISOString().slice(0, 10);
+    if (typeof v === 'number') return v > 59 && v < 2958466 ? iso(new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5)) : null;
+    const t = String(v).trim(); let m;
+    if ((m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(t))) return iso(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])));
+    if ((m = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/.exec(t))) { let [a, b, y] = [+m[1], +m[2], +m[3]]; if (y < 100) y += y < 50 ? 2000 : 1900;
+      const [d, mo] = order === 'mdy' ? [b, a] : [a, b]; if (mo > 12 || d > 31) return null; return iso(new Date(Date.UTC(y, mo - 1, d))); }
+    if (/[a-z]/i.test(t) && /\d{4}/.test(t)) { const d = new Date(t + ' UTC'); return isNaN(d) ? null : iso(d); }
+    return null;
+  }
+  const dateShare = (h, order) => { const v = state.data.rows.map(r => r[h]).filter(x => !isMissing(x)); if (!v.length) return 0;
+    const named = /date|dob|birth|admi|discharge|visit|onset|death|surgery|operation|follow/i.test(h);
+    return v.filter(x => typeof x === 'number' ? named && x > 0 && x < 73051 : parseDate(x, order)).length / v.length; };
+  function renderStep1Tools() {
+    const h = state.data.headers, cfg = state.cfg, dates = h.filter(c => dateShare(c, $('#dtOrder').value) >= 0.6);
+    const opts = (list, sel) => list.map(c => `<option ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('');
+    $('#dtCol').innerHTML = opts(h, dates[0] || $('#dtCol').value);
+    $('#dtFrom').innerHTML = opts(dates.length ? dates : h, dates[0]); $('#dtTo').innerHTML = opts(dates.length ? dates : h, dates[1] || dates[0]);
+    const keep = id => [...$(id).selectedOptions].map(o => o.value);
+    const dsel = keep('#dupCols'), asel = keep('#anonCols');
+    $('#dupCols').innerHTML = h.map(c => `<option ${dsel.includes(c) || (!dsel.length && cfg && cfg.idCols.includes(c)) ? 'selected' : ''}>${esc(c)}</option>`).join('');
+    $('#anonCols').innerHTML = h.map(c => `<option ${asel.includes(c) || (!asel.length && /name|phone|mobile|tel|address|national|file.?no|mrn|ssn/i.test(c)) ? 'selected' : ''}>${esc(c)}</option>`).join('');
+    const sm = (cfg && cfg.sample) || {}; $('#sampleOn').checked = !!sm.on; $('#sampleN').value = sm.n || 30; $('#sampleSeed').value = sm.seed || 1;
+    renderRules(); renderSnaps();
+  }
+  // a menu per column: its chart and statistics, sorting, and a filter of the grid
+  let cmenu = null;
+  function closeCmenu() { if (cmenu) { cmenu.remove(); cmenu = null; } }
+  function openCmenu(h, anchor) {
+    closeCmenu();
+    const rows = state.data.rows, g = state.grid, info = columnInfo(rows, h), vals = rows.map(r => r[h]), miss = vals.filter(isMissing).length, o = state.cfg ? state.cfg.options : DEFAULT_OPTIONS;
+    let spec, stats;
+    if (info.numeric) {
+      const x = vals.map(Analysis.toNum).filter(isFinite), d = Stats.describe(x), f = v => Analysis.fmt(v, 2);
+      const k = Math.min(12, Math.max(4, Math.ceil(Math.sqrt(x.length)))), lo = d.min, w = (d.max - d.min) / k || 1, cnt = new Array(k).fill(0); x.forEach(v => cnt[Math.min(k - 1, Math.floor((v - lo) / w))]++);
+      spec = { type: 'bar', integer: true, legend: false, categories: cnt.map((_, i) => f(lo + i * w)), yLabel: 'Patients', series: [{ name: h, values: cnt }] };
+      stats = `n ${x.length} · missing ${miss}<br>mean ${f(d.mean)} ± ${f(d.sd)} · median ${f(d.median)} (${f(d.q1)}–${f(d.q3)})<br>range ${f(d.min)} to ${f(d.max)}`;
+    } else {
+      const c = {}; vals.forEach(v => { const k = isMissing(v) ? '(blank)' : String(v).trim(); c[k] = (c[k] || 0) + 1; });
+      const top = Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      spec = { type: 'hbar', legend: false, categories: top.map(t => t[0]), yLabel: 'Patients', series: [{ name: h, values: top.map(t => t[1]) }] };
+      stats = `${Object.keys(c).length} different values · missing ${miss}`;
+    }
+    let img = ''; try { img = Charts.draw(spec, chartPalette(o), { ...chartStyle(o), res: 1, aspect: 'standard', legend: 'none' }).toDataURL('image/png'); } catch (e) { /* no chart */ }
+    const f = g.cf[h] || {}, distinct = [...new Set(vals.map(v => isMissing(v) ? '(blank)' : String(v).trim()))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const filt = info.numeric ? `<div class="row" style="gap:6px"><input type="number" id="cmMin" placeholder="from" value="${esc(f.min ?? '')}" style="width:90px"><input type="number" id="cmMax" placeholder="to" value="${esc(f.max ?? '')}" style="width:90px"></div>`
+      : distinct.length <= 60 ? `<div class="vals">${distinct.map(v => `<label class="check" style="margin:2px 0"><input type="checkbox" data-cmv="${esc(v)}" ${!f.vals || f.vals.includes(v) ? 'checked' : ''}><span>${esc(v)}</span></label>`).join('')}</div>` : '<p class="legend-note">Too many values to list — use Search.</p>';
+    cmenu = document.createElement('div'); cmenu.className = 'colmenu';
+    cmenu.innerHTML = `<div class="row"><b style="flex:1">${esc(h)}</b><button class="btn ghost small" type="button" data-cmx="1">✕</button></div>${img ? `<img src="${img}" alt="">` : ''}<div class="legend-note" style="margin:4px 0">${stats}</div>
+      <div class="row" style="gap:6px"><button class="btn ghost small" type="button" data-cmsort="1">Sort A→Z / 1→9</button><button class="btn ghost small" type="button" data-cmsort="-1">Z→A / 9→1</button></div>
+      <label class="f" style="margin-top:6px">Show only rows with</label>${filt}
+      <div class="row" style="gap:6px"><button class="btn primary small" type="button" data-cmapply="1">Filter</button><button class="btn ghost small" type="button" data-cmclear="1">Clear filter</button></div>`;
+    document.body.appendChild(cmenu);
+    const r = anchor.getBoundingClientRect(); cmenu.style.left = Math.min(window.scrollX + r.left, window.scrollX + document.documentElement.clientWidth - 316) + 'px'; cmenu.style.top = (window.scrollY + r.bottom + 4) + 'px';
+    cmenu.onclick = e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.cmx) return closeCmenu();
+      if (b.dataset.cmsort) { closeCmenu(); g.sort = { col: h, dir: +b.dataset.cmsort }; editSheet(() => { const dir = +b.dataset.cmsort; state.data.rows.sort((a, c) => { const x = a[h], y = c[h]; if (isMissing(x)) return 1; if (isMissing(y)) return -1; const nx = Analysis.toNum(x), ny = Analysis.toNum(y); return dir * (isFinite(nx) && isFinite(ny) ? nx - ny : String(x).localeCompare(String(y))); }); }); return; }
+      if (b.dataset.cmclear) delete g.cf[h];
+      if (b.dataset.cmapply) {
+        if (info.numeric) { const mn = $('#cmMin').value, mx = $('#cmMax').value; if (mn === '' && mx === '') delete g.cf[h]; else g.cf[h] = { min: mn, max: mx }; }
+        else { const on = [...cmenu.querySelectorAll('[data-cmv]')].filter(x => x.checked).map(x => x.dataset.cmv); if (on.length === distinct.length) delete g.cf[h]; else g.cf[h] = { vals: on }; }
+      }
+      closeCmenu(); g.page = 0; renderGrid();
+    };
+  }
+  document.addEventListener('click', e => { if (cmenu && !cmenu.contains(e.target) && !e.target.closest('[data-cmenu]')) closeCmenu(); });
+  $('#preview').addEventListener('click', e => {
+    const m = e.target.closest('[data-cmenu]'); if (m) { e.stopPropagation(); openCmenu(m.dataset.cmenu, m); return; }
+    if (e.target.closest('[data-rsz]')) e.stopPropagation();
+  }, true);
+  // column widths: drag the right edge of a heading
+  $('#preview').addEventListener('mousedown', e => {
+    const z = e.target.closest('[data-rsz]'); if (!z) return; e.preventDefault(); e.stopPropagation();
+    const th = z.closest('th'), h = z.dataset.rsz, x0 = e.clientX, w0 = th.getBoundingClientRect().width, g = state.grid; g.widths = g.widths || {};
+    const mv = ev => { const w = Math.max(50, Math.round(w0 + ev.clientX - x0)); g.widths[h] = w; th.style.minWidth = th.style.maxWidth = w + 'px'; };
+    const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+  });
+  $('#gridNotes').addEventListener('click', e => { const a = e.target.closest('a'); if (!a) return; e.preventDefault(); if (a.dataset.cfclear) state.grid.cf = {}; if (a.dataset.roclear) state.grid.rowsOnly = null; state.grid.page = 0; renderGrid(); });
+  const showRows = (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); $('#preview').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  // block paste in edit mode (cells copied from Excel fill to the right and down) and Ctrl+D (the value of the cell above)
+  $('#preview').addEventListener('paste', e => {
+    const td = e.target.closest('[data-cell]'); if (!td) return;
+    const t = (e.clipboardData || window.clipboardData).getData('text'); if (!/[\t\n]/.test(t.trim())) return;
+    e.preventDefault();
+    const lines = t.replace(/\r/g, '').replace(/\n$/, '').split('\n').map(l => l.split('\t')), heads = state.data.headers.filter(h => !state.grid.hidden.includes(h));
+    const r0 = +td.dataset.cell, c0 = heads.indexOf(td.dataset.col); let n = 0;
+    editSheet(() => { lines.forEach((l, i) => { const row = state.data.rows[r0 + i]; if (!row) return; l.forEach((v, j) => { const h = heads[c0 + j]; if (h) { row[h] = parseCell(v); n++; } }); }); });
+    toast(`${n} cells pasted`);
+  });
+  $('#preview').addEventListener('keydown', e => {
+    const td = e.target.closest('[data-cell]'); if (!td || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'd') return;
+    e.preventDefault(); const i = +td.dataset.cell, h = td.dataset.col; if (i < 1) return;
+    editSheet(() => { state.data.rows[i][h] = state.data.rows[i - 1][h]; });
+  });
+  /* rules: column vs column or number (or between two numbers); dates compare as dates */
+  const RULE_OPS = { lt: '<', le: '≤', gt: '>', ge: '≥', eq: '=', ne: '≠', between: 'between' };
+  // a date column (typed dates or Excel day numbers) compares as days; any other column as numbers
+  const dateCols = new Map();
+  function ruleValue(r, col) {
+    const v = r[col]; if (isMissing(v)) return NaN;
+    if (!dateCols.has(col)) dateCols.set(col, dateShare(col) >= 0.6);
+    if (dateCols.get(col)) { const d = parseDate(v); return d ? Date.parse(d) / 864e5 : NaN; }
+    return Analysis.toNum(v);
+  }
+  function ruleBreaks(rule) {
+    const rows = state.data.rows, out = []; dateCols.clear();
+    rows.forEach((r, i) => {
+      const a = ruleValue(r, rule.a); if (!isFinite(a)) return;
+      if (rule.op === 'between') { if (a < +rule.lo || a > +rule.hi) out.push(i); return; }
+      const b = rule.bCol ? ruleValue(r, rule.bCol) : +rule.val; if (!isFinite(b)) return;
+      const ok = { lt: a < b, le: a <= b, gt: a > b, ge: a >= b, eq: a === b, ne: a !== b }[rule.op];
+      if (!ok) out.push(i);
+    });
+    return out;
+  }
+  const ruleText = r => r.op === 'between' ? `${r.a} between ${r.lo} and ${r.hi}` : `${r.a} ${RULE_OPS[r.op]} ${r.bCol || r.val}`;
+  function renderRules() {
+    const cfg = state.cfg; if (!cfg) return; cfg.rules = cfg.rules || [];
+    const h = state.data.headers, sel = (list, v, attr) => `<select ${attr} style="width:auto">${list.map(c => `<option ${c === v ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
+    $('#ruleList').innerHTML = cfg.rules.map((r, i) => `<div class="flt" data-ri="${i}">${sel(h, r.a, 'data-rf="a"')}<select data-rf="op" style="width:auto">${Object.entries(RULE_OPS).map(([k, t]) => `<option value="${k}" ${k === r.op ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      ${r.op === 'between' ? `<input type="number" data-rf="lo" value="${esc(r.lo ?? '')}" style="width:80px"> and <input type="number" data-rf="hi" value="${esc(r.hi ?? '')}" style="width:80px">`
+        : `<select data-rf="bCol" style="width:auto"><option value="">a number…</option>${h.map(c => `<option ${c === r.bCol ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>${r.bCol ? '' : `<input type="number" data-rf="val" value="${esc(r.val ?? '')}" style="width:90px">`}`}
+      <span class="legend-note">${(() => { const n = ruleBreaks(r).length; return n ? `<a href="#" data-rshow="${i}">${n} row${n > 1 ? 's' : ''} break it</a>` : '✓ no row breaks it'; })()}</span><button class="btn ghost small" data-rdel2="${i}" type="button">✕</button></div>`).join('');
+    $('#ruleInfo').textContent = cfg.rules.length ? '' : 'No rules yet.';
+  }
+  $('#ruleAdd').onclick = () => { const h = state.data.headers, n = h.find(c => columnInfo(state.data.rows, c).numeric) || h[0]; state.cfg.rules = state.cfg.rules || []; state.cfg.rules.push({ a: n, op: 'between', lo: 0, hi: 100 }); renderRules(); };
+  document.querySelectorAll('[data-rulepreset]').forEach(b => { b.onclick = () => {
+    const h = state.data.headers, f = re => h.find(c => re.test(c)), cfg = state.cfg; cfg.rules = cfg.rules || []; const k = b.dataset.rulepreset;
+    if (k === 'bp') { const d = f(/^(dbp|diastolic)/i), s = f(/^(sbp|systolic)/i); if (d && s) cfg.rules.push({ a: d, op: 'lt', bCol: s }); else return toast('No SBP / DBP columns found'); }
+    if (k === 'dates') { const a = f(/admi/i), d = f(/discharge/i); if (a && d) cfg.rules.push({ a: d, op: 'ge', bCol: a }); else return toast('No admission / discharge date columns found'); }
+    if (k === 'age') { const a = f(/^age$/i) || f(/^age[_ (]/i); if (a) cfg.rules.push({ a, op: 'between', lo: 0, hi: 120 }); else return toast('No age column found'); }
+    renderRules(); }; });
+  $('#ruleList').addEventListener('change', e => { const el = e.target.closest('[data-rf]'); if (!el) return; const r = state.cfg.rules[+el.closest('[data-ri]').dataset.ri]; r[el.dataset.rf] = el.value; if (el.dataset.rf === 'bCol' && el.value) delete r.val; renderRules(); });
+  $('#ruleList').addEventListener('click', e => {
+    const d = e.target.closest('[data-rdel2]'); if (d) { state.cfg.rules.splice(+d.dataset.rdel2, 1); renderRules(); return; }
+    const s = e.target.closest('[data-rshow]'); if (s) { e.preventDefault(); const r = state.cfg.rules[+s.dataset.rshow]; showRows(ruleBreaks(r), `Rows breaking: ${ruleText(r)}`); }
+  });
+  // duplicates by chosen columns; near matches ignore case and spaces and allow one typing error in text
+  const lev1 = (a, b) => { if (Math.abs(a.length - b.length) > 1) return false; let i = 0, j = 0, e = 0; while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue; } if (++e > 1) return false; if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; } } return e + (a.length - i) + (b.length - j) <= 1; };
+  $('#dupGo').onclick = () => {
+    const cols = [...$('#dupCols').selectedOptions].map(o => o.value); if (!cols.length) { $('#dupInfo').textContent = 'Choose one or more columns.'; return; }
+    const fuzzy = $('#dupFuzzy').checked, norm = v => isMissing(v) ? '' : String(v).trim().toLowerCase().replace(/\s+/g, ' ');
+    const keys = state.data.rows.map(r => cols.map(c => norm(r[c])));
+    const hit = new Set(), groups = [];
+    for (let i = 0; i < keys.length; i++) { if (keys[i].every(k => k === '')) continue; const grp = [i];
+      // a near match may differ by one letter, never by its numbers (Patient 1 and Patient 2 are different people)
+      const digits = t => t.replace(/\D/g, '');
+      for (let j = i + 1; j < keys.length; j++) if (!hit.has(j) && keys[i].every((k, c) => k === keys[j][c] || (fuzzy && k.length >= 4 && /[a-z\u0600-\u06FF]/.test(k) && digits(k) === digits(keys[j][c]) && lev1(k, keys[j][c])))) grp.push(j);
+      if (grp.length > 1 && !hit.has(i)) { grp.forEach(x => hit.add(x)); groups.push(grp); } }
+    $('#dupInfo').innerHTML = groups.length ? `${groups.length} group${groups.length > 1 ? 's' : ''} of possible duplicates (${hit.size} rows): ${groups.slice(0, 4).map(g => 'rows ' + g.map(x => x + 1).join(' & ')).join('; ')}${groups.length > 4 ? ' …' : ''} — <a href="#" id="dupShow">show them</a>` : '✓ No duplicates on these columns.';
+    const a = $('#dupShow'); if (a) a.onclick = ev => { ev.preventDefault(); showRows([...hit].sort((x, y) => x - y), `Possible duplicates on ${cols.join(' + ')}`); };
+  };
+  // missing data: a map of the sheet, Little's MCAR test on the numeric columns, and rows with too many blanks
+  $('#missMap').onclick = () => {
+    const { headers, rows } = state.data, cv = $('#mapCanvas'), cw = Math.max(6, Math.min(26, Math.floor(900 / headers.length))), rh = Math.max(1, Math.min(6, Math.floor(420 / rows.length))), top = 110, barH = 60;
+    cv.width = headers.length * cw + 20; cv.height = top + rows.length * rh + barH + 30;
+    const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height);
+    x.font = '11px sans-serif'; x.fillStyle = '#333';
+    headers.forEach((h, j) => { x.save(); x.translate(10 + j * cw + cw / 2 + 4, top - 6); x.rotate(-Math.PI / 3); x.fillText(h.length > 18 ? h.slice(0, 17) + '…' : h, 0, 0); x.restore(); });
+    rows.forEach((r, i) => headers.forEach((h, j) => { x.fillStyle = isMissing(r[h]) ? '#C0392B' : '#E8E4EE'; x.fillRect(10 + j * cw, top + i * rh, cw - 1, rh); }));
+    const y0 = top + rows.length * rh + 10;
+    headers.forEach((h, j) => { const p = rows.filter(r => isMissing(r[h])).length / rows.length; x.fillStyle = '#7B2FBE'; x.fillRect(10 + j * cw, y0 + barH * (1 - p), cw - 1, barH * p); if (p > 0.0001 && cw >= 14) { x.fillStyle = '#333'; x.fillText(Math.round(100 * p) + '', 10 + j * cw, y0 + barH + 12); } });
+    const num = headers.filter(h => columnInfo(rows, h).numeric && !(state.cfg && state.cfg.idCols.includes(h)) && rows.some(r => !isMissing(r[h])));
+    const M = rows.map(r => num.map(h => Analysis.toNum(r[h])));
+    const anyMiss = M.some(r => r.some(v => !isFinite(v)));
+    let txt;
+    if (num.length < 2) txt = 'Little’s MCAR test needs at least two numeric columns.';
+    else if (!anyMiss) txt = 'No missing values in the numeric columns — nothing to test.';
+    else { const t = Stats.littleMCAR(M); txt = t ? `<b>Little’s MCAR test</b> (${num.length} numeric columns, ${t.patterns} missing-data patterns): χ²(${t.df}) = ${Analysis.fmt(t.chi2, 2)}, P ${Analysis.fmtP(t.p, 0.05).replace(/\*/g, '').replace(/^(?=\d)/, '= ')}. ${t.p > 0.05 ? 'The missing values may be missing completely at random (MCAR), so analysing the available data is reasonable.' : 'The values are not missing completely at random: who is missing depends on other measurements — say so in the limitations, and consider multiple imputation.'}` : 'The test could not be computed (too few complete data).'; }
+    $('#mcarInfo').innerHTML = txt; $('#mapDlg').showModal();
+  };
+  $('#missRows').onclick = () => {
+    const pct = +$('#missPct').value || 50, { headers, rows } = state.data, bad = rows.map((r, i) => [i, headers.filter(h => isMissing(r[h])).length / headers.length]).filter(x => x[1] * 100 > pct).map(x => x[0]);
+    if (!bad.length) { $('#missRowInfo').textContent = `No row misses more than ${pct}% of its cells.`; return; }
+    if (!confirm(`Delete ${bad.length} row${bad.length > 1 ? 's' : ''} missing more than ${pct}% of their cells?`)) return;
+    const del = new Set(bad); editSheet(() => { state.data.rows = rows.filter((_, i) => !del.has(i)); refreshGroups(); }, `Deleted ${bad.length} rows missing more than ${pct}% of their cells`);
+    $('#missRowInfo').textContent = `${bad.length} row${bad.length > 1 ? 's' : ''} deleted.`; renderPrep();
+  };
+  // dates
+  $('#dtOrder').onchange = renderStep1Tools;
+  $('#dtConvert').onclick = () => {
+    const col = $('#dtCol').value, order = $('#dtOrder').value; let n = 0, bad = 0;
+    editSheet(() => { state.data.rows.forEach(r => { if (isMissing(r[col])) return; const d = parseDate(r[col], order); if (d) { if (r[col] !== d) n++; r[col] = d; } else bad++; }); }, `Converted ${col} to dates`);
+    $('#dtInfo').textContent = `${n} value${n === 1 ? '' : 's'} of ${col} written as yyyy-mm-dd${bad ? `; ${bad} could not be read as dates` : ''}.`; renderStep1Tools();
+  };
+  $('#dtDiff').onclick = () => {
+    const a = $('#dtFrom').value, b = $('#dtTo').value, u = $('#dtUnit').value, order = $('#dtOrder').value; if (a === b) { $('#dtInfo').textContent = 'Choose two different columns.'; return; }
+    const div = { days: 1, weeks: 7, months: 30.4375, years: 365.25 }[u], name0 = u === 'years' && /birth|dob/i.test(a) ? 'Age_years' : `${b}_minus_${a}_${u}`;
+    let name = name0, k = 2; while (state.data.headers.includes(name)) name = `${name0}_${k++}`;
+    let n = 0;
+    editSheet(() => { const { headers, rows } = state.data; headers.splice(headers.indexOf(b) + 1, 0, name);
+      rows.forEach(r => { const x = parseDate(r[a], order), y = parseDate(r[b], order); r[name] = x && y ? +((Date.parse(y) - Date.parse(x)) / 864e5 / div).toFixed(u === 'days' ? 0 : 1) : null; if (r[name] !== null) n++; });
+      state.cfg.variables.push({ ...singleVariable(rows, name, headers.indexOf(name), 'Demographic and baseline data'), id: 'dt' + Date.now().toString(36) }); }, `New column ${name} (${u} from ${a} to ${b})`);
+    $('#dtInfo').textContent = `${name} added: ${n} of ${state.data.rows.length} patients have both dates.`; renderStep1Tools();
+  };
+  // anonymise
+  $('#anonGo').onclick = () => {
+    const cols = [...$('#anonCols').selectedOptions].map(o => o.value).filter(c => c !== state.cfg.groupCol), how = $('#anonHow').value;
+    if (!cols.length) { $('#anonInfo').textContent = 'Choose the columns (not the group column).'; return; }
+    if (!confirm(`${how === 'delete' ? 'Delete' : 'Replace with codes'}: ${cols.join(', ')}?`)) return;
+    editSheet(() => {
+      const { rows } = state.data;
+      if (how === 'delete') { state.data.headers = state.data.headers.filter(h => !cols.includes(h)); rows.forEach(r => cols.forEach(c => delete r[c])); state.cfg.variables = state.cfg.variables.filter(v => !v.cols.some(c => cols.includes(c.col))); state.cfg.idCols = state.cfg.idCols.filter(c => !cols.includes(c)); }
+      else cols.forEach(c => { const map = new Map(); const pad = String(rows.length).length; rows.forEach(r => { if (isMissing(r[c])) return; const k = String(r[c]).trim(); if (!map.has(k)) map.set(k, 'P' + String(map.size + 1).padStart(Math.max(3, pad), '0')); r[c] = map.get(k); }); });
+    }, `Anonymised (${how === 'delete' ? 'deleted' : 'coded'}): ${cols.join(', ')}`);
+    $('#anonInfo').textContent = `${cols.length} column${cols.length > 1 ? 's' : ''} ${how === 'delete' ? 'deleted' : 'replaced with codes'}.`; renderPrep();
+  };
+  // snapshots of the data and setup, kept with the project
+  function renderSnaps() {
+    const s = state.snapshots || [];
+    $('#snapList').innerHTML = s.map((x, i) => `<div class="row" style="gap:6px"><span style="flex:1">${esc(x.name)} <span class="legend-note">${esc(x.time)} · ${x.data.rows.length} rows</span></span><button class="btn ghost small" data-snaprest="${i}" type="button">Restore</button><button class="btn ghost small" data-snapdel="${i}" type="button">✕</button></div>`).join('') || '<span class="legend-note">No snapshots yet.</span>';
+    $('#logInfo').textContent = `${(state.cleanLog || []).length} change${(state.cleanLog || []).length === 1 ? '' : 's'} logged`;
+  }
+  $('#snapSave').onclick = () => { state.snapshots = state.snapshots || []; if (state.snapshots.length >= 8) state.snapshots.shift();
+    state.snapshots.push({ name: $('#snapName').value.trim() || `Snapshot ${state.snapshots.length + 1}`, time: new Date().toLocaleString(), data: JSON.parse(JSON.stringify(state.data)), cfg: JSON.parse(JSON.stringify(state.cfg)) });
+    $('#snapName').value = ''; renderSnaps(); toast('Snapshot saved'); };
+  $('#snapList').addEventListener('click', e => {
+    const r = e.target.closest('[data-snaprest]'), d = e.target.closest('[data-snapdel]');
+    if (d) { state.snapshots.splice(+d.dataset.snapdel, 1); renderSnaps(); }
+    if (r) { const s = state.snapshots[+r.dataset.snaprest]; if (!confirm(`Restore “${s.name}”? The current data are kept in Undo.`)) return; pushUndo(); state.data = JSON.parse(JSON.stringify(s.data)); state.cfg = JSON.parse(JSON.stringify(s.cfg)); state.result = null; logChange(`Restored snapshot “${s.name}”`); renderGrid(); renderPrep(); renderStepper(); toast(`Snapshot “${s.name}” restored`); }
+  });
+  // cleaning log: every change to the data, with what changed
+  function logChange(what) { (state.cleanLog = state.cleanLog || []).push({ time: new Date().toLocaleString(), what }); }
+  function describeChange(before, after) {
+    const hb = before.headers, ha = after.headers, add = ha.filter(h => !hb.includes(h)), rem = hb.filter(h => !ha.includes(h)), out = [];
+    if (add.length) out.push(`added ${add.join(', ')}`); if (rem.length) out.push(`removed ${rem.join(', ')}`);
+    if (after.rows.length !== before.rows.length) out.push(`${after.rows.length > before.rows.length ? 'added' : 'removed'} ${Math.abs(after.rows.length - before.rows.length)} rows`);
+    else { let n = 0; const per = {}; after.rows.forEach((r, i) => ha.forEach(h => { if (hb.includes(h) && String(before.rows[i][h] ?? '') !== String(r[h] ?? '')) { n++; per[h] = (per[h] || 0) + 1; } }));
+      if (n) out.push(`changed ${n} cell${n > 1 ? 's' : ''} (${Object.entries(per).slice(0, 5).map(([h, k]) => `${h}: ${k}`).join(', ')})`); }
+    return out.join('; ') || 'no change to the data';
+  }
+  $('#logXlsx').onclick = () => {
+    const log = state.cleanLog || []; if (!log.length) { toast('No change logged yet'); return; }
+    const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet([['#', 'Time', 'Change'], ...log.map((l, i) => [i + 1, l.time, l.what])]); ws['!cols'] = [{ wch: 5 }, { wch: 22 }, { wch: 110 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Cleaning log'); XLSX.writeFile(wb, `${baseName()} - Cleaning log.xlsx`);
+  };
+  // CSV of the current sheet (UTF-8 with a BOM, so Excel shows Arabic and accents)
+  $('#gridCsv').onclick = () => { const ws = XLSX.utils.json_to_sheet(state.data.rows, { header: state.data.headers }), csv = XLSX.utils.sheet_to_csv(ws);
+    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); saveUrl(url, `${baseName()} - edited.csv`); setTimeout(() => URL.revokeObjectURL(url), 5000); };
+  // a form: one patient per screen
+  let fmRow = 0;
+  function fmRender() {
+    const { headers, rows } = state.data; fmRow = Math.max(0, Math.min(rows.length - 1, fmRow));
+    $('#fmPos').textContent = `${fmRow + 1} of ${rows.length}`;
+    $('#fmFields').innerHTML = headers.map(h => `<div><label>${esc(h)}</label><input type="text" data-fm="${esc(h)}" value="${esc(rows[fmRow][h] ?? '')}"></div>`).join('');
+  }
+  function fmSave() {
+    const row = state.data.rows[fmRow]; if (!row) return; const ch = [];
+    document.querySelectorAll('#fmFields [data-fm]').forEach(el => { const v = parseCell(el.value); if (String(row[el.dataset.fm] ?? '') !== String(v ?? '')) ch.push([el.dataset.fm, v]); });
+    if (ch.length) editSheet(() => { ch.forEach(([h, v]) => { row[h] = v; }); if (ch.some(([h]) => h === state.cfg.groupCol)) refreshGroups(); }, `Form: patient ${fmRow + 1}, ${ch.map(c => c[0]).join(', ')}`);
+  }
+  $('#gridForm').onclick = () => { fmRow = state.grid.page * (state.grid.per === 'all' ? 0 : +state.grid.per); fmRender(); $('#formDlg').showModal(); };
+  $('#fmPrev').onclick = () => { fmSave(); fmRow--; fmRender(); };
+  $('#fmNext').onclick = () => { fmSave(); fmRow++; fmRender(); };
+  $('#fmNew').onclick = () => { fmSave(); editSheet(() => { state.data.rows.push(Object.fromEntries(state.data.headers.map(h => [h, null]))); }, 'Form: new patient'); fmRow = state.data.rows.length - 1; fmRender(); $('#fmFields input').focus(); };
+  $('#fmClose').onclick = () => { fmSave(); $('#formDlg').close(); };
+  // random sample
+  const readSample = () => { state.cfg.sample = { on: $('#sampleOn').checked, n: +$('#sampleN').value || 30, seed: +$('#sampleSeed').value || 1 }; state.result = null; state.cfg.consort = null; renderFilters(); renderGrid(); };
+  ['#sampleOn', '#sampleN', '#sampleSeed'].forEach(id => { $(id).onchange = readSample; });
   /* ---------- defaults for one step: every option whose control is on that step ---------- */
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-reset]'); if (!b || !state.cfg) return;
@@ -999,6 +1353,23 @@
     cfg.variables = fresh.variables; cfg.tpOrder = fresh.tpOrder; cfg.tpLabels = { ...fresh.tpLabels, ...Object.fromEntries(Object.entries(cfg.tpLabels || {}).filter(([k]) => fresh.tpOrder.includes(k))) };
     cfg.idCols = cfg.idCols.filter(h => state.data.headers.includes(h)); if (!cfg.idCols.length) cfg.idCols = fresh.idCols;
     return fresh.variables.filter(v => v.kind === 'repeated').length - before;
+  }
+  // SPSS labels: variable labels become report labels; value labels become value labels (codes analysed as categories) and group names
+  function applySavMeta(cfg, sv) {
+    const join = m => Object.entries(m).map(([k, v]) => `${k}=${v}`).join(', ');
+    cfg.variables.forEach(v => {
+      if (v.kind !== 'single') return;
+      const col = v.cols[0].col, vl = sv.valueLabels[col];
+      if (sv.varLabels[col]) v.label = sv.varLabels[col];
+      if (vl && Object.keys(vl).length) {
+        const present = columnInfo(state.data.rows, col).distinct;
+        // a numeric column whose values are all labelled codes is a category
+        if (present.every(x => x in vl)) { v.type = 'categorical'; v.levels = Object.keys(vl).filter(k => present.includes(k)); }
+        if (v.type === 'categorical') v.valueLabels = join(vl);
+      }
+    });
+    const gl = sv.valueLabels[cfg.groupCol];
+    if (gl) cfg.groupOrder.forEach(g => { if (gl[g]) cfg.groupLabels[g] = gl[g]; });
   }
   // a single (one-column) variable with the detected type and default levels
   function singleVariable(rows, h, pos, table, inf = columnInfo(rows, h)) {
@@ -2891,7 +3262,7 @@
     if (!state.data) { toast('Nothing to save yet — load an Excel file or an example'); return; }
     readUiIntoCfg();
     const proj = { app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step,
-      data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null };
+      data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], snapshots: state.snapshots || [] };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(proj)], { type: 'application/json' }));
     a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - project.easystat.json';
@@ -2912,7 +3283,7 @@
       const cfg = j.cfg;
       cfg.options = { ...defaultOptions(), ...cfg.options };
       cfg.tpInclude = cfg.tpInclude || {}; cfg.advanced = cfg.advanced || []; cfg.exportExclude = cfg.exportExclude || {}; cfg.report = { ...DEFAULT_REPORT, ...(cfg.report || {}) };
-      state.data = j.data; state.cfg = cfg; state.file = j.file || fname; state.messy = null; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
+      state.data = j.data; state.cfg = cfg; state.file = j.file || fname; state.messy = null; state.cleanLog = j.cleanLog || []; state.snapshots = j.snapshots || []; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
       state.undo = []; state.redo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
       $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option>${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
       $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value;
