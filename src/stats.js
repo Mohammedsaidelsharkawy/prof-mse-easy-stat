@@ -746,7 +746,7 @@ const Stats = (() => {
     const correct = mu.filter((m, i) => (m >= 0.5) === (y[i] === 1)).length;
     // separation shows as huge coefficients that never settle
     const unstable = !converged || terms.slice(1).some(t => Math.abs(t.B) > 15 || !isFinite(t.se));
-    return { terms, n, events: ny, m2LL: -2 * LL, chi, dfModel: k, pModel: k ? 1 - jStat.chisquare.cdf(chi, k) : NaN, coxSnell: cs, nagelkerke: nag, accuracy: correct / n, converged, unstable, iter, fitted: mu };
+    return { terms, n, events: ny, m2LL: -2 * LL, chi, dfModel: k, pModel: k ? 1 - jStat.chisquare.cdf(chi, k) : NaN, coxSnell: cs, nagelkerke: nag, accuracy: correct / n, converged, unstable, iter, fitted: mu, cov: inv };
   }
 
   // Hosmer–Lemeshow goodness of fit: patients sorted by predicted risk, g groups of (nearly) equal size, df = g − 2
@@ -1316,6 +1316,135 @@ const Stats = (() => {
     const W = w || x.map(() => 1), grp = t => { const I = x.map((_, i) => i).filter(i => !!treat[i] === t), sw = sum(I.map(i => W[i])), m = sum(I.map(i => W[i] * x[i])) / sw, v = sum(I.map(i => W[i] * (x[i] - m) ** 2)) / sw; return [m, v]; };
     const [m1, v1] = grp(true), [m0, v0] = grp(false); return (m1 - m0) / Math.sqrt((v1 + v0) / 2);
   }
+  /* ---------- more advanced: competing risks, splines, time-dependent AUC, multiple imputation, quantile regression, kappas, rmcorr, Firth ---------- */
+  // cumulative incidence of cause 1 with competing cause 2 (0 = censored): Aalen-Johansen
+  function cumIncidence(times, cause) {
+    const idx = times.map((t, i) => i).sort((a, b) => times[a] - times[b]); let atRisk = times.length, S = 1, F = 0;
+    const steps = [{ t: 0, s: 0 }], censored = [];
+    for (let i = 0; i < idx.length;) { const t = times[idx[i]]; let d1 = 0, d2 = 0, c = 0;
+      while (i < idx.length && times[idx[i]] === t) { const k = cause[idx[i]]; k === 1 ? d1++ : k === 2 ? d2++ : c++; i++; }
+      if (d1) { F += S * d1 / atRisk; steps.push({ t, s: F }); }
+      if (d1 + d2) S *= 1 - (d1 + d2) / atRisk;
+      if (c) censored.push({ t, s: F });
+      atRisk -= d1 + d2 + c; }
+    return { steps, censored, final: F };
+  }
+  // restricted cubic spline basis (Harrell): knots at quantiles; returns the k − 1 columns for a value
+  const q7 = (a, p) => { const v = sorted(a), h = (v.length - 1) * p, l = Math.floor(h); return v[l] + (h - l) * ((v[Math.min(l + 1, v.length - 1)]) - v[l]); };
+  function rcsKnots(x, k) { const P = { 3: [0.1, 0.5, 0.9], 4: [0.05, 0.35, 0.65, 0.95], 5: [0.05, 0.275, 0.5, 0.725, 0.95] }[k] || [0.1, 0.5, 0.9]; return P.map(q => q7(x, q)); }
+  function rcsBasis(v, t) {
+    const k = t.length, pp = u => u > 0 ? u * u * u : 0, d = (t[k - 1] - t[0]) ** 2, out = [v];
+    for (let j = 0; j < k - 2; j++) out.push((pp(v - t[j]) - pp(v - t[k - 2]) * (t[k - 1] - t[j]) / (t[k - 1] - t[k - 2]) + pp(v - t[k - 1]) * (t[k - 2] - t[j]) / (t[k - 1] - t[k - 2])) / d);
+    return out;
+  }
+  // Wald test of several coefficients
+  function waldTest(beta, cov, idx) { const b = idx.map(i => beta[i]), C = invert(idx.map(i => idx.map(j => cov[i][j]))); if (!C) return null;
+    const chi = b.reduce((t, v, a) => t + v * b.reduce((u, w, q) => u + C[a][q] * w, 0), 0); return { chi, df: idx.length, p: 1 - jStat.chisquare.cdf(chi, idx.length) }; }
+  // cumulative / dynamic AUC at time t with inverse-probability-of-censoring weights (Uno 2007)
+  function tdAuc(time, event, marker, t) {
+    const n = time.length, cens = kaplanMeier(time, event.map(e => !e));
+    const G = u => { let g = 1; for (const q of cens.steps) { if (q.t < u) g = q.s; else break; } return g; };
+    let num = 0, den1 = 0, nCtrl = 0;
+    for (let j = 0; j < n; j++) if (time[j] > t) nCtrl++;
+    for (let i = 0; i < n; i++) { if (!(time[i] <= t && event[i])) continue; const w = 1 / G(time[i]); den1 += w;
+      for (let j = 0; j < n; j++) if (time[j] > t) num += w * (marker[i] > marker[j] ? 1 : marker[i] === marker[j] ? 0.5 : 0); }
+    return den1 && nCtrl ? num / (den1 * nCtrl) : NaN;
+  }
+  // AUC(t) with a percentile bootstrap CI
+  function tdAucCI(time, event, marker, t, B = 200, seed = 1) {
+    const auc = tdAuc(time, event, marker, t), rnd = seeded(seed), n = time.length, bs = [];
+    for (let b = 0; b < B; b++) { const ix = Array.from({ length: n }, () => Math.floor(rnd() * n)), v = tdAuc(ix.map(i => time[i]), ix.map(i => event[i]), ix.map(i => marker[i]), t); if (isFinite(v)) bs.push(v); }
+    return { auc, lo: bs.length > 10 ? quantile(bs, QL()) : NaN, hi: bs.length > 10 ? quantile(bs, QU()) : NaN, B: bs.length };
+  }
+  // Rubin's rules: pooled estimates of m fits (each { b: [], v: [] variances })
+  function rubin(fits, dfcom = Infinity) {
+    const m = fits.length, p = fits[0].b.length;
+    return Array.from({ length: p }, (_, j) => { const q = fits.map(f => f.b[j]), u = fits.map(f => f.v[j]), Q = mean(q), U = mean(u), B = m > 1 ? variance(q) : 0, T = U + (1 + 1 / m) * B;
+      const r = (1 + 1 / m) * B / U, g = (1 + 1 / m) * B / T, dfo = isFinite(dfcom) ? (dfcom + 1) / (dfcom + 3) * dfcom * (1 - g) : Infinity, dfr = B > 0 ? (m - 1) * (1 + 1 / r) ** 2 : Infinity, df = isFinite(dfo) ? 1 / (1 / dfr + 1 / dfo) : dfr, se = Math.sqrt(T), tq = isFinite(df) ? jStat.studentt.inv(QU(), df) : ZC(), tt = Q / se;
+      return { B: Q, se, df, lo: Q - tq * se, hi: Q + tq * se, p: isFinite(df) ? 2 * (1 - jStat.studentt.cdf(Math.abs(tt), df)) : zp(tt), fmi: (r + 2 / (df + 3)) / (r + 1) }; });
+  }
+  // multiple imputation by chained equations: numeric columns by predictive mean matching, yes/no and other categories by logistic draws
+  function mice(M, kinds, m = 20, iters = 10, seed = 1) {
+    const rnd = seeded(seed), n = M.length, p = M[0].length, miss = M.map(r => r.map(v => v === null || !isFinite(v)));
+    const norm = () => Math.sqrt(-2 * Math.log(rnd() || 1e-12)) * Math.cos(2 * Math.PI * rnd());
+    const chol = A => { const L = A.map(r => r.map(() => 0)); for (let i = 0; i < A.length; i++) for (let j = 0; j <= i; j++) { let s2 = A[i][j]; for (let k = 0; k < j; k++) s2 -= L[i][k] * L[j][k]; L[i][j] = i === j ? Math.sqrt(Math.max(s2, 1e-12)) : s2 / L[j][j]; } return L; };
+    const drawB = (b, cov) => { const L = chol(cov), z = b.map(() => norm()); return b.map((v, i) => v + L[i].reduce((t, l, k) => t + l * z[k], 0)); };
+    const out = [];
+    for (let rep = 0; rep < m; rep++) {
+      const D = M.map((r, i) => r.map((v, j) => miss[i][j] ? NaN : v));
+      for (let j = 0; j < p; j++) { const obs = D.map(r => r[j]).filter(isFinite); D.forEach((r, i) => { if (miss[i][j]) r[j] = obs[Math.floor(rnd() * obs.length)]; }); }
+      for (let it = 0; it < iters; it++) for (let j = 0; j < p; j++) {
+        const mi = D.map((_, i) => i).filter(i => miss[i][j]); if (!mi.length) continue;
+        const oi = D.map((_, i) => i).filter(i => !miss[i][j]), X = i => D[i].filter((_, k) => k !== j);
+        if (kinds[j] === 'num') {
+          const fit = linearRegression(oi.map(X), oi.map(i => D[i][j])); if (!fit) continue;
+          const df = fit.df, s2 = fit.sse / df, chi = jStat.chisquare.inv(rnd() * 0.999 + 0.0005, df), s2d = s2 * df / chi;
+          const bd = drawB(fit.coef, fit.cov.map(r => r.map(v => v * s2d / s2))), pr = (b, i) => sum([1, ...X(i)].map((v, k) => v * b[k]));
+          const yhat = oi.map(i => pr(fit.coef, i));
+          mi.forEach(i => { const t = pr(bd, i), near = oi.map((o, q) => [Math.abs(yhat[q] - t), o]).sort((a, b) => a[0] - b[0]).slice(0, 5); D[i][j] = M[near[Math.floor(rnd() * near.length)][1]][j]; });
+        } else {
+          const fit = logisticRegression(oi.map(X), oi.map(i => D[i][j] ? 1 : 0)); if (!fit || !fit.cov) continue;
+          const bd = drawB(fit.terms.map(t => t.B), fit.cov);
+          mi.forEach(i => { const z = sum([1, ...X(i)].map((v, k) => v * bd[k])); D[i][j] = rnd() < 1 / (1 + Math.exp(-z)) ? 1 : 0; });
+        }
+      }
+      out.push(D);
+    }
+    return out;
+  }
+  // quantile regression (IRLS, as statsmodels QuantReg) with the robust kernel (Epanechnikov, Hall-Sheather) covariance
+  function quantReg(X0, y, q = 0.5) {
+    const X = X0.map(r => [1, ...r]), n = y.length, p = X[0].length; let beta = new Array(p).fill(1), xs = X;
+    for (let it = 0; it < 1000; it++) {
+      const A = Array.from({ length: p }, (_, a) => Array.from({ length: p }, (_, b) => sum(xs.map((r, i) => r[a] * X[i][b])))), bv = Array.from({ length: p }, (_, a) => sum(xs.map((r, i) => r[a] * y[i])));
+      const Ai = invert(A); if (!Ai) return null; const nb = Ai.map(r => sum(r.map((v, j) => v * bv[j])));
+      const diff = Math.max(...nb.map((v, j) => Math.abs(v - beta[j]))); beta = nb;
+      let res = y.map((v, i) => v - sum(X[i].map((x, j) => x * beta[j])));
+      res = res.map(r => Math.abs(r) < 1e-6 ? (r >= 0 ? 1e-6 : -1e-6) : r).map(r => Math.abs(r < 0 ? q * r : (1 - q) * r));
+      xs = X.map((r, i) => r.map(v => v / res[i]));
+      if (diff < 1e-6) break;
+    }
+    const e = y.map((v, i) => v - sum(X[i].map((x, j) => x * beta[j]))), z = jStat.normal.inv(q, 0, 1), alpha = 0.05;
+    let h = Math.pow(n, -1 / 3) * Math.pow(jStat.normal.inv(1 - alpha / 2, 0, 1), 2 / 3) * Math.pow(1.5 * jStat.normal.pdf(z, 0, 1) ** 2 / (2 * z * z + 1), 1 / 3);
+    const iqre = q7(e, 0.75) - q7(e, 0.25), sdy = Math.sqrt(sum(y.map(v => (v - mean(y)) ** 2)) / n);
+    h = Math.min(sdy, iqre / 1.34) * (jStat.normal.inv(q + h, 0, 1) - jStat.normal.inv(q - h, 0, 1));
+    const fhat = sum(e.map(r => { const u = r / h; return Math.abs(u) <= 1 ? 0.75 * (1 - u * u) : 0; })) / (n * h);
+    const XtX = Array.from({ length: p }, (_, a) => Array.from({ length: p }, (_, b) => sum(X.map(r => r[a] * r[b])))), XtXi = invert(XtX);
+    const dd = e.map(r => r > 0 ? (q / fhat) ** 2 : ((1 - q) / fhat) ** 2), XdX = Array.from({ length: p }, (_, a) => Array.from({ length: p }, (_, b) => sum(X.map((r, i) => r[a] * dd[i] * r[b]))));
+    const cov = XtXi.map((r, a) => XtXi.map((_, b) => sum(r.map((v, k) => v * sum(XdX[k].map((w, l) => w * XtXi[l][b]))))));
+    const df = n - p, tq = jStat.studentt.inv(QU(), df);
+    return { terms: beta.map((B, j) => { const se = Math.sqrt(cov[j][j]), t = B / se; return { B, se, t, p: 2 * (1 - jStat.studentt.cdf(Math.abs(t), df)), lo: B - tq * se, hi: B + tq * se }; }), n, df, q };
+  }
+  // Fleiss' kappa for several raters (rows = subjects, values = categories), with the large-sample test (Fleiss, Nee and Landis 1979)
+  function fleissKappa(R) {
+    const cats = [...new Set(R.flat())], N = R.length, n = R[0].length, cnt = R.map(r => cats.map(c => r.filter(v => v === c).length));
+    const pj = cats.map((_, j) => sum(cnt.map(r => r[j])) / (N * n)), Pi = cnt.map(r => (sum(r.map(v => v * v)) - n) / (n * (n - 1)));
+    const Pbar = mean(Pi), Pe = sum(pj.map(v => v * v)), kappa = (Pbar - Pe) / (1 - Pe);
+    const var0 = 2 / (N * n * (n - 1)) * (Pe - (2 * n - 3) * Pe * Pe + 2 * (n - 2) * sum(pj.map(v => v ** 3))) / (1 - Pe) ** 2, z = kappa / Math.sqrt(var0);
+    return { kappa, z, p: zp(z), N, raters: n, cats: cats.length, se0: Math.sqrt(var0) };
+  }
+  // repeated-measures correlation (Bakdash & Marusich): the common within-subject association
+  function rmCorr(x, y, subj) {
+    const ids = [...new Set(subj)], k = ids.length, N = x.length, gi = subj.map(s => ids.indexOf(s));
+    const mx = ids.map((_, g) => mean(x.filter((_, i) => gi[i] === g))), my = ids.map((_, g) => mean(y.filter((_, i) => gi[i] === g)));
+    const dx = x.map((v, i) => v - mx[gi[i]]), dy = y.map((v, i) => v - my[gi[i]]), sxx = sum(dx.map(v => v * v)), sxy = sum(dx.map((v, i) => v * dy[i])), syy = sum(dy.map(v => v * v));
+    const b = sxy / sxx, ssx = b * b * sxx, ssr = syy - ssx, df = N - k - 1, r = Math.sign(b) * Math.sqrt(ssx / (ssx + ssr)), F = ssx / (ssr / df);
+    const z = Math.atanh(r), se = 1 / Math.sqrt(df - 1);
+    return { r, df, p: 1 - jStat.centralF.cdf(F, 1, df), lo: Math.tanh(z - ZC() * se), hi: Math.tanh(z + ZC() * se), n: N, subjects: k };
+  }
+  // Firth's penalized logistic regression (bias reduction; works under separation), Wald inference
+  function firthLogistic(X0, y) {
+    const X = X0.map(r => [1, ...r]), n = y.length, p = X[0].length; let b = new Array(p).fill(0), cov = null;
+    for (let it = 0; it < 100; it++) {
+      const pi = X.map(r => 1 / (1 + Math.exp(-sum(r.map((v, j) => v * b[j]))))), w = pi.map(v => v * (1 - v));
+      const I = Array.from({ length: p }, (_, a) => Array.from({ length: p }, (_, c) => sum(X.map((r, i) => r[a] * w[i] * r[c])))), Ii = invert(I); if (!Ii) return null;
+      const h = X.map((r, i) => w[i] * sum(r.map((v, a) => v * sum(r.map((u, c) => Ii[a][c] * u)))));
+      const U = Array.from({ length: p }, (_, a) => sum(X.map((r, i) => r[a] * (y[i] - pi[i] + h[i] * (0.5 - pi[i])))));
+      const step = Ii.map(r => sum(r.map((v, j) => v * U[j]))), mx = Math.max(...step.map(Math.abs)), sc = mx > 5 ? 5 / mx : 1;
+      b = b.map((v, j) => v + sc * step[j]); cov = Ii; if (mx < 1e-9) break;
+    }
+    return { terms: b.map((B, j) => { const se = Math.sqrt(cov[j][j]), z = B / se; return { B, se, p: zp(z), or: Math.exp(B), lo: Math.exp(B - ZC() * se), hi: Math.exp(B + ZC() * se) }; }), n };
+  }
   // JZS Bayes factor BF10 for a two-sample t-test (Cauchy prior on the effect size, r = √2/2), by numerical integration over g
   function bayesFactorT(t, n1, n2, r = Math.SQRT1_2) {
     const N = n1 * n2 / (n1 + n2), df = n1 + n2 - 2;
@@ -1333,7 +1462,7 @@ const Stats = (() => {
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
   return {
-    poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost,
+    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,

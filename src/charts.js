@@ -354,6 +354,8 @@ const Charts = (() => {
     if (spec.type === 'scatter') return scatter(spec, paletteName, st);
     if (spec.type === 'roc') return rocChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
+    if (spec.type === 'curve') return curveChart(spec, paletteName, st);
+    if (spec.type === 'nomogram') return nomogramChart(spec, paletteName, st);
     if (spec.type === 'ba') return baChart(spec, paletteName, st);
     const pal = palette(paletteName);
     const { c, ctx, W, H, ts, F } = setup(st);
@@ -915,7 +917,7 @@ const Charts = (() => {
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
     ctx.font = F(700, 28); ctx.fillStyle = '#333';
     ctx.fillText(spec.xLabel || 'Time', L + pw / 2, T + ph + 60 * ts);
-    ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText('Survival probability', 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText(spec.yLabel || 'Survival probability', 0, 0); ctx.restore();
     // optional 95% CI bands, drawn as shaded steps under the curves
     if (spec.band) spec.series.forEach((s, i) => {
       const st2 = s.steps.filter(q => isFinite(q.lo) && isFinite(q.hi)); if (st2.length < 2) return;
@@ -928,7 +930,7 @@ const Charts = (() => {
     spec.series.forEach((s, i) => {
       const end = Math.max(s.steps[s.steps.length - 1].t, ...s.censored.map(q => q.t));
       ctx.strokeStyle = items[i].color; ctx.lineWidth = 5 * lw(st); ctx.setLineDash(items[i].dashArr || (items[i].dash ? [16, 10] : []));
-      ctx.beginPath(); ctx.moveTo(X(0), Y(1));
+      ctx.beginPath(); ctx.moveTo(X(0), Y(spec.cif ? 0 : 1));
       s.steps.forEach((q, k) => { if (k) { ctx.lineTo(X(q.t), Y(s.steps[k - 1].s)); ctx.lineTo(X(q.t), Y(q.s)); } });
       ctx.lineTo(X(end), Y(s.steps[s.steps.length - 1].s)); ctx.stroke(); ctx.setLineDash([]);
       // censored patients as small vertical ticks
@@ -943,6 +945,56 @@ const Charts = (() => {
     return c;
   }
 
+  /* ---------- effect curve with a CI band (restricted cubic splines) ---------- */
+  function curveChart(spec, paletteName, st) {
+    const pal = palette(paletteName), col = pal[0];
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const L = 120 + 40 * ts, R = 50, T = 60, B = 130 * ts, pw = W - L - R, ph = H - T - B;
+    const tf = spec.log ? Math.log : v => v, xs = spec.x, ys = spec.y.map(tf), lo = spec.lo.map(tf), hi = spec.hi.map(tf);
+    const sx = niceScale(Math.min(...xs), Math.max(...xs)), y0 = Math.min(...lo, tf(spec.ref ?? (spec.log ? 1 : 0))), y1 = Math.max(...hi, tf(spec.ref ?? (spec.log ? 1 : 0)));
+    let yt, ymin, ymax;
+    if (spec.log) { const cand = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500].map(Math.log); ymin = y0 - (y1 - y0) * 0.05; ymax = y1 + (y1 - y0) * 0.05; yt = cand.filter(v => v >= ymin && v <= ymax);
+      if (yt.length < 3) yt = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4].map(Math.log).filter(v => v >= ymin && v <= ymax); }
+    else { const sy = niceScale(y0, y1); ymin = sy.min; ymax = sy.max; yt = []; for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) yt.push(v); }
+    const X = v => L + (v - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - ymin) / (ymax - ymin || 1) * ph;
+    ctx.font = F(600, 26); ctx.lineWidth = 1.5;
+    yt.forEach(v => { if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]); }
+      ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(spec.log ? String(+Math.exp(v).toPrecision(2)) : fmtTick(v, yt[1] - yt[0] || 1), L - 14, Y(v)); });
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let v = sx.min; v <= sx.max + 1e-9; v += sx.step) { if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); }
+      ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sx.step), X(v), T + ph + 12); }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+    ctx.font = F(700, 28); ctx.fillStyle = '#333'; ctx.fillText(spec.xLabel || '', L + pw / 2, T + ph + 60 * ts);
+    ctx.save(); ctx.translate(36, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
+    ctx.fillStyle = col; ctx.globalAlpha = 0.16; ctx.beginPath(); xs.forEach((x, i) => i ? ctx.lineTo(X(x), Y(hi[i])) : ctx.moveTo(X(x), Y(hi[i])));
+    for (let i = xs.length - 1; i >= 0; i--) ctx.lineTo(X(xs[i]), Y(lo[i])); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+    const r0 = tf(spec.ref ?? (spec.log ? 1 : 0)); ctx.strokeStyle = '#888'; ctx.lineWidth = 2.5; ctx.setLineDash([12, 10]); ctx.beginPath(); ctx.moveTo(L, Y(r0)); ctx.lineTo(L + pw, Y(r0)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = col; ctx.lineWidth = 5 * lw(st); ctx.beginPath(); xs.forEach((x, i) => i ? ctx.lineTo(X(x), Y(ys[i])) : ctx.moveTo(X(x), Y(ys[i]))); ctx.stroke();
+    if (spec.rug) { ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5; spec.rug.forEach(v => { if (v < sx.min || v > sx.max) return; ctx.beginPath(); ctx.moveTo(X(v), T + ph); ctx.lineTo(X(v), T + ph - 14); ctx.stroke(); }); }
+    if (spec.note) { ctx.font = F(700, 26); ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = '#222'; ctx.fillText(spec.note, L + 16, T + 10); }
+    return c;
+  }
+  /* ---------- nomogram of a logistic model ---------- */
+  function nomogramChart(spec, paletteName, st) {
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const rowsAll = [{ label: 'Points', ticks: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(p => ({ pos: p, text: String(p) })), scale: 100 },
+      ...spec.rows.map(r => ({ ...r, scale: 100 })), { label: 'Total points', ticks: spec.total, scale: spec.totalMax }, { label: spec.probLabel || 'Probability', ticks: spec.prob, scale: spec.totalMax }];
+    ctx.font = F(700, 26); const lab = Math.min(W * 0.36, Math.max(...rowsAll.map(r => ctx.measureText(r.label).width)) + 40);
+    const L = 30 + lab, R = 60, T = 50, rh = (H - T - 40) / rowsAll.length, pw = W - L - R;
+    rowsAll.forEach((r, i) => {
+      const y = T + i * rh + rh * 0.45, X = v => L + v / r.scale * pw, emph = i === 0 || i >= rowsAll.length - 2;
+      ctx.fillStyle = '#222'; ctx.font = F(700, 26); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      let t = r.label; while (ctx.measureText(t).width > lab - 20 && t.length > 4) t = t.slice(0, -2); if (t !== r.label) t += '…'; ctx.fillText(t, L - 24, y);
+      const ps = r.ticks.map(q => q.pos); if (!ps.length) return;
+      ctx.strokeStyle = emph ? '#333' : pal[(i - 1) % pal.length]; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(X(Math.min(...ps)), y); ctx.lineTo(X(Math.max(...ps)), y); ctx.stroke();
+      ctx.font = F(600, 22); ctx.fillStyle = '#444'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; let last = -1e9;
+      [...r.ticks].sort((a, b) => a.pos - b.pos).forEach(q => { const x = X(q.pos); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 12); ctx.stroke();
+        const w = ctx.measureText(q.text).width; if (x - w / 2 > last + 6) { ctx.fillText(q.text, x, y - 16); last = x + w / 2; } });
+      if (st.grid && i === 0) { gridPen(ctx, st); r.ticks.forEach(q => { ctx.beginPath(); ctx.moveTo(X(q.pos), y); ctx.lineTo(X(q.pos), T + (rowsAll.length - 2) * rh); ctx.stroke(); }); ctx.setLineDash([]); }
+    });
+    return c;
+  }
   /* ---------- ROC curves ---------- */
   function rocChart(spec, paletteName, st) {
     st = { ...st, legendTitle: '' }; // the legend lists test variables, not groups

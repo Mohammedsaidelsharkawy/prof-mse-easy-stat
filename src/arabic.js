@@ -5,6 +5,34 @@ const Ar = (() => {
   // whole-sentence and long-phrase rules first (order matters), then terms, then short words
   const RULES = [
     // ---------- statistical analysis ----------
+    // further advanced analyses (methods sentences)
+    [/^In the presence of competing events, the cumulative incidence of the event was estimated with the Aalen-Johansen method, and groups were compared with the cause-specific log-rank test\.$/, 'في وجود أحداث متنافسة، قُدّر الحدوث التراكمي للحدث بطريقة Aalen-Johansen، وقورنت المجموعات باختبار log-rank الخاص بالسبب.'],
+    [/^Time-dependent discrimination was assessed with the cumulative\/dynamic AUC\(t\) using Uno's inverse-probability-of-censoring weights, with bootstrap 95% CI\.$/, 'قُيّمت القدرة التمييزية المعتمدة على الزمن بالمساحة تحت المنحنى التراكمية/الديناميكية AUC(t) باستخدام أوزان Uno لمقلوب احتمال الرقابة، مع فترات ثقة 95% بطريقة bootstrap.'],
+    [/^Quantile regression with robust \(kernel\) standard errors was used to model the median \(and other quantiles\) of skewed outcomes\.$/, 'استُخدم الانحدار الكمّي (quantile regression) مع أخطاء معيارية متينة (kernel) لنمذجة الوسيط (والمئينات الأخرى) للنتائج الملتوية.'],
+    [/^Agreement between three or more raters was assessed with Fleiss' kappa\.$/, "قُيّم الاتفاق بين ثلاثة مقيّمين أو أكثر باستخدام معامل كابا لفلايس (Fleiss' kappa)."],
+    [/^Within-patient associations of repeatedly measured variables were assessed with repeated-measures correlation\.$/, 'قُيّمت العلاقات داخل المريض الواحد للمتغيرات المقيسة بشكل متكرر باستخدام ارتباط القياسات المتكررة.'],
+    [/^Firth's penalized-likelihood logistic regression was used to reduce small-sample bias and to handle separation\.$/, 'استُخدم الانحدار اللوجستي بالأرجحية المعاقَبة لـFirth لتقليل تحيز العينات الصغيرة ومعالجة الانفصال التام.'],
+    [/^Missing values were handled by multiple imputation by chained equations \(predictive mean matching\), and estimates were pooled with Rubin's rules\.$/, 'عولجت القيم المفقودة بالإسناد المتعدد بالمعادلات المتسلسلة (مطابقة المتوسط التنبؤي)، وجُمعت التقديرات بقواعد Rubin.'],
+    [/^Non-linear effects of continuous predictors were modelled with restricted cubic splines \(knots at Harrell's recommended percentiles\) and tested with Wald tests\.$/, 'نُمذجت التأثيرات غير الخطية للمتنبئات المستمرة بالشرائح التكعيبية المقيدة (العُقد عند المئينات التي أوصى بها Harrell) واختُبرت باختبارات Wald.'],
+    [/^A nomogram was constructed from the logistic regression model\.$/, 'أُنشئ مخطط تنبؤي (nomogram) من نموذج الانحدار اللوجستي.'],
+    // further advanced analyses (comments)
+    [/^With (.+?) as a competing event, the cumulative incidence of (.+?) by the end of follow-up was (.+)\.$/, (m, c, e, r) => `مع اعتبار ${c} حدثًا متنافسًا، بلغ الحدوث التراكمي لـ${e} في نهاية المتابعة ${r}.`],
+    [/^The cumulative incidence of (.+?) was (.+)\.$/, 'بلغ الحدوث التراكمي لـ$1 $2.'],
+    [/^At ([\d.]+(?: \S+)?), it was (.+)\.$/, 'وعند $1 بلغ $2.'],
+    [/^The cause-specific hazard of (.+?) was (significantly|insignificantly) different (.+?) \(log-rank P value (.+?)\)\.$/, (m, e, s2, w, p) => `${s2 === 'significantly' ? 'اختلف' : 'لم يختلف'} الخطر الخاص بالسبب لـ${e} ${s2 === 'significantly' ? 'بدلالة إحصائية' : 'بدلالة إحصائية'} ${w} (قيمة P لاختبار log-rank ${p}).`],
+    [/^The time-dependent AUC of (.+?) for (.+?) was (.+)\.$/, 'بلغت المساحة تحت المنحنى المعتمدة على الزمن لـ$1 في التنبؤ بـ$2 $3.'],
+    [/^(.+?) had the highest discrimination over follow-up\.$/, 'كان لـ$1 أعلى قدرة تمييزية خلال المتابعة.'],
+    [/^None of the studied variables was significantly associated with the (median|(\d+)th percentile) of (.+?)\.$/, (m, q, n, y) => `لم يرتبط أي من المتغيرات المدروسة ارتباطًا ذا دلالة إحصائية ب${q === 'median' ? 'وسيط' : `المئين ${n} لـ`}${q === 'median' ? ' ' : ''}${y}.`],
+    [/^At the (median|(\d+)th percentile) of (.+?), (.+?) (?:was|were) significantly associated with it\.$/, (m, q, n, y, l) => `عند ${q === 'median' ? 'الوسيط' : `المئين ${n}`} لـ${y}، ارتبط ${l} به ارتباطًا ذا دلالة إحصائية.`],
+    [/^The agreement between the (\d+) raters was (\w+(?: \w+)?) \(Fleiss' κ = (.+?), P value (.+?)\)\.$/, (m, n, g, k, p) => `كان الاتفاق بين المقيّمين الـ${n} ${({ poor: 'ضعيفًا', slight: 'طفيفًا', fair: 'مقبولًا', moderate: 'متوسطًا', substantial: 'كبيرًا', 'almost perfect': 'شبه تام' })[g] || g} (κ لفلايس = ${k}، قيمة P ${p}).`],
+    [/^Within patients, (.+?) showed a significant (weak|moderate|strong) (positive|negative) correlation with (.+?) \((.+)\)\.$/, (m, x, st, dir, y, st2) => `داخل المريض الواحد، أظهر ${x} ارتباطًا ${dir === 'positive' ? 'طرديًا' : 'عكسيًا'} ${({ weak: 'ضعيفًا', moderate: 'متوسطًا', strong: 'قويًا' })[st]} ذا دلالة إحصائية مع ${y} (${st2.replace(/, P value/, '، قيمة P').replace(/, 95% CI (\S+) to (\S+)/, '، فترة ثقة 95% من $1 إلى $2')}).`],
+    [/^Within patients, there was no significant correlation between (.+?) and (.+?) \(rrm = (.+?), P value (.+?)\)\.$/, 'داخل المريض الواحد، لم يوجد ارتباط ذو دلالة إحصائية بين $1 و$2 (rrm = $3، قيمة P $4).'],
+    [/^In Firth logistic regression, (.+?) (?:were significant predictors|was a significant predictor) of (.+?)\.$/, 'في الانحدار اللوجستي لـFirth، كان $1 من العوامل المتنبئة ذات الدلالة الإحصائية بـ$2.'],
+    [/^None of the studied variables was a significant predictor of (.+?) in Firth logistic regression\.$/, 'لم يكن أي من المتغيرات المدروسة عامل تنبؤ ذا دلالة إحصائية بـ$1 في الانحدار اللوجستي لـFirth.'],
+    [/^After multiple imputation of the missing values \((\d+) of (\d+) patients incomplete\), none of the studied variables was a significant predictor of (.+?)\.$/, 'بعد الإسناد المتعدد للقيم المفقودة ($1 من $2 مريضًا بيانات غير مكتملة)، لم يكن أي من المتغيرات المدروسة عامل تنبؤ ذا دلالة إحصائية بـ$3.'],
+    [/^After multiple imputation of the missing values \((\d+) of (\d+) patients incomplete\), (.+?) (?:were significant predictors|was a significant predictor) of (.+?)\.$/, 'بعد الإسناد المتعدد للقيم المفقودة ($1 من $2 مريضًا بيانات غير مكتملة)، كان $3 من العوامل المتنبئة ذات الدلالة الإحصائية بـ$4.'],
+    [/^The complete-case analysis used (\d+) patients\.$/, 'شمل تحليل الحالات المكتملة $1 مريضًا.'],
+    [/^The association of (.+?) with (.+?) was (significant|insignificant) \(P value (.+?)\) and (significantly non-linear|did not depart significantly from linearity) \(P value (.+?)\)\.$/, (m, x, y, s2, p1, nl, p2) => `كان ارتباط ${x} بـ${y} ${s2 === 'significant' ? 'ذا دلالة إحصائية' : 'غير ذي دلالة إحصائية'} (قيمة P ${p1})، و${nl === 'significantly non-linear' ? 'غير خطي بدلالة إحصائية' : 'لم يحِد عن الخطية بدلالة إحصائية'} (قيمة P ${p2}).`],
     [/^Statistical analysis was performed using (.+?), version ([\d.]+) \((.+?)\)\.$/, 'أُجري التحليل الإحصائي باستخدام برنامج $1، الإصدار $2 ($3).'],
     [/^Statistical analysis was performed using (.+?)\.$/, 'أُجري التحليل الإحصائي باستخدام $1.'],
     [/^(.+?) and histograms were used to evaluate the normality of the distribution of data\.$/, 'استُخدم $1 والمدرجات التكرارية لتقييم طبيعية توزيع البيانات.'],
@@ -171,7 +199,7 @@ const Ar = (() => {
     // terms inside (tests, connectors) — also inside the parts captured by the rules
     TERMS.forEach(([en, ar]) => { t = t.replace(new RegExp(`(?<![\\p{L}\\uE000])${esc(en)}(?![\\p{L}])`, 'gu'), ar); });
     t = t.replace(/ و (?=\S)/g, ' و').replace(/مقارنة بـ (?=\S)/g, 'مقارنة بـ');
-    const left = t.replace(/\d+/g, '').replace(/log-rank|Clopper-Pearson|post hoc/g, '').replace(/\b[A-Z][A-Za-z0-9²]*\b/g, '').match(/\b[a-z]{3,}\b/g);
+    const left = t.replace(/\d+/g, '').replace(/log-rank|Clopper-Pearson|post hoc|bootstrap|kernel|quantile regression|Fleiss' kappa|nomogram|rrm/g, '').replace(/\b[A-Z][A-Za-z0-9²]*\b/g, '').match(/\b[a-z]{3,}\b/g);
     return { text: punct(restore(t, p.used, map)), ok: !left, rule: done };
   }
   // the Arabic of a paragraph: sentence by sentence; untranslated sentences are counted

@@ -549,6 +549,12 @@ const Analysis = (() => {
     const outLabel = columnLabel(cfg, a.outcome);
     const preds = a.predictors.filter(c => c !== a.outcome).map(c => encode(cfg, rows, c)).filter(e => e.terms.length);
     if (!preds.length) return null;
+    // optional restricted cubic spline of one numeric predictor (Harrell's knots)
+    let rcsE = null;
+    const eR = a.rcs && preds.find(e => e.col === a.rcs && !e.ref && e.terms.length === 1);
+    if (eR) { const xs = rows.filter(eR.ok).map(r => toNum(r[eR.col])), kn = new Set(xs).size >= 10 ? S.rcsKnots(xs, +a.rcsK || 4) : null;
+      if (kn && new Set(kn).size === kn.length) { const g = eR.terms[0].get, lb = eR.label;
+        eR.terms = kn.slice(1).map((_, j) => ({ label: j ? `${lb} (spline ${j})` : `${lb} (linear)`, get: r => S.rcsBasis(g(r), kn)[j] })); rcsE = { e: eR, kn, xs }; used.add('rcs'); } }
     // optional interaction of two predictors: the products of their design terms
     const e1 = preds.find(e => e.col === a.int1), e2 = preds.find(e => e.col === a.int2);
     if (e1 && e2 && e1 !== e2) { preds.push({ col: '__int', label: `${e1.label} × ${e2.label}`, terms: e1.terms.flatMap(t1 => e2.terms.map(t2 => ({ label: `${t1.label} × ${t2.label}`, get: r => t1.get(r) * t2.get(r) }))), ok: r => e1.ok(r) && e2.ok(r) }); used.add('interaction'); }
@@ -658,9 +664,40 @@ const Analysis = (() => {
         figures.push({ sig: true, caption: `Decision curve of the logistic regression model for ${what}`, spec: { type: 'line', categories: th.map(t => `${Math.round(t * 100)}%`), xLabel: 'Threshold probability', yLabel: 'Net benefit', yMin: -0.05,
           series: [{ name: 'Model', values: nb.map(q => q.model) }, { name: 'Treat all', values: nb.map(q => Math.max(-0.05, q.all)) }, { name: 'Treat none', values: nb.map(() => 0) }] } }); }
     }
+    // spline: overall and non-linearity Wald tests, and the curve of the effect against the median value
+    if (rcsE && multi && multi.cov && kept.includes(rcsE.e)) {
+      const off = 1 + kept.slice(0, kept.indexOf(rcsE.e)).reduce((n, x) => n + x.terms.length, 0), idx = rcsE.e.terms.map((_, j) => off + j), beta = multi.terms.map(t => t.B);
+      const all = S.waldTest(beta, multi.cov, idx), nl = S.waldTest(beta, multi.cov, idx.slice(1)), t1 = multi.terms[1], z = logistic ? (Math.log(t1.hi) - t1.B) / t1.se : (t1.hi - t1.B) / t1.se;
+      if (all && nl) {
+        f.push(`${rcsE.e.label}: restricted cubic spline with ${rcsE.kn.length} knots (${rcsE.kn.map(v => fmt(v, d)).join(', ')}), overall Wald χ²(${all.df}) = ${fmt(all.chi, 2)}, P ${pTxt(all.p)}, non-linearity χ²(${nl.df}) = ${fmt(nl.chi, 2)}, P ${pTxt(nl.p)}`);
+        extra.push(`The association of ${lowerFirst(plain(rcsE.e.label))} with ${what} was ${all.p <= alpha ? 'significant' : 'insignificant'} (P value ${pTxt(all.p)}) and ${nl.p <= alpha ? 'significantly non-linear' : 'did not depart significantly from linearity'} (P value ${pTxt(nl.p)}).`);
+        const ref = S.median(rcsE.xs), x0 = S.quantile(rcsE.xs, 0.05), x1 = S.quantile(rcsE.xs, 0.95), b0 = S.rcsBasis(ref, rcsE.kn), grid = Array.from({ length: 61 }, (_, i) => x0 + (x1 - x0) * i / 60);
+        const pts = grid.map(x => { const c = S.rcsBasis(x, rcsE.kn).map((v, j) => v - b0[j]), e = S.sum(c.map((v, j) => v * beta[off + j])), se = Math.sqrt(Math.max(0, S.sum(c.map((v, i) => v * S.sum(c.map((w, j) => w * multi.cov[off + i][off + j])))))); return [e, e - z * se, e + z * se]; });
+        const tr = logistic ? Math.exp : v => v;
+        figures.push({ sig: all.p <= alpha, caption: `${logistic ? 'Odds ratio' : 'Change'} of ${what} across ${lowerFirst(plain(rcsE.e.label))} (restricted cubic spline, reference ${fmt(ref, d)})`,
+          spec: { type: 'curve', x: grid, y: pts.map(q => tr(q[0])), lo: pts.map(q => tr(q[1])), hi: pts.map(q => tr(q[2])), log: logistic, ref: logistic ? 1 : 0, rug: rcsE.xs.slice(0, 600),
+            xLabel: columnLabel(cfg, rcsE.e.col), yLabel: logistic ? `Odds ratio (vs ${fmt(ref, d)})` : `Difference (vs ${fmt(ref, d)})`, note: `P non-linearity ${pTxt(nl.p)}` } });
+      }
+    }
+    // nomogram of a logistic model with main effects only
+    if (logistic && a.nomogram && multi && !rcsE && !kept.some(e => e.col === '__int')) {
+      const beta = multi.terms.map(t => t.B); let off = 1;
+      const items = kept.map(e => { const bs = beta.slice(off, off + e.terms.length); off += e.terms.length;
+        if (!e.ref) { const xs = rows.filter(e.ok).map(r => toNum(r[e.col])), lo = Math.min(...xs), hi = Math.max(...xs), sc = niceScale(lo, hi, 6), vals = [];
+          for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) if (v >= lo - 1e-9 && v <= hi + 1e-9) vals.push(+v.toFixed(10));
+          if (vals.length < 2) vals.splice(0, vals.length, lo, hi);
+          return { label: plain(e.label), pts: vals.map(v => ({ c: bs[0] * v, text: String(+v.toPrecision(6)) })) }; }
+        return { label: plain(e.label), pts: [{ c: 0, text: e.ref }, ...e.terms.map((t, j) => ({ c: bs[j], text: t.label.slice(e.label.length + 2, t.label.lastIndexOf(' vs ')) }))] }; });
+      const mn = items.map(it => Math.min(...it.pts.map(q => q.c))), rg = items.map((it, i) => Math.max(...it.pts.map(q => q.c)) - mn[i]), Rm = Math.max(...rg);
+      if (Rm > 0) { const totalMax = S.sum(rg) / Rm * 100, base = beta[0] + S.sum(mn), sc = niceScale(0, totalMax, 8), total = [];
+        for (let v = 0; v <= totalMax + 1e-9; v += sc.step) total.push({ pos: v, text: String(+v.toFixed(6)) });
+        const prob = [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99].map(pp => ({ pos: (Math.log(pp / (1 - pp)) - base) * 100 / Rm, text: String(pp) })).filter(q => q.pos >= 0 && q.pos <= totalMax);
+        used.add('nomogram');
+        figures.push({ sig: true, caption: `Nomogram of the logistic regression model for ${what}`, spec: { type: 'nomogram', rows: items.map((it, i) => ({ label: it.label, ticks: it.pts.map(q => ({ pos: (q.c - mn[i]) / Rm * 100, text: q.text })) })), total, totalMax, prob, probLabel: `Probability of ${what}` } }); }
+    }
     // the model as an equation (and a risk calculator from step 11)
     let calc = null;
-    if (a.calc && multi) { const tl = kept.flatMap(e => e.terms.map(t => ({ label: plain(t.label), dummy: / vs /.test(t.label) }))), B = multi.terms.map(t => t.B);
+    if (a.calc && multi && !rcsE) { const tl = kept.flatMap(e => e.terms.map(t => ({ label: plain(t.label), dummy: / vs /.test(t.label) }))), B = multi.terms.map(t => t.B);
       calc = { logistic, b0: B[0], terms: tl.map((t, i) => ({ ...t, B: B[i + 1] })), outcome: logistic ? eventName(cfg, a) : plain(outLabel) };
       const eq = `${fmt(B[0], 4)}${tl.map((t, i) => ` ${B[i + 1] < 0 ? '−' : '+'} ${fmt(Math.abs(B[i + 1]), 4)} × ${t.label}`).join('')}`;
       f.push(logistic ? `Risk equation: P = 1 / (1 + e^−(${eq}))` : `Equation: ${plain(outLabel)} = ${eq}`); }
@@ -858,6 +895,137 @@ const Analysis = (() => {
   };
   // options: direction (auto / higher / lower), cutoff method (ROC_CUT; manual uses manualCut), CIs of sensitivity and specificity,
   // likelihood ratios and Youden index columns, cut-off point on the curve, DeLong comparison of the AUCs, combined logistic score
+  /* ---------- more advanced analyses: competing risks, time-dependent ROC, quantile regression, Fleiss' kappa, rmcorr, Firth, multiple imputation ---------- */
+  const numList = s => String(s ?? '').split(/[,;\s]+/).map(x => parseFloat(x.replace(',', '.'))).filter(x => isFinite(x));
+  const unitOf = l => ((l.match(/\(([^)]*)\)\s*$/) || [])[1] || '').trim();
+  const kGrade = v => v < 0 ? 'poor' : v <= 0.2 ? 'slight' : v <= 0.4 ? 'fair' : v <= 0.6 ? 'moderate' : v <= 0.8 ? 'substantial' : 'almost perfect';
+  // competing risks: cumulative incidence of the event (Aalen-Johansen) with a competing event; groups by the cause-specific log-rank test
+  function cifSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G, k = gl.length;
+    if (!a.competing || a.competing === a.positive) return null;
+    const timeLabel = columnLabel(cfg, a.outcome), unit = unitOf(timeLabel), u = unit ? ' ' + unit : '';
+    const rs = rows.filter(r => isFinite(toNum(r[a.outcome])) && toNum(r[a.outcome]) >= 0 && toCat(r[a.event]) !== null);
+    const T = groups.map(g => rs.filter(r => groupOf(cfg, r) === g)); if (T.some(x => !x.length)) return null;
+    const cause = r => toCat(r[a.event]) === a.positive ? 1 : toCat(r[a.event]) === a.competing ? 2 : 0;
+    const times = T.map(x => x.map(r => toNum(r[a.outcome]))), cs = T.map(x => x.map(cause));
+    const ci = times.map((t, g) => S.cumIncidence(t, cs[g])), cc = times.map((t, g) => S.cumIncidence(t, cs[g].map(c => c === 2 ? 1 : c === 1 ? 2 : 0)));
+    const one = k === 1, lr = one ? null : S.logRank(times, cs.map(c => c.map(v => v === 1)));
+    used.add('cif');
+    const ats = numList(a.at).filter(x => x >= 0), at = (m, tt) => { let v = 0; for (const q of m.steps) if (q.t <= tt) v = q.s; return v; };
+    const ev = a.positive, comp = a.competing, cnt = (g, c) => cs[g].filter(v => v === c).length, pc = (g, c) => `${cnt(g, c)} (${fmt(100 * cnt(g, c) / cs[g].length, 1)}%)`;
+    const head = ['', 'n', `${ev} (%)`, `${comp} (%)`, 'Censored', ...ats.map(tt => `CIF of ${ev} at ${fmt(tt, d)}${u}`), ...(one ? [] : ['Cause-specific log-rank P'])];
+    const trows = ci.map((m, g) => { const row = [{ t: [one ? 'All patients' : gl[g]], b: true }, { t: [String(cs[g].length)] }, { t: [pc(g, 1)] }, { t: [pc(g, 2)] }, { t: [String(cnt(g, 0))] }];
+      ats.forEach(tt => row.push({ t: [`${fmt(100 * at(m, tt), 1)}%`] })); if (g === 0 && !one) row.push({ t: [fmtP(lr.p, alpha)], rs: k }); return row; });
+    const where = g => one ? 'the studied patients' : gl[g];
+    const sent = [`With ${lowerFirst(comp)} as a competing event, the cumulative incidence of ${lowerFirst(ev)} by the end of follow-up was ${listJoin(ci.map((m, g) => `${fmt(100 * m.final, 1)}% in ${where(g)}`))}.`];
+    ats.forEach(tt => sent.push(`At ${fmt(tt, d)}${u}, it was ${listJoin(ci.map((m, g) => `${fmt(100 * at(m, tt), 1)}% in ${where(g)}`))}.`));
+    if (!one) sent.push(`The cause-specific hazard of ${lowerFirst(ev)} was ${lr.p <= alpha ? 'significantly' : 'insignificantly'} different ${amongTxt(k)} (log-rank P value ${pTxt(lr.p)}).`);
+    if (a.commentDetail === 'detailed') sent.push(`The cumulative incidence of ${lowerFirst(comp)} was ${listJoin(cc.map((m, g) => `${fmt(100 * m.final, 1)}% in ${where(g)}`))}.`);
+    const f = [...(!one && lr.p <= alpha ? [`*: Significant as P value ≤ ${alpha}`] : []), 'CIF: Cumulative incidence function (Aalen-Johansen)', `${columnLabel(cfg, a.event)} = ${ev}: the event; ${comp}: competing event; other values are censored`, ...(one ? [] : [`Log-rank χ²(${lr.df}) = ${fmt(lr.chi, 2)}, with competing events censored`])];
+    const series = one ? [{ name: ev, steps: ci[0].steps, censored: ci[0].censored }, { name: comp, steps: cc[0].steps, censored: [] }] : ci.map((m, g) => ({ name: gl[g], steps: m.steps, censored: m.censored }));
+    return { kind: 'cif', title: `Cumulative incidence of ${lowerFirst(ev)} with ${lowerFirst(comp)} as a competing event${one ? '' : ' in the studied groups'}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
+      figures: [{ sig: one || lr.p <= alpha, caption: `Cumulative incidence of ${lowerFirst(ev)}${one ? ` and ${lowerFirst(comp)}` : ' in the studied groups'}`, spec: { type: 'km', cif: true, yLabel: 'Cumulative incidence', xLabel: timeLabel, series, ...(one ? {} : { note: `Log-rank P ${pTxt(lr.p)}` }) } }],
+      meta: { ci, cc, lr } };
+  }
+  // time-dependent ROC: cumulative/dynamic AUC(t) of each marker at chosen times (Uno's inverse-probability-of-censoring weights)
+  function tdrocSection(a, cfg, rows, alpha, d, used) {
+    const mk = (a.predictors || []).filter(c => c !== a.outcome && c !== a.event); if (!mk.length) return null;
+    const rs = rows.filter(r => isFinite(toNum(r[a.outcome])) && toNum(r[a.outcome]) >= 0 && toCat(r[a.event]) !== null && mk.every(c => isFinite(toNum(r[c])))); if (rs.length < 20) return null;
+    const time = rs.map(r => toNum(r[a.outcome])), ev = rs.map(r => toCat(r[a.event]) === a.positive), et = time.filter((_, i) => ev[i]); if (et.length < 5) return null;
+    let ts = numList(a.at).filter(x => x > 0); if (!ts.length) ts = [0.25, 0.5, 0.75].map(q => S.quantile(et, q));
+    const timeLabel = columnLabel(cfg, a.outcome), u = unitOf(timeLabel) ? ' ' + unitOf(timeLabel) : '', evN = `${lowerFirst(plain(columnLabel(cfg, a.event)))} (${a.positive})`;
+    const res = mk.map(c => ({ c, label: plain(columnLabel(cfg, c)), at: ts.map(t => S.tdAucCI(time, ev, rs.map(r => toNum(r[c])), t, 200, 1)) }));
+    used.add('tdroc');
+    const head = ['', ...ts.map(t => `AUC at ${fmt(t, d)}${u} (95% CI)`)], cell = q => isFinite(q.auc) ? `${fmt(q.auc, 3)} (${isFinite(q.lo) ? `${fmt(q.lo, 3)}-${fmt(q.hi, 3)}` : '—'})` : '—';
+    const g0 = S.quantile(et, 0.1), g1 = S.quantile(et, 0.9), gs = niceScale(g0, g1, 8), grid = []; for (let t = gs.min; t <= g1 + 1e-9; t += gs.step) if (t >= g0 - 1e-9) grid.push(+t.toFixed(10)); if (grid.length < 3) grid.splice(0, grid.length, g0, (g0 + g1) / 2, g1);
+    const curve = res.map(r => grid.map(t => S.tdAuc(time, ev, rs.map(x => toNum(x[r.c])), t)));
+    const sent = res.map(r => `The time-dependent AUC of ${lowerFirst(r.label)} for ${evN} was ${listJoin(r.at.map((q, i) => `${fmt(q.auc, 3)} at ${fmt(ts[i], d)}${u}`))}.`);
+    const best = res.length > 1 ? res.map(r => [r, S.mean(r.at.map(q => q.auc).filter(isFinite))]).sort((x, y) => y[1] - x[1])[0][0] : null;
+    if (best) sent.push(`${cap(lowerFirst(best.label))} had the highest discrimination over follow-up.`);
+    return { kind: 'tdroc', title: `Time-dependent ROC analysis for prediction of ${evN}`, head, rows: res.map(r => [{ t: [r.label], b: true }, ...r.at.map(q => ({ t: [cell(q)] }))]),
+      footnote: `Cumulative/dynamic AUC(t): patients with the event by time t against those still event-free after t, with inverse-probability-of-censoring weights (Uno); higher values = higher risk; 95% CI by bootstrap (200 resamples); n=${rs.length}, ${et.length} events.`,
+      comment: sent.join(' '), figures: [{ sig: true, caption: `Time-dependent AUC of ${listJoin(res.map(r => lowerFirst(r.label)))} for ${evN} over follow-up`,
+        spec: { type: 'line', categories: grid.map(t => String(+t.toPrecision(4))), xValues: grid, xLabel: timeLabel, yLabel: 'AUC(t)', series: res.map((r, i) => ({ name: r.label, values: curve[i] })), ...(res.length < 2 ? { legend: false } : {}) } }], meta: { res, ts } };
+  }
+  // quantile (median) regression with robust kernel standard errors
+  function quantregSection(a, cfg, rows, alpha, d, used) {
+    const D = design(a, cfg, rows, r => isFinite(toNum(r[a.outcome]))); if (!D.preds.length || D.rs.length < D.labels.length + 10) return null;
+    const qs = numList(a.quantiles || '0.5').filter(q => q > 0 && q < 1); if (!qs.length) qs.push(0.5);
+    const y = D.rs.map(r => toNum(r[a.outcome])), fits = qs.map(q => S.quantReg(D.X, y, q)); if (fits.some(f => !f)) return null; used.add('quantreg');
+    const lab = plain(columnLabel(cfg, a.outcome)), qn = q => q === 0.5 ? 'median' : `${Math.round(q * 100)}th percentile`;
+    const head = ['', ...qs.flatMap(q => [`${cap(qn(q))}: B (95% CI)`, 'P value'])], anySig = fits.some(f => f.terms.slice(1).some(t => t.p <= alpha));
+    const sent = qs.map((q, k) => { const sig = D.labels.map((l, i) => [l, fits[k].terms[i + 1]]).filter(([, t]) => t.p <= alpha);
+      return sig.length ? `At the ${qn(q)} of ${lowerFirst(lab)}, ${listJoin(sig.map(([l, t]) => `${lowerFirst(plain(l))} (B = ${fmt(t.B, d)}, 95% CI ${fmt(t.lo, d)} to ${fmt(t.hi, d)}, P value ${pTxt(t.p)})`))} ${sig.length > 1 ? 'were' : 'was'} significantly associated with it.`
+        : `None of the studied variables was significantly associated with the ${qn(q)} of ${lowerFirst(lab)}.`; });
+    return { kind: 'quantreg', title: `Quantile regression analysis of ${lowerFirst(lab)}`, head,
+      rows: D.labels.map((l, i) => [{ t: [l], b: true }, ...fits.flatMap(f => [{ t: [`${fmt(f.terms[i + 1].B, d)} (${fmt(f.terms[i + 1].lo, d)} to ${fmt(f.terms[i + 1].hi, d)})`] }, { t: [fmtP(f.terms[i + 1].p, alpha)] }])]),
+      footnote: [anySig ? `*: Significant as P value ≤ ${alpha}` : '', 'B: change in the quantile of the outcome per unit (or against the reference)', 'CI: Confidence interval', 'Robust (kernel) standard errors', `n=${D.rs.length}`, ...D.refs].filter(Boolean).join(', ') + '.',
+      comment: sent.join(' '), figures: [], meta: { fits } };
+  }
+  // Fleiss' kappa: agreement of three or more raters on a categorical rating
+  function fleissSection(a, cfg, rows, alpha, d, used) {
+    const rc = (a.predictors || []); if (rc.length < 2) return null;
+    const rs = rows.filter(r => rc.every(c => toCat(r[c]) !== null)); if (rs.length < 5) return null;
+    const m = S.fleissKappa(rs.map(r => rc.map(c => toCat(r[c])))); if (!isFinite(m.kappa)) return null; used.add('fleiss');
+    return { kind: 'fleiss', title: `Agreement between ${m.raters} raters (${listJoin(rc.map(c => plain(columnLabel(cfg, c))))})`, head: ['', 'Value'],
+      rows: [[{ t: ['Subjects / raters / categories'], b: true }, { t: [`${m.N} / ${m.raters} / ${m.cats}`] }], [{ t: ["Fleiss' κ"], b: true }, { t: [fmt(m.kappa, 3)] }], [{ t: ['z'], b: true }, { t: [fmt(m.z, 2)] }], [{ t: ['P value'], b: true }, { t: [fmtP(m.p, alpha)] }], [{ t: ['Agreement'], b: true }, { t: [cap(kGrade(m.kappa))] }]],
+      footnote: "κ: Fleiss' kappa (test against κ = 0), Interpretation (Landis & Koch): ≤0.20 slight, 0.21-0.40 fair, 0.41-0.60 moderate, 0.61-0.80 substantial, >0.80 almost perfect.",
+      comment: `The agreement between the ${m.raters} raters was ${kGrade(m.kappa)} (Fleiss' κ = ${fmt(m.kappa, 3)}, P value ${pTxt(m.p)}).`, figures: [], meta: { m } };
+  }
+  // repeated-measures correlation: the within-patient association of two variables measured several times (long data, one row per visit)
+  function rmcorrSection(a, cfg, rows, alpha, d, used) {
+    if (!a.second || !a.idcol) return null;
+    const rs = rows.filter(r => isFinite(toNum(r[a.outcome])) && isFinite(toNum(r[a.second])) && r[a.idcol] !== null && r[a.idcol] !== undefined && String(r[a.idcol]).trim() !== '');
+    const ids = rs.map(r => String(r[a.idcol]).trim()), cntId = {}; ids.forEach(i => { cntId[i] = (cntId[i] || 0) + 1; });
+    const keep = rs.map((_, i) => cntId[ids[i]] >= 2), R = rs.filter((_, i) => keep[i]), sid = ids.filter((_, i) => keep[i]);
+    if (new Set(sid).size < 3 || R.length < new Set(sid).size + 3) return null;
+    const x = R.map(r => toNum(r[a.second])), y = R.map(r => toNum(r[a.outcome])), m = S.rmCorr(x, y, sid); if (!isFinite(m.r)) return null; used.add('rmcorr');
+    const lx = plain(columnLabel(cfg, a.second)), ly = plain(columnLabel(cfg, a.outcome)), str = Math.abs(m.r) < 0.3 ? 'weak' : Math.abs(m.r) < 0.7 ? 'moderate' : 'strong';
+    return { kind: 'rmcorr', title: `Repeated-measures correlation between ${lowerFirst(lx)} and ${lowerFirst(ly)}`, head: ['', 'rrm', '95% CI', 'df', 'P value'],
+      rows: [[{ t: [`${lx} vs ${lowerFirst(ly)}`], b: true }, { t: [fmt(m.r, 3)] }, { t: [`${fmt(m.lo, 3)} to ${fmt(m.hi, 3)}`] }, { t: [String(m.df)] }, { t: [fmtP(m.p, alpha)] }]],
+      footnote: `rrm: repeated-measures correlation (common within-patient slope, ANCOVA), ${m.n} observations of ${m.subjects} patients.`,
+      comment: m.p <= alpha ? `Within patients, ${lowerFirst(lx)} showed a significant ${str} ${m.r > 0 ? 'positive' : 'negative'} correlation with ${lowerFirst(ly)} (rrm = ${fmt(m.r, 3)}, 95% CI ${fmt(m.lo, 3)} to ${fmt(m.hi, 3)}, P value ${pTxt(m.p)}).`
+        : `Within patients, there was no significant correlation between ${lowerFirst(lx)} and ${lowerFirst(ly)} (rrm = ${fmt(m.r, 3)}, P value ${pTxt(m.p)}).`,
+      figures: [{ sig: m.p <= alpha, caption: `Repeated measurements of ${lowerFirst(lx)} and ${lowerFirst(ly)} (${m.subjects} patients)`, spec: { type: 'scatter', x, y, xLabel: columnLabel(cfg, a.second), yLabel: columnLabel(cfg, a.outcome) } }], meta: { m } };
+  }
+  // Firth's penalized logistic regression: small samples and complete separation
+  function firthSection(a, cfg, rows, alpha, d, used) {
+    const D = design(a, cfg, rows, r => toCat(r[a.outcome]) !== null); if (!D.preds.length || D.rs.length < D.labels.length + 3) return null;
+    const y = D.rs.map(r => +(toCat(r[a.outcome]) === a.positive)); if (!y.some(Boolean) || y.every(Boolean)) return null;
+    const m = S.firthLogistic(D.X, y); if (!m) return null; used.add('firth');
+    const what = eventName(cfg, a), sig = D.labels.map((l, i) => [l, m.terms[i + 1]]).filter(([, t]) => t.p <= alpha);
+    return { kind: 'firth', title: `Firth logistic regression analysis for prediction of ${what}`, head: ['', 'OR (95% CI)', 'P value'],
+      rows: D.labels.map((l, i) => [{ t: [l], b: true }, { t: [`${fmt(m.terms[i + 1].or, 2)} (${fmt(m.terms[i + 1].lo, 2)}-${fmt(m.terms[i + 1].hi, 2)})`] }, { t: [fmtP(m.terms[i + 1].p, alpha)] }]),
+      footnote: [sig.length ? `*: Significant as P value ≤ ${alpha}` : '', 'OR: Odds ratio', 'CI: Confidence interval (Wald)', "Firth's penalized likelihood (bias-reduced, valid under separation)", `n=${m.n}, ${y.filter(Boolean).length} events`, ...D.refs].filter(Boolean).join(', ') + '.',
+      comment: sig.length ? `In Firth logistic regression, ${listJoin(sig.map(([l, t]) => `${lowerFirst(plain(l))} (OR = ${fmt(t.or, 2)}, 95% CI ${fmt(t.lo, 2)}-${fmt(t.hi, 2)}, P value ${pTxt(t.p)})`))} ${sig.length > 1 ? 'were significant predictors' : 'was a significant predictor'} of ${what}.`
+        : `None of the studied variables was a significant predictor of ${what} in Firth logistic regression.`, figures: [], meta: { m } };
+  }
+  // regression after multiple imputation of the missing values (chained equations; pooled by Rubin's rules), beside the complete-case model
+  function miSection(a, cfg, rows, alpha, d, used) {
+    const logistic = !!a.positive && columnKind(cfg, rows, a.outcome) !== 'numeric';
+    const preds = (a.predictors || []).filter(c => c !== a.outcome).map(c => encode(cfg, rows, c)).filter(e => e.terms.length); if (!preds.length) return null;
+    const yOf = r => logistic ? (toCat(r[a.outcome]) === null ? null : +(toCat(r[a.outcome]) === a.positive)) : (isFinite(toNum(r[a.outcome])) ? toNum(r[a.outcome]) : null);
+    const M = rows.map(r => [yOf(r), ...preds.flatMap(e => e.ok(r) ? e.terms.map(t => t.get(r)) : e.terms.map(() => null))]);
+    const labels = preds.flatMap(e => e.terms.map(t => t.label)), p = labels.length, n = M.length, nMiss = M.filter(r => r.some(v => v === null)).length;
+    if (n < p + 10) return null;
+    const kinds = [logistic ? 'bin' : 'num', ...preds.flatMap(e => e.terms.map(() => e.ref !== undefined ? 'bin' : 'num'))];
+    const fit = D => { const X = D.map(r => r.slice(1)), y = D.map(r => r[0]); return logistic ? S.logisticRegression(X, y) : S.linearRegression(X, y); };
+    const cc = M.filter(r => r.every(v => v !== null)), mc = cc.length > p + 2 ? fit(cc) : null;
+    const nImp = Math.max(5, Math.min(50, parseInt(a.mImp) || 20)), imps = nMiss ? S.mice(M, kinds, nImp, 10, 1) : [M];
+    const fits = imps.map(fit).filter(Boolean); if (!fits.length) return null;
+    const pooled = S.rubin(fits.map(f => ({ b: f.terms.map(t => t.B), v: f.terms.map(t => t.se ** 2) })), n - p - 1); used.add('mi');
+    const E = t => logistic ? `${fmt(Math.exp(t.B), 2)} (${fmt(Math.exp(t.lo), 2)}-${fmt(Math.exp(t.hi), 2)})` : `${fmt(t.B, d)} (${fmt(t.lo, d)} to ${fmt(t.hi, d)})`, effN = logistic ? 'OR (95% CI)' : 'B (95% CI)';
+    const ccT = j => { if (!mc) return null; const t = mc.terms[j]; return logistic ? { B: t.B, lo: Math.log(t.lo), hi: Math.log(t.hi), p: t.p } : t; };
+    const what = logistic ? eventName(cfg, a) : lowerFirst(plain(columnLabel(cfg, a.outcome))), sig = labels.map((l, i) => [l, pooled[i + 1]]).filter(([, t]) => t.p <= alpha);
+    const missPct = M[0].map((_, j) => M.filter(r => r[j] === null).length).map(v => 100 * v / n), missTxt = [[plain(columnLabel(cfg, a.outcome)), missPct[0]], ...labels.map((l, i) => [plain(l), missPct[i + 1]])].filter(([, v]) => v > 0).map(([l, v]) => `${l} ${fmt(v, 1)}%`).join('; ');
+    return { kind: 'mi', title: `${logistic ? 'Logistic' : 'Linear'} regression analysis for prediction of ${what} after multiple imputation`, head: ['', `Complete cases ${effN}`, 'P value', `Imputed ${effN}`, 'P value', 'FMI'],
+      rows: labels.map((l, i) => { const c = ccT(i + 1), t = pooled[i + 1]; return [{ t: [l], b: true }, { t: [c ? E(c) : '—'] }, { t: [c ? fmtP(c.p, alpha) : '—'] }, { t: [E(t)] }, { t: [fmtP(t.p, alpha)] }, { t: [fmt(t.fmi, 2)] }]; }),
+      footnote: [sig.length ? `*: Significant as P value ≤ ${alpha}` : '', logistic ? 'OR: Odds ratio' : 'B: Unstandardized coefficient', 'CI: Confidence interval', 'FMI: fraction of missing information',
+        `${nImp} imputations by chained equations (predictive mean matching for numeric, logistic models for yes/no terms), pooled by Rubin's rules`, `complete cases n=${cc.length} of ${n}`, missTxt ? `missing: ${missTxt}` : 'no missing values'].filter(Boolean).join(', ') + '.',
+      comment: (sig.length ? `After multiple imputation of the missing values (${nMiss} of ${n} patients incomplete), ${listJoin(sig.map(([l, t]) => `${lowerFirst(plain(l))} (${logistic ? `OR = ${fmt(Math.exp(t.B), 2)}` : `B = ${fmt(t.B, d)}`}, P value ${pTxt(t.p)})`))} ${sig.length > 1 ? 'were significant predictors' : 'was a significant predictor'} of ${what}.`
+        : `After multiple imputation of the missing values (${nMiss} of ${n} patients incomplete), none of the studied variables was a significant predictor of ${what}.`) + (mc ? ` The complete-case analysis used ${cc.length} patients.` : ''),
+      figures: [], meta: { pooled, mc } };
+  }
   function rocSection(a, cfg, rows, alpha, d, used) {
     const outLabel = columnLabel(cfg, a.outcome);
     const tests = a.predictors.filter(c => c !== a.outcome && columnKind(cfg, rows, c) === 'numeric');
@@ -2458,21 +2626,24 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm'].includes(a.type))) continue;
+      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss'].includes(a.type))) continue;
       const needs = {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
         mcnemar: () => a.second, kappa: () => a.second, agreement: () => a.second, diagnostic: () => a.positive && a.event && a.eventPositive, cronbach: () => true, cochran: () => (a.predictors || []).length >= 2, count: () => (a.predictors || []).length, ordinal: () => (a.predictors || []).length, multinom: () => (a.predictors || []).length,
         methodcomp: () => a.second, pca: () => (a.predictors || []).length >= 3, partial: () => a.second && (a.predictors || []).length, anova2: () => a.second, mediation: () => a.second && a.xvar, psm: () => (a.predictors || []).length, lmm: () => a.rvar, tost: () => a.margin !== undefined && a.margin !== '', mh: () => a.positive && a.second, clogit: () => a.positive && a.second && (a.predictors || []).length,
-        correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second
+        correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second,
+        cif: () => a.event && a.positive && a.competing, tdroc: () => a.event && a.positive && (a.predictors || []).length, quantreg: () => (a.predictors || []).length, fleiss: () => (a.predictors || []).length >= 2,
+        rmcorr: () => a.second && a.idcol, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
-        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, count: countSection, ordinal: ordinalSection, multinom: ordinalSection, methodcomp: methodSection, pca: pcaSection, partial: partialSection, anova2: anova2Section, mediation: mediationSection, psm: psmSection, lmm: lmmSection, tost: tostSection, mh: mhSection, clogit: clogitSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection }[a.type];
+        agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, count: countSection, ordinal: ordinalSection, multinom: ordinalSection, methodcomp: methodSection, pca: pcaSection, partial: partialSection, anova2: anova2Section, mediation: mediationSection, psm: psmSection, lmm: lmmSection, tost: tostSection, mh: mhSection, clogit: clogitSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection,
+        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, firth: firthSection, mi: miSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
-      const compares = ['ancova', 'survival', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
+      const compares = ['ancova', 'survival', 'cif', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
         : a.subset === 'each' ? groups.map(g => ({ g, rows: rows.filter(r => groupOf(cfg, r) === g) }))
         : groups.includes(a.subset) ? [{ g: a.subset, rows: rows.filter(r => groupOf(cfg, r) === a.subset) }] : [{ g: null, rows }];
@@ -2829,7 +3000,15 @@ const Analysis = (() => {
       psm: 'Propensity scores from logistic regression were used for 1:1 nearest-neighbour matching within a caliper and for inverse probability of treatment weighting; balance was judged by standardized mean differences below 0.1.',
       lmmAdv: 'Repeated outcomes were analysed with linear mixed models with a random intercept per patient, adjusted for covariates.', interaction: 'Interaction terms were added to the regression models where stated.',
       optimism: 'Models were internally validated by bootstrapping (200 resamples) with optimism-corrected AUC.', nri: 'The added value of a predictor was assessed with the continuous net reclassification improvement (NRI) and the integrated discrimination improvement (IDI).',
-      dca: 'Clinical usefulness was assessed with decision curve analysis (net benefit).' };
+      dca: 'Clinical usefulness was assessed with decision curve analysis (net benefit).',
+      cif: 'In the presence of competing events, the cumulative incidence of the event was estimated with the Aalen-Johansen method, and groups were compared with the cause-specific log-rank test.',
+      tdroc: "Time-dependent discrimination was assessed with the cumulative/dynamic AUC(t) using Uno's inverse-probability-of-censoring weights, with bootstrap 95% CI.",
+      quantreg: 'Quantile regression with robust (kernel) standard errors was used to model the median (and other quantiles) of skewed outcomes.',
+      fleiss: "Agreement between three or more raters was assessed with Fleiss' kappa.", rmcorr: 'Within-patient associations of repeatedly measured variables were assessed with repeated-measures correlation.',
+      firth: "Firth's penalized-likelihood logistic regression was used to reduce small-sample bias and to handle separation.",
+      mi: "Missing values were handled by multiple imputation by chained equations (predictive mean matching), and estimates were pooled with Rubin's rules.",
+      rcs: 'Non-linear effects of continuous predictors were modelled with restricted cubic splines (knots at Harrell\'s recommended percentiles) and tested with Wald tests.',
+      nomogram: 'A nomogram was constructed from the logistic regression model.' };
     Object.entries(M8).forEach(([k2, t]) => { if (used.has(k2)) s.push(t); });
     if (used.has('tost')) s.push('Equivalence was tested with two one-sided t-tests (TOST) against the stated margin, using the 90% confidence interval of the mean difference.');
     if (used.has('mh')) s.push('Odds ratios stratified by a third variable were pooled with the Mantel-Haenszel method, and their homogeneity checked with the Breslow-Day test.');
