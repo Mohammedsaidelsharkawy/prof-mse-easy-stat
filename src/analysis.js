@@ -172,7 +172,7 @@ const Analysis = (() => {
     const rr = binary ? pairs(k).map(([i, j]) => ({ i, j, ...(effect(i, j) || { rr: null }) })) : [];
     // optional Bonferroni-adjusted pairwise comparisons once the overall test is significant (3+ groups)
     let catPairs = null;
-    if (opts.chiPost && k > 2 && p <= opts.alpha) { catPairs = S.chiSquarePairwise(table, opts.fisher, opts.chiAdjust || 'bonferroni'); used.add('chiPost'); if (opts.chiAdjust === 'holm') used.add('chiHolm'); }
+    if (opts.chiPost && k > 2 && p <= opts.alpha) { catPairs = S.chiSquarePairwise(table, opts.fisher, opts.chiAdjust || 'bonferroni'); used.add('chiPost'); if (opts.chiAdjust === 'holm') used.add('chiHolm'); if (opts.chiAdjust === 'none') used.add('chiNone'); }
     return { table, pct, ns, p, test, stat, rr, binary, pairs: catPairs };
   }
 
@@ -1197,14 +1197,14 @@ const Analysis = (() => {
               return [`${gl[i]} vs ${gl[j]}`, rr ? `${F(rr.rr, 2)} (${ci(rr.lo, rr.hi, 2)})` : '—', or ? `${F(or.or, 2)} (${ci(or.lo, or.hi, 2)})` : '—']; });
             it.tables.push({ cat: 'tests', title: `Effect of “${levels[0]}”`, head: ['Pair', 'Relative risk (95% CI)', 'Odds ratio (95% CI)'], rows: eff });
           }
-          const pw = k > 2 ? S.chiSquarePairwise(tab, opts.fisher) : null;
-          if (pw) it.tables.push({ cat: 'pairs', title: 'Pairwise comparisons (Bonferroni)', head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
+          const pw = k > 2 ? S.chiSquarePairwise(tab, opts.fisher, opts.chiAdjust || 'bonferroni') : null, adjName = { holm: 'Holm', none: 'no correction' }[opts.chiAdjust] || 'Bonferroni';
+          if (pw) it.tables.push({ cat: 'pairs', title: `Pairwise comparisons (${adjName})`, head: ['Pair', 'P value'], rows: pw.map(q => [`${gl[q.i]} vs ${gl[q.j]}`, P(q.p)]) });
           // relative risk of the first category for each pair, with the pairwise P (the overall test for two groups)
           const two = levels.length === 2;
-          it.effects = { title: 'Pairwise comparisons and effect estimates', head: ['Pair', ...(two ? [`Relative risk of “${levels[0]}” (95% CI)`, 'Odds ratio (95% CI)'] : []), k > 2 ? 'P value (Bonferroni)' : 'P value'],
+          it.effects = { title: 'Pairwise comparisons and effect estimates', head: ['Pair', ...(two ? [`Relative risk of “${levels[0]}” (95% CI)`, 'Odds ratio (95% CI)'] : []), k > 2 ? `P value (${adjName})` : 'P value'],
             rows: pairs(k).map(([i, j], q) => { const rr = two ? S.relativeRisk(tab, 0, i, j) : null, or = two ? S.oddsRatio(tab, 0, i, j) : null;
               return [`${gl[i]} vs ${gl[j]}`, ...(two ? [rr ? `${F(rr.rr, 2)} (${ci(rr.lo, rr.hi, 2)})` : '—', or ? `${F(or.or, 2)} (${ci(or.lo, or.hi, 2)})` : '—'] : []), P(pw ? pw[q].p : cres.p)]; }),
-            note: `${two ? `Relative risk and odds ratio of “${levels[0]}” in the first group of each pair compared with the second. ` : ''}${k > 2 ? `P values: ${opts.fisher ? 'Chi-square or Fisher' : 'Chi-square'} test between each two groups, Bonferroni-adjusted.` : `P value: ${TEST_NAME[cres.test] || cres.test}.`}` };
+            note: `${two ? `Relative risk and odds ratio of “${levels[0]}” in the first group of each pair compared with the second. ` : ''}${k > 2 ? `P values: ${opts.fisher ? 'Chi-square or Fisher' : 'Chi-square'} test between each two groups, ${opts.chiAdjust === 'none' ? 'without correction' : `${adjName}-adjusted`}.` : `P value: ${TEST_NAME[cres.test] || cres.test}.`}` };
         }
         Object.assign(it, { n: N, normal: '—' }); if (it.test === undefined) Object.assign(it, { test: '', p: NaN });
         it.spec = { type: 'bar', percent: true, labels: true, categories: gl, yLabel: '% of the patients', series: levels.map((l, li) => ({ name: l, values: tab[li].map((c, g) => ns[g] ? 100 * c / ns[g] : 0) })) };
@@ -1806,7 +1806,7 @@ const Analysis = (() => {
             if (c.pairs) {
               const sp = c.pairs.filter(q => q.p <= alpha);
               sent.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).`
-                : `Pairwise comparisons were insignificant after ${opts.chiAdjust === 'holm' ? 'Holm' : 'Bonferroni'} correction.`);
+                : (opts.chiAdjust === 'none' ? 'Pairwise comparisons were insignificant.' : `Pairwise comparisons were insignificant after ${opts.chiAdjust === 'holm' ? 'Holm' : 'Bonferroni'} correction.`));
             }
           }
         }
@@ -1839,7 +1839,7 @@ const Analysis = (() => {
               else out.push(`The distribution of ${lowerFirst(lab)} ${sig ? 'differed significantly' : 'did not differ significantly'} ${amongTxt(k)} (${vals}; ${pb}).`);
               if (sig && c.pairs) {
                 const sp = c.pairs.filter(q => q.p <= alpha);
-                out.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).` : `Pairwise comparisons were insignificant after ${opts.chiAdjust === 'holm' ? 'Holm' : 'Bonferroni'} correction.`);
+                out.push(sp.length ? `Pairwise, it differed significantly between ${pairList(sp, gl)} (P value ${pList(sp.map(q => q.p))}).` : (opts.chiAdjust === 'none' ? 'Pairwise comparisons were insignificant.' : `Pairwise comparisons were insignificant after ${opts.chiAdjust === 'holm' ? 'Holm' : 'Bonferroni'} correction.`));
               }
             }
           }
@@ -2188,7 +2188,7 @@ const Analysis = (() => {
     if (used.has('param')) cont.push(k === 2 ? (used.has('welch') ? "Student's or Welch's t-test" : "Student's t-test")
       : `one-way ANOVA with Tukey's post hoc test${used.has('welchAnova') ? " (Welch's ANOVA with Games-Howell when variances differed)" : ''}`);
     if (used.has('nonparam')) cont.push(k === 2 ? 'Mann-Whitney U test' : `Kruskal-Wallis test with ${used.has('dunn') ? "Dunn's" : `pairwise Mann-Whitney${used.has('mwAdj:holm') ? ' (Holm)' : used.has('mwAdj:bonferroni') ? ' (Bonferroni)' : ''}`} post hoc tests`);
-    const cat = used.has('cat') ? `χ² test${used.has('fisher') ? " or Fisher's exact test" : ''}${used.has('chiPost') ? ` (${used.has('chiHolm') ? 'Holm' : 'Bonferroni'}-corrected pairwise comparisons)` : ''}` : '';
+    const cat = used.has('cat') ? `χ² test${used.has('fisher') ? " or Fisher's exact test" : ''}${used.has('chiPost') ? ` (${used.has('chiNone') ? 'pairwise comparisons without correction' : `${used.has('chiHolm') ? 'Holm' : 'Bonferroni'}-corrected pairwise comparisons`})` : ''}` : '';
     if (cont.length || cat) s.push(`Groups were compared using ${[cont.length ? `the ${cont.join(' or the ')} for continuous variables` : '', cat ? `the ${cat} for categorical variables` : ''].filter(Boolean).join(' and ')}.`);
     const w = [];
     if (used.has('pairedt')) w.push('paired t-test'); if (used.has('wilcoxon')) w.push('Wilcoxon signed-rank test');
@@ -2246,7 +2246,7 @@ const Analysis = (() => {
       s.push(`Quantitative non-parametric data were presented as median and interquartile range (IQR) and were analyzed by ${t}.`);
     }
     if (used.has('cat')) s.push(`Qualitative variables were presented as frequency and percentage (%) and were analyzed utilizing the Chi-square test${used.has('fisher') ? " or Fisher's exact test when appropriate" : ''}.`);
-    if (used.has('chiPost')) s.push(`When significant, qualitative variables were compared between each two groups with ${used.has('chiHolm') ? 'Holm' : 'Bonferroni'} correction.`);
+    if (used.has('chiPost')) s.push(`When significant, qualitative variables were compared between each two groups ${used.has('chiNone') ? 'without correction for multiple comparisons' : `with ${used.has('chiHolm') ? 'Holm' : 'Bonferroni'} correction`}.`);
     if (o.effect) {
       const e = [];
       if (used.has('param')) e.push(k === 2 ? 'mean differences' : 'mean differences (Tukey-adjusted)');

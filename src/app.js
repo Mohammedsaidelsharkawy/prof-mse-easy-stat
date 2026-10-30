@@ -791,6 +791,34 @@
     });
     renderRecode(); toast(`${n} cell${n === 1 ? '' : 's'} recoded in ${col}`);
   };
+  /* ---------- defaults for one step: every option whose control is on that step ---------- */
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-reset]'); if (!b || !state.cfg) return;
+    const n = +b.dataset.reset, panel = $('#p' + n);
+    if (!confirm(`Set every option of step ${n} back to its default?`)) return;
+    const o = state.cfg.options;
+    let k0 = 0;
+    for (const [k, [id]] of Object.entries(OPTION_FIELDS)) { const el = $('#' + id); if (el && panel.contains(el)) { o[k] = Array.isArray(DEFAULT_OPTIONS[k]) ? [...DEFAULT_OPTIONS[k]] : DEFAULT_OPTIONS[k]; k0++; } }
+    if (n === 7) o.customColors = [...DEFAULT_OPTIONS.customColors];
+    renderOptions();
+    if (n === 4) renderTestPlan(); if (n === 5) renderTablePreview(); if (n === 6) renderCommentPreview(); if (n === 7) { renderFigDesign(); schedulePreview(); }
+    toast(`${k0} options of step ${n} back to their defaults`);
+  });
+  /* ---------- tidy column names: one clean, unique name per column; the setup follows ---------- */
+  $('#tidyNames').onclick = () => {
+    const tidy = h => String(h).replace(/[\r\n\t]+/g, ' ').trim().replace(/[^\p{L}\p{N}_().%\-/\s]+/gu, ' ').trim().replace(/\s+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || 'Column';
+    const heads = state.data.headers, used = new Set(), map = [];
+    heads.forEach(h => { let n = tidy(h), k = 2; while (used.has(n.toLowerCase())) n = `${tidy(h)}_${k++}`; used.add(n.toLowerCase()); if (n !== h) map.push([h, n]); });
+    if (!map.length) { $('#tidyInfo').textContent = 'The column names are already tidy.'; return; }
+    editSheet(() => {
+      const ren = Object.fromEntries(map);
+      state.data.rows = state.data.rows.map(r => Object.fromEntries(heads.map(h => [ren[h] || h, r[h]])));
+      state.data.headers = heads.map(h => ren[h] || h);
+      map.forEach(([a, b]) => replaceCol(state.cfg, a, b));
+    });
+    const gained = newRepeated(); renderPrep(); renderGrid();
+    $('#tidyInfo').textContent = `${map.length} name${map.length > 1 ? 's' : ''} tidied: ${map.slice(0, 4).map(([a, b]) => `“${a}” → ${b}`).join(', ')}${map.length > 4 ? ' …' : ''}${gained ? ` — ${gained} repeated measure${gained > 1 ? 's' : ''} found` : ''}.`;
+  };
   /* ---------- fill down: empty cells take the value above (merged cells, group written once per block) ---------- */
   const fillCount = col => { let last = null, n = 0; state.data.rows.forEach(r => { if (!isMissing(r[col])) last = r[col]; else if (last !== null) n++; }); return n; };
   function renderFill() {
@@ -1056,10 +1084,12 @@
   function filterVars() {
     const q = ($('#varSearch').value || '').trim().toLowerCase(), trs = [...document.querySelectorAll('#varsTbl tr[data-vid]')];
     let n = 0;
-    trs.forEach(tr => { const v = state.cfg.variables.find(x => x.id === tr.dataset.vid), hit = !q || (v && (v.label + ' ' + v.cols.map(c => c.col).join(' ')).toLowerCase().includes(q)); tr.style.display = hit ? '' : 'none'; if (hit) n++; });
-    $('#varCount').textContent = q ? `${n} of ${trs.length} variables` : `${trs.length} variables · ${state.cfg.variables.filter(v => v.include).length} included`;
+    const onlyInc = $('#varOnlyInc').checked;
+    trs.forEach(tr => { const v = state.cfg.variables.find(x => x.id === tr.dataset.vid), hit = (!q || (v && (v.label + ' ' + v.cols.map(c => c.col).join(' ')).toLowerCase().includes(q))) && (!onlyInc || (v && v.include)); tr.style.display = hit ? '' : 'none'; if (hit) n++; });
+    $('#varCount').textContent = q || onlyInc ? `${n} of ${trs.length} variables` : `${trs.length} variables · ${state.cfg.variables.filter(v => v.include).length} included`;
   }
   $('#varSearch').addEventListener('input', filterVars);
+  $('#varOnlyInc').onchange = () => { readUiIntoCfg(); filterVars(); };
   // the codebook (data dictionary): every column with its role, label, type, levels, value labels, missing values and range
   $('#btnCodebook').onclick = () => {
     readUiIntoCfg();
@@ -1226,6 +1256,15 @@
     if (m) { const u = m[2].toLowerCase(), one = +m[1] === 1, name = /^(h|hr|hrs|hour|hours)$/.test(u) ? 'h' : /^min/.test(u) ? 'min' : /^d/.test(u) ? (one ? 'day' : 'days') : /^w/.test(u) ? (one ? 'week' : 'weeks') : /^m/.test(u) ? (one ? 'month' : 'months') : (one ? 'year' : 'years'); return `${m[1]} ${name}`; }
     return tpLabel(s);
   }
+  // per outcome: its own first and last timepoint (in its order), every shared timepoint left on
+  $('#tpFirstLast').onclick = () => {
+    readUiIntoCfg(); const cfg = state.cfg, at = t => { const i = cfg.tpOrder.indexOf(t); return i < 0 ? 1e9 : i; }; let n = 0;
+    cfg.tpOrder.forEach(t => { cfg.tpInclude[t] = true; });
+    cfg.variables.filter(v => v.kind === 'repeated').forEach(v => { const order = v.ownOrder ? v.cols : [...v.cols].sort((a, b) => at(a.tp) - at(b.tp));
+      order.forEach((c, i) => { c.include = i === 0 || i === order.length - 1; }); n++; });
+    renderTimepoints(); toast(n ? `${n} repeated measure${n > 1 ? 's' : ''}: only the first and last timepoint are used` : 'No repeated measures');
+  };
+  $('#tpAll').onclick = () => { readUiIntoCfg(); const cfg = state.cfg; cfg.tpOrder.forEach(t => { cfg.tpInclude[t] = true; }); cfg.variables.forEach(v => { if (v.kind === 'repeated') v.cols.forEach(c => { c.include = true; }); }); renderTimepoints(); toast('Every timepoint is used'); };
   $('#tpSort').onclick = () => { readUiIntoCfg(); const o = state.cfg.tpOrder; state.cfg.tpOrder = o.map((t, i) => [t, i]).sort((a, b) => tpRank(a[0]) - tpRank(b[0]) || a[1] - b[1]).map(x => x[0]); renderTimepoints(); toast('Timepoints in time order'); };
   $('#tpRelabel').onclick = () => { readUiIntoCfg(); const cfg = state.cfg; let n = 0; cfg.tpOrder.forEach(t => { const nw = tpReadable(t); if (cfg.tpLabels[t] !== nw && (cfg.tpLabels[t] === t || cfg.tpLabels[t] === tpLabel(t))) { cfg.tpLabels[t] = nw; n++; } }); renderTimepoints(); toast(n ? `${n} timepoint label${n > 1 ? 's' : ''} made readable` : 'The labels are already readable (or typed by you)'); };
   /* ---------- timepoints per outcome (step 3) ---------- */
@@ -1515,7 +1554,7 @@
     if (k < 3) return k === 2 ? '—' : '';
     const t = (it.test || '').toLowerCase();
     if (it.kind === 'repeated') return `Groups at each timepoint; ${o.rmPost === 'all' ? 'every pair of timepoints' : 'each timepoint vs the first'} within groups (${{ bonferroni: 'Bonferroni', holm: 'Holm', none: 'unadjusted' }[o.rmAdjust] || o.rmAdjust})`;
-    if (it.kind === 'categorical') return o.chiPost ? 'Chi-square / Fisher between each two groups (Bonferroni)' : '— (switched off)';
+    if (it.kind === 'categorical') return o.chiPost ? `Chi-square / Fisher between each two groups (${{ holm: 'Holm', none: 'no correction' }[o.chiAdjust] || 'Bonferroni'})` : '— (switched off)';
     if (/kruskal/.test(t)) return o.dunn ? "Dunn's test (Bonferroni)" : `Mann-Whitney${o.mwAdjust && o.mwAdjust !== 'none' ? ` (${o.mwAdjust === 'holm' ? 'Holm' : 'Bonferroni'})` : ''}`;
     if (/welch/.test(t)) return 'Games-Howell';
     if (/anova/.test(t)) return 'Tukey HSD';
@@ -1530,6 +1569,7 @@
       return `<tr><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${esc((it.normal || '—') + forced)}</td><td>${esc(it.test || '—')}</td><td>${esc(postHocOf(it, o, k))}</td><td class="${it.sig ? 'sig' : ''}">${isFinite(it.p) ? esc(Analysis.fmtP(it.p, o.alpha)) : it.sig ? 'significant' : '—'}</td></tr>`; }).join('')}</tbody>`;
   }
   $('#p4').addEventListener('change', scheduleDesign(() => renderTestPlan()));
+  $('#planXlsx').onclick = () => { const wb = XLSX.utils.table_to_book($('#testPlan'), { sheet: 'Test plan' }); XLSX.writeFile(wb, `${baseName()} - Test plan.xlsx`); };
   function renderTablePreview() {
     const box = $('#tblPreview'); if (!box || !state.cfg || !state.data) return;
     const o = state.cfg.options, { s, msg } = previewSection();
@@ -1623,6 +1663,7 @@
       return `<div class="gcard" data-adv="${ai}">
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
           <label class="check" style="margin:0"><input type="checkbox" data-af="include" ${a.include !== false ? 'checked' : ''}><span>Include</span></label>
+ <button class="btn ghost small" data-advmove="${ai},-1" type="button" title="Move up" ${ai === 0 ? 'disabled' : ''}>↑</button><button class="btn ghost small" data-advmove="${ai},1" type="button" title="Move down" ${ai === state.cfg.advanced.length - 1 ? 'disabled' : ''}>↓</button>
           <button class="btn ghost small" data-advdup="${ai}" type="button" title="A copy of this analysis, to change one setting">⧉ Duplicate</button>
           <button class="btn ghost small" data-advdel="${ai}" type="button">✕ Remove</button></div>
         <div class="grid g3" style="margin-top:8px">${fields}${uni}</div>
@@ -1694,6 +1735,8 @@
     renderAdvanced();
   });
   $('#advList').addEventListener('click', e => {
+    const mv = e.target.closest('[data-advmove]');
+    if (mv) { readUiIntoCfg(); const [i, dd] = mv.dataset.advmove.split(',').map(Number), A = state.cfg.advanced, j = i + dd; if (j >= 0 && j < A.length) { [A[i], A[j]] = [A[j], A[i]]; renderAdvanced(); } return; }
     const d = e.target.closest('[data-advdup]');
     if (d) { readUiIntoCfg(); const i = +d.dataset.advdup; state.cfg.advanced.splice(i + 1, 0, JSON.parse(JSON.stringify(state.cfg.advanced[i]))); renderAdvanced(); toast('Analysis duplicated — change what you need in the copy'); return; }
     const b = e.target.closest('[data-advdel]'); if (!b) return;
@@ -2113,7 +2156,7 @@
         ${img ? `<div class="xp-fig-below">${img}</div>` : ''}${commentHtml(it)}</div>`;
       // data of each group in the left half, the summary table (and the figure) in the right half
       if (view === 'half') return `<div class="report-sec xp-item">${headRow}
-        <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div>${sumWordHtml(it)}${effWordHtml(it)}${img}${commentHtml(it)}</div></div></div>`;
+        <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div><div class="xp-sumcopy">${sumWordHtml(it)}${effWordHtml(it)}</div><div style="text-align:right"><button class="btn ghost small" data-xpcopy="${esc(it.id)}" type="button" title="Copy these tables, to paste into Word">⧉ Copy tables</button></div>${img}${commentHtml(it)}</div></div></div>`;
       if (view === 'stacked') return `<div class="report-sec xp-item xp-stacked">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
       if (view === 'tables') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div></div>`;
@@ -2166,6 +2209,20 @@
     setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 2000); }, 400);
   }
   $('#xpPrint').onclick = () => { if (state.explore) printPart('Results by variable', $('#explore')); };
+  $('#btnCopyText').onclick = async () => {
+    if (!state.result) return; syncEdits();
+    const r = state.result, plan = exportPlan(r), o = effOptions(), lab = n => Report.figLabel(n, o.captionStyle), out = [];
+    if (r.abstract && plan.rep.abstract) out.push('Results for the abstract', r.abstract, '');
+    if (!isOut('methods')) out.push('Statistical analysis', r.methods, '');
+    out.push('Results'); if (r.intro) out.push(r.intro); if (r.narrative) out.push(r.narrative);
+    if (plan.consortOn && r.consort) out.push(`${lab(plan.consortNum)} ${r.flowCaption}`);
+    r.sections.forEach(s => { if (plan.tabNum.get(s)) out.push('', `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : ':'} ${s.title}`, s.footnote || ''); if (s.comment && !plan.paper && o.commentPlace !== 'none') out.push(s.comment);
+      s.figures.forEach(f => { if (plan.figNum.get(f)) out.push(`${lab(plan.figNum.get(f))} ${f.caption}${f.note ? ' ' + f.note : ''}`); }); });
+    if (r.summary && !isOut('summary')) out.push('', 'Summary of key findings', r.summary);
+    const txt = out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    try { await navigator.clipboard.writeText(txt); } catch (e) { const t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+    toast(`Report text copied (${txt.split(/\s+/).length} words)`);
+  };
   $('#btnPrint').onclick = () => { if (!state.result) return; syncEdits(); printPart(state.cfg.study.title || 'Statistical report', $('#report')); };
   $('#xpXlsx').onclick = () => {
     const x = state.explore; if (!x) return;
@@ -2218,6 +2275,13 @@
     finally { busy(false); }
   };
   $('#xpVar').onchange = drawExplore;
+  $('#explore').addEventListener('click', e => {
+    const c = e.target.closest('[data-xpcopy]'); if (!c) return;
+    const box = c.closest('.xp-half').querySelector('.xp-sumcopy').cloneNode(true), font = state.cfg.options.font;
+    box.querySelectorAll('table').forEach(t => { t.setAttribute('border', '1'); t.setAttribute('cellspacing', '0'); t.setAttribute('cellpadding', '4'); t.style.cssText = `border-collapse:collapse;font-family:'${font}',serif;font-size:10pt`; t.querySelectorAll('th').forEach(th => { th.style.background = '#D9D9D9'; }); });
+    box.querySelectorAll('.xw-title').forEach(d => { d.style.cssText = `font-family:'${font}',serif;font-weight:bold;margin:8px 0 4px`; });
+    copyHtml(box.innerHTML, box.innerText);
+  });
   $('#explore').addEventListener('click', e => { const r = e.target.closest('[data-xpgo]'); if (!r) return; $('#xpVar').value = r.dataset.xpgo; drawExplore(); window.scrollTo(0, $('#p10').offsetTop); });
   $('#xpView').onchange = e => { xpo().view = e.target.value; const y = window.scrollY; drawExplore(); window.scrollTo(0, y); };
   $('#xpFigs').onchange = drawExplore;
