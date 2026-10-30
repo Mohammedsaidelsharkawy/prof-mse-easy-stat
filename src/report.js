@@ -45,8 +45,11 @@ const Report = (() => {
     return new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { after: 160, line: LINE }, keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) })) });
   }
+  // headings: Word's Heading 1 / 2; with WORD_STYLES the look comes from the document's styles only (so a university template can restyle them)
+  let WORD_STYLES = false;
   function heading(text, brand) {
     const { Paragraph, TextRun, HeadingLevel } = D();
+    if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(text)] });
     return new Paragraph({
       heading: HeadingLevel.HEADING_1, spacing: { before: 240, after: 160 },
       children: [new TextRun({ text, bold: true, size: 30, font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
@@ -54,10 +57,23 @@ const Report = (() => {
   }
   function subheading(text, brand, pageBreakBefore) {
     const { Paragraph, TextRun, HeadingLevel } = D();
+    if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_2, keepNext: true, pageBreakBefore, children: [new TextRun(text)] });
     return new Paragraph({
       heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, keepNext: true, pageBreakBefore,
       children: [new TextRun({ text, bold: true, size: 26, font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
     });
+  }
+  // abbreviations explained in Word footnotes at their first use in the statistical analysis
+  const ABBR_FOOT = { SD: 'standard deviation', IQR: 'interquartile range', CI: 'confidence interval', ANOVA: 'analysis of variance', OR: 'odds ratio', RR: 'relative risk', HR: 'hazard ratio', AUC: 'area under the curve',
+    ROC: 'receiver operating characteristic', SPSS: 'Statistical Package for the Social Sciences', ICC: 'intraclass correlation coefficient', SEM: 'standard error of the mean', LMM: 'linear mixed model', NRI: 'net reclassification improvement', IDI: 'integrated discrimination improvement' };
+  function abbrPara(text, notes) {
+    const { Paragraph, TextRun, FootnoteReferenceRun, AlignmentType } = D(), kids = [], seen = new Set(), re = new RegExp(`\\b(${Object.keys(ABBR_FOOT).join('|')})\\b`, 'g');
+    let last = 0, m;
+    while ((m = re.exec(text))) { if (seen.has(m[1])) continue; seen.add(m[1]); kids.push(...runs(text.slice(last, m.index + m[1].length)));
+      const id = Object.keys(notes).length + 1; notes[id] = { children: [new Paragraph({ children: [new TextRun({ text: `${m[1]}: ${ABBR_FOOT[m[1]]}.`, size: 18, font: BODY_FONT })] })] };
+      kids.push(new FootnoteReferenceRun(id)); last = m.index + m[1].length; }
+    kids.push(...runs(text.slice(last)));
+    return new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { after: 160, line: LINE }, children: kids });
   }
   function caption(text, o = {}) {
     const { AlignmentType } = D();
@@ -203,11 +219,20 @@ const Report = (() => {
     // page: A4 or US Letter, normal / narrow / wide margins (the text width follows), body line spacing
     const pg = opts.page || {}, [pw0, ph0] = { letter: [12240, 15840], b5: [9979, 14173], a5: [8391, 11906], legal: [12240, 20160] }[pg.size] || [11906, 16838], mg = { narrow: 720, wide: 1800 }[pg.margin] || 1440;
     PAGE_W = (landscape ? ph0 : pw0) - 2 * mg;
+    if (opts.twoCol) PAGE_W = Math.floor((PAGE_W - 708) / 2); // tables and figures fit one column
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
-    const children = [];
+    const children = [], footnotes = {};
+    WORD_STYLES = !!opts.wordStyles;
     // thesis chapters number as "Table 4.1" / "Figure 4.1"; a journal paper uses sentence-case headings and one Results narrative
     const pre = opts.numberPrefix || '';
-    if (opts.title) children.push(para(opts.title, { bold: true, size: 32, align: AlignmentType.CENTER, after: 240, color: brand ? '7B2FBE' : undefined }));
+    // cover page: title, candidate, supervisor(s), department, date
+    if (opts.cover) { const cv = opts.cover;
+      children.push(para('', { after: 2400 }), para(opts.title || 'Statistical report', { bold: true, size: 40, align: AlignmentType.CENTER, after: 600, color: brand ? '7B2FBE' : undefined }));
+      [[cv.candidate, 28, true], [cv.supervisor ? `Supervised by: ${cv.supervisor}` : '', 24], [cv.dept, 24], [cv.date, 24]].forEach(([t, sz, b]) => { if (t) children.push(para(t, { size: sz, bold: b, align: AlignmentType.CENTER, after: 240 })); });
+      children.push(new Paragraph({ children: [new (D().PageBreak)()] })); }
+    else if (opts.title) children.push(para(opts.title, { bold: true, size: 32, align: AlignmentType.CENTER, after: 240, color: brand ? '7B2FBE' : undefined }));
+    // a table of contents, filled in by Word when the file is opened (it asks to update the fields)
+    if (opts.toc) children.push(heading('Contents', brand), new (D().TableOfContents)('Contents', { hyperlink: true, headingStyleRange: '1-2' }), new Paragraph({ children: [new (D().PageBreak)()] }));
     // the list of tables and figures goes here once every number is known
     const listAt = children.length, listTabs = [], listFigs = [];
     if (model.abstract) {
@@ -216,7 +241,7 @@ const Report = (() => {
     }
     if (model.methods) {
       children.push(heading(opts.paper ? 'Statistical analysis' : 'Statistical Analysis', brand));
-      children.push(para(model.methods));
+      children.push(opts.abbrFoot ? abbrPara(model.methods, footnotes) : para(model.methods));
     }
     if (!opts.bare && (model.consort || model.sections.length)) children.push(heading('Results', brand));
     let fig = opts.figStart || 1, tab = opts.tabStart || 1; // numbering may continue from an earlier chapter or paper
@@ -231,7 +256,7 @@ const Report = (() => {
     // one combined results paragraph instead of a comment with each table
     const merged = opts.commentMerge === 'combined' && opts.commentPlace !== 'none';
     if (merged) { const all = model.sections.filter(s => s.tableOn !== false && s.comment).map(s => s.comment.trim()).join(' '); if (all) children.push(commentPara(all, { boldSig: opts.boldSigText })); }
-    const [w1, w2] = FIG_W[opts.figWidth] || FIG_W.full;
+    const [w1, w2] = opts.twoCol ? [270, 135] : FIG_W[opts.figWidth] || FIG_W.full;
     const placeFigures = list => {
       const apa = opts.captionStyle === 'apa';
       const figs = list.filter(f => f.url).map(f => { const num = figLabel(pre + fig++, opts.captionStyle); listFigs.push(`${num} ${f.caption}`); return { ...f, apa, num, label: `${num} ${f.caption}` }; });
@@ -250,7 +275,7 @@ const Report = (() => {
         }
       }
     };
-    const atEnd = arrangeFigures(model.sections, opts.figPlacement);
+    const atEnd = arrangeFigures(model.sections, opts.figPlacement); let headN = 0;
     // figure numbers of a section, for "(Figure 3)" at the end of its comment
     const endNum = new Map(); if (atEnd) atEnd.filter(f => f.url).forEach((f, i) => endNum.set(f, fig + i));
     const figRef = (s, text) => {
@@ -275,7 +300,8 @@ const Report = (() => {
         const first = () => { const b = brk; brk = false; return b; };
         const wideT = opts.orientation === 'auto' && nColsOf(s.head) > 7;
         if (wideT) { turns.push({ at: children.length, land: true }); PAGE_W = landW; brk = false; }
-        if (opts.sectionHeads) children.push(subheading(s.title, brand, first()));
+        // chapter-numbered subheadings: 4.1, 4.2 …
+        if (opts.sectionHeads) children.push(subheading(opts.headNum ? `${(opts.numberPrefix || '').replace(/\.$/, '') || '1'}.${++headN} ${s.title}` : s.title, brand, first()));
         if (s.comment && !merged && opts.commentPlace === 'before') children.push(commentPara(figRef(s, s.comment), { pageBreakBefore: first(), boldSig: opts.boldSigText }));
         const num = `Table ${pre}${tab++}`;
         listTabs.push(`${num}${opts.tableCaption === 'period' || opts.tableCaption === 'apa' ? '.' : ':'} ${s.title}`);
@@ -301,6 +327,11 @@ const Report = (() => {
       children.push(para(model.summary));
     }
 
+    // appendix: codebook, test plan, every result table (prepared by the app), the reporting checklist, and the references of the methods
+    const plainTbl = t => table(t.head, t.rows.map(r => r.map(c => typeof c === 'object' && c !== null ? c : { t: [String(c ?? '')] })), brand, opts.tableStyle, { ...opts.tableLook, size: 9 });
+    if (opts.appendix && opts.appendix.length) { children.push(new Paragraph({ children: [new (D().PageBreak)()] }), heading('Appendix', brand));
+      opts.appendix.forEach(t => { children.push(subheading(t.title, brand)); children.push(plainTbl(t)); if (t.note) children.push(para(t.note, { size: 18, line: 240, after: 160, before: 60 })); }); }
+    if (opts.refs && opts.refs.length) { children.push(heading('References', brand)); opts.refs.forEach((r, i) => children.push(para(`${i + 1}. ${r}`, { line: 276, after: 80, align: AlignmentType.LEFT }))); }
     if (opts.listTF && (listTabs.length || listFigs.length)) {
       const lst = [];
       if (listTabs.length) lst.push(heading('List of tables', brand), ...listTabs.map(t => para(t, { line: 276, after: 60, align: AlignmentType.LEFT })));
@@ -310,6 +341,8 @@ const Report = (() => {
       turns.forEach(t => { if (t.at >= listAt) t.at += lst.length; });
     }
     const headerKids = [];
+    // a light "DRAFT" mark in the header of every page
+    if (opts.watermark) headerKids.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(opts.watermark).toUpperCase(), bold: true, size: 72, color: 'D9D9D9', font: BODY_FONT })] }));
     if (opts.headerText) headerKids.push(new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: opts.headerText, italics: true, size: 18, font: BODY_FONT, color: '555555' })] }));
     if (brand) {
       headerKids.push(new Paragraph({
@@ -325,12 +358,17 @@ const Report = (() => {
     const parts = []; let from = 0, land = landscape;
     turns.forEach(t => { if (t.at > from) parts.push({ land, kids: children.slice(from, t.at) }); from = t.at; land = t.land; });
     parts.push({ land, kids: children.slice(from) });
+    const hs = (id, name, size, before, after) => ({ id, name, basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: true, size, font: BODY_FONT, color: brand ? '1C1648' : '000000' }, paragraph: { spacing: { before, after }, keepNext: true } });
     const doc = new Document({
       creator: 'Prof MSE Easy Stat',
       title: opts.title || 'Statistical report',
-      styles: { default: { document: { run: { font: BODY_FONT, size: 24 } } } },
+      ...(opts.toc ? { features: { updateFields: true } } : {}),
+      ...(Object.keys(footnotes).length ? { footnotes } : {}),
+      styles: { default: { document: { run: { font: BODY_FONT, size: 24 } } }, ...(WORD_STYLES ? { paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120)] } : {}) },
       sections: parts.filter(pt => pt.kids.length).map(pt => ({
-        properties: { page: { size: pt.land ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 }, margin: { top: mg, bottom: mg, left: mg, right: mg } } },
+        properties: { page: { size: pt.land ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 }, margin: { top: mg, bottom: mg, left: mg, right: mg } },
+          // line numbers for journal submission, and a two-column layout
+          ...(opts.lineNumbers ? { lineNumbers: { countBy: 1, restart: D().LineNumberRestartFormat.CONTINUOUS } } : {}), ...(opts.twoCol ? { column: { count: 2, space: 708 } } : {}) },
         headers: { default: new Header({ children: headerKids.map(k => k) }) },
         footers: {
           // page numbers: centred (default), right, "Page 3 of 12" or none

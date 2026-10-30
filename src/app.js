@@ -3216,7 +3216,7 @@
   };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
+  const DEFAULT_REPORT = { cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: false, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, appFull: false, format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
   // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
   const JOURNAL_STYLES = {
     none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
@@ -3253,8 +3253,113 @@
     $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
     $('#fmtNewPage').checked = r.newPage; $('#fmtNonSig').checked = r.nonSig;
     $('#fmtTabStart').value = r.tabStart; $('#fmtFigStart').value = r.figStart;
+    renderRepSnaps();
+    document.querySelectorAll('[data-rx]').forEach(el => { const v = r[el.dataset.rx]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v ?? ''); });
     $('#fmtStyle').value = JOURNAL_STYLES[r.style] ? r.style : 'none'; $('#fmtStyleNote').textContent = (JOURNAL_STYLES[r.style] || JOURNAL_STYLES.none).note;
   }
+  $('#rxBox').addEventListener('input', e => { const k = e.target.dataset.rx; if (!k) return; report()[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; if (k === 'wordLimit') renderReport(); });
+  // references of the methods named in the statistical analysis
+  const METHOD_REFS = [
+    [/Shapiro/, 'Shapiro SS, Wilk MB. An analysis of variance test for normality (complete samples). Biometrika. 1965;52:591–611.'],
+    [/Lilliefors|Kolmogorov/, 'Lilliefors HW. On the Kolmogorov-Smirnov test for normality with mean and variance unknown. J Am Stat Assoc. 1967;62:399–402.'],
+    [/Welch/, "Welch BL. The generalization of 'Student's' problem when several different population variances are involved. Biometrika. 1947;34:28–35."],
+    [/Mann-Whitney/, 'Mann HB, Whitney DR. On a test of whether one of two random variables is stochastically larger than the other. Ann Math Stat. 1947;18:50–60.'],
+    [/Kruskal-Wallis/, 'Kruskal WH, Wallis WA. Use of ranks in one-criterion variance analysis. J Am Stat Assoc. 1952;47:583–621.'],
+    [/Tukey/, 'Tukey JW. Comparing individual means in the analysis of variance. Biometrics. 1949;5:99–114.'],
+    [/Dunn/, 'Dunn OJ. Multiple comparisons using rank sums. Technometrics. 1964;6:241–252.'],
+    [/Games-Howell/, "Games PA, Howell JF. Pairwise multiple comparison procedures with unequal n's and/or variances: a Monte Carlo study. J Educ Stat. 1976;1:113–125."],
+    [/Fisher's exact|Fisher exact/, 'Fisher RA. On the interpretation of χ² from contingency tables, and the calculation of P. J R Stat Soc. 1922;85:87–94.'],
+    [/Wilcoxon/, 'Wilcoxon F. Individual comparisons by ranking methods. Biometrics Bull. 1945;1:80–83.'],
+    [/Friedman/, 'Friedman M. The use of ranks to avoid the assumption of normality implicit in the analysis of variance. J Am Stat Assoc. 1937;32:675–701.'],
+    [/Greenhouse-Geisser/, 'Greenhouse SW, Geisser S. On methods in the analysis of profile data. Psychometrika. 1959;24:95–112.'],
+    [/Benjamini-Hochberg|false discovery/, 'Benjamini Y, Hochberg Y. Controlling the false discovery rate: a practical and powerful approach to multiple testing. J R Stat Soc B. 1995;57:289–300.'],
+    [/Cohen's d|Cohen 1988|effect size/i, 'Cohen J. Statistical power analysis for the behavioral sciences. 2nd ed. Hillsdale, NJ: Lawrence Erlbaum; 1988.'],
+    [/DeLong/, 'DeLong ER, DeLong DM, Clarke-Pearson DL. Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach. Biometrics. 1988;44:837–845.'],
+    [/Kaplan-Meier/, 'Kaplan EL, Meier P. Nonparametric estimation from incomplete observations. J Am Stat Assoc. 1958;53:457–481.'],
+    [/Cox regression|Cox proportional/, 'Cox DR. Regression models and life-tables. J R Stat Soc B. 1972;34:187–220.'],
+    [/Hosmer-Lemeshow/, 'Hosmer DW, Lemeshow S. Goodness of fit tests for the multiple logistic regression model. Commun Stat Theory Methods. 1980;9:1035–1049.'],
+    [/McNemar/, 'McNemar Q. Note on the sampling error of the difference between correlated proportions or percentages. Psychometrika. 1947;12:153–157.'],
+    [/kappa/i, 'Cohen J. A coefficient of agreement for nominal scales. Educ Psychol Meas. 1960;20:37–46.'],
+    [/Bland-Altman/, 'Bland JM, Altman DG. Statistical methods for assessing agreement between two methods of clinical measurement. Lancet. 1986;1:307–310.'],
+    [/Cronbach/, 'Cronbach LJ. Coefficient alpha and the internal structure of tests. Psychometrika. 1951;16:297–334.'],
+    [/Mantel-Haenszel/, 'Mantel N, Haenszel W. Statistical aspects of the analysis of data from retrospective studies of disease. J Natl Cancer Inst. 1959;22:719–748.'],
+    [/TOST|two one-sided/, 'Schuirmann DJ. A comparison of the two one-sided tests procedure and the power approach for assessing the equivalence of average bioavailability. J Pharmacokinet Biopharm. 1987;15:657–680.'],
+    [/Passing-Bablok/, 'Passing H, Bablok W. A new biometrical procedure for testing the equality of measurements from two different analytical methods. J Clin Chem Clin Biochem. 1983;21:709–720.'],
+    [/[Pp]ropensity/, 'Rosenbaum PR, Rubin DB. The central role of the propensity score in observational studies for causal effects. Biometrika. 1983;70:41–55.'],
+    [/reclassification|NRI/, 'Pencina MJ, D’Agostino RB Sr, D’Agostino RB Jr, Vasan RS. Evaluating the added predictive ability of a new marker: from area under the ROC curve to reclassification and beyond. Stat Med. 2008;27:157–172.'],
+    [/decision curve/i, 'Vickers AJ, Elkin EB. Decision curve analysis: a novel method for evaluating prediction models. Med Decis Making. 2006;26:565–574.'],
+    [/CONSORT/, 'Schulz KF, Altman DG, Moher D; CONSORT Group. CONSORT 2010 statement: updated guidelines for reporting parallel group randomised trials. BMJ. 2010;340:c332.']
+  ];
+  // appendix tables: codebook, test plan, every test of each variable, and the reporting checklist
+  function appendixTables(r, plan) {
+    const rp = report(), cfg = state.cfg, out = [];
+    if (rp.appCodebook) out.push({ title: 'Codebook of the variables', head: ['Column', 'Label', 'Type', 'Categories / timepoints', 'Unit', 'In the report'],
+      rows: cfg.variables.map(v => [v.cols.map(c => c.col).join(', '), v.label, v.kind === 'repeated' ? 'repeated' : v.type, v.kind === 'repeated' ? v.cols.map(c => c.label || c.tp).join(', ') : (v.levels || []).join(', '), v.unit || '', v.include ? 'yes' : 'no']) });
+    if (rp.appPlan || rp.appFull) { let x = null; try { x = Analysis.explore(state.data, { ...cfg, options: effOptions() }, {}); } catch (e) { }
+      if (x && rp.appPlan) out.push({ title: 'Test plan', head: ['Variable', 'Type', 'Distribution', 'Test', 'P value'], rows: x.items.map(it => [it.label, it.kind, it.normal || '—', it.test || '—', isFinite(it.p) ? Analysis.fmtP(it.p, cfg.options.alpha) : '—']) });
+      if (x && rp.appFull) x.items.forEach(it => it.tables.filter(t => t.cat === 'tests').forEach(t => out.push({ title: `${it.label}: ${t.title}`, head: t.head, rows: t.rows }))); }
+    if (rp.checklist) {
+      const tabs = r.sections.filter(s => plan.tabNum.get(s)), tn = s => `Table ${plan.tabNum.get(s)}`, first = tabs[0], rest = tabs.slice(1), where = list => list.length ? list.map(tn).join(', ') : '—';
+      const flow = plan.consortOn && r.consort ? `Figure ${plan.consortNum}` : '—', adv = tabs.filter(s => !['single', 'repeated'].includes(s.kind));
+      const items = rp.checklist === 'consort'
+        ? [['12a', 'Statistical methods used to compare groups for primary and secondary outcomes', 'Statistical analysis'], ['12b', 'Methods for additional analyses (subgroup, adjusted)', adv.length ? where(adv) : 'Statistical analysis'],
+          ['13a', 'Participants randomly assigned, receiving treatment and analysed, per group', flow], ['13b', 'Losses and exclusions after randomisation, with reasons', flow],
+          ['15', 'Baseline demographic and clinical characteristics of each group', first ? tn(first) : '—'], ['16', 'Number of participants analysed in each group', first ? tn(first) : flow],
+          ['17a', 'Results for each outcome per group, effect size and its precision (95% CI)', where(rest)], ['17b', 'Absolute and relative effect sizes for binary outcomes', effOptions().effect ? 'Effect column of the tables (RR / OR, 95% CI)' : '—'], ['18', 'Results of other analyses', where(adv)]]
+        : [['12', 'Statistical methods, including those to control for confounding', 'Statistical analysis'], ['13', 'Numbers of individuals at each stage of the study (flow diagram)', flow],
+          ['14', 'Characteristics of study participants', first ? tn(first) : '—'], ['15', 'Numbers of outcome events or summary measures', where(rest)],
+          ['16', 'Unadjusted and adjusted estimates with their precision (95% CI)', where([...rest, ...adv])], ['17', 'Other analyses (subgroups, interactions, sensitivity)', where(adv)]];
+      out.push({ title: `${rp.checklist === 'consort' ? 'CONSORT 2010' : 'STROBE'} checklist (results items)`, head: ['Item', 'Recommendation', 'Reported in'], rows: items, note: 'Page numbers can be added after the final layout in Word.' });
+    }
+    return out;
+  }
+  // the report text as Markdown, LaTeX, or a stand-alone HTML page
+  const tableRowsText = rows => { const grid = [], occ = []; rows.forEach((r, ri) => { let c = 0; const line = []; r.forEach(cell => { while (occ[ri] && occ[ri][c]) { line[c] = ''; c++; } line[c] = (cell.t || []).join(' '); for (let s = 1; s < (cell.span || 1); s++) line[c + s] = '';
+      if (cell.rs > 1) for (let k = 1; k < cell.rs; k++) { occ[ri + k] = occ[ri + k] || []; occ[ri + k][c] = true; } c += cell.span || 1; }); grid.push(line); }); return grid; };
+  const headText = h => h.flatMap(c => typeof c === 'string' ? [c] : [c.t || '', ...Array.from({ length: (c.span || 1) - 1 }, () => '')]);
+  function exportText(kind) {
+    syncEdits(); const r = state.result, plan = exportPlan(r), o = effOptions(), md = kind === 'md', out = [];
+    const tex = t => String(t ?? '').replace(/\\/g, '\\textbackslash{}').replace(/([&%$#_{}])/g, '\\$1').replace(/±/g, '$\\pm$').replace(/≤/g, '$\\le$').replace(/≥/g, '$\\ge$').replace(/χ²/g, '$\\chi^2$').replace(/η²/g, '$\\eta^2$').replace(/ε²/g, '$\\varepsilon^2$').replace(/²/g, '$^2$')
+      .replace(/—/g, '---').replace(/–/g, '--').replace(/×/g, '$\\times$').replace(/[‘’]/g, "'").replace(/“/g, '``').replace(/”/g, "''").replace(/α/g, '$\\alpha$').replace(/β/g, '$\\beta$').replace(/δ/g, '$\\delta$').replace(/Δ/g, '$\\Delta$')
+      .replace(/κ/g, '$\\kappa$').replace(/τ/g, '$\\tau$').replace(/η/g, '$\\eta$').replace(/ε/g, '$\\varepsilon$').replace(/μ/g, '$\\mu$').replace(/≠/g, '$\\neq$').replace(/→/g, '$\\rightarrow$').replace(/[^\x00-\x7F]/g, '?');
+    const H = (lvl, t) => md ? `${'#'.repeat(lvl)} ${t}` : `\\${lvl === 1 ? 'section' : 'subsection'}*{${tex(t)}}`, P = t => md ? t : tex(t);
+    if (!md) out.push(['\\documentclass{article}', '\\usepackage[utf8]{inputenc}', '\\usepackage{booktabs}', '\\usepackage{graphicx}', `\\title{${tex(state.cfg.study.title || 'Statistical report')}}`, '\\begin{document}', '\\maketitle'].join('\n'));
+    else out.push(`# ${state.cfg.study.title || 'Statistical report'}`);
+    if (!isOut('methods') && r.methods) out.push(H(2, 'Statistical analysis'), P(r.methods));
+    out.push(H(2, 'Results')); if (r.intro) out.push(P(r.intro)); if (r.narrative && plan.paper) out.push(P(r.narrative));
+    r.sections.forEach(s => { if (!plan.tabNum.get(s)) return; const head = headText(s.head), grid = tableRowsText(s.rows), cap = `Table ${plan.tabNum.get(s)}: ${s.title}`;
+      if (md) out.push(`**${cap}**`, '', `| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...grid.map(l => `| ${head.map((_, j) => (l[j] ?? '').replace(/\|/g, '\\|')).join(' | ')} |`), '', `*${s.footnote || ''}*`);
+      else out.push(['\\begin{table}[ht]\\centering\\small', `\\caption{${tex(s.title)}}`, `\\begin{tabular}{${head.map((_, j) => j ? 'c' : 'l').join('')}}\\toprule`, head.map(tex).join(' & ') + ' \\\\ \\midrule',
+        ...grid.map(l => head.map((_, j) => tex(l[j] ?? '')).join(' & ') + ' \\\\'), '\\bottomrule\\end{tabular}', `\\par\\footnotesize ${tex(s.footnote || '')}`, '\\end{table}'].join('\n'));
+      if (s.comment && !plan.paper && o.commentPlace !== 'none') out.push(P(s.comment));
+      s.figures.forEach(f => { if (plan.figNum.get(f)) out.push(md ? `*Figure ${plan.figNum.get(f)}: ${f.caption}*` : `% Figure ${plan.figNum.get(f)}: ${tex(f.caption)} - export the figures from step 11 and add \\includegraphics here`); }); });
+    if (r.summary && !isOut('summary')) out.push(H(2, 'Summary of key findings'), P(r.summary));
+    if (!md) out.push('\\end{document}');
+    const txt = out.join('\n\n'), name = `${baseName()} - Report.${md ? 'md' : 'tex'}`;
+    saveUrl(URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' })), name);
+  }
+  $('#btnMd').onclick = () => { if (state.result) exportText('md'); };
+  $('#btnTex').onclick = () => { if (state.result) exportText('tex'); };
+  $('#btnHtml').onclick = () => {
+    if (!state.result) return; syncEdits(); const clone = $('#report').cloneNode(true);
+    clone.querySelectorAll('textarea').forEach(t => { const d = document.createElement('div'); d.className = 'print-text'; d.textContent = t.value; t.replaceWith(d); });
+    clone.querySelectorAll('input[type=text],input:not([type])').forEach(i => { const s = document.createElement('span'); s.textContent = i.value; i.replaceWith(s); });
+    clone.querySelectorAll('button,input[type=checkbox],.exp-bar,.fr-rep,label.check.exp,select,#comCheckOut').forEach(el => el.remove());
+    const styles = [...document.querySelectorAll('style')].map(s => s.outerHTML).join('');
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(state.cfg.study.title || 'Statistical report')}</title>${styles}<style>body{background:#fff;color:#111;max-width:1000px;margin:24px auto;padding:0 16px}.print-text{white-space:pre-wrap;line-height:1.6}</style></head><body><h1>${esc(state.cfg.study.title || 'Statistical report')}</h1>${clone.innerHTML}</body></html>`;
+    saveUrl(URL.createObjectURL(new Blob([html], { type: 'text/html' })), `${baseName()} - Report.html`);
+  };
+  // snapshots of the report text, and what changed since one
+  const repSnapText = r => ({ methods: r.methods || '', intro: r.intro || '', narrative: r.narrative || '', summary: r.summary || '', sections: r.sections.map(s => ({ title: s.title, comment: s.comment || '', footnote: s.footnote || '' })) });
+  const renderRepSnaps = () => { const ss = (state.cfg && state.cfg.reportSnaps) || []; $('#repSnapList').innerHTML = ss.length ? ss.map((s, i) => `<option value="${i}">${esc(s.name)}</option>`).join('') : '<option value="">— no snapshot —</option>'; };
+  $('#repSnapSave').onclick = () => { if (!state.result) return; syncEdits(); const ss = state.cfg.reportSnaps = state.cfg.reportSnaps || [];
+    ss.push({ name: `${new Date().toLocaleString()}`, text: repSnapText(state.result) }); if (ss.length > 10) ss.shift(); renderRepSnaps(); $('#repSnapList').value = String(ss.length - 1); toast('Snapshot saved (kept in the saved project)'); };
+  $('#repSnapCmp').onclick = () => { const s = (state.cfg.reportSnaps || [])[+$('#repSnapList').value]; if (!s || !state.result) return; syncEdits(); const now = repSnapText(state.result), old = s.text, rows = [];
+    ['methods', 'intro', 'narrative', 'summary'].forEach(k => { if (old[k] !== now[k]) rows.push([k === 'methods' ? 'Statistical analysis' : k === 'intro' ? 'Flowchart text' : k === 'narrative' ? 'Results text' : 'Summary', old[k], now[k]]); });
+    now.sections.forEach(ns => { const os = old.sections.find(x => x.title === ns.title); if (!os) rows.push([ns.title, '(new table)', ns.comment]); else if (os.comment !== ns.comment) rows.push([`${ns.title} — comment`, os.comment, ns.comment]); else if (os.footnote !== ns.footnote) rows.push([`${ns.title} — footnote`, os.footnote, ns.footnote]); });
+    old.sections.forEach(os => { if (!now.sections.find(x => x.title === os.title)) rows.push([os.title, os.comment, '(removed)']); });
+    $('#repSnapOut').innerHTML = rows.length ? `<table class="t xp" style="margin-top:8px"><thead><tr><th>Part</th><th>Snapshot (${esc(s.name)})</th><th>Now</th></tr></thead><tbody>${rows.map(r => `<tr><td class="b">${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table>` : '<p class="legend-note">No change since this snapshot.</p>'; };
+  renderRepSnaps();
   $('#fmtBar').addEventListener('click', e => {
     const b = e.target.closest('[data-format]'); if (!b) return;
     report().format = b.dataset.format; renderFormatBar(); runAnalysis();
@@ -3470,6 +3575,8 @@
     html += `<div class="report-sec${off('methods')}"><div class="row"><h3>Statistical analysis</h3><span class="spacer"></span>${exBox('methods', 'Include')}</div><textarea id="edMethods">${esc(r.methods)}</textarea>${plan.paper ? `<div class="legend-note">${words(r.methods)} words</div>` : ''}</div>`;
     html += `<div class="report-sec"><h3>Results</h3>`;
     if (r.consort) html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${plan.consortOn ? lab(plan.consortNum) : 'Not exported:'} ${esc(r.flowCaption)}</div></div>`;
+    const wl = +report().wordLimit; if (wl) { const n = words(r.narrative || '') + words(r.intro || '') + (plan.paper ? 0 : r.sections.reduce((t, s) => t + words(s.comment || ''), 0));
+      html += `<div class="chip ${n > wl ? 'warn' : 'ok'}" style="display:block;margin:6px 0">${n > wl ? '⚠' : '✓'} Results: ${n} words (limit ${wl})${n > wl ? ` — ${n - wl} over` : ''}</div>`; }
     if (plan.paper) html += `<label class="f" style="margin-top:12px">Results text (written from the significant results, citing tables and figures — edit freely)</label><textarea id="edNarrative" style="min-height:180px">${esc(r.narrative)}</textarea>
       <div class="legend-note">${words(r.narrative) + words(r.intro)} words in Results · ${words(r.narrative) + words(r.intro) + words(r.methods)} words with the statistical analysis</div>`;
     html += `</div>`;
@@ -3655,8 +3762,11 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   $('#btnRerun').onclick = () => runAnalysis();
   // the options of the Word file, from the steps and the report format
   function wordOptions() {
-    const o = effOptions(), rp = report();
-    return { numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
+    const o = effOptions(), rp = report(), r0 = state.result, plan0 = r0 ? exportPlan(r0) : null;
+    const extras = { cover: rp.cover ? { candidate: rp.coverCandidate, supervisor: rp.coverSupervisor, dept: rp.coverDept, date: rp.coverDate } : null, toc: !!rp.toc, wordStyles: !!rp.wordStyles,
+      headNum: !!rp.headNum, lineNumbers: !!rp.lineNumbers, twoCol: !!rp.twoCol, watermark: String(rp.watermark || '').trim(), abbrFoot: !!rp.abbrFoot,
+      refs: rp.refs && r0 ? METHOD_REFS.filter(([re]) => re.test(r0.methods || '')).map(x => x[1]) : null, appendix: r0 ? appendixTables(r0, plan0) : [] };
+    return { ...extras, numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
         tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, capAbove: !!o.capAbove, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings };
   }

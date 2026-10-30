@@ -1187,6 +1187,32 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <span class="legend-note" id="fmtStyleNote" style="margin-top:20px;flex:1"></span>
         </div>
       </div>
+      <details class="fl-style" id="rxBox" style="margin-top:10px"><summary><b>Word document extras</b> — cover page, contents, styles, layout, appendix, references, other exports</summary>
+        <div class="grid g4" style="margin-top:8px">
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="cover"><span><b>Cover page</b></span></label></div>
+          <div><label class="f">Candidate / author</label><input type="text" data-rx="coverCandidate" placeholder="e.g. Dr. A. B."></div>
+          <div><label class="f">Supervisor(s)</label><input type="text" data-rx="coverSupervisor"></div>
+          <div><label class="f">Department, university</label><input type="text" data-rx="coverDept"></div>
+          <div><label class="f">Date</label><input type="text" data-rx="coverDate" placeholder="e.g. October 2026"></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="toc"><span><b>Table of contents</b> (Word fills it in)</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="wordStyles"><span><b>Word heading styles only</b> — a thesis template restyles them</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="headNum"><span><b>Numbered subheadings</b> (4.1, 4.2 …, thesis)</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="lineNumbers"><span><b>Line numbers</b> (journal submission)</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="twoCol"><span><b>Two columns</b></span></label></div>
+          <div><label class="f">Watermark in the header</label><input type="text" data-rx="watermark" placeholder="e.g. DRAFT"></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="abbrFoot"><span><b>Abbreviations as footnotes</b> in the statistical analysis</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="refs"><span><b>References</b> of the statistical methods used</span></label></div>
+          <div><label class="f">Reporting checklist (appendix)</label><select data-rx="checklist"><option value="">None</option><option value="consort">CONSORT 2010</option><option value="strobe">STROBE</option></select></div>
+          <div><label class="f">Word limit of Results (warning)</label><input type="number" min="0" step="50" data-rx="wordLimit" placeholder="none"></div>
+        </div>
+        <label class="f" style="margin-top:6px">Appendix</label>
+        <div class="row" style="gap:14px"><label class="check" style="margin:0"><input type="checkbox" data-rx="appCodebook"><span>Codebook of the variables</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appPlan"><span>Test plan (test of each variable)</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appFull"><span>Every test of each variable (step 10)</span></label></div>
+        <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn ghost small" id="btnMd" type="button">⬇ Markdown</button><button class="btn ghost small" id="btnTex" type="button">⬇ LaTeX</button><button class="btn ghost small" id="btnHtml" type="button">⬇ HTML page (to share)</button>
+          <span class="spacer"></span><button class="btn ghost small" id="repSnapSave" type="button">📸 Save a snapshot of the text</button><select id="repSnapList" style="width:auto"></select><button class="btn ghost small" id="repSnapCmp" type="button">Compare with the report now</button>
+        </div>
+        <div id="repSnapOut"></div>
+      </details>
       <p class="hint" style="margin-top:12px">Review everything below. You can edit the text boxes — your edits go into the Word file. The format changes only this report; your settings in steps 4–9 stay as they are.</p>
       <div id="report"></div>
     </div>
