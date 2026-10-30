@@ -2722,7 +2722,8 @@ const Analysis = (() => {
     const items = cols.map(c => ({ label: columnLabel(cfg, c), vals: rows.map(r => toNum(r[c])) }));
     const target = !!a.outcome && cols[0] === a.outcome;
     const title = target ? `Correlation of ${lowerFirst(plain(items[0].label))} with the studied variables (n=${rows.length})` : `Correlation between the studied variables (n=${rows.length})`;
-    const sec = corrTable(items, rows, cfg, alpha, d, { method: ['pearson', 'spearman', 'kendall'].includes(a.method) ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter ?? '2', ci: !!a.ci, detail: a.commentDetail }, title);
+    const sec = corrTable(items, rows, cfg, alpha, d, { method: ['pearson', 'spearman', 'kendall'].includes(a.method) ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter ?? '2', ci: !!a.ci, detail: a.commentDetail, figWhich: a.figWhich,
+      fig: { fit: a.figFit, pt: a.figPt, note: a.figNote, byGroup: !!a.figGroup, zero: !!a.figZero, heat: !!a.figHeat } }, title);
     if (sec.meta.pairs.some(q => q.method === 'pearson')) used.add('pearson');
     if (sec.meta.pairs.some(q => q.method === 'spearman')) used.add('spearman');
     if (sec.meta.pairs.some(q => q.method === 'kendall')) used.add('kendall');
@@ -2815,14 +2816,22 @@ const Analysis = (() => {
     if (pr.some(q => q.method === 'kendall')) f.push("τb: Kendall's tau-b (large-sample test)");
     if (o.ci) f.push("CI: Confidence interval (Fisher's z transformation)");
     const nScatter = o.scatter === undefined ? MAX_SCATTER : o.scatter === 'all' ? Infinity : +o.scatter;
-    const figures = [...sig].sort((a, b) => Math.abs(b.r) - Math.abs(a.r)).slice(0, nScatter).map(q => {
-      const xs = [], ys = [];
-      items[q.i].vals.forEach((v, r) => { if (isFinite(v) && isFinite(items[q.j].vals[r])) { xs.push(v); ys.push(items[q.j].vals[r]); } });
-      return { caption: `Correlation between ${lowerFirst(plain(items[q.i].label))} and ${lowerFirst(plain(items[q.j].label))}`,
-        spec: { type: 'scatter', x: xs, y: ys, xLabel: items[q.i].label, yLabel: items[q.j].label, note: `${coef(q)}, P ${pTxt(q.p)}` } };
+    // scatter plots of the significant pairs (or of all pairs), strongest first; the figure options of an advanced correlation
+    const fo = o.fig || {}, gOrder = (cfg.groupOrder || []).filter(g => (cfg.groupInclude || {})[g] !== false);
+    const figures = [...(o.figWhich === 'all' ? pr.filter(q => isFinite(q.r)) : sig)].sort((a, b) => Math.abs(b.r) - Math.abs(a.r)).slice(0, nScatter).map(q => {
+      const xs = [], ys = [], gs = [];
+      items[q.i].vals.forEach((v, r) => { if (isFinite(v) && isFinite(items[q.j].vals[r])) { xs.push(v); ys.push(items[q.j].vals[r]); gs.push(gOrder.indexOf(groupOf(cfg, rows[r]))); } });
+      const spec = { type: 'scatter', x: xs, y: ys, xLabel: items[q.i].label, yLabel: items[q.j].label, note: `${coef(q)}, P ${pTxt(q.p)}` };
+      if (fo.fit === 'none') spec.fit = 'none'; if (fo.fit === 'band') spec.band = true;
+      if (fo.pt === 'small' || fo.pt === 'large') spec.ptSize = fo.pt;
+      if (fo.note === 'none') delete spec.note;
+      if (fo.note === 'eq' && xs.length > 2) { const lr = S.linearRegression(xs.map(v => [v]), ys); if (lr) spec.note2 = `y = ${fmt(lr.coef[0], d)} ${lr.coef[1] < 0 ? '−' : '+'} ${fmt(Math.abs(lr.coef[1]), 3)}x, R² = ${fmt(lr.r2, 3)}`; }
+      if (fo.byGroup && gOrder.length > 1 && gs.every(g => g >= 0)) { spec.g = gs; spec.gNames = gOrder.map(g => cfg.groupLabels[g] || g); }
+      if (fo.zero) spec.zero = true;
+      return { ...(o.figWhich === 'all' ? { sig: true } : {}), caption: `Correlation between ${lowerFirst(plain(items[q.i].label))} and ${lowerFirst(plain(items[q.j].label))}`, spec };
     });
-    // optional heat map of every coefficient (step 7)
-    if (cfg.options && cfg.options.figHeat && m >= 3 && !o.target) {
+    // optional heat map of every coefficient (step 7, or the option of the advanced correlation)
+    if (((cfg.options && cfg.options.figHeat) || fo.heat) && m >= 3 && !o.target) {
       const M = items.map((_, i) => items.map((_, j) => i === j ? 1 : (q => q ? q.r : NaN)(get(i, j)))), Pm = items.map((_, i) => items.map((_, j) => i === j ? NaN : (q => q ? q.p : NaN)(get(i, j))));
       figures.unshift({ sig: true, caption: 'Heat map of the correlation coefficients', spec: { type: 'heat', labels: items.map(it => plain(it.label)), matrix: M, pmatrix: Pm, alpha } });
     }

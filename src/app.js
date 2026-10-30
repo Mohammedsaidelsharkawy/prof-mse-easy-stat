@@ -2507,7 +2507,12 @@
       out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
     if (t === 'correlation') out.push(`<div><label class="f">Coefficient</label>${sel('method', [['auto', 'Automatic (Pearson if normal, else Spearman)'], ['pearson', 'Pearson'], ['spearman', 'Spearman'], ['kendall', "Kendall's tau-b"]], a.method)}</div>`,
       `<div><label class="f">Table layout</label>${sel('layout', [['auto', 'Automatic'], ['matrix', 'Matrix'], ['pairs', 'List of pairs']], a.layout)}</div>`,
-      `<div><label class="f">Scatter plots of significant pairs</label>${sel('scatter', [['2', 'Up to 2'], ['0', 'None'], ['1', 'Up to 1'], ['4', 'Up to 4'], ['all', 'All']], a.scatter)}</div>`,
+      `<div><label class="f">Scatter plots of</label>${sel('figWhich', [['sig', 'Significant pairs only'], ['all', 'All pairs (also non-significant)']], a.figWhich)}</div>`,
+      `<div><label class="f">Number of scatter plots (strongest first)</label>${sel('scatter', [['2', 'Up to 2'], ['0', 'None'], ['1', 'Up to 1'], ['4', 'Up to 4'], ['6', 'Up to 6'], ['10', 'Up to 10'], ['all', 'All']], a.scatter)}</div>`,
+      `<div><label class="f">Line on the scatter plot</label>${sel('figFit', [['linear', 'Regression line'], ['band', 'Regression line with 95% CI band'], ['none', 'No line']], a.figFit)}</div>`,
+      `<div><label class="f">Text on the plot</label>${sel('figNote', [['coef', 'Coefficient and P value'], ['eq', 'Coefficient, P, equation and R²'], ['none', 'None']], a.figNote)}</div>`,
+      `<div><label class="f">Point size</label>${sel('figPt', [['normal', 'Normal'], ['small', 'Small'], ['large', 'Large']], a.figPt)}</div>`,
+      `<div>${box('figGroup', 'Colour the points by study group')}</div>`, `<div>${box('figZero', 'Axes start at zero')}</div>`, `<div>${box('figHeat', 'Heat map of the coefficients (3+ variables, matrix)')}</div>`,
       `<div>${box('ci', '95% CI of the coefficients')}</div>`);
     if (t === 'linear') out.push(`<div>${box('vif', 'Collinearity (VIF)')}</div>`, `<div>${box('diag', 'Residual diagnostics (Durbin-Watson, normality, residual plot)')}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t)) out.push(`<div>${box('forest', 'Forest plot of the estimates')}</div>`);

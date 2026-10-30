@@ -1061,8 +1061,9 @@ const Charts = (() => {
     const L = 110 + 40 * ts, R = 50, T = 60, B = 130 * ts, pw = W - L - R, ph = H - T - B;
     const { x: xs, y: ys } = spec;
     const pad = (a, b) => (b - a) * 0.05 || 1;
-    const xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
-    const sx = niceScale(xmin - pad(xmin, xmax), xmax + pad(xmin, xmax)), sy = niceScale(ymin - pad(ymin, ymax), ymax + pad(ymin, ymax));
+    let xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
+    if (spec.zero) { xmin = Math.min(0, xmin); xmax = Math.max(0, xmax); ymin = Math.min(0, ymin); ymax = Math.max(0, ymax); }
+    const sx = niceScale(spec.zero && xmin >= 0 ? 0 : xmin - pad(xmin, xmax), xmax + pad(xmin, xmax)), sy = niceScale(spec.zero && ymin >= 0 ? 0 : ymin - pad(ymin, ymax), ymax + pad(ymin, ymax));
     const X = v => L + (v - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - sy.min) / (sy.max - sy.min) * ph;
 
     ctx.font = F(600, 26); ctx.lineWidth = 1.5;
@@ -1084,9 +1085,13 @@ const Charts = (() => {
     ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle';
     ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
 
+    const rad = { small: 6, large: 13 }[spec.ptSize] || 9, grp = Array.isArray(spec.g) && spec.gNames;
     ctx.fillStyle = pal[0]; ctx.globalAlpha = 0.6;
-    xs.forEach((v, i) => { ctx.beginPath(); ctx.arc(X(v), Y(ys[i]), 9, 0, Math.PI * 2); ctx.fill(); });
+    xs.forEach((v, i) => { if (grp) ctx.fillStyle = pal[spec.g[i] % pal.length]; ctx.beginPath(); ctx.arc(X(v), Y(ys[i]), rad, 0, Math.PI * 2); ctx.fill(); });
     ctx.globalAlpha = 1;
+    // colour by group: a legend above the plot
+    if (grp) { ctx.font = F(600, 24); ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; const w = spec.gNames.map(n => ctx.measureText(n).width + 50), tot = w.reduce((a, b) => a + b, 0); let x = L + (pw - tot) / 2;
+      spec.gNames.forEach((n, k) => { ctx.fillStyle = pal[k % pal.length]; ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(x + 10, 26, 10, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; ctx.fillStyle = '#333'; ctx.fillText(n, x + 26, 27); x += w[k]; }); }
     const mx = Stats.mean(xs), my = Stats.mean(ys);
     const sxx = Stats.sum(xs.map(v => (v - mx) ** 2));
     const slope = sxx > 0 ? Stats.sum(xs.map((v, i) => (v - mx) * (ys[i] - my))) / sxx : 0;
@@ -1097,8 +1102,14 @@ const Charts = (() => {
       spec.lines.forEach((ln, i) => { ctx.strokeStyle = ln.dash ? '#777' : pal[1]; ctx.lineWidth = ln.dash ? 3 : 5; ctx.setLineDash(ln.dash ? [12, 8] : []);
         ctx.beginPath(); ctx.moveTo(X(sx.min), Y(ln.a + ln.b * sx.min)); ctx.lineTo(X(sx.max), Y(ln.a + ln.b * sx.max)); ctx.stroke(); });
       ctx.restore(); ctx.setLineDash([]); }
-    else if (sxx > 0) {
+    else if (sxx > 0 && spec.fit !== 'none') {
       const icpt = my - slope * mx;
+      // 95% CI band of the regression line
+      if (spec.band && xs.length > 2) { const n = xs.length, s2 = Stats.sum(xs.map((v, i) => (ys[i] - icpt - slope * v) ** 2)) / (n - 2), tq = jStat.studentt.inv(0.975, n - 2), x0 = Math.min(...xs), x1 = Math.max(...xs), xg = Array.from({ length: 41 }, (_, k) => x0 + (x1 - x0) * k / 40);
+        const hw = x => tq * Math.sqrt(s2 * (1 / n + (x - mx) ** 2 / sxx));
+        ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip(); ctx.fillStyle = pal[1]; ctx.globalAlpha = 0.15; ctx.beginPath();
+        xg.forEach((x, k) => k ? ctx.lineTo(X(x), Y(icpt + slope * x + hw(x))) : ctx.moveTo(X(x), Y(icpt + slope * x + hw(x))));
+        [...xg].reverse().forEach(x => ctx.lineTo(X(x), Y(icpt + slope * x - hw(x)))); ctx.closePath(); ctx.fill(); ctx.restore(); }
       ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
       ctx.strokeStyle = pal[1]; ctx.lineWidth = 5;
       ctx.beginPath(); ctx.moveTo(X(sx.min), Y(icpt + slope * sx.min)); ctx.lineTo(X(sx.max), Y(icpt + slope * sx.max)); ctx.stroke();
@@ -1110,6 +1121,8 @@ const Charts = (() => {
       const tw = ctx.measureText(spec.note).width, nx = slope < 0 ? L + pw - tw - 44 : L + 20;
       ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(nx, T + 10, tw + 24, 44 * ts);
       ctx.fillStyle = '#222'; ctx.fillText(spec.note, nx + 12, T + 18);
+      if (spec.note2) { ctx.font = F(600, 24); const t2 = ctx.measureText(spec.note2).width, n2 = slope < 0 ? L + pw - t2 - 44 : L + 20;
+        ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(n2, T + 10 + 44 * ts, t2 + 24, 38 * ts); ctx.fillStyle = '#333'; ctx.fillText(spec.note2, n2 + 12, T + 16 + 44 * ts); }
     }
     return c;
   }
