@@ -153,6 +153,7 @@ table.dgrid.freeze th.c1{z-index:3;background:var(--lav)}
 .colpick-box{position:absolute;z-index:20;top:110%;left:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:340px;overflow:auto;min-width:240px}
 .colpick-box label{display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0;white-space:nowrap}
 table.dgrid td.miss{background:rgba(192,57,43,.09)}
+table.dgrid td.rbad{outline:2px solid #B3261E;outline-offset:-2px}
 table.dgrid td.gout,table.dgrid.stripes tbody tr:nth-child(even) td.gout{background:rgba(224,138,46,.25);font-weight:600}
 .restore-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;margin-bottom:12px;background:var(--soft)}
 table.dgrid td.rn,table.dgrid th.rn{color:var(--muted);font-size:12px;white-space:nowrap;position:sticky;left:0;background:var(--card);z-index:2}
@@ -373,11 +374,12 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="drop" id="drop">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13l2 2 4-4"/></svg>
         <div class="big">Drop your Excel file here or click to browse</div>
-        <div class="legend-note">Excel (.xlsx, .xls), CSV / text, or SPSS (.sav, .zsav)</div>
-        <input type="file" id="file" accept=".xlsx,.xls,.csv,.txt,.tsv,.sav,.zsav" hidden>
+        <div class="legend-note">Excel (.xlsx, .xls — also password-protected), CSV / text, SPSS (.sav, .zsav) or Stata (.dta)</div>
+        <input type="file" id="file" accept=".xlsx,.xls,.csv,.txt,.tsv,.sav,.zsav,.dta" hidden>
       </div>
       <div class="row" style="margin-top:10px;gap:8px">
         <button class="btn ghost small" id="btnPaste" type="button" title="Copy the cells in Excel (with the header row) and paste them here">📋 Paste from Excel</button>
+        <span class="row" style="gap:4px;display:inline-flex;align-items:center"><select id="demoDesign" style="width:auto" title="The design of the demo data"><option value="rct2">Two-group RCT</option><option value="rct3">Three-group trial</option><option value="cohort">Cohort with follow-up</option><option value="one">One group, before / after</option><option value="diag">Diagnostic study</option><option value="ni">Non-inferiority trial</option></select><input type="number" id="demoN" value="40" min="5" max="2000" style="width:70px" title="Patients per group"><button class="btn ghost small" id="demoGo" type="button" title="Made-up data in the chosen design, to learn the app or test a plan">🎲 Demo data</button></span>
         <button class="btn ghost small" id="btnTemplate" type="button" title="An empty Excel sheet laid out the way the app reads it, with a guide">⬇ Blank template</button>
         <span class="legend-note">Copy your cells in Excel, Google Sheets or SPSS and paste them, or start from a template.</span>
       </div>
@@ -401,13 +403,19 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
               <div class="row" style="gap:10px;align-items:flex-end">
                 <div><label class="f">Column names are in row</label><select id="hdrRow" style="width:auto"></select></div>
                 <label class="check" style="margin:0 0 8px"><input type="checkbox" id="hdrTwo"><span>Two header rows (e.g. “VAS” above “Baseline”, “W1” …)</span></label>
+                <div><label class="f">Ignore the last rows</label><input type="number" id="ftRows" min="0" value="0" style="width:70px" title="Totals, notes or signatures under the data"></div>
               </div>
               <p class="legend-note">Use this when the sheet starts with a title or notes above the column names. Two header rows are joined as “VAS_Baseline”.</p>
+            </div>
+            <div class="prep-card">
+              <h4>Labels from a data dictionary</h4>
+              <div class="row" style="gap:8px;align-items:center"><button class="btn ghost small" id="ddBtn" type="button">📖 Read a data dictionary</button><input type="file" id="ddFile" accept=".csv,.txt,.xlsx,.xls" hidden><span class="legend-note" id="ddInfo">A REDCap data dictionary (CSV), or any sheet with the column name, its label and its codes (e.g. “1, Male | 2, Female” or “1=Male; 2=Female”) — the variables take those labels and value labels.</span></div>
             </div>
             <div class="prep-card">
               <h4>Missing-value codes</h4>
               <div class="row" style="gap:8px;align-items:flex-end">
                 <div style="flex:1"><label class="f">Codes that mean “missing”</label><input type="text" id="missCodes" placeholder="e.g. 999, -99, NA, N/A, ., -"></div>
+                <div><label class="f">In</label><select id="missCol" style="width:auto;max-width:160px"><option value="">All columns</option></select></div>
                 <button class="btn ghost small" id="missApply" type="button" style="margin-bottom:6px">Blank them</button>
               </div>
               <p class="legend-note" id="missInfo">Cells with exactly these values become empty (Undo in edit mode restores them).</p>
@@ -507,6 +515,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" id="gridReshape" type="button" title="One row per visit → one row per patient">⇄ Long to wide</button>
  <button class="btn ghost small" id="gridFill" type="button" title="Fill empty cells with the value above them — for sheets where a merged cell or a group name is written only once">↓ Fill down</button>
         <button class="btn ghost small" id="gridSplit" type="button" title="Split one column into several, e.g. blood pressure 120/80 → systolic and diastolic">✂ Split column</button>
+        <button class="btn ghost small" id="gridComb" type="button" title="Join several columns into one: text, sum, mean, lowest, highest or the first filled value">⊕ Combine columns</button>
+        <button class="btn ghost small" id="gridUnits" type="button" title="A new column in other units: glucose, cholesterol, creatinine, Hb, vitamin D, HbA1c, weight, height, temperature">⚖ Convert units</button>
+        <button class="btn ghost small" id="gridSortT" type="button" title="Sort the rows of the sheet, keep only the patients of the filters, or delete empty rows">⇅ Sort &amp; keep rows</button>
+        <button class="btn ghost small" id="gridLong" type="button" title="One row per patient → one row per visit">⇄ Wide to long</button>
+        <button class="btn ghost small" id="gridCmp" type="button" title="What changed between this sheet and another version of the file">⧉ Compare files</button>
           </div>
           <div class="gtool" id="findBox" style="display:none">
             <div class="row" style="gap:10px;align-items:flex-end">
@@ -532,6 +545,50 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="gtool" id="fillBox" style="display:none">
         <p class="legend-note" style="margin:0 0 8px">Copies each value down into the empty cells below it, until the next value — for exports where merged cells or a group name appear only on the first row of a block.</p>
         <div class="row" style="gap:10px;align-items:flex-end"><div><label class="f">Column</label><select id="fdCol" style="width:auto"></select></div><span class="legend-note" id="fdInfo" style="margin-bottom:8px"></span><span class="spacer"></span><button class="btn primary small" id="fdGo" type="button" style="margin-bottom:6px">Fill down</button></div>
+      </div>
+      <div class="gtool" id="combBox" style="display:none">
+        <p class="legend-note" style="margin:0 0 8px">Makes a new column from the ticked columns: their text joined, or the sum, mean, lowest or highest of their numbers, or the first filled value (e.g. a value recorded in either of two columns).</p>
+        <div id="cbCols" class="row" style="gap:4px 12px;margin-bottom:8px"></div>
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">How</label><select id="cbHow" style="width:auto"><option value="text">Join as text</option><option value="sum">Sum</option><option value="mean">Mean</option><option value="min">Lowest</option><option value="max">Highest</option><option value="first">First filled value</option></select></div>
+          <div><label class="f">Separator (text)</label><input type="text" id="cbSep" value=" " style="width:60px"></div>
+          <div><label class="f">New column name</label><input type="text" id="cbName" placeholder="e.g. Total_score"></div>
+        </div>
+        <div class="row" style="margin-top:8px"><span class="legend-note" id="cbInfo"></span><span class="spacer"></span><button class="btn primary small" id="cbGo" type="button">Combine</button></div>
+      </div>
+      <div class="gtool" id="unitBox" style="display:none">
+        <p class="legend-note" style="margin:0 0 8px">Adds a column with the values in other units, next to the original (e.g. glucose in mg/dL → mmol/L). The original stays as it is.</p>
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Column</label><select id="unCol" style="width:auto"></select></div>
+          <div><label class="f">Conversion</label><select id="unConv" style="width:auto"></select></div>
+          <div><label class="f">New column name</label><input type="text" id="unName"></div>
+          <div><label class="f">Decimals</label><select id="unDec" style="width:auto"><option>0</option><option>1</option><option selected>2</option><option>3</option></select></div>
+        </div>
+        <div class="row" style="margin-top:8px"><span class="legend-note" id="unInfo"></span><span class="spacer"></span><button class="btn primary small" id="unGo" type="button">Add column</button></div>
+      </div>
+      <div class="gtool" id="sortBox" style="display:none">
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Sort by</label><select id="soCol1" style="width:auto"></select></div><div><label class="f">Order</label><select id="soDir1" style="width:auto"><option value="1">A → Z, small → large</option><option value="-1">Z → A, large → small</option></select></div>
+          <div><label class="f">Then by</label><select id="soCol2" style="width:auto"></select></div><div><label class="f">Order</label><select id="soDir2" style="width:auto"><option value="1">A → Z, small → large</option><option value="-1">Z → A, large → small</option></select></div>
+          <button class="btn primary small" id="soGo" type="button" style="margin-bottom:6px">Sort the sheet</button>
+        </div>
+        <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn ghost small" id="soKeep" type="button">Keep only the patients of “Analyse only some patients”</button><button class="btn ghost small" id="soEmpty" type="button">Delete empty rows and columns</button><span class="legend-note" id="soInfo">The sort and deletions change the sheet itself (Undo restores it).</span></div>
+      </div>
+      <div class="gtool" id="longBox" style="display:none">
+        <p class="legend-note" style="margin:0 0 8px">Makes one row per visit from the repeated measures of step 2 (VAS_Baseline, VAS_M1 … → ID, Visit, VAS), for analyses that need long data such as the repeated-measures correlation. Other columns are copied to every visit.</p>
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Patient ID</label><select id="lgId" style="width:auto"></select></div>
+          <div style="flex:1"><label class="f">Repeated measures</label><div id="lgVars" class="row" style="gap:4px 12px"></div></div>
+        </div>
+        <div class="row" style="margin-top:8px"><span class="legend-note" id="lgInfo"></span><span class="spacer"></span><button class="btn ghost small" id="lgDl" type="button">⬇ Long sheet (Excel)</button> <button class="btn primary small" id="lgGo" type="button">Make the sheet long</button></div>
+      </div>
+      <div class="gtool" id="cmpBox" style="display:none">
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <button class="btn ghost small" id="cmpPick" type="button" style="margin-bottom:6px">📂 Choose the other file</button><input type="file" id="cmpFile" accept=".xlsx,.xls,.csv,.txt" hidden>
+          <div><label class="f">Match the rows by</label><select id="cmpKey" style="width:auto"></select></div>
+          <span class="legend-note" id="cmpName"></span>
+        </div>
+        <div id="cmpOut" style="margin-top:8px"></div>
       </div>
       <div class="gtool" id="splitBox" style="display:none">
         <p class="legend-note" style="margin:0 0 8px">Splits each value at a separator into new columns placed after the original, e.g. blood pressure “120/80” → SBP and DBP, or “T2N1M0”-style codes split at a dash. Numbers become numbers.</p>
