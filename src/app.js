@@ -763,7 +763,7 @@
   $('#varBulk').addEventListener('click', e => {
     const b = e.target.closest('[data-vbulk]'); if (!b || !state.cfg) return;
     readUiIntoCfg();
-    const k = b.dataset.vbulk, vs = state.cfg.variables;
+    const k = b.dataset.vbulk, vs = state.cfg.variables.filter(v => !v.locked);
     if (k === 'inc' || k === 'exc') vs.forEach(v => { v.include = k === 'inc'; });
     else if (k === 'num' || k === 'cat') vs.forEach(v => { v.include = (v.type === 'numeric') === (k === 'num'); });
     else vs.filter(v => v.type === 'numeric').forEach(v => { v.dist = k.slice(2); });
@@ -1201,14 +1201,19 @@
     });
     return out;
   }
-  const varBadges = v => [v.test ? ' test' : '', v.unit ? ' u' : '', v.ordinal ? ' ord' : '', v.transform ? ' tf' : '', v.memo ? ' ℹ' : ''].join('');
+  const varBadges = v => [v.locked ? ' 🔒' : '', v.test ? ' test' : '', v.unit ? ' u' : '', v.ordinal ? ' ord' : '', v.transform ? ' tf' : '', v.outRule ? ' out' : '', v.impute ? ' imp' : '', v.refLo || v.refHi ? ' ref' : '', v.memo ? ' ℹ' : ''].join('');
   // the settings window of one variable
   let vdVar = null;
   function openVarDlg(id) {
     readUiIntoCfg();
     const v = state.cfg.variables.find(x => x.id === id); if (!v) return; vdVar = v;
     $('#vdTitle').textContent = v.label; $('#vdUnit').value = v.unit || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
-    $('#vdTf').value = v.transform || ''; $('#vdTf').disabled = v.type !== 'numeric';
+    $('#vdTf').value = v.transform || ''; $('#vdTf').disabled = v.type !== 'numeric'; $('#vdWinP').value = v.winsorP || '1'; $('#vdWinBox').style.display = v.transform === 'winsor' ? '' : 'none';
+    $('#vdOut').value = v.outRule || ''; $('#vdOut').disabled = v.type !== 'numeric'; $('#vdOutLo').value = v.outLo ?? ''; $('#vdOutHi').value = v.outHi ?? ''; $('#vdOutLim').style.display = v.outRule === 'limits' ? '' : 'none';
+    $('#vdImp').value = v.impute || ''; [...$('#vdImp').options].forEach(o => { o.disabled = o.value && (o.value === 'mode') !== (v.type === 'categorical'); });
+    $('#vdRefLo').value = v.refLo ?? ''; $('#vdRefHi').value = v.refHi ?? ''; $('#vdRefLo').disabled = $('#vdRefHi').disabled = v.type !== 'numeric'; $('#vdLock').checked = !!v.locked;
+    { const lv0 = v.type === 'categorical' ? (v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct) : [], ref = lv0.length === 2 && Analysis.POSITIVE.test(lv0[0]) && !Analysis.POSITIVE.test(lv0[1]) ? lv0[1] : lv0[0];
+      $('#vdRefCat').textContent = v.type === 'categorical' && lv0.length ? `In regression models this variable is compared with its reference category “${ref}” (change the order with ↕ in the list).` : ''; $('#vdRareBox').style.display = v.type === 'categorical' && v.kind === 'single' ? '' : 'none'; }
     $('#vdOrd').checked = !!v.ordinal; $('#vdOrd').disabled = v.type !== 'categorical'; $('#vdOrdTest').value = v.ordTest || 'rank';
     $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || ''; $('#vdNoSecond').checked = !!v.noSecond; $('#vdMcid').value = v.mcid || ''; $('#vdMcid').disabled = v.type !== 'numeric'; $('#vdNoSecondBox').style.display = v.type === 'numeric' && v.kind === 'single' ? '' : 'none';
     const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis']]
@@ -1279,11 +1284,20 @@
   $('#vsLevels').onchange = e => { readUiIntoCfg(); const how = e.target.value; if (!how) return; const list = selVars().filter(v => v.type === 'categorical');
     list.forEach(v => { v.levels = sortLevels(v, lvOf(v), how); }); e.target.value = ''; renderVariables(); toast(list.length ? `Categories arranged in ${list.length} variable${list.length > 1 ? 's' : ''}` : 'No categorical variable selected'); };
   $('#vdCancel').onclick = () => $('#varDlg').close();
+  $('#vdTf').onchange = () => { $('#vdWinBox').style.display = $('#vdTf').value === 'winsor' ? '' : 'none'; };
+  $('#vdOut').onchange = () => { $('#vdOutLim').style.display = $('#vdOut').value === 'limits' ? '' : 'none'; };
+  // rare categories: their merge boxes are filled with "Other" (Save applies it)
+  $('#vdRare').onclick = () => { const v = vdVar, n = Math.max(1, +$('#vdRareN').value || 5), cnt = {}; state.data.rows.forEach(r => { const x = r[v.cols[0].col]; if (!isMissing(x)) cnt[String(x).trim()] = (cnt[String(x).trim()] || 0) + 1; });
+    let k = 0; document.querySelectorAll('[data-vdm]').forEach(el => { if ((cnt[el.dataset.vdm] || 0) < n) { el.value = 'Other'; k++; } }); toast(k ? `${k} categor${k > 1 ? 'ies' : 'y'} set to “Other” — Save to apply` : `No category has fewer than ${n} patients`); };
+  $('#vdDup').onclick = () => { const v = vdVar, cfg = state.cfg, copy = JSON.parse(JSON.stringify(v)); copy.id = v.id + '_c' + Date.now().toString(36); copy.label = `${v.label} (copy)`; copy.locked = false;
+    cfg.variables.splice(cfg.variables.indexOf(v) + 1, 0, copy); $('#varDlg').close(); renderVariables(); toast(`${v.label} duplicated — change the copy's label or transformation with ⚙`); };
   $('#vdSave').onclick = () => {
     const v = vdVar; if (!v) return;
     const set = (k, val) => { if (val === '' || val === false || val === null) delete v[k]; else v[k] = val; };
     set('unit', $('#vdUnit').value.trim()); set('dec', $('#vdDec').value); set('role', $('#vdRole').value); set('transform', v.type === 'numeric' ? $('#vdTf').value : '');
     set('ordinal', v.type === 'categorical' && $('#vdOrd').checked); set('ordTest', $('#vdOrd').checked ? $('#vdOrdTest').value : '');
+    set('winsorP', v.transform === 'winsor' || $('#vdTf').value === 'winsor' ? $('#vdWinP').value : ''); set('outRule', v.type === 'numeric' ? $('#vdOut').value : ''); set('outLo', $('#vdOut').value === 'limits' ? $('#vdOutLo').value : ''); set('outHi', $('#vdOut').value === 'limits' ? $('#vdOutHi').value : '');
+    set('impute', $('#vdImp').value); set('refLo', v.type === 'numeric' ? $('#vdRefLo').value : ''); set('refHi', v.type === 'numeric' ? $('#vdRefHi').value : ''); set('locked', $('#vdLock').checked);
     set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('test', $('#vdTest').value); set('noSecond', v.type === 'numeric' && $('#vdNoSecond').checked); set('mcid', v.type === 'numeric' ? $('#vdMcid').value.trim() : '');
     if (v.type === 'categorical' && $('#vdShowBox').style.display !== 'none') { const first = $('#vdShow').value, lv = v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct; v.levels = [first, ...lv.filter(l => l !== first)]; }
     const m = [...document.querySelectorAll('[data-vdm]')].filter(el => el.value.trim()).map(el => `${el.dataset.vdm}=${el.value.trim()}`);
@@ -1302,7 +1316,7 @@
     $('#vsFrom').innerHTML = state.cfg.variables.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
   }
   $('#varsTbl').addEventListener('change', e => { const c = e.target.closest('[data-vsel]'); if (!c) return; c.checked ? state.varSel.add(c.dataset.vsel) : state.varSel.delete(c.dataset.vsel); renderSelBar(); });
-  const selVars = () => state.cfg.variables.filter(v => state.varSel.has(v.id));
+  const selVars = () => state.cfg.variables.filter(v => state.varSel.has(v.id) && !v.locked);
   $('#vsTableGo').onclick = () => { readUiIntoCfg(); const t = $('#vsTable').value.trim(); if (!t) return; selVars().forEach(v => { if (v.kind === 'repeated') { v.split = true; v.splitTable = t; } else v.table = t; }); renderVariables(); toast(`Table “${t}” set for ${state.varSel.size} variables`); };
   $('#vsType').onchange = e => { readUiIntoCfg(); const t = e.target.value; if (!t) return; selVars().filter(v => v.kind === 'single').forEach(v => { v.type = t; if (t === 'categorical' && !v.levels.length) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); e.target.value = ''; renderVariables(); };
   $('#vsCopyGo').onclick = () => { readUiIntoCfg(); const src = state.cfg.variables.find(v => v.id === $('#vsFrom').value); if (!src) return;
@@ -1938,7 +1952,8 @@
     readUiIntoCfg();
     const cfg = state.cfg, { headers, rows } = state.data;
     const varOf = h => cfg.variables.find(v => v.cols.some(c => c.col === h));
-    const aoa = [['Column', 'Label in the report', 'Role', 'Type', 'Timepoint', 'Table', 'Levels / categories (n)', 'Value labels', 'n', 'Missing', 'Mean ± SD', 'Median (IQR)', 'Min', 'Max', 'Footnote']];
+    const aoa = [['Column', 'Label in the report', 'Role', 'Type', 'Timepoint', 'Table', 'Levels / categories (n)', 'Value labels', 'n', 'Missing', 'Mean ± SD', 'Median (IQR)', 'Min', 'Max', 'Footnote', 'Derived from']];
+    const derived = h => { const c = (cfg.computed || []).find(x => x.names.includes(h)); return c ? c.desc : ''; };
     headers.forEach(h => {
       const v = varOf(h), vals = rows.map(r => r[h]).filter(x => !isMissing(x)), nums = vals.map(Analysis.toNum).filter(isFinite), numeric = v ? v.type === 'numeric' : columnInfo(rows, h).numeric;
       const role = h === cfg.groupCol && !cfg.noGroups ? 'Group' : cfg.idCols.includes(h) ? 'ID' : !v ? 'Not analysed' : v.include ? (v.kind === 'repeated' ? 'Repeated measure' : 'Analysed') : 'Not analysed';
@@ -1947,10 +1962,10 @@
       const lv = !numeric ? Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, n]) => `${k} (${n})`).join('; ') : '';
       const st = numeric && nums.length && role !== 'ID' ? Stats.describe(nums) : null, f = x => Analysis.fmt(x, 2);
       aoa.push([h, h === cfg.groupCol && !cfg.noGroups ? 'Groups: ' + cfg.groupOrder.map(g => cfg.groupLabels[g] || g).join(', ') : v ? v.label : '', role, numeric ? 'Numeric' : 'Categorical', tp, v ? (v.kind === 'repeated' ? 'own table' : v.table || '') : '',
-        lv, v && v.valueLabels || '', vals.length, rows.length - vals.length, st ? `${f(st.mean)} ± ${f(st.sd)}` : '', st ? `${f(st.median)} (${f(st.q1)} - ${f(st.q3)})` : '', st ? f(st.min) : '', st ? f(st.max) : '', v && v.note || '']);
+        lv, v && v.valueLabels || '', vals.length, rows.length - vals.length, st ? `${f(st.mean)} ± ${f(st.sd)}` : '', st ? `${f(st.median)} (${f(st.q1)} - ${f(st.q3)})` : '', st ? f(st.min) : '', st ? f(st.max) : '', v && v.note || '', derived(h)]);
     });
     const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [18, 26, 16, 12, 12, 24, 40, 24, 6, 8, 16, 18, 8, 8, 30].map(w => ({ wch: w }));
+    ws['!cols'] = [18, 26, 16, 12, 12, 24, 40, 24, 6, 8, 16, 18, 8, 8, 30, 36].map(w => ({ wch: w }));
     XLSX.utils.book_append_sheet(wb, ws, 'Codebook');
     XLSX.writeFile(wb, `${baseName()} - Codebook.xlsx`);
     toast(`Codebook of ${headers.length} columns saved`);
@@ -2164,8 +2179,19 @@
   /* ---------- calculated variables: new columns computed from existing ones ---------- */
   const CALC_TYPES = {
     bmi: 'BMI = weight (kg) / height (m)²', diff: 'Change = B − A', pct: '% change = (B − A) / A × 100', ratio: 'Ratio = A / B',
-    sum: 'Total score (sum of columns)', mean: 'Mean of columns', log: 'Logarithm (ln or log10)', cat: 'Categories from cut-offs (e.g. BMI classes)', formula: 'Own formula'
+    sum: 'Total score (sum of columns)', mean: 'Mean of columns', log: 'Logarithm (ln or log10)', cat: 'Categories from cut-offs (e.g. BMI classes, age groups)', formula: 'Own formula',
+    likert: 'Questionnaire score (Likert items, reverse-coded items, subscales)',
+    egfr: 'eGFR — CKD-EPI 2021 (creatinine, age, sex)', map: 'Mean arterial pressure (SBP, DBP)', qtc: 'QTc (Bazett or Fridericia)', homa: 'HOMA-IR (glucose, insulin)',
+    cha2ds2: 'CHA₂DS₂-VASc score', childpugh: 'Child-Pugh score and class', charlson: 'Charlson comorbidity index'
   };
+  // cut-off presets for "Categories from cut-offs"
+  const CUT_PRESETS = { bmi: ['18.5, 25, 30', 'Underweight, Normal, Overweight, Obese'], bmiAsia: ['18.5, 23, 27.5', 'Underweight, Normal, Overweight, Obese'], bmiObese: ['18.5, 25, 30, 35, 40', 'Underweight, Normal, Overweight, Obesity I, Obesity II, Obesity III'],
+    age3: ['40, 60', '< 40 years, 40-59 years, ≥ 60 years'], age10: ['30, 40, 50, 60, 70', '< 30, 30-39, 40-49, 50-59, 60-69, ≥ 70'], ageEld: ['65, 75, 85', '< 65, 65-74, 75-84, ≥ 85'],
+    egfr: ['15, 30, 45, 60, 90', 'G5, G4, G3b, G3a, G2, G1'], bp: ['120, 130, 140', 'Normal, Elevated, Stage 1, Stage 2'], a1c: ['5.7, 6.5', 'Normal, Prediabetes, Diabetes'] };
+  const isYes = x => !isMissing(x) && (Analysis.POSITIVE.test(String(x).trim()) || /^(present|positive|true)$/i.test(String(x).trim()));
+  const CHARLSON = [[/myocard|\bmi\b|infarct/i, 1], [/heart.?fail|\bchf\b|\bhf\b/i, 1], [/periph|pvd|vascular/i, 1], [/cerebro|stroke|\bcva\b|\btia\b/i, 1], [/dementia/i, 1], [/copd|pulmon|asthma|lung/i, 1],
+    [/connective|rheumat|lupus|\bsle\b/i, 1], [/ulcer|\bpud\b/i, 1], [/liver.*(severe|cirrh)|cirrh|portal/i, 3], [/liver|hepat/i, 1], [/diabet.*(compl|organ|end)/i, 2], [/diabet|\bdm\b/i, 1],
+    [/hemipleg|parapleg/i, 2], [/renal|kidney|\bckd\b/i, 2], [/metasta/i, 6], [/tumou?r|cancer|malign|lymphoma|leuk/i, 2], [/\baids\b|\bhiv\b/i, 6]];
   const calc = { type: 'bmi' };
   const numCols = () => state.data.headers.filter(h => columnInfo(state.data.rows, h).numeric);
   function renderCalcForm() {
@@ -2181,6 +2207,24 @@
     if (t === 'cat') f += sel('a', 'Column') + `<div><label class="f">Cut-offs (lower limits)</label><input type="text" data-calc="cuts" value="${esc(calc.cuts ?? '18.5, 25, 30')}" placeholder="18.5, 25, 30"></div>`
       + `<div><label class="f">Category names (one more than cut-offs)</label><input type="text" data-calc="labels" value="${esc(calc.labels ?? 'Underweight, Normal, Overweight, Obese')}"></div>`;
     if (t === 'sum' || t === 'mean') f += `<div style="grid-column:span 3"><label class="f">Columns (a patient with any of them missing gets no value)</label><div class="predlist">${nums.map(h => `<label><input type="checkbox" data-calccol="${esc(h)}" ${(calc.cols || []).includes(h) ? 'checked' : ''}>${esc(h)}</label>`).join('')}</div></div>`;
+    const all = state.data.headers, sa = (k, label) => sel(k, label, all);
+    const femGuess = col => { const d = col ? columnInfo(state.data.rows, col).distinct : []; return d.find(x => /^(f|female|woman|women|girl)$/i.test(x)) || d.find(x => /fem|wom/i.test(x)) || ''; };
+    const fem = (k = 'fem', col = calc.c) => `<div><label class="f">Female value</label><input type="text" data-calc="${k}" value="${esc(calc[k] ?? femGuess(col))}" placeholder="e.g. Female"></div>`;
+    if (t === 'cat') f += `<div><label class="f">Preset</label><select data-calc="preset"><option value="">— cut-offs of my own —</option>${[['bmi', 'BMI — WHO'], ['bmiObese', 'BMI — WHO with obesity classes'], ['bmiAsia', 'BMI — Asian'], ['age3', 'Age: < 40, 40-59, ≥ 60'], ['age10', 'Age by decade'], ['ageEld', 'Age: older adults (65, 75, 85)'], ['egfr', 'eGFR — KDIGO G1-G5'], ['bp', 'Systolic BP — ACC/AHA'], ['a1c', 'HbA1c — ADA']].map(([k, l]) => `<option value="${k}" ${calc.preset === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
+    if (t === 'likert') f += `<div style="grid-column:span 3"><label class="f">Items — tick the reverse-coded ones in the second box</label><div class="predlist">${nums.map(h => `<label><input type="checkbox" data-calccol="${esc(h)}" ${(calc.cols || []).includes(h) ? 'checked' : ''}>${esc(h)} <span class="legend-note" title="Reverse-coded">↺</span><input type="checkbox" data-calcrev="${esc(h)}" ${(calc.rev || []).includes(h) ? 'checked' : ''}></label>`).join('')}</div></div>`
+      + `<div><label class="f">Scale from – to</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="number" data-calc="smin" value="${esc(calc.smin ?? 1)}" style="width:60px"><input type="number" data-calc="smax" value="${esc(calc.smax ?? 5)}" style="width:60px"></div></div>`
+      + `<div><label class="f">Score</label><select data-calc="how"><option value="sum" ${calc.how !== 'mean' ? 'selected' : ''}>Sum of the items</option><option value="mean" ${calc.how === 'mean' ? 'selected' : ''}>Mean of the items</option></select></div>`
+      + `<div><label class="f">Patients with missing items</label><select data-calc="miss"><option value="none" ${calc.miss !== 'half' ? 'selected' : ''}>No score</option><option value="half" ${calc.miss === 'half' ? 'selected' : ''}>Scored when at least half the items are answered (mean × number of items)</option></select></div>`
+      + `<div style="grid-column:span 3"><label class="f">Subscales (optional) — name: items</label><input type="text" data-calc="subs" value="${esc(calc.subs || '')}" placeholder="e.g. Physical: Q1, Q2, Q3; Mental: Q4, Q5, Q6"></div>`;
+    if (t === 'egfr') f += sel('a', 'Serum creatinine') + `<div><label class="f">Creatinine unit</label><select data-calc="unit"><option value="mg" ${calc.unit !== 'umol' ? 'selected' : ''}>mg/dL</option><option value="umol" ${calc.unit === 'umol' ? 'selected' : ''}>µmol/L</option></select></div>` + sel('b', 'Age (years)') + sa('c', 'Sex') + fem();
+    if (t === 'map') f += sel('a', 'Systolic BP') + sel('b', 'Diastolic BP');
+    if (t === 'qtc') f += sel('a', 'QT interval (ms)') + sel('b', 'Heart rate (bpm)') + `<div><label class="f">Formula</label><select data-calc="method"><option value="bazett" ${calc.method !== 'fridericia' ? 'selected' : ''}>Bazett: QT / √RR</option><option value="fridericia" ${calc.method === 'fridericia' ? 'selected' : ''}>Fridericia: QT / ∛RR</option></select></div>`;
+    if (t === 'homa') f += sel('a', 'Fasting glucose') + `<div><label class="f">Glucose unit</label><select data-calc="unit"><option value="mg" ${calc.unit !== 'mmol' ? 'selected' : ''}>mg/dL</option><option value="mmol" ${calc.unit === 'mmol' ? 'selected' : ''}>mmol/L</option></select></div>` + sel('b', 'Fasting insulin (µU/mL)');
+    if (t === 'cha2ds2') f += sel('b', 'Age (years)') + sa('c', 'Sex') + fem() + sa('chf', 'Heart failure (yes/no)') + sa('htn', 'Hypertension') + sa('dm', 'Diabetes') + sa('stroke', 'Stroke / TIA / thromboembolism') + sa('vasc', 'Vascular disease (MI, PAD, plaque)');
+    if (t === 'childpugh') f += sel('a', 'Bilirubin') + `<div><label class="f">Bilirubin unit</label><select data-calc="unit"><option value="mg" ${calc.unit !== 'umol' ? 'selected' : ''}>mg/dL</option><option value="umol" ${calc.unit === 'umol' ? 'selected' : ''}>µmol/L</option></select></div>`
+      + sel('b', 'Albumin') + `<div><label class="f">Albumin unit</label><select data-calc="aunit"><option value="gdl" ${calc.aunit !== 'gl' ? 'selected' : ''}>g/dL</option><option value="gl" ${calc.aunit === 'gl' ? 'selected' : ''}>g/L</option></select></div>`
+      + sel('inr', 'INR') + sa('asc', 'Ascites (none / mild / moderate-severe)') + sa('enc', 'Encephalopathy (none / grade 1-2 / grade 3-4)');
+    if (t === 'charlson') { const w = calc.w || {}; f += `<div style="grid-column:span 3"><label class="f">Comorbidity columns (yes/no) and their weights — guessed from the names; 0 leaves a column out</label><div class="predlist">${all.map(h => { const g = w[h] ?? ((CHARLSON.find(([re]) => re.test(h)) || [, 0])[1]); return `<label>${esc(h)} <select data-calcw="${esc(h)}" style="width:auto">${[0, 1, 2, 3, 6].map(n => `<option ${+g === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`; }).join('')}</div></div>` + sel('b', 'Age (optional — adds 1 point per decade from 50)'); }
     if (t === 'formula') f += `<div style="grid-column:span 3"><label class="f">Formula — column names in [brackets]; + − × / ^ ( ), ln, log10, sqrt, abs, exp, round, min, max</label><input type="text" data-calc="expr" value="${esc(calc.expr || '')}" placeholder="e.g. [Weight_kg] / ([Height_cm] / 100) ^ 2"></div>`;
     f += `<div><label class="f">New column name</label><input type="text" data-calc="name" value="${esc(calc.name || '')}" placeholder="${esc(calcDefaultName())}"></div>`;
     // where the new column goes in the sheet, and which report table shows it
@@ -2199,7 +2243,7 @@
   function calcDefaultName() {
     const t = calc.type, a = String(calc.a || '').replace(/^rep:.*/, 'BMI');
     return { bmi: 'BMI_kg_m2', diff: a ? `${a}_change` : 'Change', pct: a ? `${a}_pct_change` : 'Pct_change', ratio: 'Ratio', sum: 'Total_score', mean: 'Mean_score',
-      log: a ? `${calc.base === '10' ? 'Log10' : 'Ln'}_${a}` : 'Log', cat: a ? `${a}_class` : 'Class', formula: 'Calculated' }[t];
+      log: a ? `${calc.base === '10' ? 'Log10' : 'Ln'}_${a}` : 'Log', cat: a ? `${a}_class` : 'Class', formula: 'Calculated', likert: 'Total_score', egfr: 'eGFR', map: 'MAP_mmHg', qtc: 'QTc_ms', homa: 'HOMA_IR', cha2ds2: 'CHA2DS2_VASc', childpugh: 'Child_Pugh_score', charlson: 'Charlson_index' }[t];
   }
   // own formulas: every token is checked against a whitelist (numbers, operators, column names, a few functions) before it becomes code
   const FUNCS = { ln: Math.log, log: Math.log, log10: Math.log10, sqrt: Math.sqrt, abs: Math.abs, exp: Math.exp, round: (x, n = 0) => Math.round(x * 10 ** n) / 10 ** n, min: Math.min, max: Math.max };
@@ -2260,11 +2304,49 @@
       return { desc: `${calc.a}: ${labels.map((l, i) => `${l} ${i === 0 ? `< ${cuts[0]}` : i === cuts.length ? `≥ ${cuts[i - 1]}` : `${cuts[i - 1]}–<${cuts[i]}`}`).join(', ')}`, levels: labels, text: true,
         items: [{ name, src: [calc.a], f: ([a]) => labels[cuts.filter(c => a >= c).length] }] };
     }
+    if (t === 'likert') {
+      const cols = calc.cols || []; if (cols.length < 2) throw new Error('tick at least two items');
+      const lo = +(calc.smin ?? 1), hi = +(calc.smax ?? 5), rev = (calc.rev || []).filter(c => cols.includes(c)), how = calc.how === 'mean' ? 'mean' : 'sum', half = calc.miss === 'half';
+      const score = items => vals => { const v = items.map(c => { const x = Analysis.toNum(vals[cols.indexOf(c)]); return isFinite(x) ? (rev.includes(c) ? lo + hi - x : x) : NaN; }).filter(isFinite);
+        if (v.length < items.length && (!half || v.length < items.length / 2)) return NaN; const m = v.reduce((a, b) => a + b, 0) / v.length; return how === 'mean' ? m : m * items.length; };
+      const subs = String(calc.subs || '').split(';').map(p => { const m = /^\s*([^:]+):\s*(.+)$/.exec(p); return m ? { name: m[1].trim(), items: m[2].split(',').map(x => x.trim()).filter(x => cols.includes(x)) } : null; }).filter(x => x && x.items.length);
+      return { desc: `${how} of ${cols.join(', ')} (scale ${lo}-${hi}${rev.length ? `; reverse-coded: ${rev.join(', ')}` : ''}${half ? '; scored with at least half the items' : ''})`, multi: true,
+        items: [{ name, src: cols, raw: true, f: score(cols) }, ...subs.map(sb => ({ name: `${sb.name.replace(/\s+/g, '_')}_score`, src: cols, raw: true, f: score(sb.items) }))] };
+    }
+    const femV = calc.fem || (calc.c ? (d => d.find(x => /^(f|female|woman|women|girl)$/i.test(x)) || d.find(x => /fem|wom/i.test(x)) || '')(columnInfo(state.data.rows, calc.c).distinct) : '');
+    const nm = x => Analysis.toNum(x), female = x => !isMissing(x) && String(x).trim().toLowerCase() === String(femV).trim().toLowerCase();
+    if (t === 'egfr') { need('a', 'b', 'c'); const conv = calc.unit === 'umol' ? 88.42 : 1;
+      return { desc: `CKD-EPI 2021 from ${calc.a}${calc.unit === 'umol' ? ' (µmol/L)' : ' (mg/dL)'}, ${calc.b} and ${calc.c} (female = ${femV || '?'})`, items: [{ name, src: [calc.a, calc.b, calc.c], raw: true, f: ([cr, age, sx]) => {
+        const s = nm(cr) / conv, a = nm(age); if (!(s > 0) || !isFinite(a) || isMissing(sx)) return NaN; const fe = female(sx), k = fe ? 0.7 : 0.9, al = fe ? -0.241 : -0.302;
+        return 142 * Math.min(s / k, 1) ** al * Math.max(s / k, 1) ** -1.2 * 0.9938 ** a * (fe ? 1.012 : 1); } }] }; }
+    if (t === 'map') { need('a', 'b'); return { desc: `(${calc.a} + 2 × ${calc.b}) / 3`, items: [{ name, src: [calc.a, calc.b], f: ([s, d]) => (s + 2 * d) / 3 }] }; }
+    if (t === 'qtc') { need('a', 'b'); const fr = calc.method === 'fridericia'; return { desc: `${calc.a} / ${fr ? '∛' : '√'}(60 / ${calc.b}) (${fr ? 'Fridericia' : 'Bazett'})`, items: [{ name, src: [calc.a, calc.b], f: ([qt, hr]) => hr > 0 ? qt / (fr ? Math.cbrt(60 / hr) : Math.sqrt(60 / hr)) : NaN }] }; }
+    if (t === 'homa') { need('a', 'b'); const dv = calc.unit === 'mmol' ? 22.5 : 405; return { desc: `${calc.a} × ${calc.b} / ${dv}`, items: [{ name, src: [calc.a, calc.b], f: ([g, i]) => g * i / dv }] }; }
+    if (t === 'cha2ds2') { need('b', 'c'); const ks = ['chf', 'htn', 'dm', 'stroke', 'vasc'];
+      return { desc: `CHA₂DS₂-VASc from ${[calc.b, calc.c, ...ks.map(k => calc[k]).filter(Boolean)].join(', ')}`, items: [{ name, src: [calc.b, calc.c, ...ks.map(k => calc[k] || calc.b)], raw: true, f: ([age, sx, chf, htn, dm, st, va]) => {
+        const a = nm(age); if (!isFinite(a) || isMissing(sx)) return NaN; const y = (k, x) => calc[k] && isYes(x) ? 1 : 0;
+        return (a >= 75 ? 2 : a >= 65 ? 1 : 0) + (female(sx) ? 1 : 0) + y('chf', chf) + y('htn', htn) + y('dm', dm) + 2 * y('stroke', st) + y('vasc', va); } }] }; }
+    if (t === 'childpugh') { need('a', 'b', 'inr'); const bc = calc.unit === 'umol' ? 17.1 : 1, ac = calc.aunit === 'gl' ? 10 : 1;
+      const grade = x => { if (isMissing(x)) return NaN; const s = String(x).trim().toLowerCase(), n = Analysis.toNum(x);
+        if (isFinite(n) && n >= 1 && n <= 3 && Number.isInteger(n)) return n; if (/^(no|none|absent|0|nil|negative)$/.test(s)) return 1;
+        if (/sever|massive|refract|grade ?(3|4|iii|iv)|tense|large|moderate/.test(s)) return 3; return 2; };
+      const score = ([bi, al, inr, as, en]) => { const b = nm(bi) / bc, a = nm(al) / ac, i = nm(inr), A = calc.asc ? grade(as) : 1, E = calc.enc ? grade(en) : 1; if (![b, a, i, A, E].every(isFinite)) return NaN;
+        return (b < 2 ? 1 : b <= 3 ? 2 : 3) + (a > 3.5 ? 1 : a >= 2.8 ? 2 : 3) + (i < 1.7 ? 1 : i <= 2.3 ? 2 : 3) + A + E; };
+      const src = [calc.a, calc.b, calc.inr, calc.asc || calc.a, calc.enc || calc.a];
+      return { desc: 'Child-Pugh: bilirubin, albumin, INR, ascites, encephalopathy (class A 5-6, B 7-9, C 10-15)', multi: true,
+        items: [{ name, src, raw: true, f: score }, { name: name.replace(/_?score$/i, '') + '_class', src, raw: true, text: true, levels: ['A', 'B', 'C'], f: v => { const s2 = score(v); return isFinite(s2) ? (s2 <= 6 ? 'A' : s2 <= 9 ? 'B' : 'C') : null; } }] }; }
+    if (t === 'charlson') { const w = Object.fromEntries(Object.entries(calc.w || {}).filter(([, n]) => +n > 0)); const g = state.data.headers.filter(h => (w[h] ?? (calc.w && h in calc.w ? 0 : ((CHARLSON.find(([re]) => re.test(h)) || [, 0])[1]))) > 0);
+      const wt = h => +(w[h] ?? (CHARLSON.find(([re]) => re.test(h)) || [, 0])[1]); if (!g.length) throw new Error('give a weight to at least one comorbidity column');
+      return { desc: `Charlson: ${g.map(h => `${h} (${wt(h)})`).join(', ')}${calc.b ? ` + age points from ${calc.b}` : ''}`, items: [{ name, src: [...g, ...(calc.b ? [calc.b] : [])], raw: true, f: v => {
+        // a metastatic tumour (6) replaces the points of a tumour (2)
+        const meta = g.some((h, i) => wt(h) === 6 && /metasta/i.test(h) && isYes(v[i]));
+        let s2 = g.reduce((a, h, i) => a + (isYes(v[i]) && !(meta && wt(h) === 2 && /tumou?r|cancer|malign/i.test(h)) ? wt(h) : 0), 0); if (calc.b) { const a = nm(v[g.length]); if (!isFinite(a)) return NaN; s2 += a >= 80 ? 4 : a >= 70 ? 3 : a >= 60 ? 2 : a >= 50 ? 1 : 0; } return s2; } }] }; }
     const fm = compileFormula(calc.expr);
     return { desc: String(calc.expr).trim(), items: [{ name, src: fm.cols, f: fm.f }] };
   }
   // value of one item for one patient: missing when any source value is missing or the result is not a number
   function calcValue(it, r, text) {
+    if (it.raw) { const v = it.f(it.src.map(c => r[c])); return text || it.text ? (v ?? null) : isFinite(v) ? Math.round(v * 100) / 100 : null; }
     const vals = it.src.map(c => Analysis.toNum(r[c]));
     if (vals.some(v => !isFinite(v))) return null;
     const v = it.f(vals);
@@ -2297,6 +2379,10 @@
         const pos = headers.indexOf(plan.items[0].name), from = plan.repeated.from;
         cfg.variables.push({ ...from, id: uid(), pos, label: plan.repeated.label, cols: plan.items.map(it => ({ col: it.name, tp: it.tp, ...(it.label ? { label: it.label } : {}) })),
           chart: undefined, caption: undefined, ylabel: undefined, include: true });
+      } else if (plan.multi) {
+        plan.items.forEach(it => { if (cfg.variables.some(x => x.cols.some(c => c.col === it.name))) return;
+          const v = { ...singleVariable(state.data.rows, it.name, headers.indexOf(it.name), String(calc.table || '').trim() || 'Other outcomes'), id: uid() };
+          if (it.levels) { v.type = 'categorical'; v.levels = it.levels.filter(l => state.data.rows.some(r => r[it.name] === l)); } cfg.variables.push(v); });
       } else {
         const it = plan.items[0], pos = headers.indexOf(it.name);
         const src = cfg.variables.find(v => v.kind === 'single' && v.cols[0].col === it.src[0]);
@@ -2311,6 +2397,10 @@
   $('#calcCard').addEventListener('input', e => {
     const k = e.target.dataset.calc;
     if (e.target.dataset.calccol !== undefined) { const h = e.target.dataset.calccol; calc.cols = e.target.checked ? [...(calc.cols || []), h] : (calc.cols || []).filter(x => x !== h); }
+    else if (e.target.dataset.calcrev !== undefined) { const h = e.target.dataset.calcrev; calc.rev = e.target.checked ? [...(calc.rev || []), h] : (calc.rev || []).filter(x => x !== h); }
+    else if (e.target.dataset.calcw !== undefined) { calc.w = { ...(calc.w || {}), [e.target.dataset.calcw]: +e.target.value }; }
+    else if (k === 'preset') { calc.preset = e.target.value; if (CUT_PRESETS[calc.preset]) { [calc.cuts, calc.labels] = CUT_PRESETS[calc.preset]; } renderCalcForm(); return; }
+    else if (k === 'c' && !calc.fem) { calc.c = e.target.value; renderCalcForm(); return; }
     else if (k) { calc[k] = e.target.value; if (k === 'type' || k === 'a') { if (k === 'type') calc.name = ''; renderCalcForm(); return; } }
     calcPreview();
   });

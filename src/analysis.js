@@ -1949,24 +1949,45 @@ const Analysis = (() => {
       if (v.unit && !/\([^)]*\)\s*$/.test(v.label)) w = { ...w, label: `${v.label} (${v.unit})` };
       if (v.labelAr && lang !== 'en') w = { ...w, label: lang === 'ar' ? v.labelAr : `${w.label} / ${v.labelAr}` };
       if (o.autoAbbr && !v.note) { const found = Object.keys(ABBR).filter(a => new RegExp(`(^|[^A-Za-z])${a}([^A-Za-z]|$)`).test(w.label)); if (found.length) w = { ...w, note: found.map(a => `${a}: ${ABBR[a]}`).join(', ') }; }
+      // per-variable data handling (step 2 ⚙): outliers excluded, missing values imputed, winsorising and Box-Cox
+      if (w.type === 'numeric' && (v.outRule || v.impute || v.transform === 'winsor' || v.transform === 'boxcox')) {
+        rows = rows || data.rows.map(r => ({ ...r, __o: r.__o || r })); const notes = [], all = () => v.cols.flatMap(c => rows.map(r => toNum(r[c.col]))).filter(isFinite);
+        if (v.outRule) { const a = all(), q1 = S.quantile(a, 0.25), q3 = S.quantile(a, 0.75), m = S.mean(a), sd = S.sd(a);
+          const [lo, hi] = v.outRule === 'iqr3' ? [q1 - 3 * (q3 - q1), q3 + 3 * (q3 - q1)] : v.outRule === 'z3' ? [m - 3 * sd, m + 3 * sd] : v.outRule === 'limits' ? [toNum(v.outLo), toNum(v.outHi)] : [q1 - 1.5 * (q3 - q1), q3 + 1.5 * (q3 - q1)];
+          let n = 0; v.cols.forEach(c => rows.forEach(r => { const x = toNum(r[c.col]); if (isFinite(x) && ((isFinite(lo) && x < lo) || (isFinite(hi) && x > hi))) { r[c.col] = null; n++; } }));
+          if (n) notes.push(`${n} outlying value${n > 1 ? 's' : ''} (${v.outRule === 'limits' ? `outside ${isFinite(lo) ? lo : '−∞'} to ${isFinite(hi) ? hi : '∞'}` : v.outRule === 'z3' ? 'more than 3 SD from the mean' : `beyond ${v.outRule === 'iqr3' ? 3 : 1.5} × IQR`}) excluded`); }
+        if (v.impute === 'mean' || v.impute === 'median') { let n = 0; v.cols.forEach(c => { const a = rows.map(r => toNum(r[c.col])).filter(isFinite); if (!a.length) return; const f = v.impute === 'mean' ? S.mean(a) : S.median(a);
+          rows.forEach(r => { if (!isFinite(toNum(r[c.col]))) { r[c.col] = f; n++; } }); }); if (n) notes.push(`${n} missing value${n > 1 ? 's' : ''} replaced by the ${v.impute}`); }
+        if (v.transform === 'winsor') { const p = +(v.winsorP || 1) / 100, a = all(), lo = S.quantile(a, p), hi = S.quantile(a, 1 - p); let n = 0;
+          v.cols.forEach(c => rows.forEach(r => { const x = toNum(r[c.col]); if (isFinite(x) && (x < lo || x > hi)) { r[c.col] = Math.min(hi, Math.max(lo, x)); n++; } }));
+          notes.push(`winsorised at the ${fmt(100 * p, 0)}th and ${fmt(100 - 100 * p, 0)}th percentiles (${n} value${n === 1 ? '' : 's'} capped)`); }
+        if (v.transform === 'boxcox') { const a = all(), shift = Math.min(...a) > 0 ? 0 : 1 - Math.min(...a);
+          if (a.length > 2) { const lam = S.boxCoxLambda(a.map(x => x + shift)); v.cols.forEach(c => rows.forEach(r => { const x = toNum(r[c.col]); r[c.col] = isFinite(x) ? S.boxCox(x + shift, lam) : null; }));
+            w = { ...w, label: `${w.label}, Box-Cox-transformed` }; notes.push(`Box-Cox transformed (λ = ${fmt(lam, 2)}${shift ? `, after adding ${fmt(shift, 2)}` : ''})`); } }
+        if (notes.length) w = { ...w, note: [w.note, `${plain(v.label)}: ${notes.join('; ')}`].filter(Boolean).join('; ') };
+      }
+      if (w.type === 'categorical' && v.impute === 'mode') { rows = rows || data.rows.map(r => ({ ...r, __o: r.__o || r })); let n = 0;
+        v.cols.forEach(c => { const cnt = {}; rows.forEach(r => { const x = toCat(r[c.col]); if (x !== null) cnt[x] = (cnt[x] || 0) + 1; }); const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0]; if (!top) return;
+          rows.forEach(r => { if (toCat(r[c.col]) === null) { r[c.col] = top[0]; n++; } }); });
+        if (n) w = { ...w, note: [w.note, `${plain(v.label)}: ${n} missing value${n > 1 ? 's' : ''} replaced by the most frequent category`].filter(Boolean).join('; ') }; }
       if (v.transform && tf[v.transform] && w.type === 'numeric') {
-        rows = rows || data.rows.map(r => ({ ...r }));
+        rows = rows || data.rows.map(r => ({ ...r, __o: r.__o || r }));
         v.cols.forEach(c => rows.forEach(r => { const n = toNum(r[c.col]); r[c.col] = isFinite(n) ? tf[v.transform](n) : null; if (!isFinite(r[c.col])) r[c.col] = null; }));
         w = { ...w, label: `${w.label}, ${v.transform === 'log' ? 'log' : v.transform === 'log10' ? 'log₁₀' : '√'}-transformed`, note: [w.note, `Values were ${v.transform === 'sqrt' ? 'square-root' : v.transform === 'log10' ? 'log₁₀' : 'natural-log'} transformed before analysis`].filter(Boolean).join('; ') };
       }
       return w;
     });
     // last observation carried forward over each outcome's timepoints
-    if (o.rmImpute === 'locf') { rows = rows || data.rows.map(r => ({ ...r }));
+    if (o.rmImpute === 'locf') { rows = rows || data.rows.map(r => ({ ...r, __o: r.__o || r }));
       variables.filter(v => v.kind === 'repeated').forEach(v => rows.forEach(r => { let last = null; v.cols.forEach(c => { const n = toNum(r[c.col]); if (isFinite(n)) last = r[c.col]; else if (last !== null) r[c.col] = last; }); })); }
     // timepoint phases: "Intra-operative: 30 min"
     const ph = cfg.tpPhase || {}, tpLabels = Object.keys(ph).some(t => ph[t]) ? Object.fromEntries(Object.entries(cfg.tpLabels || {}).map(([t, l]) => [t, ph[t] ? `${ph[t]}: ${l}` : l])) : cfg.tpLabels;
     // complete-case analysis: only patients with a value in every analysed column
-    if (o.completeCase) { rows = rows || data.rows.map(r => ({ ...r })); const cols = variables.filter(v => v.include).flatMap(v => v.cols.filter(c => c.include !== false).map(c => c.col));
+    if (o.completeCase) { rows = rows || data.rows.map(r => ({ ...r, __o: r.__o || r })); const cols = variables.filter(v => v.include).flatMap(v => v.cols.filter(c => c.include !== false).map(c => c.col));
       rows = rows.filter(r => cols.every(c => r[c] !== null && r[c] !== undefined && String(r[c]).trim() !== '')); }
     // groups merged into another (e.g. two doses into one arm)
     const mg = cfg.groupMerge || {}, srcs = Object.keys(mg).filter(g => mg[g] && mg[g] !== g && !cfg.noGroups);
-    if (srcs.length) { rows = rows || data.rows.map(r => ({ ...r })); rows.forEach(r => { const g = toCat(r[cfg.groupCol]); if (g !== null && srcs.includes(g)) r[cfg.groupCol] = mg[g]; }); }
+    if (srcs.length) { rows = rows || data.rows.map(r => ({ ...r, __o: r.__o || r })); rows.forEach(r => { const g = toCat(r[cfg.groupCol]); if (g !== null && srcs.includes(g)) r[cfg.groupCol] = mg[g]; }); }
     return [rows ? { ...data, rows } : data, { ...cfg, variables, tpLabels, ...(srcs.length ? { groupOrder: cfg.groupOrder.filter(g => !srcs.includes(g)) } : {}) }];
   }
   function withValueLabels(data, cfg) {
@@ -2043,7 +2064,7 @@ const Analysis = (() => {
     const pairNames = pr.map(([i, j]) => `${gl[i]} and ${gl[j]}`);
     const numbered = k > 2;
     const sections = [];
-    const vars = effectiveVariables(cfg);
+    const vars = effectiveVariables(cfg), ROLE_RANK = { primary: 0, secondary: 1, safety: 2 };
 
     // Group single variables into their named tables, in column order
     const blocks = [];
@@ -2053,6 +2074,7 @@ const Analysis = (() => {
         let b = blocks.find(x => x.kind === 'single' && x.table === v.table);
         if (!b) { b = { kind: 'single', table: v.table, vars: [], pos: v.pos }; blocks.push(b); }
         b.vars.push(v);
+        b.vars.sort((x, y) => (ROLE_RANK[x.role] ?? 3) - (ROLE_RANK[y.role] ?? 3));
       }
     }
     blocks.sort((a, b) => a.pos - b.pos);
@@ -2739,7 +2761,14 @@ const Analysis = (() => {
             spec: { type: 'bar', percent: true, labels: true, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
         }
-        sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res },
+        res.filter(r => r.num && (r.v.refLo !== undefined && r.v.refLo !== '' || r.v.refHi !== undefined && r.v.refHi !== '')).forEach(r => {
+          const lo = toNum(r.v.refLo), hi = toNum(r.v.refHi), out = x => (isFinite(lo) && x < lo) || (isFinite(hi) && x > hi), rng = isFinite(lo) && isFinite(hi) ? `${fmt(lo, d)}–${fmt(hi, d)}${U(r.v)}` : isFinite(lo) ? `≥ ${fmt(lo, d)}${U(r.v)}` : `≤ ${fmt(hi, d)}${U(r.v)}`;
+          // the original values (before any transformation or exclusion of the variable)
+          const raw = byGroup.map(rs => rs.map(x => toNum((x.__o || x)[r.v.cols[0].col])).filter(isFinite)), pc = raw.map(g => g.length ? 100 * g.filter(out).length / g.length : NaN);
+          sent.push(`Values of ${lowerFirst(plain(r.v.label.replace(/, Box-Cox-transformed$|, (log|log₁₀|√)-transformed$/, '')))} outside the reference range (${rng}) were found in ${listJoin(pc.map((p, i) => `${fmt(p, 1)}% of ${gl[i]}`))}.`); });
+        const prim = res.filter(r => ['primary', 'secondary', 'safety'].includes(r.v.role));
+        const roleNote = prim.length ? ['primary', 'secondary', 'safety'].map(k2 => { const l = prim.filter(r => r.v.role === k2).map(r => plain(r.v.label)); return l.length ? `${k2[0].toUpperCase() + k2.slice(1)} outcome${l.length > 1 ? 's' : ''}: ${l.join(', ')}` : ''; }).filter(Boolean).join(', ') : '';
+        sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head, rows: trows, footnote: roleNote ? (fn0 => `${fn0 ? fn0.replace(/\.?\s*$/, '.') + ' ' : ''}${roleNote}.`)(footnote(flags, notes)) : footnote(flags, notes), comment: wording(sent.join(' ')), figures, twoCol, meta: { res },
           brief: opts.paperStyle ? wording(briefSingle(res, gl, alpha, d)) : '', briefSig: anySig });
       }
     }

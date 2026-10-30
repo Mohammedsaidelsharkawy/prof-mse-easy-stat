@@ -1456,6 +1456,17 @@ const Stats = (() => {
     return s2 / Math.pow(1 + t * t / df, -(df + 1) / 2);
   }
   // equivalence by two one-sided t-tests (TOST) against the margins (lo, hi) of the mean difference x − y
+  // Box-Cox: the λ that maximises the profile log-likelihood (as scipy.stats.boxcox), on positive values
+  function boxCoxLambda(x) {
+    const n = x.length, sl = sum(x.map(Math.log));
+    const llf = l => { const y = x.map(v => Math.abs(l) < 1e-12 ? Math.log(v) : (v ** l - 1) / l), m = mean(y), v2 = sum(y.map(t => (t - m) ** 2)) / n; return (l - 1) * sl - n / 2 * Math.log(v2); };
+    // golden-section search after a coarse grid
+    let best = -2, bv = -Infinity; for (let l = -5; l <= 5.0001; l += 0.05) { const f = llf(l); if (f > bv) { bv = f; best = l; } }
+    let a = best - 0.05, b = best + 0.05; const g = (Math.sqrt(5) - 1) / 2;
+    for (let i = 0; i < 100; i++) { const c = b - g * (b - a), d = a + g * (b - a); if (llf(c) > llf(d)) b = d; else a = c; }
+    return (a + b) / 2;
+  }
+  const boxCox = (v, l) => Math.abs(l) < 1e-12 ? Math.log(v) : (v ** l - 1) / l;
   /* ---------- non-inferiority / equivalence / superiority with a margin ---------- */
   const wilsonCI = (x, n, z) => { const p = x / n, den = 1 + z * z / n, c = (p + z * z / (2 * n)) / den, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den; return [c - h, c + h]; };
   // Newcombe's hybrid score interval of p1 − p2 (method 10)
@@ -1569,7 +1580,7 @@ const Stats = (() => {
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
   return {
-    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, nMargin, gee, glmmLogit, gaussHermite,
+    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, nMargin, gee, glmmLogit, gaussHermite,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
