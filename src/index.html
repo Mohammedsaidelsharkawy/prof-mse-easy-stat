@@ -1009,6 +1009,19 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optTrendWord"><span><b>Trends</b> — P between the significance level and 0.10 written as “a non-significant trend”</span></label>
           <label class="check"><input type="checkbox" id="optNsCI"><span><b>Non-significant results with their 95% CI</b> — the difference or RR/OR, two groups</span></label>
           <label class="check"><input type="checkbox" id="optFigRef"><span><b>Figure references</b> — “(Figure 3)” at the end of each comment (Word)</span></label>
+          <label class="check"><input type="checkbox" id="optClinWord"><span><b>Clinical importance</b> — a significant but small effect said to be of limited clinical importance</span></label>
+          <label class="check"><input type="checkbox" id="optTestInText"><span><b>Test named</b> in the brackets of significant results (e.g. P value = 0.003; Mann-Whitney U test)</span></label>
+          <label class="check"><input type="checkbox" id="optTableIntro"><span><b>“Table 3 shows …”</b> opening each comment (Word)</span></label>
+          <label class="check"><input type="checkbox" id="optLimits"><span><b>Limitations paragraph</b> — small groups, missing data, many tests, non-normal data, from the data</span></label>
+          <label class="check"><input type="checkbox" id="optDiscuss"><span><b>Discussion points</b> — each significant result with its size, MCID and reference range</span></label>
+          <label class="check"><input type="checkbox" id="optConclusion"><span><b>Conclusion</b> — one sentence from the primary outcome(s)</span></label>
+          <label class="check"><input type="checkbox" id="optSubSummary"><span><b>Subgroup summary</b> — where each result was significant across the subgroups</span></label>
+          <label class="check"><input type="checkbox" id="optFormerLatter"><span><b>“The former / the latter”</b> instead of repeating two group names in a sentence</span></label>
+          <label class="check"><input type="checkbox" id="optNumWords"><span><b>Numbers below 10 in words</b> for counts of patients and groups (“three groups”, “seven patients”)</span></label>
+          <div class="row" style="gap:8px;margin:6px 0"><div><label class="f">Spelling</label><select id="optSpelling" style="width:auto"><option value="">As written (US)</option><option value="uk">British (analysed, randomised)</option></select></div>
+            <div><label class="f">Wording</label><select id="optHedge" style="width:auto"><option value="">Neutral</option><option value="cautious">Cautious (“suggested”, “appeared”)</option></select></div>
+            <div><label class="f">Methods voice</label><select id="optVoice" style="width:auto"><option value="">Passive (“… was used”)</option><option value="active">Active (“We used …”)</option></select></div>
+            <div><label class="f">Results tense</label><select id="optTense" style="width:auto"><option value="">Past (“was higher”)</option><option value="present">Present (“is higher”)</option></select></div></div>
           <label class="check"><input type="checkbox" id="optBoldSigText"><span><b>Significant findings in bold</b> in the Word comments</span></label>
         </div>
       </div>

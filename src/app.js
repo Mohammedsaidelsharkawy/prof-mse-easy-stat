@@ -14,7 +14,7 @@
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, clinWord: false, testInText: false, tableIntro: false, limits: false, discuss: false, conclusion: false, subSummary: false, formerLatter: false, numWords: false, spelling: '', hedge: '', voice: '', tense: '', esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
@@ -33,7 +33,7 @@
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], clinWord: ['optClinWord', true], testInText: ['optTestInText', true], tableIntro: ['optTableIntro', true], limits: ['optLimits', true], discuss: ['optDiscuss', true], conclusion: ['optConclusion', true], subSummary: ['optSubSummary', true], formerLatter: ['optFormerLatter', true], numWords: ['optNumWords', true], spelling: ['optSpelling'], hedge: ['optHedge'], voice: ['optVoice'], tense: ['optTense'], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
@@ -3946,6 +3946,8 @@
             parts.forEach(p => { if (isAb(p.trim())) { const [k2, ...v2] = p.trim().split(': '); if (!ab.has(k2)) ab.set(k2, v2.join(': ')); } else keep.push(p); }); s.footnote = keep.length ? keep.join(', ') + '.' : ''; });
           res.abbrev = ab.size ? [...ab.entries()].sort((a2, b2) => a2[0].localeCompare(b2[0])).map(([k2, v2]) => `${k2}: ${v2.replace(/\.$/, '')}`).join('; ') + '.' : ''; }
         applyCellNotes(res);
+        writeExtras(res, cfg);
+        styleTexts(res, cfg.options);
         if (cfg.options.midDot) midDots(res);
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
           f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options);
@@ -4043,6 +4045,7 @@
     document.querySelectorAll('[data-fnote]').forEach(t => { const [si, fi] = t.dataset.fnote.split(':').map(Number); r.sections[si].figures[fi].note = t.value; });
     document.querySelectorAll('[data-ttl]').forEach(t => { r.sections[+t.dataset.ttl].title = t.value; });
     if ($('#edSummary')) r.summary = $('#edSummary').value;
+    document.querySelectorAll('[data-extra]').forEach(t => { r[t.dataset.extra] = t.value; });
     if ($('#edNarrative') && $('#edNarrative').value !== r.narrative) { r.narrative = $('#edNarrative').value; r.narrativeEdited = true; }
     if ($('#edAbstract') && $('#edAbstract').value !== r.abstract) { r.abstract = $('#edAbstract').value; r.abstractEdited = true; }
   }
@@ -4129,7 +4132,7 @@
     r.sections.forEach((s, i) => {
       const tk = exKey.table(s), tOut = isOut(tk), place = s.place && o.commentPlace !== 'none' ? s.place : o.commentPlace || 'after';
       const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}" spellcheck="true" lang="en">${esc(s.comment)}</textarea>
-        <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><span class="legend-note">${words(s.comment)} words</span></div><div class="explain" data-explainbox="${i}"></div>
+        <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><button class="btn ghost small" data-sents="${i}" type="button" title="Keep or drop single sentences">✂ Sentences</button><button class="btn ghost small" data-srcs="${i}" type="button" title="Point at a number to see its cell in the table">🔗 Sources</button><span class="legend-note">${words(s.comment)} words · readability ${flesch(s.comment)}</span></div><div class="explain" data-explainbox="${i}"></div><div data-sentbox="${i}"></div>
         ${o.keyFindings && s.findings && s.findings.length ? `<div class="legend-note"><b>Key findings:</b><ol style="margin:4px 0 0 18px;padding:0">${s.findings.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
         ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button> <button class="btn ghost small" data-pdftbl="${i}" type="button" title="This table on an A4 page (PDF)">⬇ PDF</button>${s.meta && s.meta.calc ? ` <button class="btn ghost small" data-riskcalc="${i}" type="button" title="A small web page that computes the prediction of this model">⬇ Risk calculator</button>` : ''}</div>
@@ -4142,6 +4145,7 @@
       const sorted = [...all.filter(f => plan.kept.has(f)).sort((a, b) => plan.order.indexOf(a) - plan.order.indexOf(b)), ...all.filter(f => !plan.kept.has(f))];
       if (sorted.length) html += `<div class="report-sec"><h3>Figures</h3><div class="figs">${sorted.map(figHtml).join('')}</div></div>`;
     }
+    [['subSummary', 'Subgroup summary'], ['discussion', 'Discussion points'], ['limitations', 'Statistical limitations'], ['conclusion', 'Conclusion']].forEach(([k2, h2]) => { if (r[k2]) html += `<div class="report-sec"><h3>${h2}</h3><textarea data-extra="${k2}">${esc(r[k2])}</textarea></div>`; });
     if (r.abbrev) html += `<div class="report-sec"><h3>Abbreviations</h3><p class="legend-note" style="font-size:13px">${esc(r.abbrev)}</p></div>`;
     if (r.summary) html += `<div class="report-sec${off('summary')}"><div class="row"><h3>Summary of key findings</h3><span class="spacer"></span>${exBox('summary', 'Include')}</div><textarea id="edSummary">${esc(r.summary)}</textarea></div>`;
     $('#report').innerHTML = html;
@@ -4191,6 +4195,67 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const explainHtml = t => { const hits = GLOSSARY.filter(([re]) => re.test(t || '')); return hits.length ? `<dl class="gloss">${hits.map(([, n, d]) => `<dt>${esc(n)}</dt><dd>${esc(d)}</dd>`).join('')}</dl>` : '<p class="legend-note">No statistical terms to explain.</p>'; };
   // checks of the edited comments: numbers that are not in the table (or the generated comment), causal wording, length
   const CAUSAL = /\b(caus(e|ed|es|ing)|led to|lead to|resulted in|due to|because of|prov(e|ed|es)|effect of .{0,30} on|improv(ed|es) .{0,20} because|thanks to)\b/i;
+  /* ---------- paragraphs written from the results: limitations, discussion points, conclusion, subgroup summary ---------- */
+  function writeExtras(res, cfg) {
+    const o = cfg.options, al = +o.alpha || 0.05, lf = t => t && !/^[A-Z][A-Z0-9]/.test(t) && !/^\S[A-Z]/.test(t) && !/^\S*-[A-Z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t, plain = t => String(t || '').replace(/\s*\([^)]*\)\s*$/, '');
+    const singles = res.sections.filter(s => s.kind === 'single' && s.meta && s.meta.res && !/ — /.test(s.title)), all = singles.flatMap(s => s.meta.res);
+    if (o.limits) { const L = [], groups = activeGroups(), ns = groups.map(g => state.data.rows.filter(r => Analysis.groupOf(cfg, r) === g).length);
+      if (ns.length && Math.min(...ns) < 30) L.push(`the groups were small (the smallest had ${Math.min(...ns)} patients), which limits the power to detect moderate differences`);
+      const miss = cfg.variables.filter(v => v.include).map(v => [v, Math.max(...v.cols.map(c => state.data.rows.filter(r => r[c.col] === null || r[c.col] === undefined || String(r[c.col]).trim() === '').length)) / state.data.rows.length]).filter(x => x[1] > 0.1);
+      if (miss.length) L.push(`some variables had more than 10% missing values (${miss.slice(0, 3).map(([v, f]) => `${lf(plain(v.label))}, ${Math.round(100 * f)}%`).join('; ')}), and complete-case analysis may be biased if the values were not missing at random`);
+      const nP = all.length + res.sections.filter(s => s.kind === 'repeated').length * 3; if (nP > 20 && !o.fdr) L.push(`many statistical tests were performed (about ${nP}) without correction for multiple testing, so isolated significant results should be interpreted with caution`);
+      const nonN = all.filter(r => r.num && !r.num.normal).length; if (nonN && nonN >= all.filter(r => r.num).length / 2) L.push('several numeric variables were not normally distributed and were analysed with non-parametric tests');
+      if ((cfg.consort || {}).type && /strobe|cohort|case/i.test(cfg.consort.type)) L.push('as an observational study, the associations found cannot establish causation and may be affected by unmeasured confounding');
+      res.limitations = L.length ? `This analysis has statistical limitations: ${L.join('; ')}.` : 'No major statistical limitations were identified from the data.'; }
+    if (o.discuss) { const P = [];
+      all.filter(r => (r.num || r.cat).p <= al).forEach(r => { const lab = lf(plain(r.v.label));
+        if (r.num) { const d0 = r.num.desc, hi = d0.reduce((b, x, i) => (r.num.param ? x.mean : x.median) > (r.num.param ? d0[b].mean : d0[b].median) ? i : b, 0), lo = d0.reduce((b, x, i) => (r.num.param ? x.mean : x.median) < (r.num.param ? d0[b].mean : d0[b].median) ? i : b, 0);
+          const diff = (r.num.param ? d0[hi].mean - d0[lo].mean : d0[hi].median - d0[lo].median), mc = Math.abs(Analysis.toNum(r.v.mcid));
+          let t = `The difference in ${lab} (${Analysis.fmt(diff, 2)} between the highest and lowest group)`;
+          t += isFinite(mc) && mc > 0 ? (Math.abs(diff) >= mc ? ` exceeded the minimal clinically important difference of ${Analysis.fmt(mc, 2)}` : ` was below the minimal clinically important difference of ${Analysis.fmt(mc, 2)}`) : ' should be compared with the minimal clinically important difference reported in the literature';
+          const lo2 = Analysis.toNum(r.v.refLo), hi2 = Analysis.toNum(r.v.refHi); if (isFinite(lo2) || isFinite(hi2)) t += `; the group averages ${d0.every(x => { const c = r.num.param ? x.mean : x.median; return (!isFinite(lo2) || c >= lo2) && (!isFinite(hi2) || c <= hi2); }) ? 'all lay within' : 'did not all lie within'} the reference range`;
+          P.push(t + '.'); }
+        else P.push(`The difference in ${lab} should be discussed against the frequencies reported in previous studies.`); });
+      res.sections.filter(s => s.kind === 'repeated' && !/ — /.test(s.title) && s.comment && Analysis.significantSentences(s.comment).length).forEach(s => P.push(`${Analysis.significantSentences(s.comment)[0].replace(/\s*\([^()]*P value[^()]*\)/g, '')} The size of this difference over time should be judged against its minimal clinically important difference.`));
+      res.discussion = P.length ? P.join(' ') : 'No significant differences were found to discuss.'; }
+    if (o.conclusion) { const prim = all.filter(r => r.v.role === 'primary'), base = prim.length ? prim : [];
+      let txt = ''; const primRep = cfg.variables.filter(v => v.kind === 'repeated' && v.role === 'primary').map(v => res.sections.find(s => s.kind === 'repeated' && !/ — /.test(s.title) && s.title.startsWith(String(v.label).replace(/\s*\([^)]*\)\s*$/, '')))).filter(Boolean);
+      if (!base.length && primRep.length) { const ss = primRep.flatMap(s => Analysis.significantSentences(s.comment)); txt = `In conclusion, ${ss.length ? lf(ss[0].replace(/\s*\([^()]*P value[^()]*\)/g, '')) : `${primRep.map(s => lf(s.title.replace(/ of the studied.*$/, ''))).join(' and ')} did not differ significantly between the groups.`}`; }
+      if (base.length) { const sg = base.filter(r => (r.num || r.cat).p <= al).map(r => lf(plain(r.v.label))), ns = base.filter(r => !((r.num || r.cat).p <= al)).map(r => lf(plain(r.v.label)));
+        txt = `In conclusion, ${sg.length ? `the groups differed significantly in ${sg.join(' and ')}` : ''}${sg.length && ns.length ? ', whereas they did not differ in ' : ns.length ? 'the groups did not differ significantly in ' : ''}${ns.join(' and ')}.`; }
+      else if (!txt) { const ss = Analysis.significantSentences(res.sections.filter(s => !/ — /.test(s.title)).map(s => s.comment).join(' ')); txt = ss.length ? `In conclusion, ${lf(ss[0].replace(/\s*\([^()]*P value[^()]*\)/g, ''))}` : 'In conclusion, no statistically significant differences were found between the studied groups.'; }
+      res.conclusion = txt; }
+    if (o.subSummary) { const subs = res.sections.filter(s => / — /.test(s.title) && s.kind === 'single' && s.meta && s.meta.res), by = new Map();
+      subs.forEach(s => { const sub = s.title.split(' — ').slice(1).join(' — '); s.meta.res.forEach(r => { const k2 = lf(plain(r.v.label)); if (!by.has(k2)) by.set(k2, []); by.get(k2).push([sub, (r.num || r.cat).p <= al]); }); });
+      const lines = [...by.entries()].map(([lab, a]) => { const yes = a.filter(x => x[1]).map(x => x[0].replace(/^.*?: /, '')), no = a.filter(x => !x[1]).map(x => x[0].replace(/^.*?: /, ''));
+        return yes.length === a.length ? `${lab} differed significantly in every subgroup` : !yes.length ? `${lab} did not differ significantly in any subgroup` : `${lab} differed significantly in ${yes.join(' and ')} but not in ${no.join(' and ')}`; });
+      res.subSummary = lines.length ? `Across the subgroups, ${lines.join('; ')}.` : ''; }
+  }
+  /* ---------- language options for the report text: spelling, cautious wording, active voice, tense, numbers in words, former / latter ---------- */
+  const UK = [['analyzed', 'analysed'], ['analyze', 'analyse'], ['randomized', 'randomised'], ['randomization', 'randomisation'], ['characterized', 'characterised'], ['utilizing', 'utilising'], ['utilized', 'utilised'], ['normalized', 'normalised'], ['categorized', 'categorised'], ['standardized', 'standardised'], ['summarized', 'summarised'], ['hemoglobin', 'haemoglobin'], ['anemia', 'anaemia'], ['edema', 'oedema'], ['esophag', 'oesophag'], ['pediatric', 'paediatric'], ['tumor', 'tumour'], ['color', 'colour'], ['behavior', 'behaviour'], ['center', 'centre'], ['modeled', 'modelled'], ['labeled', 'labelled']];
+  const NUMW = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+  function styleOne(t, o, kind) {
+    if (!t) return t;
+    if (o.spelling === 'uk') UK.forEach(([a, b]) => { t = t.replace(new RegExp(a, 'g'), b).replace(new RegExp(a[0].toUpperCase() + a.slice(1), 'g'), b[0].toUpperCase() + b.slice(1)); });
+    if (o.hedge === 'cautious' && kind !== 'methods') t = t.replace(/\bwas significantly (higher|lower|different)/g, 'appeared significantly $1').replace(/\bwere significantly (higher|lower|different)/g, 'appeared significantly $1').replace(/\bshowed\b/g, 'suggested').replace(/\bwere independent predictors\b/g, 'appeared to be independent predictors').replace(/\bwas a significant predictor\b/g, 'appeared to be a significant predictor');
+    // active voice in the methods, only for the simple "X was used to …" / "X were compared with …" sentences
+    const lowOk = x => /^[A-Z][a-z]+(\s|$)/.test(x) && !/^[A-Z][a-z]+(-[A-Z]|'s)/.test(x) ? x[0].toLowerCase() + x.slice(1) : x;
+    if (o.voice === 'active' && kind === 'methods') t = Analysis.sentencesOf(t).map(x => { let m = /^([A-Z][^.;]*?) (?:was|were) used to ([^.]+)\.$/.exec(x); if (m && !/ (was|were) /.test(m[1])) return `We used ${lowOk(m[1])} to ${m[2]}.`;
+      m = /^([A-Z][^.;]*?) (?:was|were) (assessed|analy[sz]ed|compared|tested) (by|using|with) ([^.]+)\.$/.exec(x); if (m && !/ (was|were|and) /.test(m[1])) return `We ${m[2]} ${lowOk(m[1])} ${m[3]} ${m[4]}.`; return x; }).join(' ');
+    if (o.tense === 'present' && kind !== 'methods') t = t.replace(/\bwas (significantly|insignificantly|not|higher|lower|found|statistically|comparable|similar|associated|an?)\b/g, 'is $1').replace(/\bwere (significantly|insignificantly|not|higher|lower|found|comparable|similar|associated|independent)\b/g, 'are $1').replace(/\bdiffered\b/g, 'differ').replace(/\bdid not (differ|change)\b/g, 'does not $1').replace(/\bchanged\b/g, 'changes');
+    if (o.numWords) t = t.replace(/(^|[\s(])([0-9])(?= (patients?|groups?|cases?|controls?|participants?|raters?|timepoints?|measurements?)\b)/g, (m, p0, n) => p0 + NUMW[+n]);
+    return t;
+  }
+  function styleTexts(res, o) {
+    if (o.spelling || o.hedge || o.voice || o.tense || o.numWords) { res.methods = styleOne(res.methods, o, 'methods'); res.sections.forEach(s => { s.comment = styleOne(s.comment, o, 'results'); }); ['summary', 'limitations', 'discussion', 'conclusion', 'subSummary', 'intro'].forEach(k => { if (res[k]) res[k] = styleOne(res[k], o, 'results'); }); }
+    if (o.formerLatter) { const gl = activeGroups().map(g => state.cfg.groupLabels[g] || g); if (gl.length === 2) res.sections.forEach(s => { if (!s.comment) return;
+      s.comment = Analysis.sentencesOf(s.comment).map(x => { const i0 = x.indexOf(gl[0]), i1 = x.indexOf(gl[1]); if (i0 < 0 || i1 < 0) return x; const first = i0 < i1 ? 0 : 1, cut = Math.max(i0, i1) + gl[i0 < i1 ? 1 : 0].length;
+        return x.slice(0, cut) + x.slice(cut).split(gl[first]).join('the former').split(gl[1 - first]).join('the latter'); }).join(' '); }); }
+  }
+  // Flesch reading ease of a text (higher = easier; 30-50 is usual for scientific writing)
+  function flesch(t) { const ss = Analysis.sentencesOf(t || ''), w = (t || '').split(/\s+/).filter(x => /[a-z]/i.test(x)); if (!ss.length || !w.length) return '—';
+    const syl = x => { x = x.toLowerCase().replace(/[^a-z]/g, ''); if (x.length <= 3) return 1; x = x.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').replace(/^y/, ''); return Math.max(1, (x.match(/[aeiouy]{1,2}/g) || []).length); };
+    const v = 206.835 - 1.015 * (w.length / ss.length) - 84.6 * (w.reduce((a, x) => a + syl(x), 0) / w.length); return `${Math.round(v)} (${v >= 60 ? 'easy' : v >= 30 ? 'fairly difficult' : 'difficult'})`; }
   function checkComments(r) {
     const nums = t => (String(t || '').match(/-?\d+(?:\.\d+)?/g) || []);
     const out = r.sections.map((s, i) => {
@@ -4198,7 +4263,12 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       const pool = new Set([...nums(JSON.stringify(s.rows)), ...nums(JSON.stringify(s.head)), ...nums(s.footnote), ...nums(s.autoComment)].map(x => String(+x)));
       const bad = [...new Set(nums(s.comment).filter(x => !pool.has(String(+x)) && !/^(19|20)\d\d$/.test(x)))];
       const causal = Analysis.sentencesOf(s.comment).filter(x => CAUSAL.test(x));
-      const issues = [...(bad.length ? [`numbers not found in the table: <b>${bad.map(esc).join(', ')}</b>`] : []), ...causal.map(x => `causal wording — an association does not show cause: “${esc(x)}”`)];
+      // direction: "X was … higher in A than (in) B" against the values of the table
+      const dirBad = []; ((s.meta && s.meta.res) || []).forEach(rr => { if (!rr.num) return; const lab = String(rr.v.label).replace(/\s*\([^)]*\)\s*$/, ''), d0 = rr.num.desc, gl2 = activeGroups().map(g => state.cfg.groupLabels[g] || g), c = i => rr.num.param ? d0[i].mean : d0[i].median;
+        Analysis.sentencesOf(s.comment).forEach(x => { if (!x.toLowerCase().startsWith(lab.toLowerCase())) return; const m = / (higher|lower|greater|less) in (.+?) than (?:in )?(.+?)(?: \(|,|\.|;| and)/.exec(x); if (!m) return;
+          const a = gl2.findIndex(g => m[2].startsWith(g)), b = gl2.findIndex(g => m[3].startsWith(g)); if (a < 0 || b < 0 || !isFinite(c(a)) || !isFinite(c(b))) return;
+          if ((/higher|greater/.test(m[1]) && c(a) < c(b)) || (/lower|less/.test(m[1]) && c(a) > c(b))) dirBad.push(`“${esc(x.slice(0, 120))}” — the table shows ${esc(gl2[a])} ${Analysis.fmt(c(a), 2)} vs ${esc(gl2[b])} ${Analysis.fmt(c(b), 2)}`); }); });
+      const issues = [...dirBad.map(x => `direction does not match the table: ${x}`), ...(bad.length ? [`numbers not found in the table: <b>${bad.map(esc).join(', ')}</b>`] : []), ...causal.map(x => `causal wording — an association does not show cause: “${esc(x)}”`)];
       return issues.length ? `<li><b>${esc(s.title)}</b><ul>${issues.map(x => `<li>${x}</li>`).join('')}</ul></li>` : '';
     }).filter(Boolean);
     return `<div class="report-sec">${out.length ? `<b>${out.length} comment${out.length > 1 ? 's' : ''} to check</b><ul>${out.join('')}</ul>` : '<b>✓ Every number in the comments is in its table, and no causal wording was found.</b>'}</div>`;
@@ -4456,7 +4526,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       refs: rp.refs && r0 ? METHOD_REFS.filter(([re]) => re.test(r0.methods || '')).map(x => x[1]) : null, appendix: r0 ? appendixTables(r0, plan0) : [] };
     return { ...extras, numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
         tableNewPage: rp.format === 'thesis' ? !!rp.newPage : rp.format === 'paper' ? false : !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { autoFit: !!o.autoFit, width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
-        orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, capAbove: !!o.capAbove, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings };
+        orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, capAbove: !!o.capAbove, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings, tableIntro: !!o.tableIntro };
   }
   const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
   const saveUrl = (url, name) => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
@@ -4508,6 +4578,19 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ...rows.map(r => headers.map(h => r[h] ?? null))]), 'Data'); XLSX.utils.book_append_sheet(wb, ws, 'Summary (formulas)');
     XLSX.writeFile(wb, `${baseName()} - Summary with formulas.xlsx`); toast('Excel file with formulas saved — the summary recalculates when the data sheet changes');
   };
+  // keep or drop single sentences of a comment; point at the numbers of a comment to find them in the table
+  $('#report').addEventListener('click', e => {
+    const b = e.target.closest('[data-sents]'), sr = e.target.closest('[data-srcs]');
+    if (b) { const i = +b.dataset.sents, ta = document.querySelector(`[data-comment="${i}"]`), box = document.querySelector(`[data-sentbox="${i}"]`); if (!ta || !box) return;
+      if (box.innerHTML) { box.innerHTML = ''; return; } const ss = Analysis.sentencesOf(ta.value);
+      box.innerHTML = `<div class="legend-note" style="margin:4px 0">Untick a sentence to drop it from the comment:</div>` + ss.map((x, k2) => `<label class="check" style="margin:2px 0"><input type="checkbox" data-sk="${i}:${k2}" checked><span>${esc(x)}</span></label>`).join('');
+      box.onchange = () => { ta.value = [...box.querySelectorAll('[data-sk]')].map((c, k2) => c.checked ? ss[k2] : '').filter(Boolean).join(' '); syncEdits(); }; }
+    if (sr) { const i = +sr.dataset.srcs, ta = document.querySelector(`[data-comment="${i}"]`), box = document.querySelector(`[data-sentbox="${i}"]`), tbl = sr.closest('.report-sec').querySelector('table.rt'); if (!ta || !box) return;
+      if (box.innerHTML) { box.innerHTML = ''; return; }
+      box.innerHTML = `<div class="pcom" style="margin-top:6px;line-height:1.7">${esc(ta.value).replace(/-?\d+(?:\.\d+)?/g, m => `<span class="srcnum" data-num="${m}" style="background:#EEE6F7;border-radius:3px;padding:0 2px;cursor:help">${m}</span>`)}</div>`;
+      box.onmouseover = ev => { const n = ev.target.closest('.srcnum'); tbl.querySelectorAll('td').forEach(td => { td.style.outline = n && (td.textContent.match(/-?\d+(?:\.\d+)?/g) || []).some(x => +x === +n.dataset.num) ? '2px solid #7B2CBF' : ''; }); };
+      box.onmouseleave = () => tbl.querySelectorAll('td').forEach(td => { td.style.outline = ''; }); }
+  });
   $('#btnXlsx').onclick = () => {
     if (!state.result) return;
     syncEdits();

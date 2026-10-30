@@ -2780,7 +2780,10 @@ const Analysis = (() => {
         for (const r of res.filter(r => !descriptive && !noP && (r.num || r.cat).p <= alpha)) {
           // compact categorical sentences already quote their percentages
           const lab = isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label));
-          if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps).replace(/\)$/, effTxt(r) + ')')}.`);
+          const testIn = r2 => opts.testInText ? `; ${TEST_NAME[(r2.num || r2.cat).test] || (r2.num || r2.cat).test}` : '';
+          if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps).replace(/\)$/, effTxt(r) + testIn(r) + ')')}.`);
+            // statistically but not clinically important: a small effect said so
+            if (opts.clinWord) { const em = effectMagnitude(r, k, opts); if (/negligible|very small|small/.test(em)) sent.push(`Although statistically significant, this difference was ${/negligible/.test(em) ? 'negligible' : 'small'} in size (${em.replace(/, [a-z ]+$/, '')}) and may be of limited clinical importance.`); }
             // the minimal clinically important difference of the variable (step 2 ⚙), two groups
             const mc = Math.abs(toNum(r.v.mcid)), q = r.num.pairs[0];
             if (k === 2 && mc > 0 && q && isFinite(q.diff)) sent.push(`This difference (${fmt(Math.abs(q.diff), d)}${U(r.v)}) ${Math.abs(q.diff) >= mc ? 'exceeded' : 'was smaller than'} the minimal clinically important difference of ${fmt(mc, d)}${U(r.v)}.`); }

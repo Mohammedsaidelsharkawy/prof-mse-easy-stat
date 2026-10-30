@@ -321,6 +321,7 @@ const Report = (() => {
         // chapter-numbered subheadings: 4.1, 4.2 …
         if (opts.sectionHeads) children.push(subheading(opts.headNum ? `${(opts.numberPrefix || '').replace(/\.$/, '') || '1'}.${++headN} ${s.title}` : s.title, brand, first()));
         const cp = s.place && opts.commentPlace !== 'none' ? s.place : opts.commentPlace;
+        if (opts.tableIntro && s.comment && !/^Table \d/.test(s.comment)) s.comment = `Table ${pre}${tab} shows the ${s.title.charAt(0).toLowerCase() + s.title.slice(1)}. ${s.comment}`;
         if (s.comment && !merged && cp === 'before') { children.push(commentPara(figRef(s, s.comment), { pageBreakBefore: first(), boldSig: opts.boldSigText })); arAfter(s.comment); }
         const num = `Table ${pre}${tab++}`;
         listTabs.push(`${num}${opts.tableCaption === 'period' || opts.tableCaption === 'apa' ? '.' : ':'} ${s.title}`);
@@ -345,6 +346,7 @@ const Report = (() => {
       children.push(heading('Figures', brand));
       placeFigures(atEnd);
     }
+    [['subSummary', 'Subgroup summary'], ['discussion', 'Discussion points'], ['limitations', 'Statistical limitations'], ['conclusion', 'Conclusion']].forEach(([k, h]) => { if (model[k]) { children.push(H1(h, brand)); children.push(para(model[k])); } });
     if (model.abbrev) { children.push(H1('Abbreviations', brand)); children.push(para(model.abbrev, { size: 20 })); }
     if (model.summary) {
       children.push(H1('Summary of key findings', brand));
