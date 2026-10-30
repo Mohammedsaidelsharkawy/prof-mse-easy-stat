@@ -1126,6 +1126,196 @@ const Stats = (() => {
     const cov = invert(H.map(r => r.map(v => -v))), se = cov.map((r, i) => Math.sqrt(r[i]));
     return { b, se, or: b.map(Math.exp), lo: b.map((v, i) => Math.exp(v - ZC() * se[i])), hi: b.map((v, i) => Math.exp(v + ZC() * se[i])), p: b.map((v, i) => 2 * (1 - jStat.normal.cdf(Math.abs(v / se[i]), 0, 1))), ll };
   }
+  /* ---------- stage 8: count, ordinal and multinomial models, method comparison, PCA, partial correlation, two-way ANOVA, mediation, model comparison ---------- */
+  const zp = z => 2 * jStat.normal.cdf(-Math.abs(z), 0, 1);
+  const termsOf = (beta, cov, exp) => beta.map((B, j) => { const se = Math.sqrt(cov[j][j]), z = B / se; return { B, se, z, p: zp(z), lo: B - ZC() * se, hi: B + ZC() * se, ...(exp ? { e: Math.exp(B), elo: Math.exp(B - ZC() * se), ehi: Math.exp(B + ZC() * se) } : {}) }; });
+  // Poisson regression (log link) by IRLS; negative binomial (NB2) with α by maximum likelihood
+  function poissonReg(X0, y, alpha = 0) {
+    const X = X0.map(r => [1, ...r]), p = X[0].length, n = y.length;
+    let beta = new Array(p).fill(0); beta[0] = Math.log(Math.max(mean(y), 1e-6));
+    let inv = null;
+    for (let it = 0; it < 100; it++) {
+      const eta = X.map(x => sum(x.map((v, j) => v * beta[j]))), mu = eta.map(Math.exp), w = mu.map(m => m / (1 + alpha * m));
+      const z = eta.map((e, i) => e + (y[i] - mu[i]) / mu[i]), { A, b } = crossprod(X, w, z); inv = invert(A); if (!inv) return null;
+      const nb = inv.map(r => sum(r.map((v, j) => v * b[j]))), d = Math.max(...nb.map((v, j) => Math.abs(v - beta[j]))); beta = nb; if (d < 1e-10) break;
+    }
+    const mu = X.map(x => Math.exp(sum(x.map((v, j) => v * beta[j]))));
+    inv = invert(crossprod(X, mu.map(m => m / (1 + alpha * m)), y).A);
+    const lgam = v => jStat.gammaln(v);
+    const ll = alpha > 0 ? sum(y.map((v, i) => lgam(v + 1 / alpha) - lgam(1 / alpha) - lgam(v + 1) - (1 / alpha) * Math.log(1 + alpha * mu[i]) + v * Math.log(alpha * mu[i] / (1 + alpha * mu[i]))))
+      : sum(y.map((v, i) => v * Math.log(mu[i]) - mu[i] - lgam(v + 1)));
+    const pearsonChi = sum(y.map((v, i) => (v - mu[i]) ** 2 / (mu[i] * (1 + alpha * mu[i]))));
+    return { terms: termsOf(beta, inv, true), beta, cov: inv, ll, n, dispersion: pearsonChi / (n - p), mu };
+  }
+  function negBinReg(X0, y) {
+    // profile likelihood over log α (golden section), then the coefficients at that α
+    let lo = -8, hi = 4; const f = t => { const r = poissonReg(X0, y, Math.exp(t)); return r ? r.ll : -Infinity; };
+    for (let i = 0; i < 80; i++) { const m1 = lo + (hi - lo) * 0.382, m2 = lo + (hi - lo) * 0.618; if (f(m1) < f(m2)) lo = m1; else hi = m2; }
+    const alpha = Math.exp((lo + hi) / 2), r = poissonReg(X0, y, alpha); if (!r) return null;
+    return { ...r, alpha };
+  }
+  // numerical Hessian of a log-likelihood from its gradient (central differences)
+  function hessOf(grad, th) { const p = th.length, H = []; for (let j = 0; j < p; j++) { const h = 1e-5 * Math.max(1, Math.abs(th[j])), a = th.slice(), b = th.slice(); a[j] += h; b[j] -= h; const ga = grad(a), gb = grad(b); H.push(ga.map((v, i) => (v - gb[i]) / (2 * h))); }
+    return H.map((r, i) => r.map((v, j) => (v + H[j][i]) / 2)); }
+  function newton(ll, grad, th) {
+    for (let it = 0; it < 100; it++) {
+      const g = grad(th), Hi = invert(hessOf(grad, th).map(r => r.map(v => -v))); if (!Hi) return null;
+      let step = Hi.map(r => sum(r.map((v, j) => v * g[j]))), t = 1, base = ll(th), nt;
+      do { nt = th.map((v, j) => v + t * step[j]); t /= 2; } while (!(ll(nt) >= base - 1e-12) && t > 1e-6);
+      const d = Math.max(...nt.map((v, j) => Math.abs(v - th[j]))); th = nt; if (d < 1e-9) break;
+    }
+    const cov = invert(hessOf(grad, th).map(r => r.map(v => -v))); return cov ? { th, cov, ll: ll(th) } : null;
+  }
+  const sig = x => 1 / (1 + Math.exp(-x));
+  // proportional-odds (cumulative logit) model: P(Y ≤ k) = σ(θk − xβ), categories 0 … K−1
+  function ordinalLogit(X, y, K) {
+    const p = X[0].length, n = y.length;
+    const cum = Array.from({ length: K - 1 }, (_, k) => y.filter(v => v <= k).length / n), th0 = [...cum.map(c => Math.log(Math.min(Math.max(c, 1e-4), 1 - 1e-4) / (1 - Math.min(Math.max(c, 1e-4), 1 - 1e-4)))), ...new Array(p).fill(0)];
+    const pr = (th, i) => { const xb = sum(X[i].map((v, j) => v * th[K - 1 + j])), F = k => k < 0 ? 0 : k >= K - 1 ? 1 : sig(th[k] - xb); return [F(y[i]) - F(y[i] - 1), F, xb]; };
+    const ll = th => { for (let k = 1; k < K - 1; k++) if (th[k] <= th[k - 1]) return -Infinity; return sum(y.map((_, i) => Math.log(Math.max(pr(th, i)[0], 1e-300)))); };
+    const grad = th => { const g = new Array(th.length).fill(0);
+      y.forEach((yi, i) => { const [P, F] = pr(th, i), d = k => { const f = F(k); return f * (1 - f); }, dU = yi < K - 1 ? d(yi) : 0, dL = yi > 0 ? d(yi - 1) : 0;
+        if (yi < K - 1) g[yi] += dU / P; if (yi > 0) g[yi - 1] -= dL / P; X[i].forEach((v, j) => { g[K - 1 + j] += -v * (dU - dL) / P; }); });
+      return g; };
+    const r = newton(ll, grad, th0); if (!r) return null;
+    const all = termsOf(r.th, r.cov, true);
+    // likelihood-ratio test of the model, and the null log-likelihood
+    const ll0 = sum(Array.from({ length: K }, (_, k) => { const nk = y.filter(v => v === k).length; return nk ? nk * Math.log(nk / n) : 0; }));
+    const chi = 2 * (r.ll - ll0);
+    return { thresholds: all.slice(0, K - 1), terms: all.slice(K - 1), ll: r.ll, ll0, chi, df: p, p: 1 - jStat.chisquare.cdf(chi, p), mcfadden: 1 - r.ll / ll0 };
+  }
+  // multinomial logistic regression against the first category; coefficients per other category
+  function multinomLogit(X0, y, K) {
+    const X = X0.map(r => [1, ...r]), p = X[0].length, n = y.length;
+    const probs = (th, i) => { const e = [0, ...Array.from({ length: K - 1 }, (_, k) => sum(X[i].map((v, j) => v * th[k * p + j])))], m = Math.max(...e), ex = e.map(v => Math.exp(v - m)), s2 = sum(ex); return ex.map(v => v / s2); };
+    const ll = th => sum(y.map((yi, i) => Math.log(Math.max(probs(th, i)[yi], 1e-300))));
+    const grad = th => { const g = new Array(th.length).fill(0); y.forEach((yi, i) => { const P = probs(th, i); for (let k = 1; k < K; k++) X[i].forEach((v, j) => { g[(k - 1) * p + j] += v * ((yi === k) - P[k]); }); }); return g; };
+    const r = newton(ll, grad, new Array((K - 1) * p).fill(0)); if (!r) return null;
+    const all = termsOf(r.th, r.cov, true), ll0 = sum(Array.from({ length: K }, (_, k) => { const nk = y.filter(v => v === k).length; return nk ? nk * Math.log(nk / n) : 0; }));
+    const chi = 2 * (r.ll - ll0), df = (K - 1) * (p - 1);
+    return { byCat: Array.from({ length: K - 1 }, (_, k) => all.slice(k * p, k * p + p)), ll: r.ll, chi, df, p: 1 - jStat.chisquare.cdf(chi, df), mcfadden: 1 - r.ll / ll0 };
+  }
+  // Deming regression (error ratio λ = 1: orthogonal) with jackknife CIs; Passing-Bablok regression with its rank-based CIs
+  function deming(x, y, lambda = 1) {
+    const fit = (a, b) => { const mx = mean(a), my = mean(b), sxx = sum(a.map(v => (v - mx) ** 2)), syy = sum(b.map(v => (v - my) ** 2)), sxy = sum(a.map((v, i) => (v - mx) * (b[i] - my)));
+      const sl = (syy - lambda * sxx + Math.sqrt((syy - lambda * sxx) ** 2 + 4 * lambda * sxy * sxy)) / (2 * sxy); return [my - sl * mx, sl]; };
+    const [b0, b1] = fit(x, y), n = x.length, js = x.map((_, k) => fit(x.filter((_, i) => i !== k), y.filter((_, i) => i !== k)));
+    const se = j => { const ps = js.map((q, k) => n * [b0, b1][j] - (n - 1) * q[j]), m = mean(ps); return Math.sqrt(sum(ps.map(v => (v - m) ** 2)) / (n * (n - 1))); };
+    const t = jStat.studentt.inv(QU(), n - 2), s0 = se(0), s1 = se(1);
+    return { intercept: b0, slope: b1, seI: s0, seS: s1, loI: b0 - t * s0, hiI: b0 + t * s0, loS: b1 - t * s1, hiS: b1 + t * s1, n };
+  }
+  function passingBablok(x, y) {
+    const n = x.length, S = [];
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) { const dx = x[j] - x[i], dy = y[j] - y[i]; if (dx === 0 && dy === 0) continue; const s2 = dx === 0 ? (dy > 0 ? Infinity : -Infinity) : dy / dx; if (s2 === -1) continue; S.push(s2); }
+    S.sort((a, b) => a - b); const N = S.length, K = S.filter(v => v < -1).length;
+    const at = q => S[Math.min(N - 1, Math.max(0, q))];
+    const b = N % 2 ? at((N + 1) / 2 + K - 1) : (at(N / 2 + K - 1) + at(N / 2 + K)) / 2;
+    const C = ZC() * Math.sqrt(n * (n - 1) * (2 * n + 5) / 18), M1 = Math.round((N - C) / 2), M2 = N - M1 + 1;
+    const loS = at(M1 + K - 1), hiS = at(M2 + K - 1), a = median(y.map((v, i) => v - b * x[i]));
+    return { slope: b, intercept: a, loS, hiS, loI: median(y.map((v, i) => v - hiS * x[i])), hiI: median(y.map((v, i) => v - loS * x[i])), n };
+  }
+  // symmetric eigen decomposition (Jacobi rotations)
+  function eigenSym(A0) {
+    const n = A0.length, A = A0.map(r => r.slice()), V = A.map((_, i) => A.map((_, j) => +(i === j)));
+    for (let sweep = 0; sweep < 100; sweep++) {
+      let off = 0; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) off += A[i][j] ** 2; if (off < 1e-20) break;
+      for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) { if (Math.abs(A[p][q]) < 1e-300) continue;
+        const th = (A[q][q] - A[p][p]) / (2 * A[p][q]), t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1)), c = 1 / Math.sqrt(t * t + 1), s2 = t * c;
+        for (let k = 0; k < n; k++) { const akp = A[k][p], akq = A[k][q]; A[k][p] = c * akp - s2 * akq; A[k][q] = s2 * akp + c * akq; }
+        for (let k = 0; k < n; k++) { const apk = A[p][k], aqk = A[q][k]; A[p][k] = c * apk - s2 * aqk; A[q][k] = s2 * apk + c * aqk; }
+        for (let k = 0; k < n; k++) { const vkp = V[k][p], vkq = V[k][q]; V[k][p] = c * vkp - s2 * vkq; V[k][q] = s2 * vkp + c * vkq; } }
+    }
+    const idx = A.map((_, i) => i).sort((a, b) => A[b][b] - A[a][a]);
+    return { values: idx.map(i => A[i][i]), vectors: idx.map(i => V.map(r => r[i])) };
+  }
+  // principal components of the correlation matrix; loadings of the components kept (eigenvalue > 1 or a chosen number), varimax-rotated
+  function pca(X, nKeep) {
+    const p = X[0].length, cols = Array.from({ length: p }, (_, j) => X.map(r => r[j])), z = cols.map(c => { const m = mean(c), s2 = sd(c); return c.map(v => (v - m) / s2); });
+    const R = z.map(a => z.map(b => sum(a.map((v, i) => v * b[i])) / (X.length - 1))), e = eigenSym(R);
+    const k = nKeep || Math.max(1, e.values.filter(v => v > 1).length);
+    let L = Array.from({ length: p }, (_, i) => Array.from({ length: k }, (_, j) => { const v = e.vectors[j]; const sgn = Math.sign(v.reduce((a, b) => Math.abs(b) > Math.abs(a) ? b : a, 0)) || 1; return sgn * v[i] * Math.sqrt(Math.max(e.values[j], 0)); }));
+    const rot = k > 1 ? varimax(L) : L;
+    const kmo = (() => { const Ri = invert(R); if (!Ri) return NaN; let r2 = 0, q2 = 0; for (let i = 0; i < p; i++) for (let j = 0; j < p; j++) if (i !== j) { r2 += R[i][j] ** 2; q2 += (-Ri[i][j] / Math.sqrt(Ri[i][i] * Ri[j][j])) ** 2; } return r2 / (r2 + q2); })();
+    // Bartlett's test of sphericity
+    const det = (() => { let d = 1; const A = R.map(r => r.slice()); for (let c = 0; c < p; c++) { let pv = c; for (let r = c + 1; r < p; r++) if (Math.abs(A[r][c]) > Math.abs(A[pv][c])) pv = r; if (pv !== c) { [A[c], A[pv]] = [A[pv], A[c]]; d = -d; } d *= A[c][c]; for (let r = c + 1; r < p; r++) { const f = A[r][c] / A[c][c]; for (let q = c; q < p; q++) A[r][q] -= f * A[c][q]; } } return d; })();
+    const bChi = -(X.length - 1 - (2 * p + 5) / 6) * Math.log(det), bDf = p * (p - 1) / 2;
+    return { values: e.values, explained: e.values.map(v => v / p), k, loadings: L, rotated: rot, kmo, bartlett: { chi: bChi, df: bDf, p: 1 - jStat.chisquare.cdf(bChi, bDf) } };
+  }
+  function varimax(L0) {
+    const p = L0.length, k = L0[0].length, h = L0.map(r => Math.sqrt(sum(r.map(v => v * v))) || 1); let L = L0.map((r, i) => r.map(v => v / h[i]));
+    for (let it = 0; it < 100; it++) { let ch = 0;
+      for (let a = 0; a < k; a++) for (let b = a + 1; b < k; b++) {
+        let A = 0, B = 0, C = 0, D = 0; for (let i = 0; i < p; i++) { const u = L[i][a] ** 2 - L[i][b] ** 2, v = 2 * L[i][a] * L[i][b]; A += u; B += v; C += u * u - v * v; D += 2 * u * v; }
+        const phi = Math.atan2(D - 2 * A * B / p, C - (A * A - B * B) / p) / 4; if (Math.abs(phi) < 1e-10) continue; ch++;
+        const c = Math.cos(phi), s2 = Math.sin(phi); L = L.map(r => { const x = r[a], y = r[b], o = r.slice(); o[a] = c * x + s2 * y; o[b] = -s2 * x + c * y; return o; }); }
+      if (!ch) break; }
+    return L.map((r, i) => r.map(v => v * h[i]));
+  }
+  // partial correlation of x and y controlling for the columns of Z (residual method)
+  function partialCorr(x, y, Z) {
+    const res = v => { const m = linearRegression(Z, v); return v.map((t, i) => t - sum([1, ...Z[i]].map((z, j) => z * m.coef[j]))); };
+    const rx = res(x), ry = res(y), r = pearson(rx, ry).r, df = x.length - 2 - Z[0].length, t = r * Math.sqrt(df / (1 - r * r));
+    return { r, df, t, p: 2 * (1 - jStat.studentt.cdf(Math.abs(t), df)), n: x.length };
+  }
+  // two-way ANOVA (type II sums of squares) with the interaction; a, b are level indices 0…ka−1 / 0…kb−1
+  function twoWayAnova(y, a, b, ka, kb) {
+    const dA = i => Array.from({ length: ka - 1 }, (_, j) => +(a[i] === j + 1)), dB = i => Array.from({ length: kb - 1 }, (_, j) => +(b[i] === j + 1));
+    const dAB = i => dA(i).flatMap(u => dB(i).map(v => u * v));
+    const fit = f => linearRegression(y.map((_, i) => f(i)), y);
+    const mA = fit(dA), mB = fit(dB), mAB = fit(i => [...dA(i), ...dB(i)]), mFull = fit(i => [...dA(i), ...dB(i), ...dAB(i)]);
+    if (!mA || !mB || !mAB || !mFull) return null;
+    const dfE = mFull.df, msE = mFull.sse / dfE, row = (ss, df) => ({ ss, df, F: ss / df / msE, p: 1 - jStat.centralF.cdf(ss / df / msE, df, dfE), eta: ss / (ss + mFull.sse) });
+    return { A: row(mB.sse - mAB.sse, ka - 1), B: row(mA.sse - mAB.sse, kb - 1), AB: row(mAB.sse - mFull.sse, (ka - 1) * (kb - 1)), error: { ss: mFull.sse, df: dfE, ms: msE }, n: y.length };
+  }
+  // simple mediation x → m → y: paths a, b, c, c′, the indirect effect a·b with Sobel's test and a percentile bootstrap CI (seeded)
+  function mediation(x, m, y, B = 2000, seed = 1) {
+    const reg = (X, v) => linearRegression(X, v);
+    const ra = reg(x.map(v => [v]), m), rb = reg(x.map((v, i) => [v, m[i]]), y), rc = reg(x.map(v => [v]), y);
+    if (!ra || !rb || !rc) return null;
+    const a = ra.terms[1], b = rb.terms[2], ind = a.B * b.B, seS = Math.sqrt(b.B ** 2 * a.se ** 2 + a.B ** 2 * b.se ** 2), zS = ind / seS;
+    const rnd = seeded(seed), n = x.length, boot = [];
+    for (let k = 0; k < B; k++) { const ix = Array.from({ length: n }, () => Math.floor(rnd() * n)), X = ix.map(i => x[i]), M = ix.map(i => m[i]), Y = ix.map(i => y[i]);
+      const p1 = reg(X.map(v => [v]), M), p2 = reg(X.map((v, i) => [v, M[i]]), Y); if (p1 && p2) boot.push(p1.coef[1] * p2.coef[2]); }
+    boot.sort((u, v) => u - v);
+    return { a, b, c: rc.terms[1], cPrime: rb.terms[1], indirect: ind, sobelZ: zS, sobelP: zp(zS), bootLo: quantile(boot, QL()), bootHi: quantile(boot, QU()), propMediated: ind / rc.terms[1].B, n };
+  }
+  // AUC (Mann-Whitney), continuous NRI and IDI between an old and a new risk model, decision-curve net benefit
+  function aucOf(p, y) { const pos = p.filter((_, i) => y[i]), neg = p.filter((_, i) => !y[i]); if (!pos.length || !neg.length) return NaN; const r = rank([...pos, ...neg]).ranks; return (sum(r.slice(0, pos.length)) - pos.length * (pos.length + 1) / 2) / (pos.length * neg.length); }
+  function nriIdi(pOld, pNew, y) {
+    const ev = y.map((v, i) => i).filter(i => y[i]), ne = y.map((v, i) => i).filter(i => !y[i]);
+    const up = I => I.filter(i => pNew[i] > pOld[i]).length / I.length, dn = I => I.filter(i => pNew[i] < pOld[i]).length / I.length;
+    const nriE = up(ev) - dn(ev), nriN = dn(ne) - up(ne), nri = nriE + nriN;
+    const seN = Math.sqrt((up(ev) + dn(ev) - nriE ** 2) / ev.length + (up(ne) + dn(ne) - nriN ** 2) / ne.length);
+    const d = pNew.map((v, i) => v - pOld[i]), dE = ev.map(i => d[i]), dN = ne.map(i => d[i]), idi = mean(dE) - mean(dN);
+    const seI = Math.sqrt(variance(dE) / ev.length + variance(dN) / ne.length);
+    return { nri, nriE, nriN, nriLo: nri - ZC() * seN, nriHi: nri + ZC() * seN, nriP: zp(nri / seN), idi, idiLo: idi - ZC() * seI, idiHi: idi + ZC() * seI, idiP: zp(idi / seI) };
+  }
+  function netBenefit(p, y, thresholds) { const n = y.length, prev = sum(y) / n;
+    return thresholds.map(t => { let tp = 0, fp = 0; p.forEach((v, i) => { if (v >= t) { if (y[i]) tp++; else fp++; } }); return { t, model: tp / n - fp / n * t / (1 - t), all: prev - (1 - prev) * t / (1 - t) }; }); }
+  // optimism-corrected AUC of a logistic model by bootstrap (Harrell), B refits on resamples
+  function optimismAuc(X, y, B = 200, seed = 1) {
+    const pred = (m, R) => R.map(r => sig(sum([1, ...r].map((v, j) => v * m.terms[j].B))));
+    const full = logisticRegression(X, y); if (!full) return null;
+    const app = aucOf(pred(full, X), y), rnd = seeded(seed), opt = []; const n = y.length;
+    for (let k = 0; k < B; k++) { const ix = Array.from({ length: n }, () => Math.floor(rnd() * n)), Xb = ix.map(i => X[i]), yb = ix.map(i => y[i]);
+      if (!yb.some(v => v) || yb.every(v => v)) continue; const m = logisticRegression(Xb, yb); if (!m || m.unstable) continue;
+      opt.push(aucOf(pred(m, Xb), yb) - aucOf(pred(m, X), y)); }
+    const o = mean(opt); return { apparent: app, optimism: o, corrected: app - o, B: opt.length };
+  }
+  // propensity scores: 1:1 nearest-neighbour matching without replacement within a caliper (0.2 SD of the logit), and inverse probability weights (ATE)
+  function propensityMatch(ps, treat, caliperSd = 0.2) {
+    const lg = ps.map(p => Math.log(p / (1 - p))), cal = caliperSd * sd(lg), T = treat.map((t, i) => i).filter(i => treat[i]), C = treat.map((t, i) => i).filter(i => !treat[i]);
+    const used = new Set(), pairs = [];
+    [...T].sort((a, b) => ps[b] - ps[a]).forEach(i => { let best = -1, bd = Infinity; C.forEach(j => { if (used.has(j)) return; const dd = Math.abs(lg[i] - lg[j]); if (dd < bd) { bd = dd; best = j; } });
+      if (best >= 0 && bd <= cal) { used.add(best); pairs.push([i, best]); } });
+    const w = ps.map((p, i) => treat[i] ? 1 / p : 1 / (1 - p));
+    return { pairs, caliper: cal, weights: w };
+  }
+  // standardized mean difference (pooled SD), optionally weighted
+  function smd(x, treat, w) {
+    const W = w || x.map(() => 1), grp = t => { const I = x.map((_, i) => i).filter(i => !!treat[i] === t), sw = sum(I.map(i => W[i])), m = sum(I.map(i => W[i] * x[i])) / sw, v = sum(I.map(i => W[i] * (x[i] - m) ** 2)) / sw; return [m, v]; };
+    const [m1, v1] = grp(true), [m0, v0] = grp(false); return (m1 - m0) / Math.sqrt((v1 + v0) / 2);
+  }
   // JZS Bayes factor BF10 for a two-sample t-test (Cauchy prior on the effect size, r = √2/2), by numerical integration over g
   function bayesFactorT(t, n1, n2, r = Math.SQRT1_2) {
     const N = n1 * n2 / (n1 + n2), df = n1 + n2 - 2;
@@ -1143,7 +1333,7 @@ const Stats = (() => {
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
   return {
-    mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost,
+    poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,

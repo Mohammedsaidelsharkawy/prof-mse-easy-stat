@@ -2300,6 +2300,9 @@
   const ADV_TYPES = { paired: 'Paired comparison (two measurements)', correlation: 'Correlation (Pearson / Spearman)', linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
     cox: 'Cox regression (hazard ratios)', mcnemar: 'McNemar test (paired categorical)', kappa: "Cohen's kappa (agreement, categorical)",
     agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)", cochran: "Cochran's Q (the same yes/no outcome measured repeatedly)",
+    count: 'Poisson / negative binomial regression (counts)', ordinal: 'Ordinal logistic regression', multinom: 'Multinomial logistic regression', methodcomp: 'Method comparison (Passing-Bablok / Deming)',
+    pca: 'Principal component analysis (questionnaire items)', partial: 'Partial correlation', anova2: 'Two-way ANOVA (group × factor)', mediation: 'Mediation analysis (X → M → Y)',
+    psm: 'Propensity-score matching and weighting', lmm: 'Linear mixed model (repeated outcome + covariates)',
     tost: 'Equivalence (TOST, two one-sided t-tests)', mh: 'Mantel-Haenszel (stratified odds ratio)', clogit: 'Conditional logistic regression (matched sets)' };
   const analysedRows = () => { const g = activeGroups(); return Analysis.filterRows(state.cfg, state.data.rows).filter(r => g.includes(Analysis.groupOf(state.cfg, r))); };
   function advColumns() {
@@ -2351,7 +2354,18 @@
         + select('second', 'Stratify by (e.g. sex, centre, age band)', cat.filter(c => c.col !== a.outcome && c.col !== cfg.groupCol), a.second);
       if (t === 'clogit') { fields = select('outcome', 'Case / control column', cat, a.outcome) + levelSelect('Case value', a.outcome, a.positive)
         + select('second', 'Matched-set ID column', state.data.headers.filter(h => h !== a.outcome).map(h => ({ col: h, label: Analysis.columnLabel(cfg, h) })), a.second); predLabel = 'Exposures (predictors)'; preds = cols.filter(c => c.col !== a.outcome && c.col !== a.second); }
-      const withPreds = ['linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit'].includes(t);
+      if (t === 'count') { fields = select('outcome', 'Count outcome (0, 1, 2 …)', num, a.outcome) + '<div></div>'; predLabel = 'Predictors'; preds = cols.filter(c => c.col !== a.outcome); }
+      if (t === 'ordinal' || t === 'multinom') { fields = select('outcome', t === 'ordinal' ? 'Ordered outcome (categories in their order, step 2)' : 'Outcome (the first category is the reference)', cols.filter(isCat), a.outcome) + '<div></div>'; predLabel = 'Predictors'; preds = cols.filter(c => c.col !== a.outcome); }
+      if (t === 'methodcomp') fields = select('outcome', 'Method A (reference, x)', num, a.outcome) + select('second', 'Method B (new, y)', num.filter(c => c.col !== a.outcome), a.second);
+      if (t === 'pca') { fields = '<p class="legend-note" style="margin:0">Tick the items (numeric scores). Patients with any missing item are left out.</p>'; predLabel = 'Items'; preds = num; }
+      if (t === 'partial') { fields = select('outcome', 'Variable X', num, a.outcome) + select('second', 'Variable Y', num.filter(c => c.col !== a.outcome), a.second); predLabel = 'Control for'; preds = num.filter(c => c.col !== a.outcome && c.col !== a.second); }
+      if (t === 'anova2') fields = select('outcome', 'Numeric outcome', num, a.outcome) + select('second', 'Second factor (e.g. sex)', cat.filter(c => c.col !== cfg.groupCol), a.second);
+      if (t === 'mediation') fields = select('xvar', 'Exposure X', num, a.xvar) + select('second', 'Mediator M', num.filter(c => c.col !== a.xvar), a.second) + select('outcome', 'Outcome Y', num.filter(c => c.col !== a.xvar && c.col !== a.second), a.outcome);
+      if (t === 'psm') { fields = `<p class="legend-note" style="margin:0">Treatment = the two study groups. Tick the covariates of the propensity score.</p>` + select('outcome', 'Outcome compared in the matched sample (optional)', cols.filter(c => c.col !== cfg.groupCol), a.outcome); predLabel = 'Covariates'; preds = cols.filter(c => c.col !== cfg.groupCol && c.col !== a.outcome); }
+      if (t === 'lmm') { const reps = cfg.variables.filter(v => v.kind === 'repeated' && v.type === 'numeric');
+        fields = `<div><label class="f">Repeated outcome</label><select data-af="rvar"><option value="">— choose —</option>${reps.map(v => `<option value="${esc(v.id)}" ${v.id === a.rvar ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></div><div></div>`;
+        predLabel = 'Covariates (baseline)'; preds = cols.filter(c => c.col !== cfg.groupCol); }
+      const withPreds = ['linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
       const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
       return `<div class="gcard" data-adv="${ai}">
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
@@ -2373,7 +2387,7 @@
     const box = (key, label) => `<label class="check" style="margin-top:22px"><input type="checkbox" data-af="${key}" ${a[key] ? 'checked' : ''}><span>${label}</span></label>`;
     const out = [`<div><label class="f">Title (optional)</label><input type="text" data-af="title" value="${esc(a.title || '')}" placeholder="automatic"></div>`,
       `<div><label class="f">Comment</label>${sel('commentDetail', [['standard', 'Standard'], ['detailed', 'Detailed — more numbers and interpretation'], ['brief', 'Brief — one sentence']], a.commentDetail)}</div>`];
-    if (!['ancova', 'survival', 'mcnemar'].includes(t))
+    if (!['ancova', 'survival', 'mcnemar', 'anova2', 'psm', 'lmm'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
       out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
@@ -2383,6 +2397,15 @@
       `<div>${box('ci', '95% CI of the coefficients')}</div>`);
     if (t === 'linear') out.push(`<div>${box('vif', 'Collinearity (VIF)')}</div>`, `<div>${box('diag', 'Residual diagnostics (Durbin-Watson, normality, residual plot)')}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t)) out.push(`<div>${box('forest', 'Forest plot of the estimates')}</div>`);
+    if (['linear', 'logistic'].includes(t)) { const pc = [['', '— none —'], ...(a.predictors || []).map(c => [c, Analysis.columnLabel(state.cfg, c)])];
+      out.push(`<div><label class="f">Interaction term</label><div class="row" style="gap:4px">${sel('int1', pc, a.int1 || '')}×${sel('int2', pc, a.int2 || '')}</div></div>`,
+        `<div>${box('epv', 'Sample size check (events per variable)')}</div>`, `<div>${box('calc', 'Model equation + risk calculator (step 11)')}</div>`); }
+    if (t === 'logistic') out.push(`<div>${box('optimism', 'Bootstrap validation (optimism-corrected AUC)')}</div>`, `<div>${box('dca', 'Decision curve (net benefit)')}</div>`,
+      `<div><label class="f">Added value of one predictor (NRI, IDI)</label>${sel('nriVar', [['', '— none —'], ...(a.predictors || []).map(c => [c, Analysis.columnLabel(state.cfg, c)])], a.nriVar || '')}</div>`);
+    if (t === 'count') out.push(`<div><label class="f">Model</label>${sel('family', [['auto', 'Automatic (negative binomial if overdispersed)'], ['poisson', 'Poisson'], ['negbin', 'Negative binomial']], a.family)}</div>`);
+    if (t === 'methodcomp') out.push(`<div><label class="f">Method</label>${sel('method', [['pb', 'Passing-Bablok'], ['deming', 'Deming (equal error variances)']], a.method)}</div>`);
+    if (t === 'pca') out.push(`<div><label class="f">Components kept</label>${sel('nComp', [['', 'Eigenvalue above 1'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']], a.nComp || '')}</div>`);
+    if (t === 'psm') out.push(`<div><label class="f">Caliper (SD of the logit)</label>${sel('caliper', [['0.2', '0.2 (recommended)'], ['0.1', '0.1'], ['0.05', '0.05'], ['1', 'Wide (1)']], a.caliper || '0.2')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('modelRoc', 'ROC curve and AUC of the model')}</div>`,
       `<div><label class="f">Classification cut-off (predicted probability)</label><input type="text" data-af="cut" value="${esc(a.cut || '')}" placeholder="0.5"></div>`);
     if (t === 'survival') out.push(`<div>${box('swimmer', 'Swimmer plot of every patient')}</div>`, `<div>${box('ciBand', '95% CI bands on the curves')}</div>`, `<div>${box('risk', 'Number at risk table')}</div>`, `<div>${box('pairwise', 'Pairwise log-rank tests (3+ groups, Bonferroni)')}</div>`);
@@ -3269,7 +3292,7 @@
         <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><span class="legend-note">${words(s.comment)} words</span></div><div class="explain" data-explainbox="${i}"></div>
         ${o.keyFindings && s.findings && s.findings.length ? `<div class="legend-note"><b>Key findings:</b><ol style="margin:4px 0 0 18px;padding:0">${s.findings.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
-        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button></div>
+        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button>${s.meta && s.meta.calc ? ` <button class="btn ghost small" data-riskcalc="${i}" type="button" title="A small web page that computes the prediction of this model">⬇ Risk calculator</button>` : ''}</div>
         <div class="foot">${esc(s.footnote)}</div>
         ${place !== 'before' ? comment : ''}</div>
         ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
@@ -3292,6 +3315,16 @@
     catch (e) { const d = document.createElement('div'); d.innerHTML = html; d.style.position = 'fixed'; d.style.left = '-9999px'; document.body.appendChild(d);
       const rg = document.createRange(); rg.selectNodeContents(d); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg); document.execCommand('copy'); sel.removeAllRanges(); d.remove(); }
     toast('Table copied — paste it into Word');
+  }
+  // a stand-alone page that computes a regression model's prediction (probability for logistic models)
+  function calcPage(c) {
+    const inputs = c.terms.map((t, i) => t.dummy ? `<label><input type="checkbox" data-i="${i}"> ${esc(t.label)}</label>` : `<label>${esc(t.label)} <input type="number" step="any" data-i="${i}" value="0"></label>`).join('');
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Risk calculator</title>
+<style>body{font-family:system-ui,Arial,sans-serif;max-width:560px;margin:24px auto;padding:0 16px;color:#1C1648;background:#fff}label{display:flex;justify-content:space-between;gap:12px;margin:8px 0}input[type=number]{width:120px}#out{font-size:22px;font-weight:700;margin-top:16px}small{color:#666}</style></head>
+<body><h2>${esc(c.logistic ? `Predicted probability of ${c.outcome}` : `Predicted ${c.outcome}`)}</h2>${inputs}<div id="out"></div>
+<p><small>From the ${c.logistic ? 'logistic' : 'linear'} regression model of the study (Prof MSE Easy Stat). For research use; not validated for clinical decisions.</small></p>
+<script>const B0=${c.b0},B=${JSON.stringify(c.terms.map(t => t.B))},L=${c.logistic};function f(){let z=B0;document.querySelectorAll('[data-i]').forEach(e=>{const v=e.type==='checkbox'?(e.checked?1:0):(+e.value||0);z+=B[+e.dataset.i]*v;});
+document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+' %':z.toFixed(2);}document.addEventListener('input',f);f();<\/script></body></html>`;
   }
   // plain explanations of the statistical terms found in a comment (for students)
   const GLOSSARY = [
@@ -3361,7 +3394,8 @@
   $('#figPrevCopy').onclick = () => { const f = state.prevFig; if (f) copyImage(f.url); };
   $('#flowCopy').onclick = () => copyImage($('#consortCanvas').toDataURL('image/png'));
   $('#report').addEventListener('click', e => {
-    const cc = e.target.closest('[data-copycom]'), ex = e.target.closest('[data-explain]');
+    const cc = e.target.closest('[data-copycom]'), ex = e.target.closest('[data-explain]'), ca = e.target.closest('[data-riskcalc]');
+    if (ca) { const c = state.result.sections[+ca.dataset.riskcalc].meta.calc; saveUrl(URL.createObjectURL(new Blob([calcPage(c)], { type: 'text/html' })), `${baseName()} - Risk calculator.html`); }
     if (cc) { syncEdits(); const t = state.result.sections[+cc.dataset.copycom].comment || ''; navigator.clipboard.writeText(t).then(() => toast('Comment copied'), () => toast('Copying was blocked by the browser')); }
     if (ex) { syncEdits(); const box = document.querySelector(`[data-explainbox="${ex.dataset.explain}"]`); box.innerHTML = box.innerHTML ? '' : explainHtml(state.result.sections[+ex.dataset.explain].comment); }
     if (e.target.closest('#comCheck')) { syncEdits(); $('#comCheckOut').innerHTML = checkComments(state.result); }

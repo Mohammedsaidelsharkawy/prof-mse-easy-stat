@@ -1038,6 +1038,11 @@ const Charts = (() => {
     const slope = sxx > 0 ? Stats.sum(xs.map((v, i) => (v - mx) * (ys[i] - my))) / sxx : 0;
     // residual plots: a dashed line at zero instead of the least-squares line
     if (spec.zeroLine) { ctx.save(); ctx.strokeStyle = pal[1]; ctx.lineWidth = 3; ctx.setLineDash([12, 8]); ctx.beginPath(); ctx.moveTo(L, Y(0)); ctx.lineTo(L + pw, Y(0)); ctx.stroke(); ctx.restore(); }
+    // given lines (e.g. a method-comparison fit and the identity line) instead of the least-squares line
+    else if (spec.lines) { ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+      spec.lines.forEach((ln, i) => { ctx.strokeStyle = ln.dash ? '#777' : pal[1]; ctx.lineWidth = ln.dash ? 3 : 5; ctx.setLineDash(ln.dash ? [12, 8] : []);
+        ctx.beginPath(); ctx.moveTo(X(sx.min), Y(ln.a + ln.b * sx.min)); ctx.lineTo(X(sx.max), Y(ln.a + ln.b * sx.max)); ctx.stroke(); });
+      ctx.restore(); ctx.setLineDash([]); }
     else if (sxx > 0) {
       const icpt = my - slope * mx;
       ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
