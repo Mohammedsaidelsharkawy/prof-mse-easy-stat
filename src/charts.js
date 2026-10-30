@@ -55,7 +55,7 @@ const Charts = (() => {
   let FONT = FONTS.sans; // chart text font, set per chart from the style
   let TICKS = 6; // about how many axis ticks: fewer (4), normal (6) or more (10), set per chart from the style
   // figure shapes (logical canvas size before the resolution multiplier)
-  const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300] };
+  const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300], tall: [1100, 1400] };
   const TEXT = { normal: 1, large: 1.25, xlarge: 1.5 };
   const DEFAULT_STYLE = { text: 'normal', aspect: 'wide', barFill: 'gradient', grid: true, arrows: true, legend: 'bottom', res: 1, yAxis: 'auto',
     legendSize: 'normal', legendTitle: '', legendFrame: false, barWidth: 'normal', boxMean: false };
@@ -65,11 +65,88 @@ const Charts = (() => {
   const LEGEND_SIZE = { small: 0.85, normal: 1, large: 1.2 };
   const palette = p => Array.isArray(p) && p.length ? p : PALETTES[p] || PALETTES.brand;
 
+  /* ---------- vector export: a 2D context that records the drawing as SVG, so every chart's code runs unchanged ---------- */
+  let VECTOR = false; // set while drawing a chart for SVG export
+  const makeCanvas = (w, h) => { if (VECTOR) return new SvgCanvas(w, h); const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+  const xmlEsc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const n2 = v => +(+v).toFixed(2);
+  function SvgCanvas(w, h) { this.width = w; this.height = h; this._svg = true; const ctx = new SvgCtx(); this.getContext = () => ctx; this._ctx = ctx; }
+  SvgCanvas.prototype.toSVG = function () {
+    const x = this._ctx;
+    return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width} ${this.height}">`
+      + `<defs>${x.defs.join('')}</defs>${x.els.join('')}</svg>`;
+  };
+  function SvgCtx() {
+    this.els = []; this.defs = []; this.stack = []; this.path = ''; this.cur = null;
+    this.st = { fillStyle: '#000', strokeStyle: '#000', lineWidth: 1, dash: [], globalAlpha: 1, font: '10px sans-serif', textAlign: 'start', textBaseline: 'alphabetic', m: [1, 0, 0, 1, 0, 0], clip: null, lineCap: 'butt', lineJoin: 'miter' };
+    this.meas = document.createElement('canvas').getContext('2d');
+  }
+  let SVG_ID = 0;
+  const SP = SvgCtx.prototype;
+  ['fillStyle', 'strokeStyle', 'lineWidth', 'globalAlpha', 'textAlign', 'textBaseline', 'lineCap', 'lineJoin'].forEach(k => Object.defineProperty(SP, k, { get() { return this.st[k]; }, set(v) { this.st[k] = v; } }));
+  Object.defineProperty(SP, 'font', { get() { return this.st.font; }, set(v) { this.st.font = v; this.meas.font = v; } });
+  SP.save = function () { this.stack.push({ ...this.st, m: this.st.m.slice(), dash: this.st.dash.slice() }); };
+  SP.restore = function () { if (this.stack.length) { this.st = this.stack.pop(); this.meas.font = this.st.font; } };
+  SP.mul = function (n) { const m = this.st.m; this.st.m = [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]; };
+  SP.scale = function (x, y) { this.mul([x, 0, 0, y, 0, 0]); };
+  SP.translate = function (x, y) { this.mul([1, 0, 0, 1, x, y]); };
+  SP.rotate = function (a) { const c = Math.cos(a), s = Math.sin(a); this.mul([c, s, -s, c, 0, 0]); };
+  SP.setTransform = function (a, b, c, d, e, f) { this.st.m = [a, b, c, d, e, f]; };
+  SP.pt = function (x, y) { const m = this.st.m; return `${n2(m[0] * x + m[2] * y + m[4])},${n2(m[1] * x + m[3] * y + m[5])}`; };
+  SP.k = function () { const m = this.st.m; return Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1; };
+  SP.beginPath = function () { this.path = ''; this.cur = null; };
+  SP.moveTo = function (x, y) { this.path += 'M' + this.pt(x, y); this.cur = [x, y]; };
+  SP.lineTo = function (x, y) { this.path += (this.cur ? 'L' : 'M') + this.pt(x, y); this.cur = [x, y]; };
+  SP.closePath = function () { this.path += 'Z'; };
+  SP.rect = function (x, y, w, h) { this.path += `M${this.pt(x, y)}L${this.pt(x + w, y)}L${this.pt(x + w, y + h)}L${this.pt(x, y + h)}Z`; this.cur = [x, y]; };
+  SP.quadraticCurveTo = function (a, b, x, y) { this.path += `Q${this.pt(a, b)} ${this.pt(x, y)}`; this.cur = [x, y]; };
+  SP.bezierCurveTo = function (a, b, c, d, x, y) { this.path += `C${this.pt(a, b)} ${this.pt(c, d)} ${this.pt(x, y)}`; this.cur = [x, y]; };
+  SP.arc = function (cx, cy, r, a0, a1, ccw) {
+    const T = 2 * Math.PI; let d = a1 - a0;
+    if (!ccw) d = d >= T ? T : ((d % T) + T) % T; else d = -d >= T ? -T : -((((a0 - a1) % T) + T) % T);
+    const n = Math.max(8, Math.ceil(Math.abs(d) / (Math.PI / 24)));
+    for (let i = 0; i <= n; i++) { const a = a0 + d * i / n, x = cx + r * Math.cos(a), y = cy + r * Math.sin(a); this.path += (i === 0 && !this.cur ? 'M' : 'L') + this.pt(x, y); this.cur = [x, y]; }
+  };
+  SP.paint = function (p) {
+    if (typeof p === 'string') return p;
+    const id = 'v' + (++SVG_ID);
+    if (p && p.g === 'lin') this.defs.push(`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${p.a[0]}" y1="${p.a[1]}" x2="${p.b[0]}" y2="${p.b[1]}">${p.stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}</linearGradient>`);
+    else if (p && p.g === 'pat') this.defs.push(`<pattern id="${id}" patternUnits="userSpaceOnUse" width="${p.w}" height="${p.h}" patternTransform="matrix(${p.m.map(n2).join(' ')})"><image width="${p.w}" height="${p.h}" xlink:href="${p.url}"/></pattern>`);
+    else return '#000';
+    return `url(#${id})`;
+  };
+  SP.attrs = function () { return `${this.st.globalAlpha < 1 ? ` opacity="${n2(this.st.globalAlpha)}"` : ''}${this.st.clip ? ` clip-path="url(#${this.st.clip})"` : ''}`; };
+  SP.fill = function () { if (this.path) this.els.push(`<path d="${this.path}" fill="${xmlEsc(this.paint(this.st.fillStyle))}"${this.attrs()}/>`); };
+  SP.stroke = function () {
+    if (!this.path) return; const k = this.k(), dash = this.st.dash.length ? ` stroke-dasharray="${this.st.dash.map(v => n2(v * k)).join(' ')}"` : '';
+    this.els.push(`<path d="${this.path}" fill="none" stroke="${xmlEsc(this.paint(this.st.strokeStyle))}" stroke-width="${n2(this.st.lineWidth * k)}" stroke-linecap="${this.st.lineCap}" stroke-linejoin="${this.st.lineJoin}"${dash}${this.attrs()}/>`);
+  };
+  SP.fillRect = function (x, y, w, h) { const p = this.path, c = this.cur; this.beginPath(); this.rect(x, y, w, h); this.fill(); this.path = p; this.cur = c; };
+  SP.strokeRect = function (x, y, w, h) { const p = this.path, c = this.cur; this.beginPath(); this.rect(x, y, w, h); this.stroke(); this.path = p; this.cur = c; };
+  SP.clearRect = function (x, y, w, h) { const f = this.st.fillStyle; this.st.fillStyle = '#fff'; this.fillRect(x, y, w, h); this.st.fillStyle = f; };
+  SP.clip = function () { const id = 'c' + (++SVG_ID); this.defs.push(`<clipPath id="${id}"><path d="${this.path}"/></clipPath>`); this.st.clip = id; };
+  SP.setLineDash = function (d) { this.st.dash = (d || []).slice(); };
+  SP.getLineDash = function () { return this.st.dash.slice(); };
+  SP.measureText = function (t) { return this.meas.measureText(t); };
+  SP.createLinearGradient = function (x0, y0, x1, y1) { const m = this.st.m, P = (x, y) => [n2(m[0] * x + m[2] * y + m[4]), n2(m[1] * x + m[3] * y + m[5])];
+    return { g: 'lin', a: P(x0, y0), b: P(x1, y1), stops: [], addColorStop(o, c) { this.stops.push([o, c]); } }; };
+  SP.createPattern = function (img) { return { g: 'pat', url: img.toDataURL('image/png'), w: img.width, h: img.height, m: this.st.m.slice() }; };
+  SP.fillText = function (t, x, y) {
+    const f = /^(italic\s+)?(\d{3}|bold|normal)?\s*(\d+(?:\.\d+)?)px\s+(.*)$/.exec(this.st.font) || [], size = +f[3] || 10;
+    const anchor = { center: 'middle', right: 'end', end: 'end' }[this.st.textAlign] || 'start', dy = { top: 0.8, hanging: 0.8, middle: 0.35, bottom: -0.22, ideographic: -0.22 }[this.st.textBaseline] || 0;
+    this.els.push(`<text transform="matrix(${this.st.m.map(n2).join(' ')})" x="${n2(x)}" y="${n2(y + dy * size)}" font-family="${xmlEsc(f[4] || 'sans-serif')}" font-size="${size}"${f[2] && f[2] !== 'normal' ? ` font-weight="${f[2]}"` : ''}${f[1] ? ' font-style="italic"' : ''} text-anchor="${anchor}" fill="${xmlEsc(this.paint(this.st.fillStyle))}"${this.attrs()}>${xmlEsc(t)}</text>`);
+  };
+  SP.drawImage = function (img, x = 0, y = 0, w, h) {
+    if (img._svg) { const x2 = img._ctx; this.defs.push(...x2.defs); this.els.push(`<g transform="matrix(${this.st.m.map(n2).join(' ')}) translate(${n2(x)} ${n2(y)})${w ? ` scale(${n2(w / img.width)} ${n2(h / img.height)})` : ''}"${this.attrs()}>${x2.els.join('')}</g>`); return; }
+    const url = img.toDataURL ? img.toDataURL('image/png') : img.src;
+    this.els.push(`<image transform="matrix(${this.st.m.map(n2).join(' ')})" x="${n2(x)}" y="${n2(y)}" width="${n2(w || img.width)}" height="${n2(h || img.height)}" xlink:href="${url}"${this.attrs()}/>`);
+  };
+  SP.getImageData = function () { throw new Error('not available in vector export'); };
+
   // canvas with logical size W×H drawn at `res` times the pixels, and a font helper scaled by text size
   function setup(st) {
-    const [W, H] = ASPECTS[st.aspect] || ASPECTS.wide, ts = TEXT[st.text] || 1, res = +st.res || 1;
-    const c = document.createElement('canvas');
-    c.width = W * res; c.height = H * res;
+    const [W, H] = ASPECTS[st.aspect] || ASPECTS.wide, ts = TEXT[st.text] || +st.text || 1, res = VECTOR ? 1 : +st.res || 1;
+    const c = makeCanvas(W * res, H * res);
     const ctx = c.getContext('2d');
     ctx.scale(res, res);
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
@@ -215,17 +292,41 @@ const Charts = (() => {
   }
 
   // public entry: draws the chart, then adds the optional title band above it
+  // points of the last chart with their values (logical coordinates), for hover values in the preview
+  let HITS = [];
+  const hit = (x, y, t) => HITS.push({ x, y, t });
   function draw(spec, paletteName = 'brand', style = {}) {
     FONT = FONTS[style.font] || FONTS.sans;
     TICKS = { fewer: 4, more: 10 }[style.ticks] || 6;
+    HITS = [];
+    // a figure may have its own shape (step 7)
+    if (spec.aspect && ASPECTS[spec.aspect]) style = { ...style, aspect: spec.aspect };
     // a chart of one series (one-group studies) needs no legend
     const c = drawChart(spec, paletteName, spec.legend === false ? { ...style, legend: 'none' } : style);
     const out = spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
+    const res = VECTOR ? 1 : +style.res || 1, band = (out.height - c.height) / res;
+    hitsOf = { W: out.width / res, H: out.height / res, list: HITS.map(h => ({ ...h, y: h.y + band })) };
     if (style.frame) { const x = out.getContext('2d'), w = Math.max(2, 3 * (+style.res || 1)); x.setTransform(1, 0, 0, 1, 0, 0); x.strokeStyle = '#555'; x.lineWidth = w; x.strokeRect(w / 2, w / 2, out.width - w, out.height - w); }
     return out;
   }
+  let hitsOf = { W: 1, H: 1, list: [] };
+  // the same chart as SVG text (vector graphics for journals)
+  function drawSVG(spec, paletteName, style = {}) { VECTOR = true; try { return draw(spec, paletteName, { ...style, res: 1 }).toSVG(); } finally { VECTOR = false; } }
+  // log10 scale: data, means and their error bars are drawn as logarithms and the ticks labelled with the original values
+  function logSpec(spec) {
+    const L = v => v > 0 ? Math.log10(v) : NaN, out = { ...spec, _log: true };
+    out.series = spec.series.map(s => {
+      if (s.data) return { ...s, data: s.data.map(a => a.filter(v => v > 0).map(Math.log10)) };
+      const err = s.err, lo = s.values.map((v, i) => err && err[i] != null ? L(Math.max(v - err[i], v / 100)) : s.lo ? L(s.lo[i]) : null), hi = s.values.map((v, i) => err && err[i] != null ? L(v + err[i]) : s.hi ? L(s.hi[i]) : null);
+      return { ...s, values: s.values.map(L), err: null, lo: lo.some(x => x !== null) ? lo : null, hi: hi.some(x => x !== null) ? hi : null };
+    });
+    if (spec.individual) out.individual = spec.individual.map(g => g.map(p => p.map(L)));
+    if (isFinite(spec.refLine)) out.refLine = L(spec.refLine);
+    return out;
+  }
+  const FS = { small: 0.8, normal: 1, large: 1.25, xlarge: 1.5 };
   function withTitle(src, title, st) {
-    const res = +st.res || 1, ts = TEXT[st.text] || 1, out = document.createElement('canvas'), ctx = out.getContext('2d');
+    const res = VECTOR ? 1 : +st.res || 1, ts = TEXT[st.text] || +st.text || 1, out = makeCanvas(src.width, src.height), ctx = out.getContext('2d');
     ctx.font = `700 ${Math.round(32 * ts * res)}px ${FONT}`;
     const lines = measureLines(ctx, title, src.width - 80 * res), band = (lines * 42 * ts + 36) * res;
     out.width = src.width; out.height = src.height + band;
@@ -238,6 +339,12 @@ const Charts = (() => {
 
   function drawChart(spec, paletteName = 'brand', style = {}) {
     const st = { ...DEFAULT_STYLE, ...style };
+    if (spec.type === 'heat') return heatChart(spec, paletteName, st);
+    if (spec.type === 'waterfall') return waterfallChart(spec, paletteName, st);
+    if (spec.type === 'swimmer') return swimmerChart(spec, paletteName, st);
+    if (spec.logY && ['line', 'box', 'dot', 'violin'].includes(spec.type)) spec = logSpec(spec);
+    // text sizes of the axis numbers, the axis titles and the value labels
+    const AX = FS[st.axisSize] || 1, TL = FS[st.titleSize] || 1, VL = FS[st.valueSize] || 1;
     if (spec.type === 'pie') return pieChart(spec, paletteName, st);
     if (spec.type === 'hbar') return hbarChart(spec, paletteName, st);
     if (spec.type === 'qq') return qqChart(spec, paletteName, st);
@@ -248,8 +355,10 @@ const Charts = (() => {
     if (spec.type === 'ba') return baChart(spec, paletteName, st);
     const pal = palette(paletteName);
     const { c, ctx, W, H, ts, F } = setup(st);
-    const brackets = (spec.sig || []).filter(q => stars(q.p, spec.alpha));
-    const catStars = (spec.sigCat || []).map(p => stars(p, spec.alpha));
+    // significance letters (a, b, c) above the groups instead of brackets
+    const letters = st.sigLabel === 'letters' && Array.isArray(spec.letters) && spec.letters.some(Boolean) ? spec.letters : null;
+    const brackets = letters ? [] : (spec.sig || []).filter(q => stars(q.p, spec.alpha));
+    const catStars = letters ? spec.letters : (spec.sigCat || []).map(p => stars(p, spec.alpha));
 
     const perGroup = !!spec.perGroup && spec.series.length === 1, shapes = st.series === 'shapes';
     const legendItems = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: spec.type === 'box' && i === 2 }));
@@ -274,7 +383,7 @@ const Charts = (() => {
     if (spec.percent) { lo = 0; hi = Math.max(10, Math.min(100, hi * 1.1)); }
     if (!isFinite(lo)) { lo = 0; hi = 1; }
     // y axis: auto = bars and box plots from zero, lines fitted; 'zero' / 'fit' apply to lines and box plots (bars always start at zero)
-    const fit = spec.type !== 'bar' && !spec.percent && (st.yAxis === 'fit' || (st.yAxis !== 'zero' && spec.type === 'line'));
+    const fit = spec._log || (spec.type !== 'bar' && !spec.percent && (st.yAxis === 'fit' || (st.yAxis !== 'zero' && spec.type === 'line')));
     if (!fit && lo > 0) lo = 0;
     if (fit) { const pad = (hi - lo) * 0.1 || 1; lo = Math.max(lo > 0 && spec.type === 'line' && st.yAxis !== 'fit' ? 0 : -Infinity, lo - pad); }
     let sc = niceScale(lo, spec.percent ? hi : hi * (spec.labels ? 1.08 : 1.02), 6, spec.integer);
@@ -297,18 +406,23 @@ const Charts = (() => {
 
     // grid + y axis
     ctx.font = F(600, 26); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    // panel: classic (default), grey background with white gridlines, or minimal (no axis lines)
+    if (st.panel === 'grey') { ctx.fillStyle = '#EBEBEB'; ctx.fillRect(L, T, pw, ph); }
+    ctx.font = F(600, 26 * AX);
     for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) {
       if (spec.percent && v > 100 + 1e-9) break;
       const yy = y(v);
       ctx.strokeStyle = st.grid ? '#E6E1EC' : '#333'; ctx.lineWidth = st.grid ? 1.5 : 3; ctx.setLineDash([]);
       if (st.grid) gridPen(ctx, st);
+      if (st.panel === 'grey') { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; }
       ctx.beginPath(); ctx.moveTo(st.grid ? L : L - 9, yy); ctx.lineTo(st.grid ? L + pw : L, yy); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sc.step) + (spec.percent ? '%' : ''), L - 14, yy);
+      ctx.fillStyle = '#444'; ctx.fillText(spec._log ? String(+(10 ** v).toPrecision(3)) : fmtTick(v, sc.step) + (spec.percent ? '%' : ''), L - 14, yy);
     }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
-    const ext = st.arrows ? 20 : 0;
-    ctx.beginPath(); ctx.moveTo(L, T - ext); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw + ext, T + ph); ctx.stroke();
-    if (st.arrows) {
+    const ext = st.arrows && !st.panel ? 20 : 0;
+    if (!st.panel) { ctx.beginPath(); ctx.moveTo(L, T - ext); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw + ext, T + ph); ctx.stroke(); }
+    else if (st.panel === 'minimal') { ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke(); }
+    if (st.arrows && !st.panel) {
       ctx.fillStyle = '#333';
       ctx.beginPath(); ctx.moveTo(L, T - 32); ctx.lineTo(L - 8, T - 16); ctx.lineTo(L + 8, T - 16); ctx.fill();
       ctx.beginPath(); ctx.moveTo(L + pw + 32, T + ph); ctx.lineTo(L + pw + 16, T + ph - 8); ctx.lineTo(L + pw + 16, T + ph + 8); ctx.fill();
@@ -316,18 +430,21 @@ const Charts = (() => {
 
     // y label
     ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2);
-    ctx.textAlign = 'center'; ctx.font = F(700, 28); ctx.fillStyle = '#333';
-    ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
+    ctx.textAlign = 'center'; ctx.font = F(700, 28 * TL); ctx.fillStyle = '#333';
+    ctx.fillText((spec.yLabel || '') + (spec._log ? ' (log scale)' : ''), 0, 0); ctx.restore();
 
     const nc = spec.categories.length, ns = spec.series.length;
     const cw = pw / nc;
     // line charts with real times: each timepoint at its time (e.g. 0, 2, 6, 24 h) instead of equal spacing
     const xv = spec.type === 'line' && Array.isArray(spec.xValues) && spec.xValues.length === nc && nc > 1 ? spec.xValues : null;
-    const xAt = ci => xv ? L + cw / 2 + (xv[ci] - xv[0]) / ((xv[nc - 1] - xv[0]) || 1) * (pw - cw) : L + cw * (ci + 0.5);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = F(700, 26); ctx.fillStyle = '#333';
+    // mosaic: 100% bars as wide as their group's share of the patients
+    const mos = spec.type === 'stacked' && Array.isArray(spec.widths) && spec.widths.length === nc ? (() => { const tot = spec.widths.reduce((a, b) => a + b, 0) || 1, gap = 8, avail = pw - gap * (nc - 1); let x = L;
+      return spec.widths.map(w => { const ww = avail * w / tot, o = { x, w: ww, c: x + ww / 2 }; x += ww + gap; return o; }); })() : null;
+    const xAt = ci => mos ? mos[ci].c : xv ? L + cw / 2 + (xv[ci] - xv[0]) / ((xv[nc - 1] - xv[0]) || 1) * (pw - cw) : L + cw * (ci + 0.5);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = F(700, 26 * AX); ctx.fillStyle = '#333';
     const catLines = Math.max(1, ...spec.categories.map(cat => measureLines(ctx, cat, cw - 10)));
     spec.categories.forEach((cat, i) => wrapText(ctx, cat, xAt(i), T + ph + 16, cw - 10, 30 * ts));
-    if (spec.xLabel) { ctx.font = F(700, 26); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + (catLines * 30 + 24) * ts); }
+    if (spec.xLabel) { ctx.font = F(700, 26 * TL); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + (catLines * 30 + 24) * ts); }
 
     // error bars: both directions with caps (default), without caps, or upward only from the mean (mid)
     const errBar = (x, a, b, w, mid, color) => {
@@ -347,11 +464,11 @@ const Charts = (() => {
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
         fillBar(ctx, st, color, perGroup ? ci : si, x0, y(v), w, y(Math.max(sc.min, 0)) - y(v));
-        const cx = x0 + w / 2;
+        const cx = x0 + w / 2; hit(cx, y(v), `${perGroup ? spec.categories[ci] : `${s.name} · ${spec.categories[ci]}`}: ${+v.toPrecision(4)}${spec.percent ? '%' : ''}`);
         if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4), v, color);
         else if (s.lo && s.hi) errBar(cx, s.lo[ci], s.hi[ci], Math.min(14, w / 4), v, color);
         if (spec.labels) {
-          ctx.fillStyle = '#222'; ctx.font = F(700, 24); ctx.textBaseline = 'bottom';
+          ctx.fillStyle = '#222'; ctx.font = F(700, 24 * VL); ctx.textBaseline = 'bottom';
           const dec = spec.labelDec ?? 1, top = s.err && isFinite(s.err[ci]) ? v + s.err[ci] : s.hi ? s.hi[ci] : v;
           ctx.fillText((Math.round(v * 10 ** dec) / 10 ** dec) + (spec.percent ? '%' : ''), cx, y(top) - 6);
         }
@@ -382,6 +499,7 @@ const Charts = (() => {
           return;
         }
         ctx.setLineDash([]); ctx.fillStyle = color;
+        s.values.forEach((v, ci) => hit(xs[ci], y(v), `${s.name} · ${spec.categories[ci]}: ${spec._log ? +(10 ** v).toPrecision(4) : +(+v).toPrecision(4)}`));
         if (shapes) s.values.forEach((v, ci) => marker(ctx, si, xs[ci], y(v), 12 * Math.sqrt(lw(st))));
         else s.values.forEach((v, ci) => { ctx.beginPath(); ctx.arc(xs[ci], y(v), 10, 0, Math.PI * 2); ctx.fill(); });
       });
@@ -391,14 +509,15 @@ const Charts = (() => {
       spec.categories.forEach((_, ci) => {
         let base = 0;
         spec.series.forEach((s, si) => {
-          const v = s.values[ci] || 0, x0 = L + cw * ci + (cw - w) / 2;
+          const v = s.values[ci] || 0, x0 = mos ? mos[ci].x : L + cw * ci + (cw - w) / 2, bw = mos ? mos[ci].w : w;
           if (v <= 0) return;
-          fillBar(ctx, st, pal[si % pal.length], si, x0, y(base + v), w, y(base) - y(base + v));
-          ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x0, y(base + v), w, y(base) - y(base + v));
+          fillBar(ctx, st, pal[si % pal.length], si, x0, y(base + v), bw, y(base) - y(base + v));
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x0, y(base + v), bw, y(base) - y(base + v));
+          hit(x0 + bw / 2, y(base + v / 2), `${spec.categories[ci]} · ${s.name}: ${Math.round(v * 10) / 10}%`);
           if (v >= 6) {
             ctx.font = F(700, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillStyle = st.barFill === 'outline' || st.barFill === 'hatched' ? '#222' : '#fff';
-            ctx.fillText(`${Math.round(v * 10) / 10}%`, x0 + w / 2, y(base + v / 2));
+            ctx.fillText(`${Math.round(v * 10) / 10}%`, x0 + bw / 2, y(base + v / 2));
           }
           base += v;
         });
@@ -413,7 +532,10 @@ const Charts = (() => {
         arr.forEach((v, i) => { ctx.beginPath(); ctx.arc(cx + jitter(i + 1) * gw * 0.8, y(v), 7, 0, Math.PI * 2); ctx.fill(); });
         ctx.globalAlpha = 1;
         const m = spec.median ? Stats.median(arr) : Stats.mean(arr);
-        const a = spec.median ? Stats.quantile(arr, 0.25) : m - Stats.sd(arr), b = spec.median ? Stats.quantile(arr, 0.75) : m + Stats.sd(arr);
+        // whiskers: IQR (median), the 95% CI of the mean, or ± SD
+        const h95 = spec.ci && arr.length > 1 ? jStat.studentt.inv(Stats.QU(), arr.length - 1) * Stats.sd(arr) / Math.sqrt(arr.length) : null;
+        const a = spec.median ? Stats.quantile(arr, 0.25) : h95 !== null ? m - h95 : m - Stats.sd(arr), b = spec.median ? Stats.quantile(arr, 0.75) : h95 !== null ? m + h95 : m + Stats.sd(arr);
+        hit(cx, y(m), `${spec.categories[ci]}: ${spec.median ? 'median' : spec._log ? 'geometric mean' : 'mean'} ${+(spec._log ? 10 ** m : m).toPrecision(4)}`);
         ctx.strokeStyle = '#222'; ctx.lineWidth = 5;
         ctx.beginPath(); ctx.moveTo(cx - gw / 2, y(m)); ctx.lineTo(cx + gw / 2, y(m)); ctx.stroke();
         if (isFinite(a) && isFinite(b)) errBar(cx, a, b, gw / 4);
@@ -432,16 +554,19 @@ const Charts = (() => {
         const grid = Array.from({ length: 61 }, (_, i) => mn + (mx - mn) * i / 60);
         const dens = grid.map(g => arr.reduce((a, v) => a + Math.exp(-0.5 * ((g - v) / h) ** 2), 0));
         const dmax = Math.max(...dens) || 1, wd = dd => half * dd / dmax;
+        // raincloud: the density on one side only, the box in the middle and the patients as rain on the other side
+        const rain = !!spec.rain, cxD = rain ? cx - half * 0.05 : cx;
         ctx.beginPath();
-        grid.forEach((g, i) => i ? ctx.lineTo(cx + wd(dens[i]), y(g)) : ctx.moveTo(cx + wd(dens[i]), y(g)));
-        for (let i = grid.length - 1; i >= 0; i--) ctx.lineTo(cx - wd(dens[i]), y(grid[i]));
+        grid.forEach((g, i) => i ? ctx.lineTo(cxD + wd(dens[i]) * (rain ? 1.9 : 1), y(g)) : ctx.moveTo(cxD + wd(dens[i]) * (rain ? 1.9 : 1), y(g)));
+        for (let i = grid.length - 1; i >= 0; i--) ctx.lineTo(rain ? cxD : cx - wd(dens[i]), y(grid[i]));
         ctx.closePath();
         ctx.fillStyle = shade(color, 0.7); ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 3.5 * lw(st); ctx.setLineDash(perGroup ? [] : shapes ? DASHES[si % 6] : si === 2 ? [12, 7] : []); ctx.stroke(); ctx.setLineDash([]);
-        if (spec.points) {
+        if (spec.points || rain) {
           ctx.fillStyle = color; ctx.globalAlpha = 0.5;
-          arr.forEach((v, i) => { ctx.beginPath(); ctx.arc(cx + jitter(i + 1) * half * 0.5, y(v), 5, 0, Math.PI * 2); ctx.fill(); });
+          arr.forEach((v, i) => { ctx.beginPath(); ctx.arc(rain ? cx - half * 0.55 + jitter(i + 1) * half * 0.45 : cx + jitter(i + 1) * half * 0.5, y(v), 5, 0, Math.PI * 2); ctx.fill(); });
           ctx.globalAlpha = 1;
         }
+        hit(cx, y(b.med), `${perGroup ? spec.categories[ci] : `${s.name} · ${spec.categories[ci]}`}: median ${+(spec._log ? 10 ** b.med : b.med).toPrecision(4)}`);
         const bwid = Math.max(8, half * 0.16);
         ctx.fillStyle = '#222'; ctx.fillRect(cx - bwid / 2, y(b.q3), bwid, y(b.q1) - y(b.q3));
         ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(cx, y(b.hi)); ctx.lineTo(cx, y(b.lo)); ctx.stroke();
@@ -476,6 +601,10 @@ const Charts = (() => {
           ctx.beginPath(); ctx.moveTo(cx, y(m) - r); ctx.lineTo(cx + r, y(m)); ctx.lineTo(cx, y(m) + r); ctx.lineTo(cx - r, y(m)); ctx.closePath(); ctx.fill(); ctx.stroke();
           ctx.strokeStyle = color;
         }
+        // the mean written beside the box
+        if (st.boxMeanVal) { const m = Stats.mean(arr), dec = spec.labelDec ?? 1; ctx.fillStyle = '#222'; ctx.font = F(700, 22 * VL); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.fillText(`x̄ ${(Math.round((spec._log ? 10 ** m : m) * 10 ** dec) / 10 ** dec)}`, cx + w / 2 + 6, y(m)); ctx.textAlign = 'center'; }
+        hit(cx, y(b.med), `${perGroup ? spec.categories[ci] : `${s.name} · ${spec.categories[ci]}`}: median ${+(spec._log ? 10 ** b.med : b.med).toPrecision(4)} (IQR ${+(spec._log ? 10 ** b.q1 : b.q1).toPrecision(4)}–${+(spec._log ? 10 ** b.q3 : b.q3).toPrecision(4)})`);
         ctx.lineWidth = 2.5;
         if (spec.points) {
           // every observation as a translucent dot (outliers included)
@@ -506,9 +635,75 @@ const Charts = (() => {
       fillSig(ctx, sigMark(q.p, spec.alpha, st), (x1 + x2) / 2, yy - 2);
     });
     if (st.sigLabel === 'p' || st.sigLabel === 'both') ctx.font = F(700, 22);
-    catStars.forEach((s, ci) => { if (s) fillSig(ctx, sigMark(spec.sigCat[ci], spec.alpha, st), xAt(ci), y(dataHi) - 24); });
+    if (letters) { ctx.font = F(700, 30); letters.forEach((t, ci) => { if (t) ctx.fillText(t, xAt(ci), y(dataHi) - 24); }); }
+    else catStars.forEach((s, ci) => { if (s) fillSig(ctx, sigMark(spec.sigCat[ci], spec.alpha, st), xAt(ci), y(dataHi) - 24); });
 
     drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2, ...(shapes ? { dashArr: DASHES[i % 6], marker: spec.type === 'line' ? i : null } : {}) })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
+    return c;
+  }
+
+  /* ---------- correlation heat map: r of every pair, blue (negative) – white – the palette's first colour (positive), stars for significance ---------- */
+  function heatChart(spec, paletteName, st) {
+    const pal = palette(paletteName), { c, ctx, W, H, ts, F } = setup({ ...st, aspect: st.aspect === 'wide' ? 'square' : st.aspect });
+    const n = spec.labels.length; ctx.font = F(700, 24);
+    const labW = Math.min(W * 0.3, Math.max(...spec.labels.map(l => ctx.measureText(l).width)) + 24), keyW = 120;
+    const L = labW + 20, T = 30, size = Math.min(W - L - keyW - 40, H - T - labW - 30), cs = size / n;
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), pos = hex(pal[0]), neg = [31, 78, 154];
+    const col = r => { const t = Math.min(1, Math.abs(r)), k = r >= 0 ? pos : neg; return `rgb(${k.map(v => Math.round(255 + (v - 255) * t)).join(',')})`; };
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const r = spec.matrix[i][j], x = L + j * cs, yy = T + i * cs;
+      ctx.fillStyle = isFinite(r) ? col(r) : '#F2F2F2'; ctx.fillRect(x, yy, cs, cs); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x, yy, cs, cs);
+      if (isFinite(r)) { ctx.fillStyle = Math.abs(r) > 0.6 ? '#fff' : '#222'; ctx.font = F(700, Math.min(26, cs * 0.28)); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const p = spec.pmatrix && spec.pmatrix[i][j]; ctx.fillText(i === j ? '1' : (r.toFixed(2).replace(/^(-?)0\./, '$1.') + (p <= (spec.alpha ?? 0.05) && i !== j ? stars(p, spec.alpha ?? 0.05) : '')), x + cs / 2, yy + cs / 2);
+        if (i !== j) hit(x + cs / 2, yy + cs / 2, `${spec.labels[i]} × ${spec.labels[j]}: r = ${r.toFixed(3)}${p !== undefined ? `, P = ${p < 0.001 ? '< 0.001' : p.toFixed(3)}` : ''}`); }
+    }
+    ctx.fillStyle = '#333'; ctx.font = F(700, 24);
+    spec.labels.forEach((l, i) => { ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(l, L - 10, T + (i + 0.5) * cs);
+      ctx.save(); ctx.translate(L + (i + 0.5) * cs, T + size + 10); ctx.rotate(-Math.PI / 4); ctx.textAlign = 'right'; ctx.fillText(l, 0, 0); ctx.restore(); });
+    // colour key from −1 to 1
+    const kx = L + size + 40, kh = size * 0.8, ky = T + (size - kh) / 2;
+    for (let q = 0; q < 100; q++) { ctx.fillStyle = col(1 - 2 * q / 99); ctx.fillRect(kx, ky + kh * q / 100, 28, kh / 100 + 1); }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; ctx.strokeRect(kx, ky, 28, kh); ctx.fillStyle = '#333'; ctx.font = F(600, 22); ctx.textAlign = 'left';
+    [[1, ky], [0, ky + kh / 2], [-1, ky + kh]].forEach(([v, yy]) => ctx.fillText(String(v), kx + 36, yy));
+    return c;
+  }
+  /* ---------- waterfall: each patient's change as one bar, sorted, coloured by group ---------- */
+  function waterfallChart(spec, paletteName, st) {
+    const pal = palette(paletteName), { c, ctx, W, H, ts, F } = setup(st);
+    const bars = spec.bars.filter(b => isFinite(b.v)).sort((a, b) => b.v - a.v);
+    const items = spec.groups.length > 1 ? spec.groups.map((g, i) => ({ name: g, color: pal[i % pal.length] })) : [];
+    const lm = legendMetrics(ctx, items, st, ts);
+    const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 80 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0), pw = W - L - R, ph = H - T - B;
+    const vs = bars.map(b => b.v), sc = niceScale(Math.min(0, ...vs, ...(spec.lines || [])), Math.max(0, ...vs, ...(spec.lines || [])), 6), Y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
+    ctx.font = F(600, 24); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) { if (st.grid) { gridPen(ctx, st); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]); } ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sc.step) + (spec.percent ? '%' : ''), L - 12, Y(v)); }
+    const bw = pw / Math.max(1, bars.length);
+    bars.forEach((b, i) => { const x = L + i * bw; ctx.fillStyle = pal[b.g % pal.length]; ctx.fillRect(x + bw * 0.1, Math.min(Y(b.v), Y(0)), bw * 0.8, Math.abs(Y(b.v) - Y(0))); hit(x + bw / 2, Y(b.v), `${b.id !== undefined ? b.id + ': ' : ''}${+b.v.toPrecision(4)}${spec.percent ? '%' : ''}`); });
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.moveTo(L, Y(0)); ctx.lineTo(L + pw, Y(0)); ctx.stroke();
+    (spec.lines || []).forEach(v => { ctx.strokeStyle = '#C0392B'; ctx.setLineDash([12, 8]); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]); });
+    ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.font = F(700, 28); ctx.fillStyle = '#333'; ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
+    ctx.font = F(700, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(spec.xLabel || 'Patients (sorted)', L + pw / 2, T + ph + 14);
+    drawLegend(ctx, items, 'fill', st, lm, { W, H, L, T, pw, ph, ts });
+    return c;
+  }
+  /* ---------- swimmer plot: each patient's follow-up as a horizontal bar, the event or censoring marked at its end ---------- */
+  function swimmerChart(spec, paletteName, st) {
+    const pal = palette(paletteName), { c, ctx, W, H, ts, F } = setup({ ...st, aspect: st.aspect === 'wide' ? 'standard' : st.aspect });
+    const rows = spec.rows.filter(r => isFinite(r.t)).sort((a, b) => b.t - a.t).slice(0, 80);
+    const items = [...(spec.groups.length > 1 ? spec.groups.map((g, i) => ({ name: g, color: pal[i % pal.length] })) : [])];
+    const lm = legendMetrics(ctx, items, st, ts);
+    const L = 60, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 30, B = 110 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0), pw = W - L - R, ph = H - T - B;
+    const sc = niceScale(0, Math.max(...rows.map(r => r.t), 1), 6), X = v => L + v / sc.max * pw, rh = ph / Math.max(1, rows.length);
+    ctx.font = F(600, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let v = 0; v <= sc.max + 1e-9; v += sc.step) { if (st.grid) { gridPen(ctx, st); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); } ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sc.step), X(v), T + ph + 10); }
+    rows.forEach((r, i) => { const yy = T + i * rh, col = pal[r.g % pal.length]; ctx.fillStyle = col; ctx.fillRect(L, yy + rh * 0.15, X(r.t) - L, rh * 0.7);
+      const cy = yy + rh / 2, z = Math.max(5, Math.min(12, rh * 0.45)); ctx.fillStyle = r.event ? '#C0392B' : '#222';
+      ctx.beginPath(); if (r.event) { ctx.moveTo(X(r.t) + 4, cy - z); ctx.lineTo(X(r.t) + 4 + 2 * z, cy); ctx.lineTo(X(r.t) + 4, cy + z); } else { ctx.moveTo(X(r.t) + 4, cy - z * 0.6); ctx.lineTo(X(r.t) + 4 + z * 1.4, cy); ctx.lineTo(X(r.t) + 4, cy + z * 0.6); } ctx.closePath(); ctx.fill();
+      hit(X(r.t), cy, `${r.id !== undefined ? r.id + ': ' : ''}${+r.t.toPrecision(4)} (${r.event ? 'event' : 'censored'})`); });
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+    ctx.font = F(700, 26); ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.fillText(spec.xLabel || 'Time', L + pw / 2, T + ph + 48 * ts);
+    ctx.font = F(600, 22); ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillText('▶ event (red)   ▷ censored (black)', L + pw, T + ph + 48 * ts);
+    drawLegend(ctx, items, 'fill', st, lm, { W, H, L, T, pw, ph, ts });
     return c;
   }
 
@@ -1177,5 +1372,5 @@ const Charts = (() => {
     return new Blob([jpg ? jpegDpi(b, dpi) : pngDpi(b, dpi)], { type: jpg ? 'image/jpeg' : 'image/png' });
   }
 
-  return { draw, consort, exportImage, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
+  return { draw, drawSVG, makeCanvas, hits: () => hitsOf, consort, exportImage, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
 })();

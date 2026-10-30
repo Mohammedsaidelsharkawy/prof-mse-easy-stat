@@ -241,6 +241,9 @@ const Report = (() => {
         if (apa) {
           children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, w1));
           if (f.note) children.push(para('Note. ' + f.note, { size: 20, line: 240, after: 200, align: AlignmentType.LEFT }));
+        } else if (opts.capAbove) {
+          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}), image(f.url, f.w, f.h, w1, false));
+          children.push(para('', { after: 120, line: 240 }));
         } else {
           children.push(image(f.url, f.w, f.h, w1));
           children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}));

@@ -910,6 +910,9 @@ const Analysis = (() => {
         spec: { type: 'km', xLabel: timeLabel, ...(a.ciBand ? { band: true } : {}), series: km.map((m, g) => ({ name: gl[g], steps: m.steps, censored: m.censored })), ...(one ? { legend: false } : { note: `Log-rank P ${pTxt(lr.p)}` }) } }],
       meta: { km, lr }
     };
+    // swimmer plot: every patient's follow-up, event or censored
+    if (a.swimmer) sec.figures.push({ sig: true, caption: `Follow-up of each patient (swimmer plot)`,
+      spec: { type: 'swimmer', xLabel: timeLabel, groups: one ? [] : gl, rows: T.flatMap((x, g) => x.map((r, i) => ({ t: toNum(r[a.outcome]), event: ev[g][i], g, id: cfg.idCols && cfg.idCols[0] ? r[cfg.idCols[0]] : undefined }))) } });
     if (!a.risk) return sec;
     // number at risk: at the chosen survival times, or at six even times over the follow-up
     const tMax = Math.max(...times.flat()), sc = niceScale(0, tMax, 5), rt = [];
@@ -1932,10 +1935,17 @@ const Analysis = (() => {
             // per-variable chart type overrides the global chart style
             const ct = v.chart && v.chart !== 'auto' ? v.chart : opts.chartStyle;
             const meanChart = ct === 'bar' || ct === 'line' || (ct === 'auto' && param);
-            if (ct === 'violin' || ct === 'meanci') return { sig: sigAny, vid: v.id,
-              caption: v.caption || `${v.label} of the studied groups${ct === 'meanci' ? ' (mean with 95% CI)' : ''}`,
-              spec: ct === 'violin'
-                ? { type: 'violin', categories: tps, yLabel: v.ylabel || v.label, points: opts.points, ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
+            // waterfall: each patient's change from the first to the last timepoint (% when every first value is above zero)
+            if (ct === 'waterfall') {
+              const pairsV = byGroup.flatMap((rs, g) => rs.map(r => ({ a: toNum(r[v.cols[0].col]), b: toNum(r[v.cols[v.cols.length - 1].col]), g, id: cfg.idCols && cfg.idCols[0] ? r[cfg.idCols[0]] : undefined })).filter(q => isFinite(q.a) && isFinite(q.b)));
+              const pct = pairsV.every(q => q.a > 0);
+              return { sig: sigAny, vid: v.id, caption: v.caption || `${pct ? 'Percentage change' : 'Change'} in ${lowerFirst(plain(v.label))} from ${lowerFirst(tps[0])} to ${lowerFirst(tps[tps.length - 1])} in each patient (waterfall plot)`,
+                spec: { type: 'waterfall', percent: pct, groups: k > 1 ? gl : [], yLabel: `${pct ? '% change' : 'Change'} in ${plain(v.label)}`, bars: pairsV.map(q => ({ v: pct ? 100 * (q.b - q.a) / q.a : q.b - q.a, g: q.g, id: q.id })) } };
+            }
+            if (ct === 'violin' || ct === 'rain' || ct === 'meanci') return { sig: sigAny, vid: v.id,
+              caption: v.caption || `${v.label} of the studied groups${ct === 'meanci' ? ' (mean with 95% CI)' : ct === 'rain' ? ' (raincloud plot)' : ''}`,
+              spec: ct !== 'meanci'
+                ? { type: 'violin', ...(ct === 'rain' ? { rain: true } : {}), categories: tps, yLabel: v.ylabel || v.label, points: opts.points, ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, data: per.map(gv => gv[i]) })) }
                 : { type: 'line', errKind: 'ci', categories: tps, yLabel: v.ylabel || v.label, xLabel: 'Time', ...marks, series: withN(gl, gN).map((g, i) => ({ name: g, values: results.map(r => r.desc[i].mean), err: results.map(r => ciHalf(r.desc[i])) })) } };
             return {
             sig: sigAny, vid: v.id,
@@ -2187,7 +2197,7 @@ const Analysis = (() => {
         const brackets = x => {
           if (!opts.sigMarks || !(x.p <= alpha)) return {};
           if (k === 2) return { sig: [{ i: 0, j: 1, p: x.p }], alpha };
-          return x.pairs ? { sig: x.pairs.filter(q => q.p <= alpha).map(q => ({ i: q.i, j: q.j, p: q.p })), alpha } : {};
+          return x.pairs ? { sig: x.pairs.filter(q => q.p <= alpha).map(q => ({ i: q.i, j: q.j, p: q.p })), alpha, ...(opts.sigLabel === 'letters' ? { letters: compactLetters(k, x.pairs.filter(q => q.p <= alpha)) } : {}) } : {};
         };
         const figures = res.filter(r => r.v.chart !== 'none').map(r => {
           const f = { sig: (r.num || r.cat).p <= alpha, vid: r.v.id, ...figureFor(r) };
@@ -2207,8 +2217,10 @@ const Analysis = (() => {
                 spec: { type: 'bar', integer: true, categories: edges.map(e => `${fmt(e, d)}-${fmt(e + sc.step, d)}`), xLabel: r.v.label, yLabel: 'Number of patients',
                   series: withN(gl, r.num.desc.map(x => x.n)).map((g, i) => { const n = new Array(edges.length).fill(0); r.gv[i].forEach(v => n[bin(v)]++); return { name: g, values: n }; }) } };
             }
-            if (ct === 'violin') return { caption: `${r.v.label} of the studied groups`,
-              spec: { type: 'violin', perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
+            if (ct === 'violin' || ct === 'rain') return { caption: `${r.v.label} of the studied groups${ct === 'rain' ? ' (raincloud plot)' : ''}`,
+              spec: { type: 'violin', ...(ct === 'rain' ? { rain: true } : {}), perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
+            if (ct === 'dotci') return { caption: `${r.v.label} of the studied groups (every patient, mean with 95% CI)`,
+              spec: { type: 'dot', ci: true, perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
             if (ct === 'meanci') return { caption: `${r.v.label} of the studied groups (mean with 95% CI)`,
               spec: { type: 'line', noLine: true, perGroup: true, errKind: 'ci', categories: cats, yLabel: r.v.ylabel || r.v.label, ...brackets(r.num),
                 series: [{ name: r.v.label, values: r.num.desc.map(x => x.mean), err: r.num.desc.map(ciHalf) }] } };
@@ -2228,6 +2240,10 @@ const Analysis = (() => {
           if (ct === 'hbar') return {
             caption: `${r.v.label} of the studied groups`,
             spec: { type: 'hbar', categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
+          };
+          if (ct === 'mosaic') return {
+            caption: `${r.v.label} of the studied groups (mosaic plot: bar widths show the group sizes)`,
+            spec: { type: 'stacked', widths: c.ns, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
           if (ct === 'stacked' || ct === 'pie' || ct === 'piefull') return {
             caption: `${r.v.label} of the studied groups`,
@@ -2437,6 +2453,11 @@ const Analysis = (() => {
       return { caption: `Correlation between ${lowerFirst(plain(items[q.i].label))} and ${lowerFirst(plain(items[q.j].label))}`,
         spec: { type: 'scatter', x: xs, y: ys, xLabel: items[q.i].label, yLabel: items[q.j].label, note: `${coef(q)}, P ${pTxt(q.p)}` } };
     });
+    // optional heat map of every coefficient (step 7)
+    if (cfg.options && cfg.options.figHeat && m >= 3 && !o.target) {
+      const M = items.map((_, i) => items.map((_, j) => i === j ? 1 : (q => q ? q.r : NaN)(get(i, j)))), Pm = items.map((_, i) => items.map((_, j) => i === j ? NaN : (q => q ? q.p : NaN)(get(i, j))));
+      figures.unshift({ sig: true, caption: 'Heat map of the correlation coefficients', spec: { type: 'heat', labels: items.map(it => plain(it.label)), matrix: M, pmatrix: Pm, alpha } });
+    }
     return { kind: 'correlation', title, head, rows: trows,
       footnote: f.join(', ') + '.', comment: sent.join(' '), figures, meta: { pairs: pr, items: items.map(it => it.label) } };
   }
@@ -2755,6 +2776,32 @@ const Analysis = (() => {
     if (r.abstract) r.abstract = trimWords(fix(r.abstract), +o.absMaxWords || 0);
     return r;
   }
-  const run2 = (data, cfg) => polish(relabelCI(run(data, cfg), cfg.options.confLevel), cfg.options), explore2 = (data, cfg, xo) => relabelCI(explore(data, cfg, xo), cfg.options.confLevel);
+  // per-figure settings of step 7 (log scale, shape), and the forest plot of every effect (standardized, two groups)
+  function figExtras(r, cfg) {
+    if (!r || !r.sections) return r;
+    r.sections.forEach(sec => sec.figures.forEach(f => { const v = f.vid && cfg.variables.find(x => x.id === f.vid || String(f.vid).startsWith(x.id + '_')); if (!v) return;
+      if (v.logY) f.spec.logY = true; if (v.aspect) f.spec.aspect = v.aspect; }));
+    if (cfg.options.figForestAll) {
+      const rowsF = [];
+      r.sections.filter(s => s.kind === 'single' && s.meta && s.meta.res).forEach(s => s.meta.res.forEach(x => {
+        if (x.gv && x.gv.length !== 2) return;
+        if (x.num) { const [a, b] = x.num.desc; if (!(a.n > 1 && b.n > 1)) return; const N = a.n + b.n, sp = Math.sqrt(((a.n - 1) * a.sd ** 2 + (b.n - 1) * b.sd ** 2) / (N - 2)), g = (1 - 3 / (4 * N - 9)) * (a.mean - b.mean) / sp, se = Math.sqrt(N / (a.n * b.n) + g * g / (2 * N));
+          if (isFinite(g)) rowsF.push({ label: plain(x.v.label), est: g, lo: g - S.ZC() * se, hi: g + S.ZC() * se, p: x.num.p, kind: 'Hedges g' }); }
+        else if (x.cat && x.cat.table.length === 2) { let [[A, C]] = x.cat.table, [n1, n2] = x.cat.ns, B = n1 - A, D = n2 - C; if ([A, B, C, D].some(v => v === 0)) { A += 0.5; B += 0.5; C += 0.5; D += 0.5; }
+          const lor = Math.log(A * D / (B * C)), se = Math.sqrt(1 / A + 1 / B + 1 / C + 1 / D), k2 = Math.sqrt(3) / Math.PI;
+          if (isFinite(lor)) rowsF.push({ label: `${plain(x.v.label)} (${x.levels[0]})`, est: lor * k2, lo: (lor - S.ZC() * se) * k2, hi: (lor + S.ZC() * se) * k2, p: x.cat.p, kind: 'from the OR' }); }
+      }));
+      if (rowsF.length >= 2) {
+        const gl = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false).map(g => cfg.groupLabels[g] || g), F2 = v => fmt(v, 2), al = cfg.options.alpha;
+        r.sections.push({ kind: 'forestAll', title: `Standardized differences between ${gl[0]} and ${gl[1]}`, head: ['Variable', 'Standardized difference (95% CI)', 'Measure', 'P value'],
+          rows: rowsF.map(q => [{ t: [q.label], b: true }, { t: [`${F2(q.est)} (${F2(q.lo)} to ${F2(q.hi)})`] }, { t: [q.kind] }, { t: [fmtP(q.p, al)] }]),
+          footnote: `Positive values are higher in ${gl[0]}; binary variables are converted from the log odds ratio (× √3 / π, Chinn 2000).`, comment: '',
+          figures: [{ sig: true, caption: `Forest plot of the standardized differences between ${gl[0]} and ${gl[1]}`, spec: { type: 'forest', ref: 0, xLabel: `Standardized difference (${gl[0]} − ${gl[1]})`, valHead: 'd (95% CI)', alpha: al,
+            rows: rowsF.map(q => ({ label: q.label, est: q.est, lo: q.lo, hi: q.hi, p: q.p, text: `${F2(q.est)} (${F2(q.lo)} to ${F2(q.hi)})` })) } }], meta: {} });
+      }
+    }
+    return r;
+  }
+  const run2 = (data, cfg) => polish(figExtras(relabelCI(run(data, cfg), cfg.options.confLevel), cfg), cfg.options), explore2 = (data, cfg, xo) => relabelCI(explore(data, cfg, xo), cfg.options.confLevel);
   return { run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();

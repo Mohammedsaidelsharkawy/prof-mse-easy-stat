@@ -197,6 +197,8 @@ table.rt td.s{font-size:.9em}
 table.rt tr.band td{background:#F2F2F2}
 table.rt tr td.hl{background:#FFF2CC}
 table.rt td.left{text-align:left}
+.fig-tip{display:none;position:absolute;pointer-events:none;background:#1C1648;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:5}
+label.cc{display:inline-flex;flex-direction:column;align-items:center;font-size:11px;gap:2px}
 .gloss{margin:6px 0;padding:8px 10px;background:var(--lav);border-radius:8px;font-size:13px}.gloss dt{font-weight:700;margin-top:4px}.gloss dd{margin:0 0 0 12px}
 table.rt.rt-compact th,table.rt.rt-compact td{padding:2px 5px}
 table.rt.rt-roomy th,table.rt.rt-roomy td{padding:9px 10px}
@@ -940,7 +942,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Bar width</label><select id="optBarWidth"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="wide">Wide</option></select></div>
         <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
         <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
-        <div><label class="f">Significance on figures</label><select id="optSigLabel"><option value="stars" selected>Stars (*, **, ***)</option><option value="p">Exact P values (P = 0.013)</option><option value="both">Stars and P values</option></select></div>
+        <div><label class="f">Significance on figures</label><select id="optSigLabel"><option value="stars" selected>Stars (*, **, ***)</option><option value="p">Exact P values (P = 0.013)</option><option value="both">Stars and P values</option><option value="letters">Letters a, b, c (3+ groups)</option></select></div>
+        <div><label class="f">Panel style</label><select id="optPanelStyle"><option value="classic" selected>Classic (axes with arrows)</option><option value="minimal">Minimal (no axis lines)</option><option value="grey">Grey background, white grid</option></select></div>
+        <div><label class="f">Axis numbers</label><select id="optAxisSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
+        <div><label class="f">Axis titles</label><select id="optTitleSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
+        <div><label class="f">Value labels</label><select id="optValueSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option></select></div>
         <div><label class="f">Groups told apart by</label><select id="optSeriesStyle"><option value="colour" selected>Colour</option><option value="shapes">Colour, marker shapes and line patterns (greyscale print)</option></select></div>
         <div><label class="f">Line weight</label><select id="optLineWeight"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="thick">Thick</option></select></div>
         <div><label class="f">Error bars</label><select id="optErrBars"><option value="both" selected>Both directions, with caps</option><option value="nocap">Both directions, no caps</option><option value="up">Upward only (from the mean)</option></select></div>
@@ -966,6 +972,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
           <label class="check"><input type="checkbox" id="optBoxMean"><span><b>Mean marker</b> (◆) on box plots</span></label>
+          <label class="check"><input type="checkbox" id="optBoxMeanVal"><span><b>Mean value</b> written beside each box</span></label>
+          <label class="check"><input type="checkbox" id="optFigPanels"><span><b>Multi-panel figures</b> — the figures of a table joined as panels A, B, C (Word)</span></label>
+          <label class="check"><input type="checkbox" id="optFigForestAll"><span><b>Forest plot of every effect</b> — standardized differences of all variables, two groups</span></label>
+          <label class="check"><input type="checkbox" id="optFigHeat"><span><b>Correlation heat map</b> with the correlation table (step 4)</span></label>
+          <label class="check"><input type="checkbox" id="optCapAbove"><span><b>Captions above the figures</b> in Word</span></label>
           <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
           <label class="check"><input type="checkbox" id="optFigFrame"><span><b>Frame</b> around each figure</span></label>
           <label class="check"><input type="checkbox" id="optFigNotes" checked><span><b>Explain the symbols in the caption</b> — what *, **, ***, the bars, error bars, boxes and markers show</span></label>
@@ -981,7 +992,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div class="tbl-wrap" style="max-height:560px"><table class="t" id="figTbl"></table></div></div>
         <div>
           <div class="row"><label class="f" style="margin:0">Preview</label><select id="figPrevVar" style="flex:1"></select></div>
-          <div class="fig-prev"><canvas id="figPrevCanvas"></canvas><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevCopy" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="figPrevPng" type="button">⬇ Export this figure…</button></div></div>
+          <div class="fig-prev" style="position:relative"><canvas id="figPrevCanvas"></canvas><div id="figPrevTip" class="fig-tip"></div><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevCopy" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="figPrevPng" type="button">⬇ Export this figure…</button></div></div>
         </div>
       </div>
     </div>
@@ -1162,7 +1173,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="row" style="margin-top:10px"><b id="fxCount"></b><span class="spacer"></span><button type="button" class="btn ghost small" id="fxAll">Select all</button> <button type="button" class="btn ghost small" id="fxNone">Clear</button></div>
     <div id="fxList"></div>
     <div class="fx-grid">
-      <div><label class="f">Format</label><select id="fxFormat"><option value="png">PNG (lossless)</option><option value="jpg">JPEG</option><option value="tiff">TIFF (journal submission)</option></select></div>
+      <div><label class="f">Format</label><select id="fxFormat"><option value="png">PNG (lossless)</option><option value="jpg">JPEG</option><option value="tiff">TIFF (journal submission)</option><option value="svg">SVG (vector, scalable)</option></select></div>
+      <div><label class="f">Text size (journal)</label><select id="fxText"><option value="0" selected>As on screen</option><option value="8">8 pt at this width</option><option value="10">10 pt at this width</option></select></div>
       <div><label class="f">Resolution</label><select id="fxDpi"><option value="96">96 dpi (screen)</option><option value="150">150 dpi</option><option value="300" selected>300 dpi (print)</option><option value="600">600 dpi</option><option value="900">900 dpi</option><option value="1200">1200 dpi (line art)</option></select></div>
       <div><label class="f">Width</label><select id="fxWidth"><option value="report">As in the Word report</option><option value="8.5">8.5 cm (single column)</option><option value="12">12 cm (1.5 column)</option><option value="17.4">17.4 cm (double column)</option></select></div>
       <div><label class="f">Colour</label><select id="fxColor"><option value="color">Colour</option><option value="grey">Greyscale</option></select></div>
