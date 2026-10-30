@@ -3696,6 +3696,86 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       s.figures = [merged, ...s.figures.filter(f => !f.url)];
     }
   }
+  /* ---------- direct PDF: the report laid out as HTML on A4 pages, each page drawn to an image, written as a PDF ---------- */
+  const PDF_W = 794, PDF_H = 1123, PDF_M = 68; // A4 at 96 px per inch, margins
+  function pdfBlocks(r, plan) {
+    const o = effOptions(), lab = n => Report.figLabel(n, o.captionStyle), B = [], P = (t, cls = 'p') => t && B.push({ html: `<div class="${cls}">${esc(t)}</div>` });
+    const img = (url, w, h, cap) => B.push({ html: `<div class="fig"><img src="${url}" style="width:${Math.min(560, w)}px;height:${Math.round(Math.min(560, w) * h / w)}px"><div class="cap">${esc(cap)}</div></div>`, keep: true });
+    if (state.cfg.study.title) B.push({ html: `<div class="title">${esc(state.cfg.study.title)}</div>` });
+    if (!isOut('methods') && r.methods) { B.push({ html: '<div class="h1">Statistical Analysis</div>', head: true }); P(r.methods); }
+    B.push({ html: '<div class="h1">Results</div>', head: true });
+    if (plan.consortOn && r.consort) { P(r.intro); img(r.consort.url, 560, 560 * r.consort.h / r.consort.w, `${lab(plan.consortNum)} ${r.flowCaption}`); }
+    if (plan.paper && r.narrative) r.narrative.split(/\n\s*\n/).forEach(t => P(t.trim()));
+    r.sections.forEach(s => {
+      if (plan.tabNum.get(s)) {
+        if (s.comment && o.commentPlace === 'before' && !plan.paper) P(s.comment);
+        B.push({ html: `<div class="cap tcap">Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : ':'} ${esc(s.title)}</div>`, head: true });
+        B.push({ table: s }); B.push({ html: `<div class="foot">${esc(s.footnote || '')}</div>` });
+        if (s.comment && (o.commentPlace || 'after') === 'after' && !plan.paper) P(s.comment);
+      }
+      s.figures.forEach(f => { const n = plan.figNum.get(f); if (n && f.url) img(f.url, 560, 560 * f.h / f.w, `${lab(n)} ${f.caption}${f.note ? ' ' + f.note : ''}`); });
+    });
+    if (r.summary && !isOut('summary')) { B.push({ html: '<div class="h1">Summary of key findings</div>', head: true }); P(r.summary); }
+    return B;
+  }
+  async function buildPdf() {
+    syncEdits(); const r = state.result, plan = exportPlan(r), o = effOptions();
+    const css = [...document.styleSheets].flatMap(sh => { try { return [...sh.cssRules]; } catch (e) { return []; } }).map(x => x.cssText).filter(t => /table\.rt|\.rt[ .{]/.test(t)).join('\n');
+    const font = o.font || 'Times New Roman', W = PDF_W - 2 * PDF_M, H = PDF_H - 2 * PDF_M;
+    const style = `${css} .pg{width:${W}px;font-family:'${font}',serif;font-size:15px;line-height:1.5;color:#000}.pg .p{text-align:justify;margin:0 0 10px}.pg .h1{font-weight:700;font-size:20px;margin:6px 0 10px}.pg .title{font-weight:700;font-size:22px;text-align:center;margin:0 0 16px}
+      .pg .cap{font-weight:700;margin:4px 0 6px}.pg .tcap{text-align:${{ left: 'left', center: 'center' }[o.tableCapAlign] || 'justify'}}.pg .foot{font-size:12px;margin:4px 0 12px}.pg .fig{text-align:center;margin:6px 0 12px}.pg .fig .cap{font-size:13px}.pg table.rt{width:100%;font-size:12px}`;
+    // measure each block at the page width; tables are cut into row groups that fit
+    const probe = document.createElement('div'); probe.style.cssText = 'position:absolute;left:-10000px;top:0'; probe.innerHTML = `<style>${style}</style><div class="pg"></div>`; document.body.appendChild(probe);
+    const pg = probe.querySelector('.pg'), measure = html => { pg.innerHTML = html; return pg.firstElementChild ? pg.firstElementChild.getBoundingClientRect().height + 12 : 0; };
+    const items = [];
+    for (const b of pdfBlocks(r, plan)) {
+      if (!b.table) { items.push({ html: b.html, h: measure(b.html), head: b.head }); continue; }
+      const s = b.table, rows = s.rows, blocks = []; let cover = 0;
+      rows.forEach(rw => { if (cover === 0) blocks.push([]); blocks[blocks.length - 1].push(rw); cover = Math.max(cover - 1, ...rw.map(c => (c.rs || 1) - 1)); });
+      let cur = [];
+      const flush = () => { if (!cur.length) return; const html = htmlTable(s.head, cur); items.push({ html, h: measure(html) }); cur = []; };
+      blocks.forEach(bk => { const trial = htmlTable(s.head, [...cur, ...bk]); if (cur.length && measure(trial) > H * 0.92) flush(); cur.push(...bk); });
+      flush();
+    }
+    probe.remove();
+    // pack into pages: a heading or caption stays with what follows it
+    const pages = [[]]; let used = 0;
+    items.forEach((it, i) => { const nxt = it.head && items[i + 1] ? items[i + 1].h : 0;
+      if (pages[pages.length - 1].length && used + it.h + nxt > H) { pages.push([]); used = 0; } pages[pages.length - 1].push(it); used += it.h; });
+    // draw every page: HTML in an SVG foreignObject, at 2× for sharp text, as JPEG
+    const jpgs = [];
+    for (let i = 0; i < pages.length; i++) {
+      const body = pages[i].map(it => it.html).join('') + `<div style="position:absolute;left:0;right:0;bottom:${-PDF_M + 24}px;text-align:center;font-size:12px">${i + 1}</div>`;
+      const html = `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${PDF_W}px;height:${PDF_H}px;background:#fff;box-sizing:border-box;padding:${PDF_M}px"><style>${style}</style><div class="pg" style="position:relative;height:${H}px">${body}</div></div>`;
+      const xhtml = new XMLSerializer().serializeToString(new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html').body.firstChild.firstChild);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PDF_W}" height="${PDF_H}"><foreignObject width="100%" height="100%">${xhtml}</foreignObject></svg>`;
+      const im = await new Promise((ok, bad) => { const x = new Image(); x.onload = () => ok(x); x.onerror = () => bad(new Error('page ' + (i + 1) + ' could not be drawn')); x.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); });
+      const c = document.createElement('canvas'); c.width = PDF_W * 2; c.height = PDF_H * 2; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.scale(2, 2); x.drawImage(im, 0, 0);
+      jpgs.push({ bytes: new Uint8Array(await (await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.88))).arrayBuffer()), w: c.width, h: c.height });
+    }
+    return pdfFromJpegs(jpgs, state.cfg.study.title || 'Statistical report');
+  }
+  // a minimal PDF: one JPEG image (DCTDecode) filling each A4 page
+  function pdfFromJpegs(pages, title) {
+    const enc = new TextEncoder(), parts = [], offs = []; let len = 0;
+    const add = b => { const u = typeof b === 'string' ? enc.encode(b) : b; parts.push(u); len += u.length; };
+    const obj = (n, body) => { offs[n] = len; add(`${n} 0 obj\n`); body(); add('\nendobj\n'); };
+    add('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+    const n = pages.length, kids = pages.map((_, i) => `${3 + i * 3} 0 R`).join(' '), safe = String(title).replace(/[()\\]/g, ' ').replace(/[^\x20-\x7E]/g, '');
+    obj(1, () => add('<< /Type /Catalog /Pages 2 0 R >>'));
+    obj(2, () => add(`<< /Type /Pages /Kids [${kids}] /Count ${n} >>`));
+    pages.forEach((p, i) => { const pn = 3 + i * 3, cn = pn + 1, im = pn + 2, content = `q 595.28 0 0 841.89 0 0 cm /Im0 Do Q`;
+      obj(pn, () => add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 ${im} 0 R >> >> /Contents ${cn} 0 R >>`));
+      obj(cn, () => { add(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`); });
+      obj(im, () => { add(`<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.bytes.length} >>\nstream\n`); add(p.bytes); add('\nendstream'); }); });
+    const info = 3 + n * 3; obj(info, () => add(`<< /Title (${safe}) /Producer (Prof MSE Easy Stat) >>`));
+    const xref = len; add(`xref\n0 ${info + 1}\n0000000000 65535 f \n`); for (let k = 1; k <= info; k++) add(`${String(offs[k]).padStart(10, '0')} 00000 n \n`);
+    add(`trailer\n<< /Size ${info + 1} /Root 1 0 R /Info ${info} 0 R >>\nstartxref\n${xref}\n%%EOF`);
+    return new Blob(parts, { type: 'application/pdf' });
+  }
+  $('#btnPdf').onclick = async () => { if (!state.result) return; busy(true); await new Promise(r => setTimeout(r, 30));
+    try { const blob = await buildPdf(); saveUrl(URL.createObjectURL(blob), `${baseName()} - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.pdf`); toast('PDF saved'); }
+    catch (err) { console.error(err); toast('PDF failed: ' + err.message); } busy(false); };
   // a table as a picture: its HTML with the page's table styles, drawn through an SVG foreignObject at 2× resolution
   function tableImage(tbl, cap, foot) {
     const css = [...document.styleSheets].flatMap(sh => { try { return [...sh.cssRules]; } catch (e) { return []; } }).map(r => r.cssText).filter(t => /table\.rt|\.rt[ .{]/.test(t)).join('\n');
