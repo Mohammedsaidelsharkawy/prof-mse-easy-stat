@@ -197,6 +197,7 @@ table.rt td.s{font-size:.9em}
 table.rt tr.band td{background:#F2F2F2}
 table.rt tr td.hl{background:#FFF2CC}
 table.rt td.left{text-align:left}
+.ar-row{margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:8px}.ar-row.flag{border-color:var(--warn)}.ar-en{font-size:12px;color:var(--muted);margin:4px 0}.ar-row textarea{width:100%;min-height:60px;font-size:15px;font-family:'Times New Roman',Arial,serif}
 .xp-dash{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.xp-dash div{background:var(--lav);border-radius:10px;padding:8px 14px;display:flex;flex-direction:column;min-width:96px}.xp-dash b{font-size:20px}.xp-dash span{font-size:12px;color:var(--muted)}
 .xp-tools{display:inline-flex;gap:2px;margin-left:6px}.xp-tools .btn{padding:2px 6px}.xp-lab{margin:8px 0;padding:8px;border:1px dashed var(--line);border-radius:10px}.xp-labgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}.xp-lt h5{margin:0 0 4px}
 td.xp-hit{background:#FFF2A8!important}.xp-note textarea{min-height:50px}.xp-hist{margin:0;padding-left:18px;font-size:12px}
@@ -1210,6 +1211,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div class="row" style="gap:8px;margin-top:8px;align-items:center"><label class="f" style="margin:0">Your Word template (.dotx / .docx)</label><input type="file" id="tplFile" accept=".dotx,.docx,.dotm,.docm" style="width:auto">
           <button class="btn ghost small" id="tplClear" type="button">✕</button><span class="legend-note" id="tplName">No template — the report's own styles</span></div>
         <p class="legend-note" style="margin:2px 0 0">The Word file takes the template's styles (Normal, Heading 1 / 2 …), theme fonts and colours, and page size and margins. Kept for this session only.</p>
+        <div class="row" style="gap:10px;margin-top:8px;align-items:center"><label class="check" style="margin:0"><input type="checkbox" data-rx="bilingual"><span><b>Bilingual report (English + Arabic)</b> — an Arabic paragraph after each English one, Arabic table headings, captions and footnotes</span></label>
+          <button class="btn ghost small" id="arPrev" type="button">🌐 Arabic text — check and edit…</button></div>
+        <div id="arOut"></div>
         <label class="f" style="margin-top:6px">Appendix</label>
         <div class="row" style="gap:14px"><label class="check" style="margin:0"><input type="checkbox" data-rx="appCodebook"><span>Codebook of the variables</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appPlan"><span>Test plan (test of each variable)</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appFull"><span>Every test of each variable (step 10)</span></label></div>
         <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">

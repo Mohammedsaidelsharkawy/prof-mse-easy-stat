@@ -3232,7 +3232,7 @@
   };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: false, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, appFull: false, format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
+  const DEFAULT_REPORT = { bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: false, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, appFull: false, format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
   // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
   const JOURNAL_STYLES = {
     none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
@@ -3696,6 +3696,39 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       s.figures = [merged, ...s.figures.filter(f => !f.url)];
     }
   }
+  /* ---------- bilingual report: Arabic by rules (arabic.js), with the Arabic labels of step 2 ⚙ and of the groups, and your edits ---------- */
+  function arLabels() {
+    const cfg = state.cfg, m = new Map(), lf = t => t ? t[0].toLowerCase() + t.slice(1) : t, plainL = t => String(t).replace(/ \([^)]*\)$/, '');
+    cfg.variables.forEach(v => { const ar = (v.labelAr || '').trim(); [v.label, plainL(v.label)].forEach(l => { [l, lf(l)].forEach(x => { if (x && !m.has(x)) m.set(x, ar || x); }); });
+      (v.cols || []).forEach(c => { const tl = c.label || cfg.tpLabels[c.tp]; if (tl && !m.has(tl)) m.set(tl, tl); }); });
+    const ga = report().groupAr || {};
+    activeGroups().forEach(g => { const l = cfg.groupLabels[g] || g; m.set(l, (ga[g] || '').trim() || l); });
+    return m;
+  }
+  function arApi() {
+    const map = arLabels(), ed = (state.result && state.result.arEdits) || {};
+    return { text: t => ed[t] !== undefined ? ed[t] : Ar.translate(t, map).text, head: t => Ar.head(t, map), caption: t => Ar.caption(t, map), footnote: t => Ar.footnote(t, map), heading: t => Ar.heading(t) };
+  }
+  $('#arPrev').onclick = () => {
+    if (!state.result) return; syncEdits(); const r = state.result, map = arLabels(), ed = r.arEdits = r.arEdits || {}, rpa = report(), ga = rpa.groupAr || (rpa.groupAr = {});
+    const paras = [['Statistical analysis', r.methods], ['Flowchart text', r.intro], ...(r.narrative ? r.narrative.split(/\n\s*\n/).map(t => ['Results text', t.trim()]) : []), ...r.sections.map(s => [s.title, s.comment]), ['Summary', r.summary]].filter(x => x[1]);
+    let bad = 0;
+    const rows = paras.map(([where, en]) => { const tr = Ar.translate(en, map), flag = tr.bad > 0 && ed[en] === undefined; if (flag) bad++;
+      return `<div class="ar-row${flag ? ' flag' : ''}"><div class="legend-note"><b>${esc(where)}</b>${flag ? ` · <span class="chip warn">${tr.bad} of ${tr.total} sentence${tr.total > 1 ? 's' : ''} partly in English — please check</span>` : ''}</div>
+        <div class="ar-en">${esc(en)}</div><textarea dir="rtl" lang="ar" data-aren="${esc(en)}">${esc(ed[en] !== undefined ? ed[en] : tr.text)}</textarea></div>`; }).join('');
+    $('#arOut').innerHTML = `<div class="report-sec"><b>Arabic names of the groups</b> (used in the Arabic text): ${activeGroups().map(g => `<label style="display:inline-flex;gap:4px;align-items:center;margin:4px 10px 4px 0">${esc(state.cfg.groupLabels[g] || g)} <input type="text" dir="rtl" data-grpar="${esc(g)}" value="${esc(ga[g] || '')}" style="width:150px"></label>`).join('')}
+      <p class="legend-note">Arabic names of the variables come from step 2 ⚙. The Arabic below is written by rules from the English; edit any paragraph — your text is used in the Word file. ${bad ? `<b>${bad} paragraph${bad > 1 ? 's' : ''}</b> still hold English words (often your own reasons or category names).` : 'Every paragraph was translated.'}</p>
+      <button class="btn ghost small" id="arRedo" type="button">↻ Translate again (drops your edits)</button>${rows}</div>`;
+  };
+  $('#arOut').addEventListener('input', e => {
+    const en = e.target.dataset.aren, g = e.target.dataset.grpar;
+    if (en !== undefined && state.result) { (state.result.arEdits = state.result.arEdits || {})[en] = e.target.value; e.target.closest('.ar-row').classList.remove('flag'); }
+    if (g !== undefined) { const rpa = report(), ga = rpa.groupAr || (rpa.groupAr = {}); if (e.target.value.trim()) ga[g] = e.target.value.trim(); else delete ga[g]; }
+  });
+  // a new group name refreshes the Arabic paragraphs that were not edited (the boxes stay where they are)
+  $('#arOut').addEventListener('change', e => { if (e.target.dataset.grpar === undefined || !state.result) return; const map = arLabels(), ed = state.result.arEdits || {};
+    document.querySelectorAll('#arOut [data-aren]').forEach(t => { if (ed[t.dataset.aren] === undefined) t.value = Ar.translate(t.dataset.aren, map).text; }); });
+  $('#arOut').addEventListener('click', e => { if (e.target.id === 'arRedo' && state.result) { state.result.arEdits = {}; $('#arPrev').onclick(); } });
   /* ---------- your own Word template (.dotx / .docx): its styles, theme fonts and colours, and page setup ---------- */
   async function applyTemplate(blob, tplBytes) {
     const CFB = XLSX.CFB, doc = CFB.read(new Uint8Array(await blob.arrayBuffer()), { type: 'array' }), tpl = CFB.read(tplBytes, { type: 'array' });
@@ -3893,6 +3926,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const o = effOptions(), rp = report(), r0 = state.result, plan0 = r0 ? exportPlan(r0) : null;
     const extras = { cover: rp.cover ? { candidate: rp.coverCandidate, supervisor: rp.coverSupervisor, dept: rp.coverDept, date: rp.coverDate } : null, toc: !!rp.toc, wordStyles: !!rp.wordStyles,
       headNum: !!rp.headNum, lineNumbers: !!rp.lineNumbers, twoCol: !!rp.twoCol, watermark: String(rp.watermark || '').trim(), abbrFoot: !!rp.abbrFoot,
+      ar: rp.bilingual ? arApi() : null,
       template: !!state.wordTemplate, tplPage: state.wordTemplate && state.wordTemplate.page,
       refs: rp.refs && r0 ? METHOD_REFS.filter(([re]) => re.test(r0.methods || '')).map(x => x[1]) : null, appendix: r0 ? appendixTables(r0, plan0) : [] };
     return { ...extras, numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',

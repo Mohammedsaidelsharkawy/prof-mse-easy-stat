@@ -65,6 +65,12 @@ const Report = (() => {
       children: [new TextRun({ text, bold: true, size: 26, font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
     });
   }
+  // bilingual report: an Arabic paragraph, right to left, after its English one
+  function arPara(text, o = {}) {
+    const { Paragraph, TextRun, AlignmentType } = D(), sz = o.size || 24;
+    return new Paragraph({ bidirectional: true, alignment: o.center ? AlignmentType.CENTER : AlignmentType.JUSTIFIED, keepNext: o.keepNext, spacing: { after: o.after ?? 160, line: o.line ?? LINE, before: o.before ?? 0 },
+      children: [new TextRun({ text, rightToLeft: true, bold: o.bold, boldComplexScript: o.bold, size: sz, sizeComplexScript: sz, font: { ascii: BODY_FONT, hAnsi: BODY_FONT, cs: BODY_FONT }, color: o.color })] });
+  }
   // abbreviations explained in Word footnotes at their first use in the statistical analysis
   const ABBR_FOOT = { SD: 'standard deviation', IQR: 'interquartile range', CI: 'confidence interval', ANOVA: 'analysis of variance', OR: 'odds ratio', RR: 'relative risk', HR: 'hazard ratio', AUC: 'area under the curve',
     ROC: 'receiver operating characteristic', SPSS: 'Statistical Package for the Social Sciences', ICC: 'intraclass correlation coefficient', SEM: 'standard error of the mean', LMM: 'linear mixed model', NRI: 'net reclassification improvement', IDI: 'integrated discrimination improvement' };
@@ -108,7 +114,7 @@ const Report = (() => {
     const isP = name => /^(p value|p|p-value)$/i.test(name);
     headCells.forEach((h, i) => {
       for (let s = 0; s < (h.span || 1); s++) {
-        const name = h.t || '';
+        const name = (Array.isArray(h.t) ? h.t[0] : h.t) || '';
         // very wide tables (e.g. ROC) need roomier label and P value columns
         const wide = nCols > 7;
         weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : isP(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
@@ -225,6 +231,9 @@ const Report = (() => {
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [], footnotes = {};
     TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE;
+    // bilingual: AR gives the Arabic of a paragraph, heading, caption, footnote or column heading
+    const AR = opts.ar || null, arAfter = (text, o) => { if (AR && text) { const t = AR.text(text); if (t) children.push(arPara(t, o)); } };
+    const H1 = (t, b) => heading(AR && AR.heading(t) ? `${t} — ${AR.heading(t)}` : t, b);
     // thesis chapters number as "Table 4.1" / "Figure 4.1"; a journal paper uses sentence-case headings and one Results narrative
     const pre = opts.numberPrefix || '';
     // cover page: title, candidate, supervisor(s), department, date
@@ -242,19 +251,20 @@ const Report = (() => {
       children.push(para(model.abstract));
     }
     if (model.methods) {
-      children.push(heading(opts.paper ? 'Statistical analysis' : 'Statistical Analysis', brand));
-      children.push(opts.abbrFoot ? abbrPara(model.methods, footnotes) : para(model.methods));
+      children.push(H1(opts.paper ? 'Statistical analysis' : 'Statistical Analysis', brand));
+      children.push(opts.abbrFoot ? abbrPara(model.methods, footnotes) : para(model.methods)); arAfter(model.methods);
     }
-    if (!opts.bare && (model.consort || model.sections.length)) children.push(heading('Results', brand));
+    if (!opts.bare && (model.consort || model.sections.length)) children.push(H1('Results', brand));
     let fig = opts.figStart || 1, tab = opts.tabStart || 1; // numbering may continue from an earlier chapter or paper
     if (model.consort) {
-      if (model.intro) children.push(para(model.intro));
+      if (model.intro) { children.push(para(model.intro)); arAfter(model.intro); }
       const fl = figLabel(pre + fig++, opts.captionStyle), ft = model.flowCaption || 'CONSORT flowchart of the enrolled patients';
       listFigs.push(`${fl} ${ft}`);
       if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600));
       else children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600), caption(`${fl} ${ft}`));
+      if (AR) children.push(arPara(`الشكل ${pre + (fig - 1)}: ${AR.caption(ft)}`, { bold: true, center: true, line: 276, after: 160 }));
     } else if (opts.paper && model.intro) children.push(para(model.intro));
-    if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => t.trim() && children.push(para(t.trim())));
+    if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => { if (t.trim()) { children.push(para(t.trim())); arAfter(t.trim()); } });
     // one combined results paragraph instead of a comment with each table
     const merged = opts.commentMerge === 'combined' && opts.commentPlace !== 'none';
     if (merged) { const all = model.sections.filter(s => s.tableOn !== false && s.comment).map(s => s.comment.trim()).join(' '); if (all) children.push(commentPara(all, { boldSig: opts.boldSigText })); }
@@ -275,6 +285,7 @@ const Report = (() => {
           children.push(image(f.url, f.w, f.h, w1));
           children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}));
         }
+        if (AR) children.push(arPara(`الشكل ${String(f.num).replace(/^\D+/, '').replace(/[:.]$/, '')}: ${AR.caption(f.caption)}${f.note ? ' ' + AR.caption(f.note) : ''}`, { bold: true, center: true, size: 22, line: 276, after: 200 }));
       }
     };
     const atEnd = arrangeFigures(model.sections, opts.figPlacement); let headN = 0;
@@ -304,17 +315,21 @@ const Report = (() => {
         if (wideT) { turns.push({ at: children.length, land: true }); PAGE_W = landW; brk = false; }
         // chapter-numbered subheadings: 4.1, 4.2 …
         if (opts.sectionHeads) children.push(subheading(opts.headNum ? `${(opts.numberPrefix || '').replace(/\.$/, '') || '1'}.${++headN} ${s.title}` : s.title, brand, first()));
-        if (s.comment && !merged && opts.commentPlace === 'before') children.push(commentPara(figRef(s, s.comment), { pageBreakBefore: first(), boldSig: opts.boldSigText }));
+        if (s.comment && !merged && opts.commentPlace === 'before') { children.push(commentPara(figRef(s, s.comment), { pageBreakBefore: first(), boldSig: opts.boldSigText })); arAfter(s.comment); }
         const num = `Table ${pre}${tab++}`;
         listTabs.push(`${num}${opts.tableCaption === 'period' || opts.tableCaption === 'apa' ? '.' : ':'} ${s.title}`);
         if (opts.tableCaption === 'apa') children.push(...apaCaption(num, s.title, { pageBreakBefore: first() }));
         else children.push(caption(`${num}${opts.tableCaption === 'period' ? '.' : ':'} ${s.title}`, { pageBreakBefore: first(), align: { justify: D().AlignmentType.JUSTIFIED, left: D().AlignmentType.LEFT }[opts.tableCapAlign] || D().AlignmentType.CENTER }));
+        if (AR) children.push(arPara(`الجدول ${pre}${tab - 1}: ${AR.caption(s.title)}`, { bold: true, keepNext: true, line: 276, after: 120 }));
+        // bilingual column headings: the Arabic below the English
+        const headAr = AR ? s.head.map(h => { const c = typeof h === 'string' ? { t: h } : { ...h }, a = AR.head(c.t); return a ? { ...c, t: [c.t, a] } : c; }) : s.head;
         chunks(s.rows).forEach((part, pi) => {
           if (pi > 0) { const cont = `${num} (continued)`; children.push(opts.tableCaption === 'apa' ? para(cont, { bold: true, align: D().AlignmentType.LEFT, after: 120, line: 276, keepNext: true, before: 200 }) : caption(cont, { before: 200, align: D().AlignmentType.LEFT })); }
-          children.push(table(s.head, part, brand, opts.tableStyle, opts.tableLook));
+          children.push(table(headAr, part, brand, opts.tableStyle, opts.tableLook));
         });
         children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
-        if (s.comment && !merged && (opts.commentPlace || 'after') === 'after') children.push(commentPara(figRef(s, s.comment), { boldSig: opts.boldSigText }));
+        if (AR && s.footnote) children.push(arPara(AR.footnote(s.footnote), { size: 18, line: 240, after: 160 }));
+        if (s.comment && !merged && (opts.commentPlace || 'after') === 'after') { children.push(commentPara(figRef(s, s.comment), { boldSig: opts.boldSigText })); arAfter(s.comment); }
         if (!merged && opts.commentPlace !== 'none') children.push(...findings(s));
         if (wideT) { turns.push({ at: children.length, land: false }); PAGE_W = portraitW; }
       }
@@ -325,8 +340,8 @@ const Report = (() => {
       placeFigures(atEnd);
     }
     if (model.summary) {
-      children.push(heading('Summary of key findings', brand));
-      children.push(para(model.summary));
+      children.push(H1('Summary of key findings', brand));
+      children.push(para(model.summary)); arAfter(model.summary);
     }
 
     // appendix: codebook, test plan, every result table (prepared by the app), the reporting checklist, and the references of the methods
