@@ -682,10 +682,14 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <h2>4 · Statistical tests</h2>
       <div class="grid g4" style="margin-bottom:8px">
         <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
-        <div><label class="f">Normality test</label><select id="optNormality"><option value="sw" selected>Shapiro-Wilk</option><option value="ks">Kolmogorov-Smirnov (Lilliefors)</option></select></div>
+        <div><label class="f">Normality test</label><select id="optNormality"><option value="sw" selected>Shapiro-Wilk</option><option value="ks">Kolmogorov-Smirnov (Lilliefors)</option><option value="skewkurt">Skewness &amp; kurtosis z-scores (|z| &gt; 1.96)</option></select></div>
         <div><label class="f">Effect of binary variables</label><select id="optCatEffect"><option value="rr" selected>Relative risk (RR)</option><option value="or">Odds ratio (OR)</option></select></div>
         <div><label class="f">Pairwise Mann-Whitney tests (3+ groups, without Dunn)</label><select id="optMwAdjust"><option value="none" selected>Unadjusted</option><option value="bonferroni">Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option></select></div>
         <div><label class="f">Pairwise categorical comparisons</label><select id="optChiAdjust"><option value="bonferroni" selected>Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option><option value="none">No correction</option></select></div>
+        <div><label class="f">Confidence level of intervals</label><select id="optConfLevel"><option value="90">90%</option><option value="95" selected>95%</option><option value="99">99%</option></select></div>
+        <div><label class="f">Hypothesis (two groups)</label><select id="optAlternative"><option value="two" selected>Two-sided</option><option value="greater">One-sided: first group greater</option><option value="less">One-sided: first group smaller</option></select></div>
+        <div><label class="f">Median difference CI</label><select id="optNpEffect"><option value="hl" selected>Hodges-Lehmann</option><option value="boot">Bootstrap (2000 resamples)</option></select></div>
+        <div><label class="f">Effect size in the comments (two groups)</label><select id="optEffSize"><option value="auto" selected>Cohen's d / r (by test)</option><option value="hedges">Hedges g</option><option value="glass">Glass Δ</option><option value="cliff">Cliff's δ</option></select></div>
       </div>
       <div class="grid g2">
         <div>
@@ -701,6 +705,20 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optMixed"><span><b>Group × time interaction</b> — mixed (split-plot) ANOVA with Greenhouse-Geisser, parametric repeated outcomes</span></label>
         </div>
       </div>
+      <details class="more" style="margin-top:8px"><summary><b>More test options</b></summary>
+      <div class="grid g2" style="margin-top:6px">
+        <div>
+          <label class="check"><input type="checkbox" id="optFdr"><span><b>False discovery rate</b> — Benjamini-Hochberg adjustment of all between-group P values of the report</span></label>
+          <label class="check"><input type="checkbox" id="optCltRule"><span><b>Large-sample rule</b> — parametric tests when every group has n ≥ 30, even if normality is rejected</span></label>
+          <label class="check"><input type="checkbox" id="optExactSmall"><span><b>Exact Mann-Whitney</b> P value for small samples (n ≤ 50; permutation when tied)</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optFfh"><span><b>Fisher-Freeman-Halton exact test</b> for larger tables with expected counts &lt; 5</span></label>
+          <label class="check"><input type="checkbox" id="optGroupTrend"><span><b>P for trend</b> column across ordered groups — Jonckheere-Terpstra / Cochran-Armitage</span></label>
+          <label class="check"><input type="checkbox" id="optCompleteCase"><span><b>Complete cases only</b> — analyse only patients with no missing value in the studied variables</span></label>
+        </div>
+      </div>
+      </details>
     </div>
     <div class="card">
       <h2>Repeated measures</h2>
@@ -724,6 +742,20 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="card">
       <div class="row"><h2 style="margin:0">Test plan</h2><span class="spacer"></span><span class="legend-note">Which test each variable gets with the settings above — updated as you change them.</span><button class="btn ghost small" id="planXlsx" type="button">⬇ Excel</button></div>
       <div class="tbl-wrap" style="margin-top:8px;max-height:420px"><table class="t" id="testPlan"></table></div>
+    </div>
+    <div class="card">
+      <details><summary><b>Sample size calculator</b> <span class="legend-note">— for planning a new study (not part of the report)</span></summary>
+      <div class="grid g4" style="margin-top:8px">
+        <div><label class="f">Outcome</label><select id="pwKind"><option value="means">Means (numeric outcome)</option><option value="props">Proportions (yes/no outcome)</option></select></div>
+        <div><label class="f" id="pwALab">Mean difference to detect</label><input type="number" step="any" id="pwA" value="5"></div>
+        <div><label class="f" id="pwBLab">Standard deviation</label><input type="number" step="any" id="pwB" value="10"></div>
+        <div><label class="f">α (two-sided)</label><select id="pwAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
+        <div><label class="f">Power (%)</label><select id="pwPower"><option value="80" selected>80</option><option value="85">85</option><option value="90">90</option><option value="95">95</option></select></div>
+        <div><label class="f">Allocation ratio (group 2 : group 1)</label><input type="number" step="0.1" min="0.1" id="pwRatio" value="1"></div>
+        <div><label class="f">Expected drop-out (%)</label><input type="number" step="1" min="0" max="90" id="pwDrop" value="0"></div>
+      </div>
+      <div id="pwOut" style="margin-top:8px"></div>
+      </details>
     </div>
     <div class="nav"><button class="btn ghost" data-go="3">← Back</button><button class="btn ghost small" data-reset="4" type="button" title="Every option of this step back to its default">↺ Defaults for this step</button><button class="btn primary" data-go="5">Next: Tables →</button></div>
   </section>
@@ -924,6 +956,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" data-advadd="diagnostic" type="button">+ Diagnostic accuracy (2×2)</button>
         <button class="btn ghost small" data-advadd="cronbach" type="button">+ Cronbach's alpha</button>
         <button class="btn ghost small" data-advadd="cochran" type="button">+ Cochran's Q (repeated yes/no)</button>
+        <button class="btn ghost small" data-advadd="tost" type="button">+ Equivalence (TOST)</button>
+        <button class="btn ghost small" data-advadd="mh" type="button">+ Mantel-Haenszel</button>
+        <button class="btn ghost small" data-advadd="clogit" type="button">+ Conditional logistic</button>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="7">← Back</button><button class="btn primary" data-go="9">Next: Flowchart →</button></div>
@@ -1098,6 +1133,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div><label class="f">Transformation (numeric)</label><select id="vdTf"><option value="">None</option><option value="log">Natural log</option><option value="log10">Log₁₀</option><option value="sqrt">Square root</option></select></div>
       <div><label class="check" style="margin-top:22px"><input type="checkbox" id="vdOrd"><span><b>Ordinal</b> (ordered categories)</span></label></div>
       <div><label class="f">Test for ordinal</label><select id="vdOrdTest"><option value="rank">Mann-Whitney / Kruskal-Wallis</option><option value="trend">Chi-square for trend</option></select></div>
+      <div><label class="f">Test between the groups</label><select id="vdTest"></select></div>
       <div><label class="f">Arabic label (optional)</label><input type="text" id="vdAr" dir="rtl"></div>
       <div id="vdShowBox"><label class="f">Row shows (two categories)</label><select id="vdShow"></select></div>
     </div>

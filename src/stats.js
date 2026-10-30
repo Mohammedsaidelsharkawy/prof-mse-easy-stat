@@ -1,5 +1,9 @@
 /* Prof MSE Easy Stat — statistics engine (depends on jStat for distributions) */
 const Stats = (() => {
+  // confidence level of every interval (95% by default); the quantiles at 95% are the exact constants used before
+  let CONF = 0.95;
+  const setConf = c => { CONF = [0.9, 0.95, 0.99].includes(+c) ? +c : 0.95; };
+  const QU = () => CONF === 0.95 ? 0.975 : 1 - (1 - CONF) / 2, QL = () => CONF === 0.95 ? 0.025 : (1 - CONF) / 2, ZC = () => CONF === 0.95 ? 1.959964 : jStat.normal.inv(QU(), 0, 1);
   const sum = a => a.reduce((s, v) => s + v, 0);
   const mean = a => sum(a) / a.length;
   const variance = a => { const m = mean(a); return sum(a.map(v => (v - m) ** 2)) / (a.length - 1); };
@@ -123,7 +127,7 @@ const Stats = (() => {
       df = (v1 / n1 + v2 / n2) ** 2 / ((v1 / n1) ** 2 / (n1 - 1) + (v2 / n2) ** 2 / (n2 - 1));
     }
     const t = (m1 - m2) / se, p = 2 * (1 - jStat.studentt.cdf(Math.abs(t), df));
-    const tc = jStat.studentt.inv(0.975, df);
+    const tc = jStat.studentt.inv(QU(), df);
     return { t, df, p, diff: m1 - m2, lo: m1 - m2 - tc * se, hi: m1 - m2 + tc * se };
   }
 
@@ -148,7 +152,7 @@ const Stats = (() => {
 
   function tukey(groups) {
     const a = anova(groups), k = groups.length, out = [];
-    const qc = jStat.tukey.inv(0.95, k, a.df2);
+    const qc = jStat.tukey.inv(CONF, k, a.df2);
     for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
       const d = mean(groups[i]) - mean(groups[j]);
       const se = Math.sqrt(a.msw / 2 * (1 / groups[i].length + 1 / groups[j].length));
@@ -179,7 +183,7 @@ const Stats = (() => {
     d.sort((p, q) => p - q);
     const n1 = x.length, n2 = y.length, N = d.length;
     const est = N % 2 ? d[(N - 1) / 2] : (d[N / 2 - 1] + d[N / 2]) / 2;
-    let ca = Math.floor(n1 * n2 / 2 - 1.959964 * Math.sqrt(n1 * n2 * (n1 + n2 + 1) / 12));
+    let ca = Math.floor(n1 * n2 / 2 - ZC() * Math.sqrt(n1 * n2 * (n1 + n2 + 1) / 12));
     ca = Math.max(1, ca);
     return { diff: est, lo: d[ca - 1], hi: d[N - ca] };
   }
@@ -235,7 +239,7 @@ const Stats = (() => {
     if (a === 0 || c === 0 || n1 === 0 || n2 === 0) return null;
     const rr = (a / n1) / (c / n2);
     const se = Math.sqrt(1 / a - 1 / n1 + 1 / c - 1 / n2);
-    return { rr, lo: Math.exp(Math.log(rr) - 1.959964 * se), hi: Math.exp(Math.log(rr) + 1.959964 * se) };
+    return { rr, lo: Math.exp(Math.log(rr) - ZC() * se), hi: Math.exp(Math.log(rr) + ZC() * se) };
   }
 
   /* ---------- Repeated measures (within group) ---------- */
@@ -259,7 +263,7 @@ const Stats = (() => {
   function pairedT(x, y) {
     const d = x.map((v, i) => v - y[i]), n = d.length, md = mean(d), se = sd(d) / Math.sqrt(n), df = n - 1;
     if (!(se > 0)) return { t: 0, df, p: md === 0 ? 1 : 0, diff: md, lo: md, hi: md };
-    const t = md / se, tc = jStat.studentt.inv(0.975, df);
+    const t = md / se, tc = jStat.studentt.inv(QU(), df);
     return { t, df, p: 2 * (1 - jStat.studentt.cdf(Math.abs(t), df)), diff: md, lo: md - tc * se, hi: md + tc * se };
   }
 
@@ -308,7 +312,7 @@ const Stats = (() => {
       const a = groups[i], b = groups[j], va = variance(a) / a.length, vb = variance(b) / b.length;
       const d = mean(a) - mean(b), se = Math.sqrt(va + vb);
       const df = (va + vb) ** 2 / (va * va / (a.length - 1) + vb * vb / (b.length - 1));
-      const q = Math.abs(d) / se * Math.SQRT2, qc = jStat.tukey.inv(0.95, k, df) / Math.SQRT2;
+      const q = Math.abs(d) / se * Math.SQRT2, qc = jStat.tukey.inv(CONF, k, df) / Math.SQRT2;
       out.push({ i, j, diff: d, lo: d - qc * se, hi: d + qc * se, p: Math.min(1, Math.max(0, 1 - jStat.tukey.cdf(q, k, df))) });
     }
     return out;
@@ -379,7 +383,7 @@ const Stats = (() => {
       if (d) {
         S *= 1 - d / atRisk; gw += atRisk > d ? d / (atRisk * (atRisk - d)) : Infinity;
         // log(-log) limits, as in lifelines
-        const se = Math.sqrt(gw) / Math.abs(Math.log(S)), lo = S > 0 && S < 1 && isFinite(se) ? S ** Math.exp(1.959964 * se) : S > 0 ? S : 0, hi = S > 0 && S < 1 && isFinite(se) ? S ** Math.exp(-1.959964 * se) : S > 0 ? S : 0;
+        const se = Math.sqrt(gw) / Math.abs(Math.log(S)), lo = S > 0 && S < 1 && isFinite(se) ? S ** Math.exp(ZC() * se) : S > 0 ? S : 0, hi = S > 0 && S < 1 && isFinite(se) ? S ** Math.exp(-ZC() * se) : S > 0 ? S : 0;
         steps.push({ t, s: S, atRisk, d, lo, hi });
       }
       if (c) censored.push({ t, s: S });
@@ -428,7 +432,7 @@ const Stats = (() => {
     const a = table[row][i], b = sum(table.map(r => r[i])) - a, c = table[row][j], d = sum(table.map(r => r[j])) - c;
     if (!a || !b || !c || !d) return null;
     const or = (a * d) / (b * c), se = Math.sqrt(1 / a + 1 / b + 1 / c + 1 / d);
-    return { or, lo: Math.exp(Math.log(or) - 1.959964 * se), hi: Math.exp(Math.log(or) + 1.959964 * se) };
+    return { or, lo: Math.exp(Math.log(or) - ZC() * se), hi: Math.exp(Math.log(or) + ZC() * se) };
   }
 
   /* ---------- Paired categorical: McNemar (2×2) and Bowker (k×k) ---------- */
@@ -473,7 +477,7 @@ const Stats = (() => {
     const se = Math.sqrt((A + (1 - kappa) ** 2 * B - (kappa - pe * (1 - kappa)) ** 2) / (n * (1 - pe) ** 2));
     const se0 = Math.sqrt((pe + pe * pe - sum(pr.map((v, i) => v * pc[i] * (v + pc[i])))) / (n * (1 - pe) ** 2));
     const z = kappa / se0;
-    return { kappa, se, lo: kappa - 1.959964 * se, hi: kappa + 1.959964 * se, z, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), po, pe, n };
+    return { kappa, se, lo: kappa - ZC() * se, hi: kappa + ZC() * se, z, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), po, pe, n };
   }
   // ICC for n subjects × k raters (complete rows): two-way random, absolute agreement (ICC2 / ICC2k, McGraw & Wong CIs)
   function icc(Y) {
@@ -488,12 +492,12 @@ const Stats = (() => {
     // McGraw & Wong (1996) confidence limits for ICC(A,1)
     const a = k * single / (n * (1 - single)), b = 1 + k * single * (n - 1) / (n * (1 - single));
     const v = (a * msC + b * msE) ** 2 / ((a * msC) ** 2 / (k - 1) + (b * msE) ** 2 / ((n - 1) * (k - 1)));
-    const Fu = jStat.centralF.inv(0.975, n - 1, v), Fl = jStat.centralF.inv(0.975, v, n - 1);
+    const Fu = jStat.centralF.inv(QU(), n - 1, v), Fl = jStat.centralF.inv(QU(), v, n - 1);
     const lo = n * (msR - Fu * msE) / (Fu * (k * msC + (k * n - k - n) * msE) + n * msR);
     const hi = n * (Fl * msR - msE) / (k * msC + (k * n - k - n) * msE + n * Fl * msR);
     // consistency (ICC(C,1) and ICC(C,k)), with exact F-based limits
     const cSingle = (msR - msE) / (msR + (k - 1) * msE), cAverage = (msR - msE) / msR;
-    const FL = F / jStat.centralF.inv(0.975, df1, df2), FU = F * jStat.centralF.inv(0.975, df2, df1);
+    const FL = F / jStat.centralF.inv(QU(), df1, df2), FU = F * jStat.centralF.inv(QU(), df2, df1);
     const cLo = (FL - 1) / (FL + k - 1), cHi = (FU - 1) / (FU + k - 1);
     return { single, average, lo, hi, loAvg: lo * k / (1 + lo * (k - 1)), hiAvg: hi * k / (1 + hi * (k - 1)), F, df1, df2, p: 1 - jStat.centralF.cdf(F, df1, df2), n, k,
       consistency: { single: cSingle, average: cAverage, lo: cLo, hi: cHi, loAvg: 1 - 1 / FL, hiAvg: 1 - 1 / FU } };
@@ -514,7 +518,7 @@ const Stats = (() => {
     }
     const fac = 1 / ((1 - pe) ** 2 * N), se = Math.sqrt(Math.max(0, (a - (kappa - pe * (1 - kappa)) ** 2) * fac)), se0 = Math.sqrt(Math.max(0, (a0 - pe ** 2) * fac));
     const z = se0 > 0 ? kappa / se0 : 0;
-    return { kappa, se, lo: kappa - 1.959964 * se, hi: kappa + 1.959964 * se, z, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), po, pe, n: N, type };
+    return { kappa, se, lo: kappa - ZC() * se, hi: kappa + ZC() * se, z, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), po, pe, n: N, type };
   }
   // Kendall's tau-b with the large-sample test (tie-corrected variance, as scipy's asymptotic method)
   function kendall(x, y) {
@@ -535,7 +539,7 @@ const Stats = (() => {
   const durbinWatson = e => sum(e.slice(1).map((v, i) => (v - e[i]) ** 2)) / sum(e.map(v => v * v));
   // Bland–Altman: bias (a − b) with 95% CI and limits of agreement
   function blandAltman(a, b) {
-    const d = a.map((v, i) => v - b[i]), n = d.length, bias = mean(d), s = sd(d), tc = jStat.studentt.inv(0.975, n - 1);
+    const d = a.map((v, i) => v - b[i]), n = d.length, bias = mean(d), s = sd(d), tc = jStat.studentt.inv(QU(), n - 1);
     return { n, bias, sd: s, lo: bias - 1.959964 * s, hi: bias + 1.959964 * s, biasLo: bias - tc * s / Math.sqrt(n), biasHi: bias + tc * s / Math.sqrt(n),
       means: a.map((v, i) => (v + b[i]) / 2), diffs: d, p: pairedT(a, b).p };
   }
@@ -552,21 +556,21 @@ const Stats = (() => {
       const rest = all.filter(x => x !== j);
       return { mean: mean(Y.map(r => r[j])), sd: sd(Y.map(r => r[j])), rit: pearson(Y.map(r => r[j]), Y.map(r => sum(rest.map(x => r[x])))).r, alphaDeleted: k > 2 ? alphaOf(rest) : NaN };
     });
-    return { alpha, lo: 1 - (1 - alpha) * jStat.centralF.inv(0.975, df1, df2), hi: 1 - (1 - alpha) * jStat.centralF.inv(0.025, df1, df2), n, k, items };
+    return { alpha, lo: 1 - (1 - alpha) * jStat.centralF.inv(QU(), df1, df2), hi: 1 - (1 - alpha) * jStat.centralF.inv(QL(), df1, df2), n, k, items };
   }
 
   /* ---------- Diagnostic accuracy from a 2×2 table ---------- */
   // Clopper–Pearson exact CIs for proportions; log-method CIs for likelihood ratios
   function clopperPearson(x, n) {
     if (!n) return [NaN, NaN];
-    return [x === 0 ? 0 : jStat.beta.inv(0.025, x, n - x + 1), x === n ? 1 : jStat.beta.inv(0.975, x + 1, n - x)];
+    return [x === 0 ? 0 : jStat.beta.inv(QL(), x, n - x + 1), x === n ? 1 : jStat.beta.inv(QU(), x + 1, n - x)];
   }
   function diagnostic2x2(tp, fp, fn, tn) {
     const prop = (x, n) => { const [lo, hi] = clopperPearson(x, n); return { v: x / n, lo, hi }; };
     const sens = prop(tp, tp + fn), spec = prop(tn, tn + fp);
     const lr = (num, den, a, n1, b, n2) => {
       const v = num / den, se = Math.sqrt((1 - a / n1) / a + (1 - b / n2) / b);
-      return { v, lo: Math.exp(Math.log(v) - 1.959964 * se), hi: Math.exp(Math.log(v) + 1.959964 * se) };
+      return { v, lo: Math.exp(Math.log(v) - ZC() * se), hi: Math.exp(Math.log(v) + ZC() * se) };
     };
     return {
       tp, fp, fn, tn, n: tp + fp + fn + tn, sens, spec, ppv: prop(tp, tp + fp), npv: prop(tn, tn + fn), accuracy: prop(tp + tn, tp + fp + fn + tn), prevalence: prop(tp + fn, tp + fp + fn + tn),
@@ -631,7 +635,7 @@ const Stats = (() => {
     if (!cov) return null;
     const terms = beta.map((B, j) => {
       const se = Math.sqrt(cov[j][j]), z = B / se;
-      return { B, se, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), hr: Math.exp(B), lo: Math.exp(B - 1.959964 * se), hi: Math.exp(B + 1.959964 * se) };
+      return { B, se, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), hr: Math.exp(B), lo: Math.exp(B - ZC() * se), hi: Math.exp(B + ZC() * se) };
     });
     const chi = 2 * (cur.ll - ll0);
     return { terms, n, events: event.filter(Boolean).length, ll: cur.ll, chi, df: p, pModel: 1 - jStat.chisquare.cdf(chi, p), converged, unstable: !converged || terms.some(t => Math.abs(t.B) > 15) };
@@ -676,7 +680,7 @@ const Stats = (() => {
     const coef = inv.map(r => sum(r.map((v, j) => v * b[j])));
     const fit = X.map(x => sum(x.map((v, j) => v * coef[j]))), my = mean(y);
     const sse = sum(y.map((v, i) => (v - fit[i]) ** 2)), sst = sum(y.map(v => (v - my) ** 2));
-    const df = n - p, s2 = sse / df, tc = jStat.studentt.inv(0.975, df), sdy = sd(y);
+    const df = n - p, s2 = sse / df, tc = jStat.studentt.inv(QU(), df), sdy = sd(y);
     const terms = coef.map((B, j) => {
       const se = Math.sqrt(inv[j][j] * s2), t = B / se;
       const sdx = j ? sd(X0.map(r => r[j - 1])) : NaN;
@@ -701,7 +705,7 @@ const Stats = (() => {
     const quad = (a, b) => sum(a.map((ai, r) => ai * sum(b.map((bj, c) => bj * full.cov[r][c]))));
     const dot = x => sum(x.map((v, j) => v * full.coef[j]));
     const adj = Array.from({ length: k }, (_, gi) => { const x = x0(gi); return { mean: dot(x), se: Math.sqrt(quad(x, x)) }; });
-    const tc = jStat.studentt.inv(0.975, full.df), m = k * (k - 1) / 2, pairs = [];
+    const tc = jStat.studentt.inv(QU(), full.df), m = k * (k - 1) / 2, pairs = [];
     for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
       const c = x0(i).map((v, r) => v - x0(j)[r]), diff = dot(c), se = Math.sqrt(quad(c, c)), t = diff / se;
       pairs.push({ i, j, diff, lo: diff - tc * se, hi: diff + tc * se, p: bonferroni(2 * (1 - jStat.studentt.cdf(Math.abs(t), full.df)), m) });
@@ -733,7 +737,7 @@ const Stats = (() => {
     if (!inv) return null;
     const terms = beta.map((B, j) => {
       const se = Math.sqrt(inv[j][j]), z = B / se;
-      return { B, se, wald: z * z, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), or: Math.exp(B), lo: Math.exp(B - 1.959964 * se), hi: Math.exp(B + 1.959964 * se) };
+      return { B, se, wald: z * z, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1), or: Math.exp(B), lo: Math.exp(B - ZC() * se), hi: Math.exp(B + ZC() * se) };
     });
     const ny = sum(y), p0 = ny / n;
     const LL = ll(beta), LL0 = ny * Math.log(p0) + (n - ny) * Math.log(1 - p0);
@@ -805,7 +809,7 @@ const Stats = (() => {
     }
     const [sLo, sHi] = clopperPearson(best.tp, n1), [cLo, cHi] = clopperPearson(best.tn, n0);
     return {
-      auc, se, lo: Math.max(0, auc - 1.959964 * se), hi: Math.min(1, auc + 1.959964 * se), p, n1, n0, higher,
+      auc, se, lo: Math.max(0, auc - ZC() * se), hi: Math.min(1, auc + ZC() * se), p, n1, n0, higher,
       points: points.map(q => ({ fpr: 1 - q.spec, tpr: q.sens })),
       cutoff: { ...best, ppv: best.tp / (best.tp + best.fp), npv: best.tn / (best.tn + best.fn), accuracy: (best.tp + best.tn) / (n1 + n0),
         sensLo: sLo, sensHi: sHi, specLo: cLo, specHi: cHi, youden: best.sens + best.spec - 1,
@@ -825,7 +829,7 @@ const Stats = (() => {
     const aucA = mean(A.V10), aucB = mean(B.V10), diff = aucA - aucB;
     const v = (cov(A.V10, A.V10) + cov(B.V10, B.V10) - 2 * cov(A.V10, B.V10)) / n1 + (cov(A.V01, A.V01) + cov(B.V01, B.V01) - 2 * cov(A.V01, B.V01)) / n0;
     const se = Math.sqrt(Math.max(v, 0)), z = se > 0 ? diff / se : 0;
-    return { aucA, aucB, diff, se, z, lo: diff - 1.959964 * se, hi: diff + 1.959964 * se, p: se > 0 ? 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1)) : 1 };
+    return { aucA, aucB, diff, se, z, lo: diff - ZC() * se, hi: diff + ZC() * se, p: se > 0 ? 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1)) : 1 };
   }
 
   function rmAnova(Y) {
@@ -951,8 +955,180 @@ const Stats = (() => {
     const den = k * N - Ri.reduce((t, v) => t + v * v, 0), Q = den ? (k - 1) * (k * C.reduce((t, v) => t + v * v, 0) - N * N) / den : 0;
     return { Q, df: k - 1, p: den ? 1 - jStat.chisquare.cdf(Q, k - 1) : 1, n: R.length, counts: C };
   }
+
+  /* ---------- stage 4 statistics ---------- */
+  // a seeded random generator, so resampling gives the same answer every time
+  const seeded = seed => { let s0 = (seed >>> 0) || 1; return () => { s0 = (s0 + 0x6D2B79F5) >>> 0; let t = s0; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  // normality from the skewness and kurtosis z-scores (both within ±1.96)
+  function skewKurtZ(x) {
+    const n = x.length; if (n < 4) return null;
+    const m = mean(x), m2 = x.reduce((t, v) => t + (v - m) ** 2, 0) / n, m3 = x.reduce((t, v) => t + (v - m) ** 3, 0) / n, m4 = x.reduce((t, v) => t + (v - m) ** 4, 0) / n;
+    if (!m2) return null;
+    const g1 = m3 / m2 ** 1.5, g2 = m4 / m2 ** 2 - 3, G1 = g1 * Math.sqrt(n * (n - 1)) / (n - 2), G2 = ((n + 1) * g2 + 6) * (n - 1) / ((n - 2) * (n - 3));
+    const ses = Math.sqrt(6 * n * (n - 1) / ((n - 2) * (n + 1) * (n + 3))), sek = 2 * ses * Math.sqrt((n * n - 1) / ((n - 3) * (n + 5)));
+    const zs = G1 / ses, zk = G2 / sek, p = Math.min(2 * (1 - jStat.normal.cdf(Math.abs(zs), 0, 1)), 2 * (1 - jStat.normal.cdf(Math.abs(zk), 0, 1)));
+    return { zs, zk, p, W: NaN };
+  }
+  // percentile bootstrap CI of the difference in medians (x − y)
+  function bootMedianDiff(x, y, B = 2000, seed = 7) {
+    const r = seeded(seed), md = median(x) - median(y), out = [];
+    for (let b = 0; b < B; b++) { const xs = x.map(() => x[Math.floor(r() * x.length)]), ys = y.map(() => y[Math.floor(r() * y.length)]); out.push(median(xs) - median(ys)); }
+    out.sort((a, c) => a - c);
+    return { diff: md, lo: out[Math.floor(B * QL())], hi: out[Math.min(B - 1, Math.ceil(B * QU()) - 1)] };
+  }
+  // Mann-Whitney P: exact (no ties, small samples) by the distribution of U, otherwise a seeded permutation test
+  function mannWhitneyExact(x, y, B = 20000, seed = 11) {
+    const n1 = x.length, n2 = y.length, all = [...x, ...y], { ranks, ties } = rank(all), R1 = sum(ranks.slice(0, n1)), U = R1 - n1 * (n1 + 1) / 2, Umin = Math.min(U, n1 * n2 - U);
+    if (!ties.some(t => t > 1) && n1 * n2 <= 2500) {
+      // number of ways to reach each U: f(n1, n2, u) by the recursion over the largest observation
+      let prev = Array.from({ length: n2 + 1 }, () => [1]);
+      for (let i = 1; i <= n1; i++) { const cur = [[1]]; for (let j = 1; j <= n2; j++) { const a = cur[j - 1], b = prev[j], len = i * j + 1, row = new Array(len).fill(0);
+        for (let u = 0; u < len; u++) row[u] = (u - j >= 0 && b[u - j] !== undefined ? b[u - j] : 0) + (a[u] !== undefined ? a[u] : 0); cur.push(row); } prev = cur; }
+      const f = prev[n2], tot = f.reduce((t, v) => t + v, 0); let c = 0; for (let u = 0; u <= Umin; u++) c += f[u] || 0;
+      return { U: Umin, p: Math.min(1, 2 * c / tot), method: 'exact' };
+    }
+    const r = seeded(seed), obs = Math.abs(U - n1 * n2 / 2); let hit = 0;
+    const rk = ranks.slice();
+    for (let b = 0; b < B; b++) { for (let i = rk.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [rk[i], rk[j]] = [rk[j], rk[i]]; } const u = sum(rk.slice(0, n1)) - n1 * (n1 + 1) / 2; if (Math.abs(u - n1 * n2 / 2) >= obs - 1e-9) hit++; }
+    return { U: Umin, p: (hit + 1) / (B + 1), method: 'permutation' };
+  }
+  // Fisher-Freeman-Halton exact test for an r × c table: Monte Carlo over random tables with the same margins (Patefield), like R's simulate.p.value
+  function fisherRxC(table, B = 50000, seed = 13) {
+    const t = table.filter(r => sum(r) > 0), cs0 = t[0].map((_, j) => sum(t.map(r => r[j]))), keepC = cs0.map((c, j) => c > 0 ? j : -1).filter(j => j >= 0);
+    const T = t.map(r => keepC.map(j => r[j])), rs = T.map(sum), cs = T[0].map((_, j) => sum(T.map(r => r[j]))), N = sum(rs);
+    const lf = (() => { const a = [0]; for (let i = 1; i <= N; i++) a.push(a[i - 1] + Math.log(i)); return a; })();
+    const stat = M => M.reduce((tt, r) => tt + r.reduce((u, v) => u + lf[v], 0), 0); // smaller probability ⇔ larger Σ log x!
+    const obs = stat(T), rnd = seeded(seed); let hit = 0;
+    for (let b = 0; b < B; b++) {
+      // fill row by row: each row's counts drawn without replacement from the remaining column totals
+      const left = cs.slice(), M = [];
+      let remaining = N;
+      for (let i = 0; i < rs.length; i++) { const row = new Array(cs.length).fill(0); let need = rs[i];
+        if (i === rs.length - 1) { M.push(left.slice()); break; }
+        for (let k = 0; k < need; k++) { let u = Math.floor(rnd() * remaining), j = 0; while (u >= left[j]) { u -= left[j]; j++; } row[j]++; left[j]--; remaining--; }
+        M.push(row); }
+      if (stat(M) >= obs - 1e-9) hit++;
+    }
+    return { p: (hit + 1) / (B + 1), B };
+  }
+  // Jonckheere-Terpstra test for ordered groups (normal approximation with the tie correction)
+  function jonckheere(groups) {
+    const k = groups.length, n = groups.map(g => g.length), N = sum(n); let J = 0;
+    for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) for (const a of groups[i]) for (const b of groups[j]) J += b > a ? 1 : b === a ? 0.5 : 0;
+    const all = groups.flat(), cnt = {}; all.forEach(v => { cnt[v] = (cnt[v] || 0) + 1; }); const t = Object.values(cnt);
+    const E = (N * N - sum(n.map(x => x * x))) / 4;
+    const V = (N * (N - 1) * (2 * N + 5) - sum(n.map(x => x * (x - 1) * (2 * x + 5))) - sum(t.map(x => x * (x - 1) * (2 * x + 5)))) / 72
+      + sum(n.map(x => x * (x - 1) * (x - 2))) * sum(t.map(x => x * (x - 1) * (x - 2))) / (36 * N * (N - 1) * (N - 2))
+      + sum(n.map(x => x * (x - 1))) * sum(t.map(x => x * (x - 1))) / (8 * N * (N - 1));
+    const z = (J - E) / Math.sqrt(V);
+    return { J, z, p: 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1)) };
+  }
+  // Cochran-Armitage trend test: a yes/no outcome over ordered groups (scores 1, 2, 3 …), as R's prop.trend.test
+  function cochranArmitage(events, totals) {
+    const k = events.length, sc = events.map((_, i) => i + 1), N = sum(totals), R = sum(events), pbar = R / N;
+    const sb = sum(sc.map((s2, i) => totals[i] * s2)) / N, num = sum(sc.map((s2, i) => events[i] * (s2 - sb))), den = pbar * (1 - pbar) * sum(sc.map((s2, i) => totals[i] * (s2 - sb) ** 2));
+    const chi = den > 0 ? num * num / den : 0;
+    return { chi, p: 1 - jStat.chisquare.cdf(chi, 1) };
+  }
+  // effect sizes for two groups
+  function effectSizes(x, y) {
+    const n1 = x.length, n2 = y.length, m1 = mean(x), m2 = mean(y), s1 = sd(x), s2 = sd(y), sp = Math.sqrt(((n1 - 1) * s1 * s1 + (n2 - 1) * s2 * s2) / (n1 + n2 - 2));
+    const d = (m1 - m2) / sp, J = 1 - 3 / (4 * (n1 + n2) - 9), g = d * J;
+    let gt = 0, lt = 0; for (const a of x) for (const b of y) { if (a > b) gt++; else if (a < b) lt++; }
+    const cliff = (gt - lt) / (n1 * n2);
+    return { d, g, glass: (m1 - m2) / s2, cliff, rbc: cliff };
+  }
+  // power and sample size: two means (t-test) and two proportions (normal approximation)
+  function nTwoMeans(diff, sdv, alpha = 0.05, power = 0.8, ratio = 1) {
+    const za = jStat.normal.inv(1 - alpha / 2, 0, 1), zb = jStat.normal.inv(power, 0, 1);
+    let n = Math.ceil((1 + 1 / ratio) * ((za + zb) * sdv / diff) ** 2);
+    // refine with the noncentral t (power of the two-sided t-test)
+    const pw = n1 => { const n2 = Math.max(2, Math.round(n1 * ratio)), df = n1 + n2 - 2, ncp = diff / (sdv * Math.sqrt(1 / n1 + 1 / n2)), tc = jStat.studentt.inv(1 - alpha / 2, df); return 1 - nctCdf(tc, df, ncp) + nctCdf(-tc, df, ncp); };
+    while (n > 2 && pw(n - 1) >= power) n--; while (pw(n) < power) n++;
+    return { n1: n, n2: Math.max(2, Math.round(n * ratio)), power: pw(n) };
+  }
+  function nctCdf(t, df, ncp) { // noncentral t distribution function by numerical integration over the chi distribution
+    // T = (Z + ncp) / V with V = √(χ²_df / df): P(T ≤ t) = E[Φ(t·V − ncp)]
+    const steps = 4000, upper = 6; let s2 = 0;
+    for (let i = 1; i <= steps; i++) { const v = upper * (i - 0.5) / steps; s2 += jStat.normal.cdf(t * v - ncp, 0, 1) * chiDens(v, df) * upper / steps; }
+    return s2;
+  }
+  const lgam = z => jStat.gammaln(z);
+  const chiDens = (v, df) => Math.exp(Math.log(2) + (df / 2) * Math.log(df / 2) - lgam(df / 2) + (df - 1) * Math.log(v) - df * v * v / 2); // density of sqrt(chi²_df / df)
+  function nTwoProps(p1, p2, alpha = 0.05, power = 0.8, ratio = 1) {
+    const za = jStat.normal.inv(1 - alpha / 2, 0, 1), zb = jStat.normal.inv(power, 0, 1), pb = (p1 + ratio * p2) / (1 + ratio);
+    const n = Math.ceil(((za * Math.sqrt(pb * (1 - pb) * (1 + 1 / ratio)) + zb * Math.sqrt(p1 * (1 - p1) + p2 * (1 - p2) / ratio)) ** 2) / (p1 - p2) ** 2);
+    return { n1: n, n2: Math.ceil(n * ratio) };
+  }
+  // Mantel-Haenszel common odds ratio over strata (Robins-Breslow-Greenland CI), the Cochran-Mantel-Haenszel test and Breslow-Day homogeneity
+  function mantelHaenszel(tables) { // each table [[a, b], [c, d]]: rows exposure yes/no, columns outcome yes/no
+    const T = tables.filter(t => t[0][0] + t[0][1] + t[1][0] + t[1][1] > 1);
+    let R = 0, Sx = 0, PR = 0, PS_QR = 0, QS = 0, num = 0, varA = 0, EA = 0, A = 0;
+    T.forEach(([[a, b], [c, d]]) => { const n = a + b + c + d, r = a * d / n, s2 = b * c / n, P = (a + d) / n, Q = (b + c) / n;
+      R += r; Sx += s2; PR += P * r; PS_QR += P * s2 + Q * r; QS += Q * s2;
+      const n1 = a + b, n0 = c + d, m1 = a + c, m0 = b + d; A += a; EA += n1 * m1 / n; varA += n1 * n0 * m1 * m0 / (n * n * (n - 1)); });
+    const or = R / Sx, se = Math.sqrt(PR / (2 * R * R) + PS_QR / (2 * R * Sx) + QS / (2 * Sx * Sx));
+    const cmh = (Math.abs(A - EA) - 0.5) ** 2 / varA;
+    // Breslow-Day: expected a in each stratum under the common OR
+    let bd = 0;
+    T.forEach(([[a, b], [c, d]]) => { const n1 = a + b, m1 = a + c, n = a + b + c + d, lo = Math.max(0, m1 - (n - n1)), hi = Math.min(n1, m1);
+      const f = x => x * (n - n1 - m1 + x) - or * (n1 - x) * (m1 - x); let L = lo, H = hi; for (let it = 0; it < 200; it++) { const M = (L + H) / 2; if (f(M) > 0) H = M; else L = M; } const e = (L + H) / 2;
+      const v = 1 / (1 / e + 1 / (n1 - e) + 1 / (m1 - e) + 1 / (n - n1 - m1 + e)); if (isFinite(v) && v > 0) bd += (a - e) ** 2 / v; });
+    return { or, lo: Math.exp(Math.log(or) - ZC() * se), hi: Math.exp(Math.log(or) + ZC() * se), cmh, p: 1 - jStat.chisquare.cdf(cmh, 1), bd, bdP: T.length > 1 ? 1 - jStat.chisquare.cdf(bd, T.length - 1) : NaN, strata: T.length };
+  }
+  // Brown-Forsythe test for equal means (F*) and Yuen's trimmed-means t-test (20%)
+  function brownForsytheMeans(groups) {
+    const k = groups.length, n = groups.map(g => g.length), N = sum(n), m = groups.map(mean), v = groups.map(variance), gm = sum(groups.map((g, i) => n[i] * m[i])) / N;
+    const num = sum(n.map((ni, i) => ni * (m[i] - gm) ** 2)), den = sum(n.map((ni, i) => (1 - ni / N) * v[i])), F = num / den;
+    const c = n.map((ni, i) => (1 - ni / N) * v[i] / den), df2 = 1 / sum(c.map((ci, i) => ci * ci / (n[i] - 1)));
+    return { F, df1: k - 1, df2, p: 1 - jStat.centralF.cdf(F, k - 1, df2) };
+  }
+  function yuen(x, y, tr = 0.2) {
+    const tm = a => { const s2 = a.slice().sort((p, q) => p - q), g = Math.floor(tr * s2.length); return { m: mean(s2.slice(g, s2.length - g)), w: s2.map((v, i) => i < g ? s2[g] : i >= s2.length - g ? s2[s2.length - g - 1] : v), h: s2.length - 2 * g }; };
+    const a = tm(x), b = tm(y), da = (x.length - 1) * variance(a.w) / (a.h * (a.h - 1)), db = (y.length - 1) * variance(b.w) / (b.h * (b.h - 1));
+    const t = (a.m - b.m) / Math.sqrt(da + db), df = (da + db) ** 2 / (da * da / (a.h - 1) + db * db / (b.h - 1));
+    return { t, df, p: 2 * (1 - jStat.studentt.cdf(Math.abs(t), df)), diff: a.m - b.m };
+  }
+  // conditional logistic regression for matched sets (Newton-Raphson on the conditional likelihood)
+  function conditionalLogit(sets) { // sets: [{ y: [0/1 …], X: [[…], …] }]; one or more cases per set
+    const p = sets[0].X[0].length; let b = new Array(p).fill(0), ll = 0, H = null, g = null;
+    const subsets = (n, k) => { const out = []; const rec = (st, cur) => { if (cur.length === k) { out.push(cur.slice()); return; } for (let i = st; i < n; i++) { cur.push(i); rec(i + 1, cur); cur.pop(); } }; rec(0, []); return out; };
+    for (let it = 0; it < 50; it++) {
+      ll = 0; g = new Array(p).fill(0); H = Array.from({ length: p }, () => new Array(p).fill(0));
+      for (const st of sets) {
+        const cases = st.y.map((v, i) => v ? i : -1).filter(i => i >= 0), k = cases.length; if (!k || k === st.y.length) continue;
+        const combos = subsets(st.y.length, k), sx = combos.map(c => st.X[0].map((_, j) => c.reduce((t, i) => t + st.X[i][j], 0))), eta = sx.map(v => v.reduce((t, x, j) => t + x * b[j], 0));
+        const mx = Math.max(...eta), w = eta.map(e => Math.exp(e - mx)), W = w.reduce((t, x) => t + x, 0), obs = st.X[0].map((_, j) => cases.reduce((t, i) => t + st.X[i][j], 0));
+        ll += obs.reduce((t, x, j) => t + x * b[j], 0) - (mx + Math.log(W));
+        const ex = st.X[0].map((_, j) => sx.reduce((t, v, q) => t + v[j] * w[q], 0) / W);
+        for (let a = 0; a < p; a++) { g[a] += obs[a] - ex[a]; for (let c = 0; c < p; c++) H[a][c] -= sx.reduce((t, v, q) => t + v[a] * v[c] * w[q], 0) / W - ex[a] * ex[c]; }
+      }
+      const Hi = invert(H.map(r => r.map(v => -v))); if (!Hi) return null;
+      const step = Hi.map(r => r.reduce((t, v, j) => t + v * g[j], 0)); b = b.map((v, j) => v + step[j]);
+      if (Math.max(...step.map(Math.abs)) < 1e-9) break;
+    }
+    const cov = invert(H.map(r => r.map(v => -v))), se = cov.map((r, i) => Math.sqrt(r[i]));
+    return { b, se, or: b.map(Math.exp), lo: b.map((v, i) => Math.exp(v - ZC() * se[i])), hi: b.map((v, i) => Math.exp(v + ZC() * se[i])), p: b.map((v, i) => 2 * (1 - jStat.normal.cdf(Math.abs(v / se[i]), 0, 1))), ll };
+  }
+  // JZS Bayes factor BF10 for a two-sample t-test (Cauchy prior on the effect size, r = √2/2), by numerical integration over g
+  function bayesFactorT(t, n1, n2, r = Math.SQRT1_2) {
+    const N = n1 * n2 / (n1 + n2), df = n1 + n2 - 2;
+    const f = g => Math.pow(1 + N * g * r * r, -0.5) * Math.pow(1 + t * t / ((1 + N * g * r * r) * df), -(df + 1) / 2) * Math.pow(2 * Math.PI, -0.5) * Math.pow(g, -1.5) * Math.exp(-1 / (2 * g));
+    // integrate over g on a log scale
+    let s2 = 0; const lo = -12, hi = 12, steps = 4000, h = (hi - lo) / steps;
+    for (let i = 0; i <= steps; i++) { const u = lo + i * h, g = Math.exp(u), w = i === 0 || i === steps ? 1 : i % 2 ? 4 : 2; s2 += w * f(g) * g; }
+    s2 *= h / 3;
+    return s2 / Math.pow(1 + t * t / df, -(df + 1) / 2);
+  }
+  // equivalence by two one-sided t-tests (TOST) against the margins (lo, hi) of the mean difference x − y
+  function tost(x, y, lo, hi) {
+    const n1 = x.length, n2 = y.length, df = n1 + n2 - 2, md = mean(x) - mean(y), sp = Math.sqrt(((n1 - 1) * variance(x) + (n2 - 1) * variance(y)) / df), se = sp * Math.sqrt(1 / n1 + 1 / n2);
+    const pL = 1 - jStat.studentt.cdf((md - lo) / se, df), pU = jStat.studentt.cdf((md - hi) / se, df), t90 = jStat.studentt.inv(0.95, df);
+    return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
+  }
   return {
-    lmmRandomIntercept, cochranQ,
+    skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost,
+    lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
     tTest, levene, anova, tukey, mannWhitney, hodgesLehmann, kruskalWallis,

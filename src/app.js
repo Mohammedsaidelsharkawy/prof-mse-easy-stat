@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmImpute: 'none', autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmImpute: 'none', confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,7 +47,7 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], rmTrend: ['optRmTrend', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -1168,7 +1168,7 @@
     });
     return out;
   }
-  const varBadges = v => [v.unit ? ' u' : '', v.ordinal ? ' ord' : '', v.transform ? ' tf' : '', v.memo ? ' ℹ' : ''].join('');
+  const varBadges = v => [v.test ? ' test' : '', v.unit ? ' u' : '', v.ordinal ? ' ord' : '', v.transform ? ' tf' : '', v.memo ? ' ℹ' : ''].join('');
   // the settings window of one variable
   let vdVar = null;
   function openVarDlg(id) {
@@ -1178,6 +1178,9 @@
     $('#vdTf').value = v.transform || ''; $('#vdTf').disabled = v.type !== 'numeric';
     $('#vdOrd').checked = !!v.ordinal; $('#vdOrd').disabled = v.type !== 'categorical'; $('#vdOrdTest').value = v.ordTest || 'rank';
     $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || '';
+    const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis']]
+      : [['chi', 'Chi-square'], ['fisher', "Fisher's exact (2×2)"], ['ffh', 'Fisher-Freeman-Halton (larger tables)']];
+    $('#vdTest').innerHTML = `<option value="">Automatic (step 4 settings)</option>` + tests.map(([k, l]) => `<option value="${k}" ${v.test === k ? 'selected' : ''}>${esc(l)}</option>`).join('');
     const lv = v.type === 'categorical' ? (v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct) : [];
     $('#vdShowBox').style.display = lv.length === 2 ? '' : 'none';
     $('#vdShow').innerHTML = lv.map(l => `<option ${l === lv[0] ? 'selected' : ''}>${esc(l)}</option>`).join('');
@@ -1197,7 +1200,7 @@
     const set = (k, val) => { if (val === '' || val === false || val === null) delete v[k]; else v[k] = val; };
     set('unit', $('#vdUnit').value.trim()); set('dec', $('#vdDec').value); set('role', $('#vdRole').value); set('transform', v.type === 'numeric' ? $('#vdTf').value : '');
     set('ordinal', v.type === 'categorical' && $('#vdOrd').checked); set('ordTest', $('#vdOrd').checked ? $('#vdOrdTest').value : '');
-    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim());
+    set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('test', $('#vdTest').value);
     if (v.type === 'categorical' && $('#vdShowBox').style.display !== 'none') { const first = $('#vdShow').value, lv = v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct; v.levels = [first, ...lv.filter(l => l !== first)]; }
     const m = [...document.querySelectorAll('[data-vdm]')].filter(el => el.value.trim()).map(el => `${el.dataset.vdm}=${el.value.trim()}`);
     if (document.querySelector('[data-vdm]')) v.valueLabels = m.join(', ');
@@ -2180,11 +2183,28 @@
     const tbl = $('#testPlan'); if (!tbl || !state.cfg || !state.data) return;
     let x; try { x = Analysis.explore(state.data, state.cfg, {}); } catch (e) { tbl.innerHTML = `<tbody><tr><td>${esc(e.message)}</td></tr></tbody>`; return; }
     const o = state.cfg.options, k = x.k;
-    tbl.innerHTML = `<thead><tr><th>Variable</th><th>Type</th><th>Distribution</th><th>Test between the groups</th><th>Post hoc (when significant)</th><th>P value</th></tr></thead><tbody>${x.items.map(it => {
+    tbl.innerHTML = `<thead><tr><th>Variable</th><th>Type</th><th>Distribution</th><th>Test between the groups</th><th>Post hoc (when significant)</th><th>Normality P (per group)</th><th>P value</th><th>Check</th></tr></thead><tbody>${x.items.map(it => {
+      const nps = (it.normPs || []).map(p => isFinite(p) ? Analysis.fmtP(p, -1) : '—').join(' / ') || '—';
+      const chk = it.disagree ? '<span class="chip warn" title="The parametric and non-parametric tests disagree on significance — check the distribution">⚠ tests disagree</span>' : '';
       const v = state.cfg.variables.find(q => q.id === it.id), forced = v && v.dist && v.dist !== 'auto' ? ` · set to ${v.dist === 'param' ? 'parametric' : 'non-parametric'}` : '';
-      return `<tr><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${esc((it.normal || '—') + forced)}</td><td>${esc(it.test || '—')}</td><td>${esc(postHocOf(it, o, k))}</td><td class="${it.sig ? 'sig' : ''}">${isFinite(it.p) ? esc(Analysis.fmtP(it.p, o.alpha)) : it.sig ? 'significant' : '—'}</td></tr>`; }).join('')}</tbody>`;
+      return `<tr><td class="b">${esc(it.label)}</td><td>${it.kind}</td><td>${esc((it.normal || '—') + forced)}</td><td>${esc(it.test || '—')}</td><td>${esc(postHocOf(it, o, k))}</td><td>${esc(nps)}</td><td class="${it.sig ? 'sig' : ''}">${isFinite(it.p) ? esc(Analysis.fmtP(it.p, o.alpha)) : it.sig ? 'significant' : '—'}</td><td>${chk}</td></tr>`; }).join('')}</tbody>`;
   }
   $('#p4').addEventListener('change', scheduleDesign(() => renderTestPlan()));
+  // sample size for two groups: means (difference, SD) or proportions, at the chosen α, power and allocation ratio
+  function renderPower() {
+    const box = $('#pwOut'); if (!box) return;
+    const kind = $('#pwKind').value, a = +$('#pwAlpha').value || 0.05, pw = +$('#pwPower').value / 100 || 0.8, ratio = +$('#pwRatio').value || 1, A = +$('#pwA').value, B = +$('#pwB').value;
+    $('#pwALab').textContent = kind === 'means' ? 'Mean difference to detect' : 'Proportion in group 1 (%)'; $('#pwBLab').textContent = kind === 'means' ? 'Standard deviation' : 'Proportion in group 2 (%)';
+    let r = null;
+    if (kind === 'means' && A > 0 && B > 0) r = Stats.nTwoMeans(A, B, a, pw, ratio);
+    if (kind === 'props' && A > 0 && A < 100 && B > 0 && B < 100 && A !== B) r = Stats.nTwoProps(A / 100, B / 100, a, pw, ratio);
+    if (!r) { box.textContent = 'Enter the values above.'; return; }
+    const drop = +$('#pwDrop').value || 0, up = n => Math.ceil(n / (1 - drop / 100));
+    box.innerHTML = `<b>${r.n1} + ${r.n2} = ${r.n1 + r.n2} patients</b>${drop ? ` · with ${drop}% drop-out: <b>${up(r.n1)} + ${up(r.n2)} = ${up(r.n1) + up(r.n2)}</b>` : ''}<br><span class="legend-note">${kind === 'means'
+      ? `Two-sided independent t-test, α = ${a}, power ${Math.round(pw * 100)}%, effect size d = ${(A / B).toFixed(2)}.` : `Two-sided comparison of two proportions (normal approximation), α = ${a}, power ${Math.round(pw * 100)}%.`}</span>`;
+  }
+  ['#pwKind', '#pwAlpha', '#pwPower', '#pwRatio', '#pwA', '#pwB', '#pwDrop'].forEach(id => { const el = $(id); if (el) el.addEventListener('input', renderPower); });
+  if ($('#pwKind')) renderPower();
   $('#planXlsx').onclick = () => { const wb = XLSX.utils.table_to_book($('#testPlan'), { sheet: 'Test plan' }); XLSX.writeFile(wb, `${baseName()} - Test plan.xlsx`); };
   function renderTablePreview() {
     const box = $('#tblPreview'); if (!box || !state.cfg || !state.data) return;
@@ -2230,7 +2250,8 @@
   /* ---------- advanced analyses (regression, ROC) ---------- */
   const ADV_TYPES = { paired: 'Paired comparison (two measurements)', correlation: 'Correlation (Pearson / Spearman)', linear: 'Linear regression', logistic: 'Logistic regression', roc: 'ROC curve', ancova: 'ANCOVA (adjusted group comparison)', survival: 'Kaplan-Meier survival',
     cox: 'Cox regression (hazard ratios)', mcnemar: 'McNemar test (paired categorical)', kappa: "Cohen's kappa (agreement, categorical)",
-    agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)", cochran: "Cochran's Q (the same yes/no outcome measured repeatedly)" };
+    agreement: 'ICC + Bland-Altman (agreement, numeric)', diagnostic: 'Diagnostic accuracy (2×2)', cronbach: "Cronbach's alpha (reliability)", cochran: "Cochran's Q (the same yes/no outcome measured repeatedly)",
+    tost: 'Equivalence (TOST, two one-sided t-tests)', mh: 'Mantel-Haenszel (stratified odds ratio)', clogit: 'Conditional logistic regression (matched sets)' };
   const analysedRows = () => { const g = activeGroups(); return Analysis.filterRows(state.cfg, state.data.rows).filter(r => g.includes(Analysis.groupOf(state.cfg, r))); };
   function advColumns() {
     const cfg = state.cfg, rows = analysedRows();
@@ -2275,7 +2296,13 @@
         + '<p class="legend-note" style="margin:22px 0 0">Leave the main variable empty to correlate every pair of the ticked variables.</p>'; predLabel = 'Variables (numeric or ordinal scores)'; preds = cols.filter(c => Analysis.isNumberColumn(rows, c.col)); }
       if (t === 'cronbach') { fields = '<p class="legend-note" style="margin:0">Tick the questionnaire items (numeric scores). Patients with any missing item are left out.</p>'; predLabel = 'Items'; preds = cols.filter(c => Analysis.isNumberColumn(rows, c.col)); }
       if (t === 'cochran') { fields = `<p class="legend-note" style="margin:0">Tick the measurements in time order (e.g. Complication_D1, _D3, _D7). Patients with every measurement are used.</p><div><label class="f">Counted as</label><input type="text" data-af="positive" value="${esc(a.positive || 'Yes')}" style="width:120px"></div>`; predLabel = 'Measurements'; preds = cols.filter(c => c.kind === 'categorical'); }
-      const withPreds = ['linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran'].includes(t);
+      if (t === 'tost') fields = select('outcome', 'Outcome compared between the study groups', num, a.outcome)
+        + `<div><label class="f">Equivalence margin ± Δ (outcome units)</label><input type="number" step="any" data-af="margin" value="${esc(a.margin ?? '')}" placeholder="e.g. 5"></div>`;
+      if (t === 'mh') fields = select('outcome', 'Yes/no outcome (two study groups compared)', cat, a.outcome) + levelSelect('Event value', a.outcome, a.positive)
+        + select('second', 'Stratify by (e.g. sex, centre, age band)', cat.filter(c => c.col !== a.outcome && c.col !== cfg.groupCol), a.second);
+      if (t === 'clogit') { fields = select('outcome', 'Case / control column', cat, a.outcome) + levelSelect('Case value', a.outcome, a.positive)
+        + select('second', 'Matched-set ID column', state.data.headers.filter(h => h !== a.outcome).map(h => ({ col: h, label: Analysis.columnLabel(cfg, h) })), a.second); predLabel = 'Exposures (predictors)'; preds = cols.filter(c => c.col !== a.outcome && c.col !== a.second); }
+      const withPreds = ['linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit'].includes(t);
       const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
       return `<div class="gcard" data-adv="${ai}">
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
@@ -3071,7 +3098,7 @@
         out.push(`${lv.join(', ')} (${what}).`);
       }
     }
-    return out.filter(Boolean).join(' ');
+    return Analysis.relabelCI(out.filter(Boolean).join(' '), o.confLevel);
   }
   // per-variable figure settings of step 7: y-axis range and a reference line
   function figVarProps(f) {
