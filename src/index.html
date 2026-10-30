@@ -1207,6 +1207,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Reporting checklist (appendix)</label><select data-rx="checklist"><option value="">None</option><option value="consort">CONSORT 2010</option><option value="strobe">STROBE</option></select></div>
           <div><label class="f">Word limit of Results (warning)</label><input type="number" min="0" step="50" data-rx="wordLimit" placeholder="none"></div>
         </div>
+        <div class="row" style="gap:8px;margin-top:8px;align-items:center"><label class="f" style="margin:0">Your Word template (.dotx / .docx)</label><input type="file" id="tplFile" accept=".dotx,.docx,.dotm,.docm" style="width:auto">
+          <button class="btn ghost small" id="tplClear" type="button">✕</button><span class="legend-note" id="tplName">No template — the report's own styles</span></div>
+        <p class="legend-note" style="margin:2px 0 0">The Word file takes the template's styles (Normal, Heading 1 / 2 …), theme fonts and colours, and page size and margins. Kept for this session only.</p>
         <label class="f" style="margin-top:6px">Appendix</label>
         <div class="row" style="gap:14px"><label class="check" style="margin:0"><input type="checkbox" data-rx="appCodebook"><span>Codebook of the variables</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appPlan"><span>Test plan (test of each variable)</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appFull"><span>Every test of each variable (step 10)</span></label></div>
         <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">

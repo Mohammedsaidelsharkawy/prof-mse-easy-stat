@@ -6,11 +6,13 @@ const Report = (() => {
   const PORTRAIT_W = 9026, LANDSCAPE_W = 13958; // A4 text width with 1" margins (DXA)
   let PAGE_W = PORTRAIT_W; // set per build from the page orientation
   let ITALIC_P = false; // APA / AMA / NEJM: the P of P values in italics
+  let TEMPLATE = false; // a Word template gives the styles
 
   // text runs of a paragraph; with ITALIC_P the letter P of "P = 0.01", "p < .001" or a "P" heading is set in italics
   function runs(text, o = {}) {
     const { TextRun } = D();
-    const mk = (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || 24, font: o.font || BODY_FONT, color: o.color });
+    // with a Word template the body text takes the template's font and size (only explicit sizes, e.g. of tables, stay)
+    const mk = (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || (TEMPLATE ? undefined : 24), font: o.font || (TEMPLATE ? undefined : BODY_FONT), color: o.color });
     if (!ITALIC_P || !text) return [mk(text || '')];
     if (/^[pP]( value| Value)?$/.test(text)) return [mk(text[0], true), ...(text.length > 1 ? [mk(text.slice(1))] : [])];
     const out = [], re = /(?<![A-Za-z])[pP](?=\s?(?:value\s?)?[=<>≤])/g;
@@ -31,7 +33,7 @@ const Report = (() => {
     const { Paragraph, TextRun, AlignmentType } = D();
     return new Paragraph({
       alignment: o.align || AlignmentType.JUSTIFIED,
-      spacing: { after: o.after ?? 160, line: o.line ?? LINE, before: o.before ?? 0 },
+      spacing: TEMPLATE && o.line === undefined ? { after: o.after ?? 160, before: o.before ?? 0 } : { after: o.after ?? 160, line: o.line ?? LINE, before: o.before ?? 0 },
       keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: [...runs(text, o), ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, bold: false, size: o.noteSize || o.size }) : [])]
     });
@@ -217,12 +219,12 @@ const Report = (() => {
     ITALIC_P = !!opts.italicP;
     const landscape = opts.orientation === 'landscape';
     // page: A4 or US Letter, normal / narrow / wide margins (the text width follows), body line spacing
-    const pg = opts.page || {}, [pw0, ph0] = { letter: [12240, 15840], b5: [9979, 14173], a5: [8391, 11906], legal: [12240, 20160] }[pg.size] || [11906, 16838], mg = { narrow: 720, wide: 1800 }[pg.margin] || 1440;
+    const pg = opts.page || {}, tp = opts.tplPage, [pw0, ph0] = tp ? [tp.w, tp.h] : { letter: [12240, 15840], b5: [9979, 14173], a5: [8391, 11906], legal: [12240, 20160] }[pg.size] || [11906, 16838], mg = tp ? Math.round((tp.l + tp.r) / 2) : { narrow: 720, wide: 1800 }[pg.margin] || 1440;
     PAGE_W = (landscape ? ph0 : pw0) - 2 * mg;
     if (opts.twoCol) PAGE_W = Math.floor((PAGE_W - 708) / 2); // tables and figures fit one column
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [], footnotes = {};
-    WORD_STYLES = !!opts.wordStyles;
+    TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE;
     // thesis chapters number as "Table 4.1" / "Figure 4.1"; a journal paper uses sentence-case headings and one Results narrative
     const pre = opts.numberPrefix || '';
     // cover page: title, candidate, supervisor(s), department, date

@@ -3696,6 +3696,38 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       s.figures = [merged, ...s.figures.filter(f => !f.url)];
     }
   }
+  /* ---------- your own Word template (.dotx / .docx): its styles, theme fonts and colours, and page setup ---------- */
+  async function applyTemplate(blob, tplBytes) {
+    const CFB = XLSX.CFB, doc = CFB.read(new Uint8Array(await blob.arrayBuffer()), { type: 'array' }), tpl = CFB.read(tplBytes, { type: 'array' });
+    const get = (z, p) => z.FileIndex[z.FullPaths.indexOf('Root Entry/' + p)], txt = e => new TextDecoder().decode(e.content), put = (e, s) => { const u = new TextEncoder().encode(s); e.content = u; e.size = u.length; };
+    const set = (p, s) => { const e = get(doc, p); if (e) put(e, s); else CFB.utils.cfb_add(doc, '/' + p, new TextEncoder().encode(s)); };
+    const ts = get(tpl, 'word/styles.xml'); if (!ts) throw new Error('the template has no styles');
+    set('word/styles.xml', txt(ts));
+    // the theme carries the template's fonts (+Headings / +Body) and colours
+    const th = get(tpl, 'word/theme/theme1.xml');
+    if (th && !get(doc, 'word/theme/theme1.xml')) {
+      set('word/theme/theme1.xml', txt(th));
+      const rels = get(doc, 'word/_rels/document.xml.rels'); put(rels, txt(rels).replace('</Relationships>', '<Relationship Id="rIdTheme1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/></Relationships>'));
+      const ct = get(doc, '[Content_Types].xml'); put(ct, txt(ct).replace('</Types>', '<Override PartName="/word/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/></Types>'));
+    }
+    // page size and margins of the template (landscape sections keep their orientation)
+    const td = get(tpl, 'word/document.xml'), tx = td ? txt(td) : '', sect = tx.slice(tx.lastIndexOf('<w:sectPr'));
+    const pgSz = (sect.match(/<w:pgSz[^>]*\/>/) || [])[0], pgMar = (sect.match(/<w:pgMar[^>]*\/>/) || [])[0];
+    if (pgSz || pgMar) { const dd = get(doc, 'word/document.xml'); let x = txt(dd);
+      const wh = pgSz ? [(pgSz.match(/w:w="(\d+)"/) || [])[1], (pgSz.match(/w:h="(\d+)"/) || [])[1]] : null;
+      if (wh && wh[0] && wh[1]) x = x.replace(/<w:pgSz[^>]*\/>/g, m => /landscape/.test(m) ? `<w:pgSz w:w="${Math.max(+wh[0], +wh[1])}" w:h="${Math.min(+wh[0], +wh[1])}" w:orient="landscape"/>` : `<w:pgSz w:w="${wh[0]}" w:h="${wh[1]}"/>`);
+      if (pgMar) x = x.replace(/<w:pgMar[^>]*\/>/g, pgMar);
+      put(dd, x); }
+    return new Blob([CFB.write(doc, { fileType: 'zip', type: 'array', compression: true })], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  }
+  $('#tplFile').onchange = async e => { const f = e.target.files[0]; if (!f) return;
+    try { const bytes = new Uint8Array(await f.arrayBuffer()), z = XLSX.CFB.read(bytes, { type: 'array' }); if (z.FullPaths.indexOf('Root Entry/word/styles.xml') < 0) throw new Error('no Word styles found');
+      // its page (twentieths of a point) for laying out the tables and figures
+      const de = z.FileIndex[z.FullPaths.indexOf('Root Entry/word/document.xml')], dx = de ? new TextDecoder().decode(de.content) : '', sp = dx.slice(dx.lastIndexOf('<w:sectPr')), at = (re2, d) => +((sp.match(re2) || [])[1]) || d;
+      const page = /<w:pgSz/.test(sp) ? { w: at(/<w:pgSz[^>]*w:w="(\d+)"/, 11906), h: at(/<w:pgSz[^>]*w:h="(\d+)"/, 16838), l: at(/<w:pgMar[^>]*w:left="(\d+)"/, 1440), r: at(/<w:pgMar[^>]*w:right="(\d+)"/, 1440) } : null;
+      state.wordTemplate = { name: f.name, bytes, page }; $('#tplName').textContent = `Template: ${f.name}`; toast(`Word template “${f.name}” will be used for the Word file`); }
+    catch (err) { toast('Not a Word template: ' + err.message); } e.target.value = ''; };
+  $('#tplClear').onclick = () => { state.wordTemplate = null; $('#tplName').textContent = 'No template — the report\'s own styles'; toast('Template removed'); };
   /* ---------- direct PDF: the report laid out as HTML on A4 pages, each page drawn to an image, written as a PDF ---------- */
   const PDF_W = 794, PDF_H = 1123, PDF_M = 68; // A4 at 96 px per inch, margins
   function pdfBlocks(r, plan) {
@@ -3861,6 +3893,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const o = effOptions(), rp = report(), r0 = state.result, plan0 = r0 ? exportPlan(r0) : null;
     const extras = { cover: rp.cover ? { candidate: rp.coverCandidate, supervisor: rp.coverSupervisor, dept: rp.coverDept, date: rp.coverDate } : null, toc: !!rp.toc, wordStyles: !!rp.wordStyles,
       headNum: !!rp.headNum, lineNumbers: !!rp.lineNumbers, twoCol: !!rp.twoCol, watermark: String(rp.watermark || '').trim(), abbrFoot: !!rp.abbrFoot,
+      template: !!state.wordTemplate, tplPage: state.wordTemplate && state.wordTemplate.page,
       refs: rp.refs && r0 ? METHOD_REFS.filter(([re]) => re.test(r0.methods || '')).map(x => x[1]) : null, appendix: r0 ? appendixTables(r0, plan0) : [] };
     return { ...extras, numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
         tableNewPage: (rp.format === 'thesis' && rp.newPage) || !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
@@ -4000,7 +4033,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       if (effOptions().figPanels) await panelize(r);
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
-      const blob = await Report.build(r, wordOptions());
+      let blob = await Report.build(r, wordOptions());
+      if (state.wordTemplate) blob = await applyTemplate(blob, state.wordTemplate.bytes);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;
