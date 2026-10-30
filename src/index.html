@@ -312,6 +312,10 @@ dialog.app-dlg::backdrop{background:rgba(20,17,34,.45)}
 .keys-grid kbd{font-family:inherit;font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--soft);white-space:nowrap}
 .keys-grid .sec{grid-column:1/-1;font-weight:700;color:var(--title);margin-top:6px}
 dialog.app-dlg h3{margin:0 0 4px;color:var(--title)}
+.lv-list{list-style:none;margin:0;padding:0;max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.lv-list li{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--card)}
+.lv-list li:last-child{border-bottom:0}.lv-list li.drag{opacity:.4}.lv-list li.over{box-shadow:inset 0 2px 0 var(--accent,#7B2CBF)}
+.lv-list .h{cursor:grab;color:#999;user-select:none}.lv-list .n{margin-left:auto}.lv-list .k{min-width:18px;text-align:right;color:#888;font-size:12px}
 /* figure export dialog */
 dialog#figDlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);box-shadow:0 20px 60px rgba(28,22,72,.25)}
 dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
@@ -607,6 +611,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="row" id="varSelBar" style="gap:6px;margin-bottom:8px;flex-wrap:wrap;display:none"><b id="varSelN"></b>
         <span class="legend-note">Table</span><input type="text" id="vsTable" placeholder="table name" style="width:200px"><button class="btn ghost small" id="vsTableGo" type="button">Set</button>
         <span class="legend-note">Type</span><select id="vsType" style="width:auto"><option value="">—</option><option value="numeric">numeric</option><option value="categorical">categorical</option></select>
+        <span class="legend-note">Arrange categories</span><select id="vsLevels" style="width:auto"><option value="">—</option><option value="az">A → Z</option><option value="za">Z → A</option><option value="num">1 → 9</option><option value="freq">Most frequent first</option><option value="rare">Least frequent first</option><option value="smart">Severity / scale order</option><option value="sheet">As in the sheet</option><option value="rev">Reverse</option><option value="default">Default</option></select>
         <span class="legend-note">Copy the settings of</span><select id="vsFrom" style="width:auto"></select><button class="btn ghost small" id="vsCopyGo" type="button" title="Distribution, table, decimals, unit, role, ordinal and transformation">Copy</button>
         <button class="btn ghost small" id="vsClear" type="button">Clear selection</button></div>
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
@@ -1270,6 +1275,20 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <p class="legend-note" style="margin:0 0 8px">Single keys work when you are not typing in a box.</p>
     <div class="keys-grid" id="keysList"></div>
     <div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn primary" value="close">Close</button></div>
+  </form>
+</dialog>
+<dialog id="lvDlg" class="app-dlg" style="width:min(560px,calc(100vw - 32px))">
+  <form method="dialog">
+    <h3 id="lvTitle">Arrange categories</h3>
+    <p class="legend-note" style="margin:0 0 8px">The order of the rows in tables, of the bars and legends in figures, and of the comparisons. The <b>first</b> category is the reference for relative risk / odds ratios and in regression. Drag ⋮⋮ or use ↑ ↓.</p>
+    <div class="row" style="gap:4px;flex-wrap:wrap;margin-bottom:8px" id="lvSorts">
+      <button type="button" class="btn ghost small" data-lvsort="az">A → Z</button><button type="button" class="btn ghost small" data-lvsort="za">Z → A</button>
+      <button type="button" class="btn ghost small" data-lvsort="num">1 → 9</button><button type="button" class="btn ghost small" data-lvsort="freq">Most frequent first</button>
+      <button type="button" class="btn ghost small" data-lvsort="rare">Least frequent first</button><button type="button" class="btn ghost small" data-lvsort="smart" title="none → mild → moderate → severe, low → high, never → always, Yes before No">Severity / scale order</button>
+      <button type="button" class="btn ghost small" data-lvsort="sheet">As in the sheet</button><button type="button" class="btn ghost small" data-lvsort="rev">⇅ Reverse</button><button type="button" class="btn ghost small" data-lvsort="default">Default</button>
+    </div>
+    <ol id="lvList" class="lv-list"></ol>
+    <div class="row" style="margin-top:12px"><span class="spacer"></span><button type="button" class="btn ghost" id="lvCancel">Cancel</button> <button type="button" class="btn primary" id="lvSave">Save order</button></div>
   </form>
 </dialog>
 <dialog id="varDlg" class="app-dlg" style="width:min(760px,calc(100vw - 32px))">

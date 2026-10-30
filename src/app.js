@@ -1193,7 +1193,58 @@
     $('#vdAdjBox').style.display = v.type === 'numeric' && v.kind === 'single' && !state.cfg.noGroups ? '' : 'none';
     $('#varDlg').showModal();
   }
-  $('#varsTbl').addEventListener('click', e => { const b = e.target.closest('[data-vgear]'); if (b) openVarDlg(b.dataset.vgear); });
+  $('#varsTbl').addEventListener('click', e => { const b = e.target.closest('[data-vgear]'); if (b) openVarDlg(b.dataset.vgear); const l = e.target.closest('[data-lvarr]'); if (l) openLevelsDlg(l.dataset.lvarr); });
+
+  /* ---------- arranging the categories (levels) of a categorical variable ---------- */
+  const lvValues = v => v.cols.flatMap(c => state.data.rows.map(r => r[c.col])).filter(x => x !== null && x !== undefined && String(x).trim() !== '').map(x => String(x).trim());
+  const lvOf = v => v.levels && v.levels.length ? [...v.levels] : columnInfo(state.data.rows, v.cols[0].col).distinct.map(String);
+  // a rank for scale words: none → mild → moderate → severe, low → high, never → always; yes before no
+  const SCALE = [[/\b(very severe|very high|very good|critical|extreme|always|excellent|grade (iv|4))\b/i, 5], [/\b(very low|very poor|minimal|trace)\b/i, 1],
+    [/^(none|nil|never|absent|normal|no pain|negative|grade 0|0)$/i, 0], [/\b(mild|low|slight|light|rarely|seldom|poor|grade (i|1))\b/i, 2],
+    [/\b(moderate|medium|intermediate|sometimes|fair|average|grade (ii|2))\b/i, 3], [/\b(severe|high|heavy|often|frequently|good|marked|grade (iii|3))\b/i, 4]];
+  const scaleRank = t => { const m = SCALE.find(([re]) => re.test(t)); return m ? m[1] : null; };
+  function sortLevels(v, lv, how) {
+    const vals = lvValues(v), cnt = {}; vals.forEach(x => { cnt[x] = (cnt[x] || 0) + 1; });
+    const vl = Analysis.parseValueLabels(v.valueLabels || ''), name = l => String(vl[l] ?? l), cmp = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    const out = [...lv];
+    if (how === 'az') out.sort((a, b) => cmp(name(a), name(b)));
+    else if (how === 'za') out.sort((a, b) => cmp(name(b), name(a)));
+    else if (how === 'num') out.sort((a, b) => (isFinite(+a) && isFinite(+b) ? a - b : cmp(a, b)));
+    else if (how === 'freq') out.sort((a, b) => (cnt[b] || 0) - (cnt[a] || 0) || cmp(a, b));
+    else if (how === 'rare') out.sort((a, b) => (cnt[a] || 0) - (cnt[b] || 0) || cmp(a, b));
+    else if (how === 'rev') out.reverse();
+    else if (how === 'sheet') { const first = [...new Set(vals)]; out.sort((a, b) => (first.indexOf(a) + 1 || 1e9) - (first.indexOf(b) + 1 || 1e9)); }
+    else if (how === 'default') return defaultLevels(lv);
+    else if (how === 'smart') {
+      if (out.length === 2 && out.some(l => Analysis.POSITIVE.test(name(l)) || Analysis.POSITIVE.test(l))) return defaultLevels(lv);
+      const rk = out.map(l => [l, scaleRank(name(l)) ?? scaleRank(l)]);
+      if (rk.filter(x => x[1] !== null).length >= 2) return rk.map((x, i) => [x[0], x[1] ?? 99, i]).sort((a, b) => a[1] - b[1] || a[2] - b[2]).map(x => x[0]);
+      out.sort((a, b) => cmp(name(a), name(b)));
+    }
+    return out;
+  }
+  let lvVar = null, lvCur = [];
+  function renderLevelsList() {
+    const v = lvVar, vals = lvValues(v), cnt = {}; vals.forEach(x => { cnt[x] = (cnt[x] || 0) + 1; });
+    const vl = Analysis.parseValueLabels(v.valueLabels || '');
+    $('#lvList').innerHTML = lvCur.map((l, i) => `<li draggable="true" data-lvi="${i}"><span class="h" title="Drag">⋮⋮</span><span class="k">${i + 1}.</span><span>${esc(vl[l] !== undefined && vl[l] !== l ? `${vl[l]} (${l})` : l)}</span>${i === 0 ? '<span class="chip info" title="Reference category">ref</span>' : ''}<span class="legend-note n">n=${cnt[l] || 0}</span>
+      <button type="button" class="btn ghost small" data-lvmv="${i},-1" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="btn ghost small" data-lvmv="${i},1" ${i === lvCur.length - 1 ? 'disabled' : ''}>↓</button></li>`).join('');
+  }
+  function openLevelsDlg(id) {
+    readUiIntoCfg(); lvVar = state.cfg.variables.find(v => v.id === id); if (!lvVar) return;
+    lvCur = lvOf(lvVar); $('#lvTitle').textContent = `Arrange categories — ${lvVar.label}`; renderLevelsList(); $('#lvDlg').showModal();
+  }
+  $('#lvSorts').onclick = e => { const b = e.target.closest('[data-lvsort]'); if (!b) return; lvCur = sortLevels(lvVar, lvCur, b.dataset.lvsort); renderLevelsList(); };
+  $('#lvList').addEventListener('click', e => { const b = e.target.closest('[data-lvmv]'); if (!b) return; const [i, d] = b.dataset.lvmv.split(',').map(Number), j = i + d; if (j < 0 || j >= lvCur.length) return; [lvCur[i], lvCur[j]] = [lvCur[j], lvCur[i]]; renderLevelsList(); });
+  let lvDrag = null;
+  $('#lvList').addEventListener('dragstart', e => { const li = e.target.closest('li'); if (!li) return; lvDrag = +li.dataset.lvi; li.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(lvDrag)); } catch (_) {} });
+  $('#lvList').addEventListener('dragover', e => { const li = e.target.closest('li'); if (!li || lvDrag === null) return; e.preventDefault(); document.querySelectorAll('#lvList li.over').forEach(x => x.classList.remove('over')); li.classList.add('over'); });
+  $('#lvList').addEventListener('drop', e => { const li = e.target.closest('li'); if (!li || lvDrag === null) return; e.preventDefault(); const to = +li.dataset.lvi, [m] = lvCur.splice(lvDrag, 1); lvCur.splice(to, 0, m); lvDrag = null; renderLevelsList(); });
+  $('#lvList').addEventListener('dragend', () => { lvDrag = null; document.querySelectorAll('#lvList li').forEach(x => x.classList.remove('drag', 'over')); });
+  $('#lvCancel').onclick = () => $('#lvDlg').close();
+  $('#lvSave').onclick = () => { lvVar.levels = [...lvCur]; $('#lvDlg').close(); renderVariables(); toast(`${lvVar.label}: categories ${lvCur.join(' → ')}`); };
+  $('#vsLevels').onchange = e => { readUiIntoCfg(); const how = e.target.value; if (!how) return; const list = selVars().filter(v => v.type === 'categorical');
+    list.forEach(v => { v.levels = sortLevels(v, lvOf(v), how); }); e.target.value = ''; renderVariables(); toast(list.length ? `Categories arranged in ${list.length} variable${list.length > 1 ? 's' : ''}` : 'No categorical variable selected'); };
   $('#vdCancel').onclick = () => $('#varDlg').close();
   $('#vdSave').onclick = () => {
     const v = vdVar; if (!v) return;
@@ -1688,7 +1739,7 @@
         <td>${v.kind === 'repeated' ? `<select data-k="split" title="Analyse the timepoints together, or each as its own variable"><option value="">repeated measure</option><option value="1" ${v.split ? 'selected' : ''}>separate variables</option></select>` : `<select data-k="type"><option value="numeric" ${v.type === 'numeric' ? 'selected' : ''}>numeric</option><option value="categorical" ${v.type === 'categorical' ? 'selected' : ''}>categorical</option></select>`}</td>
         <td>${v.type === 'numeric' ? `<select data-k="dist"><option value="auto" ${v.dist === 'auto' ? 'selected' : ''}>Auto</option><option value="param" ${v.dist === 'param' ? 'selected' : ''}>Parametric</option><option value="nonparam" ${v.dist === 'nonparam' ? 'selected' : ''}>Non-parametric</option></select><div style="margin-top:4px">${swChip(v)}</div>` : swChip(v)}</td>
         <td>${v.kind === 'repeated' ? (v.split ? `<input type="text" data-k="splitTable" value="${esc(v.splitTable || 'Other outcomes')}">` : '<span class="legend-note">own table</span>') : `<input type="text" data-k="table" value="${esc(v.table)}">`}</td>
-        <td>${v.type === 'categorical' ? `<input type="text" data-k="levels" value="${esc(v.levels.join(', '))}">` : '<span class="legend-note">—</span>'}</td>
+        <td>${v.type === 'categorical' ? `<div class="row" style="gap:4px;flex-wrap:nowrap"><input type="text" data-k="levels" value="${esc(v.levels.join(', '))}"><button class="btn ghost small" data-lvarr="${v.id}" type="button" title="Arrange the categories: drag, A-Z, by frequency, severity order …">↕</button></div>` : '<span class="legend-note">—</span>'}</td>
         <td>${v.type === 'categorical' ? `<input type="text" data-k="valueLabels" value="${esc(v.valueLabels || '')}" placeholder="${esc(v.levels.slice(0, 3).map(l => `${l}=…`).join(', ') || 'e.g. 1=Male, 2=Female')}" title="Code=label pairs separated by commas, e.g. 1=Male, 2=Female">` : '<span class="legend-note" title="Set the type to categorical to label coded values">—</span>'}</td>
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
         <td style="white-space:nowrap"><button class="btn ghost small" data-vgear="${v.id}" type="button" title="Unit, decimals, role, ordinal, transformation, Arabic label, merging categories, adjusted comparison">⚙${varBadges(v)}</button>${(warn[v.id] || []).map(w => `<span class="chip warn" title="${esc(w[1])}">${w[0]}</span>`).join('')}</td>
