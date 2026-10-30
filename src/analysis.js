@@ -1491,6 +1491,109 @@ const Analysis = (() => {
     return { kind: 'tost', title: `Equivalence of ${lowerFirst(plain(lab))} between the studied groups (margin ± ${fmt(D, d)})`, head, rows: trows,
       footnote: `Two one-sided t-tests (TOST); the groups are equivalent when the 90% CI of the mean difference lies within the margin (TOST P value ≤ ${alpha}).`, comment: sent.join(' '), figures: [], meta: {} };
   }
+  /* ---------- non-inferiority, equivalence and superiority trials (a margin for the difference new − reference) ---------- */
+  const DESIGN_NAME = { noninf: 'non-inferiority', equiv: 'equivalence', superior: 'superiority' };
+  function noninfSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G, M0 = Math.abs(parseFloat(String(a.margin ?? '').replace(',', '.'))); if (groups.length < 2 || !(M0 >= 0) || (!(M0 > 0) && a.design !== 'superior')) return null;
+    const tg = groups.includes(a.treat) ? a.treat : groups[1], rg = groups.includes(a.control) && a.control !== tg ? a.control : groups.find(g => g !== tg);
+    const tl = gl[groups.indexOf(tg)], rl = gl[groups.indexOf(rg)], design = DESIGN_NAME[a.design] ? a.design : 'noninf', better = a.better === 'lower' ? 'lower' : 'higher';
+    const conf = (+a.conf || (design === 'equiv' ? 90 : 95)) / 100, cpct = Math.round(conf * 100), lab = plain(columnLabel(cfg, a.outcome));
+    const binary = columnKind(cfg, rows, a.outcome) !== 'numeric', pos = a.positive, M = binary ? M0 / 100 : M0, unit = binary ? ' percentage points' : '';
+    const cov = binary ? [] : (a.predictors || []).filter(c => c !== a.outcome).map(c => encode(cfg, rows, c)).filter(e => e.terms.length);
+    const pops = [{ name: 'Intention-to-treat', rows }];
+    if (a.ppCol && a.ppVal !== undefined && a.ppVal !== '') pops.push({ name: 'Per-protocol', rows: rows.filter(r => toCat(r[a.ppCol]) === a.ppVal) });
+    if (pops.length === 1) pops[0].name = 'All patients';
+    const fx = v => binary ? fmt(100 * v, 1) : fmt(v, d);
+    const verdict = r => { const up = better === 'higher';
+      if (design === 'equiv') return r.lo > -M && r.hi < M ? 'Equivalent' : r.lo > M || r.hi < -M ? 'Not equivalent' : 'Inconclusive';
+      if (design === 'superior') return (up ? r.lo > M : r.hi < -M) ? 'Superior' : 'Not shown superior';
+      if (up ? r.lo > -M : r.hi < M) return (up ? r.lo > 0 : r.hi < 0) ? 'Non-inferior (and superior)' : 'Non-inferior';
+      return (up ? r.hi < -M : r.lo > M) ? 'Inferior' : 'Inconclusive'; };
+    const res = pops.map(pop => {
+      const T = pop.rows.filter(r => groupOf(cfg, r) === tg), R = pop.rows.filter(r => groupOf(cfg, r) === rg);
+      if (binary) { const ok = r => toCat(r[a.outcome]) !== null, t1 = T.filter(ok), r1 = R.filter(ok), x1 = t1.filter(r => toCat(r[a.outcome]) === pos).length, x2 = r1.filter(r => toCat(r[a.outcome]) === pos).length, n1 = t1.length, n2 = r1.length;
+        if (n1 < 2 || n2 < 2) return null; const nc = S.newcombeDiff(x1, n1, x2, n2, conf), p1 = x1 / n1, p2 = x2 / n2, se = Math.sqrt(p1 * (1 - p1) / n1 + p2 * (1 - p2) / n2) || 1e-9;
+        const m = S.marginTest(nc.d, se, Infinity, M, design, better, conf, d0 => S.fmZ(x1, n1, x2, n2, d0));
+        return { pop, ...m, lo: nc.lo, hi: nc.hi, tTxt: `${x1}/${n1} (${fmt(100 * p1, 1)}%)`, rTxt: `${x2}/${n2} (${fmt(100 * p2, 1)}%)`, n1, n2, p2 }; }
+      const ok = r => isFinite(toNum(r[a.outcome])) && cov.every(e => e.ok(r)), t1 = T.filter(ok), r1 = R.filter(ok); if (t1.length < 2 || r1.length < 2) return null;
+      const xv = t1.map(r => toNum(r[a.outcome])), yv = r1.map(r => toNum(r[a.outcome])), all = [...t1, ...r1];
+      let est, se, df;
+      if (cov.length) { const lr = S.linearRegression(all.map((r, i) => [i < t1.length ? 1 : 0, ...cov.flatMap(e => e.terms.map(t => t.get(r)))]), all.map(r => toNum(r[a.outcome]))); if (!lr) return null; est = lr.coef[1]; se = lr.terms[1].se; df = lr.df; }
+      else { const tt = S.tost(xv, yv, -1, 1); est = tt.md; se = tt.se; df = tt.df; }
+      const m = S.marginTest(est, se, df, M, design, better, conf), ms = v => `${fmt(S.mean(v), d)} ± ${fmt(S.sd(v), d)} (n=${v.length})`;
+      return { pop, ...m, tTxt: ms(xv), rTxt: ms(yv), n1: xv.length, n2: yv.length, sd: Math.sqrt(((xv.length - 1) * S.variance(xv) + (yv.length - 1) * S.variance(yv)) / (xv.length + yv.length - 2)) };
+    }).filter(Boolean);
+    if (!res.length) return null; used.add('noninf'); if (cov.length) used.add('noninfAdj');
+    res.forEach(r => { r.v = verdict(r); });
+    const sg = s0 => M > 0 ? s0 : '', mTxt = design === 'equiv' ? `± ${fx(M)}${unit}` : design === 'superior' ? `${sg(better === 'higher' ? '+' : '−')}${fx(M)}${unit}` : `${sg(better === 'higher' ? '−' : '+')}${fx(M)}${unit}`, a1 = (1 - conf) / 2;
+    const effName = binary ? `Risk difference, % (${cpct}% CI)` : `${cov.length ? 'Adjusted mean' : 'Mean'} difference (${cpct}% CI)`;
+    const head = ['Population', `${tl} (new)`, `${rl} (reference)`, effName, 'Margin', `P (${DESIGN_NAME[design]})`, 'Conclusion'];
+    const trows = res.map(r => [{ t: [r.pop.name], b: true }, { t: [r.tTxt] }, { t: [r.rTxt] }, { t: [`${fx(r.est)} (${fx(r.lo)} to ${fx(r.hi)})`] }, { t: [mTxt] }, { t: [fmtP(r.p, a1)] }, { t: [r.v] }]);
+    const what = binary ? `the proportion of ${lowerFirst(lab)} (${pos})` : lowerFirst(lab);
+    const sent = res.map(r => `${res.length > 1 ? `In the ${r.pop.name.toLowerCase()} population, the` : 'The'} difference in ${what} between ${tl} and ${rl} was ${fx(r.est)}${binary ? ' percentage points' : ''} (${cpct}% CI ${fx(r.lo)} to ${fx(r.hi)}); ${
+      design === 'equiv' ? (r.v === 'Equivalent' ? `the CI lay entirely within the equivalence margin of ± ${fx(M)}${unit}, so the treatments were equivalent` : `the CI was not entirely within the equivalence margin of ± ${fx(M)}${unit}, so equivalence was not shown`)
+      : design === 'superior' ? (r.v === 'Superior' ? `the CI excluded the superiority margin of ${fx(M)}${unit}, so ${tl} was superior` : `the CI did not exclude the superiority margin of ${fx(M)}${unit}, so superiority was not shown`)
+      : r.v.startsWith('Non-inferior') ? `the ${better === 'higher' ? 'lower' : 'upper'} limit of the CI did not cross the non-inferiority margin of ${mTxt}, so ${tl} was non-inferior to ${rl}${r.v.includes('superior') ? ', and also superior as the CI excluded zero' : ''}`
+      : r.v === 'Inferior' ? `the whole CI lay beyond the non-inferiority margin of ${mTxt}, so ${tl} was inferior to ${rl}` : `the CI crossed the non-inferiority margin of ${mTxt}, so non-inferiority was not shown`} (P value ${pTxt(r.p)}).`);
+    if (res.length > 1) sent.push(res.every(r => r.v === res[0].v) ? `The ${res.map(r => r.pop.name.toLowerCase()).join(' and ')} analyses agreed.` : `The ${res.map(r => r.pop.name.toLowerCase()).join(' and ')} analyses did not agree, so the result should be interpreted with caution.`);
+    const f = [`${effName.replace(/ \(.*$/, '')}: ${tl} − ${rl}`, `${better === 'higher' ? 'Higher' : 'Lower'} values of ${lowerFirst(lab)} are better`,
+      design === 'equiv' ? `equivalence when the ${cpct}% CI lies within ± ${fx(M)}${unit} (two one-sided tests)` : design === 'superior' ? `superiority when the ${cpct}% CI excludes ${mTxt}` : `non-inferiority when the ${cpct}% CI excludes the margin ${mTxt}`, `one-sided P values; *: P ≤ ${fmt(a1, 3)}; the conclusion follows the CI`,
+      binary ? "Newcombe's hybrid score CI and the Farrington-Manning test" : cov.length ? `ANCOVA adjusted for ${listJoin(cov.map(e => lowerFirst(plain(e.label))))}` : 't-test with pooled variance'];
+    if (a.ssPower) { const pw = +a.ssPower / 100, r0 = res[0], need = S.nMargin({ sd: binary ? NaN : r0.sd, p: binary ? r0.p2 : NaN, margin: M, design, conf, power: pw, trueDiff: 0 });
+      f.push(`Sample size for ${a.ssPower}% power (true difference 0${binary ? `, ${fmt(100 * r0.p2, 1)}% in both groups` : `, SD ${fmt(r0.sd, d)}`}): ${isFinite(need) ? need : '—'} per group; analysed ${r0.n1} and ${r0.n2}`);
+      if (isFinite(need)) sent.push(`The study ${Math.min(r0.n1, r0.n2) >= need ? 'had' : 'did not have'} the ${need} patients per group needed for ${a.ssPower}% power.`); }
+    if (a.ppCol && pops.length > 1) f.push(`Per-protocol: ${columnLabel(cfg, a.ppCol)} = ${a.ppVal}`);
+    const sc = binary ? 100 : 1;
+    return { kind: 'noninf', title: `${cap(DESIGN_NAME[design])} of ${tl} compared with ${rl} for ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
+      figures: a.marginFig === false ? [] : [{ sig: true, caption: `${cap(DESIGN_NAME[design])} plot: difference in ${what} (${tl} − ${rl}) with its ${cpct}% CI and the margin`,
+        spec: { type: 'margin', rows: res.map(r => ({ label: r.pop.name, est: r.est * sc, lo: r.lo * sc, hi: r.hi * sc })), margin: M * sc, design, better, xLabel: `${binary ? 'Risk difference (percentage points)' : 'Difference'}: ${tl} − ${rl}`, favNew: `Favours ${tl}`, favRef: `Favours ${rl}` } }],
+      meta: { res } };
+  }
+  /* ---------- GEE and generalised mixed models of a repeated outcome (binary, count or numeric) ---------- */
+  function geeSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G, v = cfg.variables.find(x => x.id === a.rvar && x.kind === 'repeated'); if (!v) return null;
+    const cols = v.cols.filter(c => c.include !== false), T = cols.length, k = groups.length; if (T < 2) return null;
+    const binary = v.type === 'categorical', pos = a.positive || (levelsOf(cfg, rows, cols[0].col).find(l => POSITIVE.test(l)) || levelsOf(cfg, rows, cols[0].col).slice(-1)[0]);
+    const family = binary ? 'binomial' : a.family === 'poisson' ? 'poisson' : 'gaussian', glmm = binary && a.method === 'glmm', corr = ['independence', 'ar1'].includes(a.corr) ? a.corr : 'exchangeable';
+    const linT = a.timeAs === 'linear', tval = c => { const t = (cfg.tpTime || {})[c.tp]; return t !== undefined && t !== '' && isFinite(+t) ? +t : cols.indexOf(c); };
+    const inter = a.inter !== false && k > 1, cov = (a.predictors || []).map(c => encode(cfg, rows, c)).filter(e => e.terms.length);
+    const tLab = c => c.label || cfg.tpLabels[c.tp] || c.tp;
+    const y = [], X = [], cl = [], tm = [];
+    rows.forEach((r, ri) => { const gi = groups.indexOf(groupOf(cfg, r)); if (gi < 0 || !cov.every(e => e.ok(r))) return; const cv = cov.flatMap(e => e.terms.map(t => t.get(r)));
+      cols.forEach((c, t) => { let val; if (binary) { const cc = toCat(r[c.col]); if (cc === null) return; val = +(cc === pos); } else { val = toNum(r[c.col]); if (!isFinite(val) || (family === 'poisson' && val < 0)) return; }
+        const gd = Array.from({ length: k - 1 }, (_, q) => +(gi === q + 1)), td = linT ? [tval(c)] : Array.from({ length: T - 1 }, (_, q) => +(t === q + 1));
+        y.push(val); cl.push(ri); tm.push(t); X.push([1, ...gd, ...td, ...(inter ? gd.flatMap(g => td.map(tt => g * tt)) : []), ...cv]); }); });
+    if (y.length < X[0].length + 10 || new Set(cl).size < 5 || (binary && (y.every(Boolean) || !y.some(Boolean)))) return null;
+    const m = glmm ? S.glmmLogit(y, X, cl) : S.gee(y, X, cl, tm, family, corr); if (!m || m.beta.some(b => !isFinite(b))) return null;
+    used.add(glmm ? 'glmm' : 'gee');
+    const nt = linT ? 1 : T - 1, ix = (s0, n) => Array.from({ length: n }, (_, q) => s0 + q), Gi = ix(1, k - 1), Ti = ix(k, nt), Ii = inter ? ix(k + nt, (k - 1) * nt) : [], Ci = ix(k + nt + Ii.length, cov.reduce((n, e) => n + e.terms.length, 0));
+    const expo = family !== 'gaussian', eName = family === 'binomial' ? 'OR' : family === 'poisson' ? 'RR' : 'B', z = S.ZC();
+    const est = j => { const B = m.beta[j], se = m.se[j], p = 2 * jStat.normal.cdf(-Math.abs(B / se), 0, 1); return expo ? { e: Math.exp(B), lo: Math.exp(B - z * se), hi: Math.exp(B + z * se), p } : { e: B, lo: B - z * se, hi: B + z * se, p }; };
+    const dd = expo ? 2 : d, E = q => `${fmt(q.e, dd)} (${fmt(q.lo, dd)}${expo ? '-' : ' to '}${fmt(q.hi, dd)})`;
+    const names = [...Gi.map((_, q) => `${gl[q + 1]} vs ${gl[0]}`), ...(linT ? ['Time (per unit)'] : cols.slice(1).map(c => `${tLab(c)} vs ${tLab(cols[0])}`)),
+      ...(inter ? Gi.flatMap((_, q) => (linT ? ['time'] : cols.slice(1).map(tLab)).map(tn => `${gl[q + 1]} × ${tn}`)) : []), ...cov.flatMap(e => e.terms.map(t => t.label))];
+    const W = [['Study group', k > 1 ? m.wald(Gi) : null], ['Time', m.wald(Ti)], ['Group × time', inter ? m.wald(Ii) : null]].filter(x => x[1]);
+    const trows = [...W.map(([n, w]) => [{ t: [`${n} (overall)`], b: true }, { t: [`Wald χ²(${w.df}) = ${fmt(w.chi, 2)}`] }, { t: [fmtP(w.p, alpha)] }]),
+      ...names.map((n, q) => { const r = est(q + 1); return [{ t: [n], b: true }, { t: [E(r)] }, { t: [fmtP(r.p, alpha)] }]; })];
+    const what = binary ? `${lowerFirst(plain(v.label))} (${pos})` : lowerFirst(plain(v.label)), wi = W.find(x => x[0] === 'Group × time'), wg = W.find(x => x[0] === 'Study group'), wt = W.find(x => x[0] === 'Time');
+    const sent = [];
+    if (wi) sent.push(`The change in ${what} over time ${wi[1].p <= alpha ? 'differed significantly' : 'did not differ significantly'} between the groups (group × time P value ${pTxt(wi[1].p)}).`);
+    if (wg) sent.push(`${binary ? `The odds of ${what}` : cap(what)} ${wg[1].p <= alpha ? 'differed significantly' : 'did not differ significantly'} between the groups${inter ? ' at the first measurement' : ''} (P value ${pTxt(wg[1].p)}).`);
+    if (wt) sent.push(`${cap(what)} ${wt[1].p <= alpha ? 'changed significantly' : 'did not change significantly'} over time${inter && k > 1 ? ` in ${gl[0]}` : ''} (P value ${pTxt(wt[1].p)}).`);
+    const sigC = Ci.map((j, q) => [cov.flatMap(e => e.terms.map(t => t.label))[q], est(j)]).filter(([, r]) => r.p <= alpha);
+    if (sigC.length) sent.push(`${cap(listJoin(sigC.map(([l, r]) => `${lowerFirst(plain(l))} (${eName} = ${fmt(r.e, dd)}, P value ${pTxt(r.p)})`)))} ${sigC.length > 1 ? 'were' : 'was'} also significantly associated with ${what}.`);
+    const fam = { binomial: 'logistic (binary outcome)', poisson: 'Poisson (counts)', gaussian: 'linear (numeric outcome)' }[family];
+    const foot = glmm ? `Generalised linear mixed model, logistic with a random intercept per patient (adaptive Gauss-Hermite quadrature, 15 points); random-intercept variance = ${fmt(m.var, 3)}, ICC = ${fmt(m.icc, 2)}; ${m.clusters} patients, ${m.n} measurements`
+      : `Generalised estimating equations, ${fam}, ${corr === 'ar1' ? 'AR(1)' : corr} working correlation${corr !== 'independence' ? ` (α = ${fmt(m.alpha, 3)})` : ''}, robust (sandwich) standard errors; ${m.clusters} patients, ${m.n} measurements`;
+    // observed course: % with the outcome (or mean) at each timepoint in each group
+    const series = groups.map((g, gi) => ({ name: gl[gi], values: cols.map(c => { const vs = rows.filter(r => groupOf(cfg, r) === g).map(r => binary ? (toCat(r[c.col]) === null ? NaN : +(toCat(r[c.col]) === pos)) : toNum(r[c.col])).filter(isFinite); return vs.length ? (binary ? 100 : 1) * S.mean(vs) : NaN; }) }));
+    return { kind: glmm ? 'glmm' : 'gee', title: `${glmm ? 'Mixed-effects logistic regression' : 'GEE analysis'} of ${what} over time${cov.length ? ` adjusted for ${listJoin(cov.map(e => lowerFirst(plain(e.label))))}` : ''}`,
+      head: ['Effect', expo ? `${eName} (95% CI) / test` : 'B (95% CI) / test', 'P value'], rows: trows,
+      footnote: [`${eName}: ${family === 'binomial' ? 'odds ratio' : family === 'poisson' ? 'rate ratio' : 'regression coefficient'}`, 'CI: Confidence interval', foot, linT ? 'time as a continuous variable' : `time as categories (reference ${tLab(cols[0])})`, ...(k > 1 ? [`reference group: ${gl[0]}`] : [])].join(', ') + '.',
+      comment: sent.join(' '), figures: [{ sig: wi ? wi[1].p <= alpha : true, caption: `${binary ? `Percentage with ${what}` : `Mean ${what}`} at each measurement in the studied groups`,
+        spec: { type: 'line', categories: cols.map(tLab), yLabel: binary ? `% with ${plain(v.label)} (${pos})` : plain(v.label), ...(binary ? { percent: true } : {}), series: k > 1 ? series : series.map(s => ({ ...s, name: 'All patients' })), ...(k < 2 ? { legend: false } : {}) } }],
+      meta: { m } };
+  }
   // Mantel-Haenszel: the odds ratio of a yes/no outcome between two study groups, pooled over the strata of a third variable
   function mhSection(a, cfg, rows, alpha, d, used, G) {
     const { gl, groups } = G; if (groups.length !== 2 || !a.second) return null;
@@ -2637,7 +2740,7 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss'].includes(a.type))) continue;
+      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee'].includes(a.type))) continue;
       const needs = {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
@@ -2645,16 +2748,16 @@ const Analysis = (() => {
         methodcomp: () => a.second, pca: () => (a.predictors || []).length >= 3, partial: () => a.second && (a.predictors || []).length, anova2: () => a.second, mediation: () => a.second && a.xvar, psm: () => (a.predictors || []).length, lmm: () => a.rvar, tost: () => a.margin !== undefined && a.margin !== '', mh: () => a.positive && a.second, clogit: () => a.positive && a.second && (a.predictors || []).length,
         correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second,
         cif: () => a.event && a.positive && a.competing, tdroc: () => a.event && a.positive && (a.predictors || []).length, quantreg: () => (a.predictors || []).length, fleiss: () => (a.predictors || []).length >= 2,
-        rmcorr: () => a.second && a.idcol, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
+        rmcorr: () => a.second && a.idcol, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
         agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, count: countSection, ordinal: ordinalSection, multinom: ordinalSection, methodcomp: methodSection, pca: pcaSection, partial: partialSection, anova2: anova2Section, mediation: mediationSection, psm: psmSection, lmm: lmmSection, tost: tostSection, mh: mhSection, clogit: clogitSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection,
-        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, firth: firthSection, mi: miSection }[a.type];
+        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
-      const compares = ['ancova', 'survival', 'cif', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
+      const compares = ['ancova', 'survival', 'cif', 'noninf', 'gee', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
         : a.subset === 'each' ? groups.map(g => ({ g, rows: rows.filter(r => groupOf(cfg, r) === g) }))
         : groups.includes(a.subset) ? [{ g: a.subset, rows: rows.filter(r => groupOf(cfg, r) === a.subset) }] : [{ g: null, rows }];
@@ -3030,7 +3133,11 @@ const Analysis = (() => {
       firth: "Firth's penalized-likelihood logistic regression was used to reduce small-sample bias and to handle separation.",
       mi: "Missing values were handled by multiple imputation by chained equations (predictive mean matching), and estimates were pooled with Rubin's rules.",
       rcs: 'Non-linear effects of continuous predictors were modelled with restricted cubic splines (knots at Harrell\'s recommended percentiles) and tested with Wald tests.',
-      nomogram: 'A nomogram was constructed from the logistic regression model.' };
+      nomogram: 'A nomogram was constructed from the logistic regression model.',
+      noninf: "Non-inferiority, equivalence or superiority was judged by comparing the confidence interval of the difference between the new and the reference treatment (new − reference) with the prespecified margin; differences in means were estimated with the t-test, and differences in proportions with Newcombe's hybrid score interval and the Farrington-Manning test.",
+      noninfAdj: 'Differences in means were adjusted for covariates by analysis of covariance where stated.',
+      gee: 'Repeated binary, count and numeric outcomes were analysed with generalised estimating equations (GEE) with robust (sandwich) standard errors, including the study group, time and their interaction.',
+      glmm: 'Repeated binary outcomes were analysed with mixed-effects logistic regression with a random intercept per patient (maximum likelihood, adaptive Gauss-Hermite quadrature).' };
     Object.entries(M8).forEach(([k2, t]) => { if (used.has(k2)) s.push(t); });
     if (used.has('tost')) s.push('Equivalence was tested with two one-sided t-tests (TOST) against the stated margin, using the 90% confidence interval of the mean difference.');
     if (used.has('mh')) s.push('Odds ratios stratified by a third variable were pooled with the Mantel-Haenszel method, and their homogeneity checked with the Breslow-Day test.');

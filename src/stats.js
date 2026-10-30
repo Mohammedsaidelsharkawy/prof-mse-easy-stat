@@ -1456,13 +1456,120 @@ const Stats = (() => {
     return s2 / Math.pow(1 + t * t / df, -(df + 1) / 2);
   }
   // equivalence by two one-sided t-tests (TOST) against the margins (lo, hi) of the mean difference x − y
+  /* ---------- non-inferiority / equivalence / superiority with a margin ---------- */
+  const wilsonCI = (x, n, z) => { const p = x / n, den = 1 + z * z / n, c = (p + z * z / (2 * n)) / den, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den; return [c - h, c + h]; };
+  // Newcombe's hybrid score interval of p1 − p2 (method 10)
+  function newcombeDiff(x1, n1, x2, n2, conf) {
+    const z = jStat.normal.inv(1 - (1 - conf) / 2, 0, 1), p1 = x1 / n1, p2 = x2 / n2, [l1, u1] = wilsonCI(x1, n1, z), [l2, u2] = wilsonCI(x2, n2, z), d = p1 - p2;
+    return { d, lo: d - Math.sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2), hi: d + Math.sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2) };
+  }
+  // Farrington-Manning score statistic for H0: p1 − p2 = delta (restricted maximum likelihood)
+  function fmZ(x1, n1, x2, n2, delta) {
+    const p1 = x1 / n1, p2 = x2 / n2, N = n1 + n2, C = x1 + x2; let q0 = C / N, q1 = q0;
+    if (delta !== 0) { const t3 = N, t2 = (n1 + 2 * n2) * delta - N - C, t1 = (x2 * delta - N - 2 * x2) * delta + C, t0 = x2 * delta * (1 - delta);
+      const q = (t2 / (3 * t3)) ** 3 - t1 * t2 / (6 * t3 * t3) + t0 / (2 * t3), pp = Math.sign(q) * Math.sqrt(Math.max(0, (t2 / (3 * t3)) ** 2 - t1 / (3 * t3))), an = (Math.PI + Math.acos(Math.max(-1, Math.min(1, pp ? q / pp ** 3 : 0)))) / 3;
+      q0 = 2 * pp * Math.cos(an) - t2 / (3 * t3); q1 = q0 + delta; }
+    const se = Math.sqrt(Math.max(1e-300, q1 * (1 - q1) / n1 + q0 * (1 - q0) / n2)); return (p1 - p2 - delta) / se;
+  }
+  // margin tests of a difference (new − reference): design 'noninf' | 'equiv' | 'superior'; better 'higher' | 'lower'
+  // est, se and df (Infinity for z) give the CI and the one-sided P values; zAt(delta) may replace (est − delta) / se (score tests)
+  function marginTest(est, se, df, margin, design, better, conf, zAt) {
+    const q = isFinite(df) ? jStat.studentt.inv(1 - (1 - conf) / 2, df) : jStat.normal.inv(1 - (1 - conf) / 2, 0, 1), cdf = t => isFinite(df) ? jStat.studentt.cdf(t, df) : jStat.normal.cdf(t, 0, 1);
+    const stat = d0 => zAt ? zAt(d0) : (est - d0) / se, pAbove = d0 => 1 - cdf(stat(d0)), pBelow = d0 => cdf(stat(d0)), M = Math.abs(margin), up = better !== 'lower';
+    let p;
+    if (design === 'equiv') p = Math.max(pAbove(-M), pBelow(M));
+    else if (design === 'superior') p = up ? pAbove(M) : pBelow(-M);
+    else p = up ? pAbove(-M) : pBelow(M);
+    return { est, se, lo: est - q * se, hi: est + q * se, p, pSup0: up ? pAbove(0) : pBelow(0) };
+  }
+  // sample size per group (equal groups) for a margin design; sd for means, or p (the expected proportion in both groups) for proportions
+  function nMargin({ sd, p, margin, design, conf, power, trueDiff = 0 }) {
+    const za = jStat.normal.inv(1 - (1 - conf) / 2, 0, 1), zb = jStat.normal.inv(design === 'equiv' ? 1 - (1 - power) / 2 : power, 0, 1), v = isFinite(sd) ? 2 * sd * sd : 2 * p * (1 - p);
+    const gap = design === 'equiv' ? Math.abs(margin) - Math.abs(trueDiff) : design === 'superior' ? Math.abs(trueDiff) - Math.abs(margin) : Math.abs(margin) + trueDiff;
+    return gap > 0 ? Math.ceil(v * (za + zb) ** 2 / (gap * gap)) : Infinity;
+  }
+  /* ---------- GEE (binary / count / numeric repeated outcomes) and a random-intercept logistic GLMM ---------- */
+  // y, X (with intercept column), cluster ids, time index per row (for AR(1)); robust (sandwich) covariance, as statsmodels GEE
+  function gee(y, X, cl, time, family = 'binomial', corr = 'exchangeable') {
+    const n = y.length, p = X[0].length, ids = [...new Set(cl)], groups = ids.map(id => cl.map((c, i) => c === id ? i : -1).filter(i => i >= 0));
+    const lk = family === 'binomial' ? { inv: e => 1 / (1 + Math.exp(-e)), d: m => m * (1 - m), v: m => m * (1 - m) } : family === 'poisson' ? { inv: Math.exp, d: m => m, v: m => m } : { inv: e => e, d: () => 1, v: () => 1 };
+    let beta = new Array(p).fill(0), alpha = 0, mu = [];
+    if (family === 'binomial') { const m0 = mean(y); beta[0] = Math.log(Math.max(1e-6, m0) / Math.max(1e-6, 1 - m0)); } else if (family === 'poisson') beta[0] = Math.log(Math.max(1e-6, mean(y))); else beta[0] = mean(y);
+    const R = g => g.map((i, a) => g.map((j, b) => a === b ? 1 : corr === 'independence' ? 0 : corr === 'ar1' ? alpha ** Math.abs(time[i] - time[j]) : alpha));
+    const means = () => { mu = X.map(r => lk.inv(r.reduce((t, v, j) => t + v * beta[j], 0))); };
+    const parts = () => { const B = Array.from({ length: p }, () => new Array(p).fill(0)), U = new Array(p).fill(0), per = [];
+      for (const g of groups) { const sdv = g.map(i => Math.sqrt(lk.v(mu[i]))), Rm = R(g), V = Rm.map((r, a) => r.map((v, b) => v * sdv[a] * sdv[b])), Vi = invert(V); if (!Vi) return null;
+        const D = g.map(i => X[i].map(x => x * lk.d(mu[i]))), res = g.map(i => y[i] - mu[i]), VD = Vi.map(r => D[0].map((_, j) => r.reduce((t, v, k) => t + v * D[k][j], 0))), Vr = Vi.map(r => r.reduce((t, v, k) => t + v * res[k], 0));
+        const u = D[0].map((_, j) => D.reduce((t, row, k) => t + row[j] * Vr[k], 0)); per.push(u);
+        for (let a = 0; a < p; a++) { U[a] += u[a]; for (let b = 0; b < p; b++) for (let k = 0; k < g.length; k++) B[a][b] += D[k][a] * VD[k][b]; } }
+      return { B, U, per }; };
+    const updAssoc = () => { if (corr === 'independence') return; const pr = groups.map(g => g.map(i => (y[i] - mu[i]) / Math.sqrt(lk.v(mu[i]))));
+      if (corr === 'ar1') { let l0 = 0, l1 = 0; pr.forEach((r, gi) => { const g = groups[gi], o = g.map((_, k) => k).sort((a, b) => time[g[a]] - time[g[b]]), rr = o.map(k => r[k]); if (rr.length > 1) { let s1 = 0; for (let k = 0; k + 1 < rr.length; k++) s1 += rr[k] * rr[k + 1]; l1 += s1 / (rr.length - 1); l0 += rr.reduce((t, v) => t + v * v, 0) / rr.length; } }); alpha = l0 ? l1 / l0 : 0; return; }
+      let scale = 0, rs = 0, np = 0; pr.forEach(r => { const ssr = r.reduce((t, v) => t + v * v, 0), sm = r.reduce((t, v) => t + v, 0); scale += ssr; rs += (sm * sm - ssr) / 2; np += r.length * (r.length - 1) / 2; });
+      scale /= (n - p); alpha = np > p ? rs / scale / (np - p) : 0; };
+    means(); let it = 0, conv = false, assoc = 0;
+    for (; it < 100; it++) {
+      const P = parts(); if (!P) return null; const Bi = invert(P.B); if (!Bi) return null;
+      const step = Bi.map(r => r.reduce((t, v, j) => t + v * P.U[j], 0)); beta = beta.map((b, j) => b + step[j]); means();
+      if (Math.sqrt(P.U.reduce((t, v) => t + v * v, 0)) < 1e-8 && assoc > 0) { conv = true; break; }
+      updAssoc(); assoc++;
+    }
+    const P = parts(), Bi = invert(P.B), C = Array.from({ length: p }, (_, a) => Array.from({ length: p }, (_, b) => P.per.reduce((t, u) => t + u[a] * u[b], 0)));
+    const cov = Bi.map((r, a) => Bi.map((_, b) => r.reduce((t, v, k) => t + v * C[k].reduce((u, w, l) => u + w * Bi[l][b], 0), 0)));
+    return { beta, cov, se: cov.map((r, j) => Math.sqrt(r[j])), alpha: corr === 'independence' ? 0 : alpha, n, clusters: groups.length, converged: conv, iter: it,
+      wald: idx => waldTest(beta, cov, idx) };
+  }
+  // Gauss-Hermite nodes and weights (Golub-Welsch would also do; Newton on the Hermite polynomials as in Numerical Recipes)
+  function gaussHermite(nq) {
+    const x = new Array(nq), w = new Array(nq), m = (nq + 1) >> 1, PIM4 = 0.7511255444649425; let z = 0;
+    for (let i = 0; i < m; i++) {
+      z = i === 0 ? Math.sqrt(2 * nq + 1) - 1.85575 * Math.pow(2 * nq + 1, -0.16667) : i === 1 ? z - 1.14 * Math.pow(nq, 0.426) / z : i === 2 ? 1.86 * z - 0.86 * x[0] : i === 3 ? 1.91 * z - 0.91 * x[1] : 2 * z - x[i - 2];
+      let pp = 0;
+      for (let k = 0; k < 100; k++) { let p1 = PIM4, p2 = 0; for (let j = 0; j < nq; j++) { const p3 = p2; p2 = p1; p1 = z * Math.sqrt(2 / (j + 1)) * p2 - Math.sqrt(j / (j + 1)) * p3; } pp = Math.sqrt(2 * nq) * p2; const z1 = z; z = z1 - p1 / pp; if (Math.abs(z - z1) < 1e-14) break; }
+      x[i] = z; x[nq - 1 - i] = -z; w[i] = w[nq - 1 - i] = 2 / (pp * pp);
+    }
+    return { x, w };
+  }
+  // logistic regression with a random intercept per cluster: maximum likelihood by adaptive Gauss-Hermite quadrature
+  function glmmLogit(y, X, cl, nq = 15) {
+    const p = X[0].length, ids = [...new Set(cl)], groups = ids.map(id => cl.map((c, i) => c === id ? i : -1).filter(i => i >= 0)), GH = gaussHermite(nq), modes = new Array(groups.length).fill(0);
+    const ll = th => { const beta = th.slice(0, p), s2 = Math.exp(2 * th[p]); let tot = 0;
+      groups.forEach((g, gi) => { const eta = g.map(i => X[i].reduce((t, v, j) => t + v * beta[j], 0));
+        const f = b => g.reduce((t, i, k) => { const e = eta[k] + b; return t + (y[i] ? -Math.log1p(Math.exp(-e)) : -Math.log1p(Math.exp(e))); }, 0) - b * b / (2 * s2) - 0.5 * Math.log(2 * Math.PI * s2);
+        let b = modes[gi], h = 1;
+        for (let k = 0; k < 30; k++) { let g1 = -b / s2, h1 = -1 / s2; g.forEach((i, q) => { const pr = 1 / (1 + Math.exp(-(eta[q] + b))); g1 += y[i] - pr; h1 -= pr * (1 - pr); }); const st = g1 / h1; b -= st; h = -h1; if (Math.abs(st) < 1e-10) break; }
+        modes[gi] = b; const sc = Math.SQRT2 / Math.sqrt(h), f0 = f(b); let L = 0;
+        GH.x.forEach((xq, q) => { L += GH.w[q] * Math.exp(f(b + sc * xq) - f0 + xq * xq); });
+        tot += f0 + Math.log(L * sc); });
+      return tot; };
+    const fit0 = logisticRegression(X.map(r => r.slice(1)), y); let th = [...(fit0 ? fit0.terms.map(t => t.B) : new Array(p).fill(0)), 0];
+    const grad = t => t.map((_, j) => { const hh = 1e-5 * Math.max(1, Math.abs(t[j])), a = t.slice(), b = t.slice(); a[j] += hh; b[j] -= hh; return (ll(a) - ll(b)) / (2 * hh); });
+    // BFGS (maximising)
+    let g = grad(th), H = th.map((_, i) => th.map((_, j) => i === j ? 1 : 0)), f = ll(th);
+    for (let it = 0; it < 200; it++) {
+      const d = H.map(r => r.reduce((t, v, j) => t + v * g[j], 0)); let stp = 1, nt, nf;
+      for (let k = 0; k < 30; k++) { nt = th.map((v, j) => v + stp * d[j]); nf = ll(nt); if (nf >= f + 1e-4 * stp * d.reduce((t, v, j) => t + v * g[j], 0)) break; stp /= 2; }
+      const ng = grad(nt), sv = nt.map((v, j) => v - th[j]), yv = ng.map((v, j) => -(v - g[j])), sy = sv.reduce((t, v, j) => t + v * yv[j], 0);
+      th = nt; const df = nf - f; f = nf; g = ng;
+      if (sy > 1e-12) { const Hy = H.map(r => r.reduce((t, v, j) => t + v * yv[j], 0)), yHy = yv.reduce((t, v, j) => t + v * Hy[j], 0);
+        H = H.map((r, i) => r.map((v, j) => v + (1 + yHy / sy) * sv[i] * sv[j] / sy - (Hy[i] * sv[j] + sv[i] * Hy[j]) / sy)); }
+      if (Math.max(...g.map(Math.abs)) < 1e-5 || Math.abs(df) < 1e-10) break;
+    }
+    // observed information by central differences
+    const k = th.length, hs = th.map(v => 1e-4 * Math.max(1, Math.abs(v))), Hs = Array.from({ length: k }, () => new Array(k).fill(0));
+    for (let i = 0; i < k; i++) for (let j = i; j < k; j++) { const e = (di, dj) => { const t = th.slice(); t[i] += di; t[j] += dj; return ll(t); };
+      Hs[i][j] = Hs[j][i] = (e(hs[i], hs[j]) - e(hs[i], -hs[j]) - e(-hs[i], hs[j]) + e(-hs[i], -hs[j])) / (4 * hs[i] * hs[j]); }
+    const cov = invert(Hs.map(r => r.map(v => -v))); if (!cov) return null;
+    const beta = th.slice(0, p), covB = cov.slice(0, p).map(r => r.slice(0, p)), sigma = Math.exp(th[p]);
+    return { beta, cov: covB, se: covB.map((r, j) => Math.sqrt(r[j])), sigma, var: sigma * sigma, icc: sigma * sigma / (sigma * sigma + Math.PI * Math.PI / 3), logLik: f, n: y.length, clusters: groups.length, wald: idx => waldTest(beta, covB, idx) };
+  }
   function tost(x, y, lo, hi) {
     const n1 = x.length, n2 = y.length, df = n1 + n2 - 2, md = mean(x) - mean(y), sp = Math.sqrt(((n1 - 1) * variance(x) + (n2 - 1) * variance(y)) / df), se = sp * Math.sqrt(1 / n1 + 1 / n2);
     const pL = 1 - jStat.studentt.cdf((md - lo) / se, df), pU = jStat.studentt.cdf((md - hi) / se, df), t90 = jStat.studentt.inv(0.95, df);
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
   return {
-    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost,
+    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, nMargin, gee, glmmLogit, gaussHermite,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,

@@ -2366,7 +2366,24 @@
     psm: 'Propensity-score matching and weighting', lmm: 'Linear mixed model (repeated outcome + covariates)',
     tost: 'Equivalence (TOST, two one-sided t-tests)', mh: 'Mantel-Haenszel (stratified odds ratio)', clogit: 'Conditional logistic regression (matched sets)',
     cif: 'Competing risks (cumulative incidence)', tdroc: 'Time-dependent ROC (AUC at set times)', quantreg: 'Quantile (median) regression', fleiss: "Fleiss' kappa (agreement of 3+ raters)",
-    rmcorr: 'Repeated-measures correlation (long data)', firth: 'Firth logistic regression (small samples, separation)', mi: 'Regression with multiple imputation' };
+    rmcorr: 'Repeated-measures correlation (long data)', firth: 'Firth logistic regression (small samples, separation)', mi: 'Regression with multiple imputation',
+    noninf: 'Non-inferiority / equivalence / superiority trial', gee: 'GEE / mixed-effects logistic (repeated binary, count or numeric outcome)' };
+  // the analyses by category: the add buttons, the headings of the list and the order of "group by category"
+  const ADV_GROUPS = [
+    ['Compare groups', 'Adjusted, stratified and matched comparisons of the study groups', [['ancova', 'ANCOVA'], ['anova2', 'Two-way ANOVA'], ['mh', 'Mantel-Haenszel'], ['psm', 'Propensity score']]],
+    ['Non-inferiority & equivalence trials', 'A margin for the difference: non-inferiority, equivalence or superiority, ITT and per-protocol', [['noninf', 'Non-inferiority / equivalence / superiority'], ['tost', 'Equivalence of means (TOST)']]],
+    ['Paired & repeated measurements', 'The same patients measured twice or more', [['paired', 'Paired comparison'], ['mcnemar', 'McNemar (paired categorical)'], ['cochran', "Cochran's Q (repeated yes/no)"], ['lmm', 'Linear mixed model'], ['gee', 'GEE / mixed logistic (binary repeated)'], ['rmcorr', 'Repeated-measures correlation']]],
+    ['Correlation & mediation', 'Associations between numeric variables', [['correlation', 'Correlation'], ['partial', 'Partial correlation'], ['mediation', 'Mediation']]],
+    ['Regression models', 'Predictors of an outcome', [['linear', 'Linear'], ['logistic', 'Logistic'], ['firth', 'Firth logistic'], ['mi', 'With multiple imputation'], ['quantreg', 'Quantile (median)'], ['count', 'Poisson / negative binomial'], ['ordinal', 'Ordinal logistic'], ['multinom', 'Multinomial logistic'], ['clogit', 'Conditional logistic']]],
+    ['Survival & time to event', 'Follow-up time with an event', [['survival', 'Kaplan-Meier'], ['cox', 'Cox regression'], ['cif', 'Competing risks'], ['tdroc', 'Time-dependent ROC']]],
+    ['Diagnostic accuracy & prediction', 'Tests against a reference standard', [['roc', 'ROC curve'], ['diagnostic', 'Diagnostic accuracy (2×2)']]],
+    ['Agreement, reliability & questionnaires', 'Raters, methods and scales', [['kappa', "Cohen's kappa"], ['fleiss', "Fleiss' kappa"], ['agreement', 'ICC / Bland-Altman'], ['methodcomp', 'Passing-Bablok / Deming'], ['cronbach', "Cronbach's alpha"], ['pca', 'PCA (items)']]]];
+  const ADV_CAT = {}; ADV_GROUPS.forEach(([g, , list], gi) => list.forEach(([t]) => { ADV_CAT[t] = gi; }));
+  $('#advAdd').innerHTML = ADV_GROUPS.map(([g, note, list]) => `<div class="adv-cat"><h4>${esc(g)}</h4><p class="legend-note">${esc(note)}</p><div class="btns">${list.map(([t, l]) => `<button class="btn ghost small" data-advadd="${t}" type="button" title="${esc(ADV_TYPES[t] || l)}" data-find="${esc((l + ' ' + (ADV_TYPES[t] || '') + ' ' + g).toLowerCase())}">+ ${esc(l)}</button>`).join('')}</div></div>`).join('');
+  $('#advFind').oninput = e => { const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#advAdd .adv-cat').forEach(c => { let any = false; c.querySelectorAll('[data-advadd]').forEach(b => { const ok = !q || b.dataset.find.includes(q); b.classList.toggle('hide', !ok); any = any || ok; }); c.classList.toggle('hide', !any); }); };
+  $('#advSortCat').onclick = () => { readUiIntoCfg(); const A = state.cfg.advanced; if (A.length < 2) return; const idx = A.map((a, i) => [a, i]); idx.sort((x, y) => (ADV_CAT[x[0].type] ?? 99) - (ADV_CAT[y[0].type] ?? 99) || x[1] - y[1]);
+    state.cfg.advanced = idx.map(x => x[0]); renderAdvanced(); toast('Analyses grouped by category — the report follows this order'); };
   const analysedRows = () => { const g = activeGroups(); return Analysis.filterRows(state.cfg, state.data.rows).filter(r => g.includes(Analysis.groupOf(state.cfg, r))); };
   function advColumns() {
     const cfg = state.cfg, rows = analysedRows();
@@ -2440,9 +2457,30 @@
       if (t === 'firth') { fields = select('outcome', 'Yes/no outcome', cols.filter(isCat), a.outcome) + levelSelect('Positive (event) value', a.outcome, a.positive); predLabel = 'Predictors'; preds = cols.filter(c => c.col !== a.outcome); }
       if (t === 'mi') { const isC = a.outcome && (cols.find(c => c.col === a.outcome) || {}).kind !== 'numeric';
         fields = select('outcome', 'Outcome (numeric → linear, categorical → logistic)', cols.filter(c => c.kind === 'numeric' || isCat(c)), a.outcome) + (isC ? levelSelect('Positive (event) value', a.outcome, a.positive) : '<div></div>'); predLabel = 'Predictors (missing values are imputed)'; preds = cols.filter(c => c.col !== a.outcome); }
-      const withPreds = ['tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
+      if (t === 'noninf') { const gs = activeGroups(), gsel = (key, label, val, auto) => `<div><label class="f">${label}</label><select data-af="${key}"><option value="">${auto}</option>${gs.map(g => `<option value="${esc(g)}" ${g === val ? 'selected' : ''}>${esc(cfg.groupLabels[g] || g)}</option>`).join('')}</select></div>`;
+        const ocol = cols.find(c => c.col === a.outcome), isC = ocol && ocol.kind !== 'numeric', cats = cols.filter(isCat);
+        const sl = (key, label, opts, v) => `<div><label class="f">${label}</label><select data-af="${key}">${opts.map(([k, l]) => `<option value="${k}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+        fields = select('outcome', 'Primary outcome (numeric or yes/no)', cols.filter(c => c.kind === 'numeric' || isCat(c)), a.outcome) + (isC ? levelSelect('Outcome event / success value', a.outcome, a.positive) : '<div></div>')
+          + sl('design', 'Trial design', [['noninf', 'Non-inferiority'], ['equiv', 'Equivalence'], ['superior', 'Superiority (by a margin)']], a.design)
+          + gsel('treat', 'New (experimental) treatment', a.treat, '— automatic (second group) —') + gsel('control', 'Reference (control) treatment', a.control, '— automatic (first group) —')
+          + `<div><label class="f">Margin Δ ${isC ? '(percentage points, e.g. 10)' : '(outcome units)'}</label><input type="number" step="any" min="0" data-af="margin" value="${esc(a.margin ?? '')}" placeholder="${isC ? 'e.g. 10' : 'e.g. 5'}"></div>`
+          + sl('better', 'Better outcome', [['higher', isC ? 'Higher proportion is better (e.g. cure)' : 'Higher values are better'], ['lower', isC ? 'Lower proportion is better (e.g. complications)' : 'Lower values are better (e.g. pain)']], a.better)
+          + sl('conf', 'Confidence interval', [['', 'Automatic (95% non-inferiority / superiority, 90% equivalence)'], ['95', '95% (one-sided α = 0.025)'], ['90', '90% (one-sided α = 0.05)'], ['99', '99%']], a.conf)
+          + select('ppCol', 'Per-protocol population column (optional)', cats.filter(c => c.col !== a.outcome && c.col !== cfg.groupCol), a.ppCol) + (a.ppCol ? levelSelect('Per-protocol when', a.ppCol, a.ppVal, 'ppVal') : '<div></div>');
+        predLabel = 'Adjust the mean difference for (ANCOVA, numeric outcome only)'; preds = isC ? [] : num.filter(c => c.col !== a.outcome); }
+      if (t === 'gee') { const reps = cfg.variables.filter(v => v.kind === 'repeated'), rv = reps.find(v => v.id === a.rvar), isB = rv && rv.type === 'categorical';
+        const sl = (key, label, opts, v) => `<div><label class="f">${label}</label><select data-af="${key}">${opts.map(([k, l]) => `<option value="${k}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+        fields = `<div><label class="f">Repeated outcome (binary, count or numeric)</label><select data-af="rvar"><option value="">— choose —</option>${reps.map(v => `<option value="${esc(v.id)}" ${v.id === a.rvar ? 'selected' : ''}>${esc(v.label)} (${v.type === 'categorical' ? 'categorical' : 'numeric'})</option>`).join('')}</select></div>`
+          + (isB ? levelSelect('Counted as the event', rv.cols[0].col, a.positive) + sl('method', 'Model', [['gee', 'GEE (population-averaged)'], ['glmm', 'Mixed-effects logistic (random intercept)']], a.method)
+            : sl('family', 'Outcome type', [['gaussian', 'Numeric (linear GEE)'], ['poisson', 'Count (Poisson GEE)']], a.family) + '<div></div>')
+          + sl('corr', 'Working correlation (GEE)', [['exchangeable', 'Exchangeable'], ['ar1', 'AR(1) — closer visits more alike'], ['independence', 'Independence']], a.corr)
+          + sl('timeAs', 'Time', [['cat', 'Categories (each visit vs the first)'], ['linear', 'Continuous (a linear trend; time values of step 3)']], a.timeAs)
+          + `<div><label class="check" style="margin-top:22px"><input type="checkbox" data-af="inter" ${a.inter !== false ? 'checked' : ''}><span>Group × time interaction</span></label></div>`;
+        predLabel = 'Baseline covariates (optional)'; preds = cols.filter(c => c.col !== cfg.groupCol); }
+      const withPreds = ['noninf', 'gee', 'tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
       const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
-      return `<div class="gcard" data-adv="${ai}">
+      const ci = ADV_CAT[t] ?? 99, prevC = ai ? ADV_CAT[cfg.advanced[ai - 1].type] ?? 99 : -1, sep = ci !== prevC && ADV_GROUPS[ci] ? `<div class="adv-sep">${esc(ADV_GROUPS[ci][0])}</div>` : '';
+      return `${sep}<div class="gcard" data-adv="${ai}">
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
           <label class="check" style="margin:0"><input type="checkbox" data-af="include" ${a.include !== false ? 'checked' : ''}><span>Include</span></label>
  <button class="btn ghost small" data-advmove="${ai},-1" type="button" title="Move up" ${ai === 0 ? 'disabled' : ''}>↑</button><button class="btn ghost small" data-advmove="${ai},1" type="button" title="Move down" ${ai === state.cfg.advanced.length - 1 ? 'disabled' : ''}>↓</button>
@@ -2450,7 +2488,7 @@
           <button class="btn ghost small" data-advdel="${ai}" type="button">✕ Remove</button></div>
         <div class="grid g3" style="margin-top:8px">${fields}${uni}</div>
         <div class="grid g4 adv-opts">${advOptions(a)}</div>
-        ${t === 'survival' ? '<p class="legend-note" style="margin:6px 0 0">Curves are drawn for each study group; patients without the event are censored at their follow-up time.</p>' : t === 'mcnemar' ? '<p class="legend-note" style="margin:6px 0 0">Tested in each study group and in all patients together.</p>' : !withPreds ? '' : `
+        ${t === 'survival' ? '<p class="legend-note" style="margin:6px 0 0">Curves are drawn for each study group; patients without the event are censored at their follow-up time.</p>' : t === 'mcnemar' ? '<p class="legend-note" style="margin:6px 0 0">Tested in each study group and in all patients together.</p>' : !withPreds || (t === 'noninf' && !preds.length) ? '' : `
         <label class="f" style="margin-top:8px">${predLabel}</label>
         <div class="predlist">${preds.filter(c => c.col !== a.outcome).map(c => `<label><input type="checkbox" data-apred="${esc(c.col)}" ${(a.predictors || []).includes(c.col) ? 'checked' : ''}>${esc(c.label)} <span class="legend-note">${c.kind === 'numeric' ? 'num' : 'cat'}</span></label>`).join('')}</div>`}
         <details class="adv-out" data-advout="${ai}" ${advOpen.has(a) ? 'open' : ''}><summary><b>Show output</b> <span class="legend-note">— table, comment and figure of this analysis, as in the report</span></summary><div class="adv-out-body"></div></details>
@@ -2501,7 +2539,7 @@
       `<div><label class="f">Text before the comment (optional)</label><input type="text" data-af="commentPre" value="${esc(a.commentPre || '')}" placeholder="e.g. To identify the predictors of …"></div>`,
       `<div><label class="f">Text after the comment (optional)</label><input type="text" data-af="commentPost" value="${esc(a.commentPost || '')}" placeholder="e.g. This supports the hypothesis that …"></div>`,
       `<div style="grid-column:1/-1"><label class="f">Your own comment (optional — replaces the automatic one)</label><textarea data-af="commentCustom" rows="2" placeholder="Leave empty for the automatic comment">${esc(a.commentCustom || '')}</textarea></div>`].join('')}</div></details>`); }
-    if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm'].includes(t))
+    if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm', 'noninf', 'gee'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
       out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
@@ -2524,6 +2562,8 @@
     if (['linear', 'logistic'].includes(t)) { const nc = (a.predictors || []).filter(c => Analysis.columnKind(state.cfg, analysedRows(), c) === 'numeric').map(c => [c, Analysis.columnLabel(state.cfg, c)]);
       out.push(`<div><label class="f">Non-linear predictor (restricted cubic spline)</label>${sel('rcs', [['', '— none —'], ...nc], a.rcs || '')}</div>`, `<div><label class="f">Spline knots</label>${sel('rcsK', [['4', '4 knots'], ['3', '3 knots'], ['5', '5 knots']], a.rcsK || '4')}</div>`); }
     if (t === 'logistic') out.push(`<div>${box('nomogram', 'Nomogram of the model')}</div>`);
+    if (t === 'noninf') out.push(`<div><label class="f">Sample size check</label>${sel('ssPower', [['', 'None'], ['80', 'n needed for 80% power'], ['90', 'n needed for 90% power']], a.ssPower || '')}</div>`,
+      `<div><label class="check" style="margin-top:22px"><input type="checkbox" data-af="marginFig" ${a.marginFig !== false ? 'checked' : ''}><span>CI-and-margin plot</span></label></div>`);
     if (t === 'mi') out.push(`<div><label class="f">Number of imputations</label>${sel('mImp', [['20', '20'], ['5', '5'], ['10', '10'], ['50', '50']], a.mImp || '20')}</div>`);
     if (t === 'count') out.push(`<div><label class="f">Model</label>${sel('family', [['auto', 'Automatic (negative binomial if overdispersed)'], ['poisson', 'Poisson'], ['negbin', 'Negative binomial']], a.family)}</div>`);
     if (t === 'methodcomp') out.push(`<div><label class="f">Method</label>${sel('method', [['pb', 'Passing-Bablok'], ['deming', 'Deming (equal error variances)']], a.method)}</div>`);
@@ -2590,9 +2630,12 @@
   $('#advList').addEventListener('change', e => {
     const f = e.target.dataset.af;
     if (f === 'cutoff') { readUiIntoCfg(); renderAdvanced(); return; }
-    if (f !== 'outcome' && f !== 'event' && f !== 'second') return;
+    if (!['outcome', 'event', 'second', 'rvar', 'ppCol', 'design'].includes(f)) return;
     readUiIntoCfg();
     const a = state.cfg.advanced[+e.target.closest('[data-adv]').dataset.adv];
+    if (f === 'rvar') { const rv = state.cfg.variables.find(v => v.id === a.rvar); a.positive = rv && rv.type === 'categorical' ? defaultPositive(rv.cols[0].col) : ''; renderAdvanced(); return; }
+    if (f === 'ppCol') { a.ppVal = a.ppCol ? defaultPositive(a.ppCol) : ''; renderAdvanced(); return; }
+    if (f === 'design') { renderAdvanced(); return; }
     a.predictors = (a.predictors || []).filter(c => c !== a.outcome);
     // the positive value belongs to the outcome (logistic, ROC) or to the event column (survival)
     if (a.type === 'survival' || a.type === 'cox' || a.type === 'tdroc') { if (f === 'event') a.positive = defaultPositive(a.event); }
@@ -2601,7 +2644,7 @@
       a.positive = pos; a.competing = comp || lv.find(l => l !== pos && !cens(l)) || ''; } }
     else if (a.type === 'rmcorr') { /* no positive value */ }
     else if (a.type === 'diagnostic') { if (f === 'event') a.eventPositive = defaultPositive(a.event); else a.positive = defaultPositive(a.outcome); }
-    else a.positive = ['logistic', 'roc', 'mcnemar', 'firth', 'mi'].includes(a.type) ? defaultPositive(a.outcome) : '';
+    else a.positive = ['logistic', 'roc', 'mcnemar', 'firth', 'mi', 'noninf'].includes(a.type) ? defaultPositive(a.outcome) : '';
     renderAdvanced();
   });
 

@@ -355,6 +355,7 @@ const Charts = (() => {
     if (spec.type === 'roc') return rocChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
     if (spec.type === 'curve') return curveChart(spec, paletteName, st);
+    if (spec.type === 'margin') return marginChart(spec, paletteName, st);
     if (spec.type === 'nomogram') return nomogramChart(spec, paletteName, st);
     if (spec.type === 'ba') return baChart(spec, paletteName, st);
     const pal = palette(paletteName);
@@ -945,6 +946,40 @@ const Charts = (() => {
     return c;
   }
 
+  /* ---------- non-inferiority / equivalence plot: each CI against the margin ---------- */
+  function marginChart(spec, paletteName, st) {
+    const pal = palette(paletteName), col = pal[0];
+    const { c, ctx, W, H, ts, F } = setup({ ...st, aspect: st.aspect === 'tall' ? 'standard' : st.aspect });
+    ctx.font = F(700, 26); const lab = Math.max(...spec.rows.map(r => ctx.measureText(r.label).width)) + 40;
+    const L = 30 + lab, R = 50, T = 70, B = 170 * ts, pw = W - L - R, ph = H - T - B, M = spec.margin, up = spec.better !== 'lower';
+    const ref = spec.design === 'equiv' ? [-M, M] : spec.design === 'superior' ? [up ? M : -M] : [up ? -M : M];
+    const vals = [...spec.rows.flatMap(r => [r.lo, r.hi]), 0, ...ref, ...ref.map(v => v * 1.6)], sx = niceScale(Math.min(...vals), Math.max(...vals));
+    const X = v => L + (v - sx.min) / (sx.max - sx.min) * pw;
+    // the zone where the conclusion holds, lightly shaded
+    const zone = spec.design === 'equiv' ? [-M, M] : spec.design === 'superior' ? (up ? [M, sx.max] : [sx.min, -M]) : (up ? [-M, sx.max] : [sx.min, M]);
+    ctx.fillStyle = col; ctx.globalAlpha = 0.07; ctx.fillRect(X(zone[0]), T, X(zone[1]) - X(zone[0]), ph); ctx.globalAlpha = 1;
+    ctx.font = F(600, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let v = sx.min; v <= sx.max + 1e-9; v += sx.step) { if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); } ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sx.step), X(v), T + ph + 12); }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(X(0), T); ctx.lineTo(X(0), T + ph); ctx.stroke();
+    ctx.strokeStyle = '#B3261E'; ctx.lineWidth = 3; ctx.setLineDash([14, 10]);
+    ref.forEach(v => { ctx.beginPath(); ctx.moveTo(X(v), T - 10); ctx.lineTo(X(v), T + ph); ctx.stroke(); });
+    ctx.setLineDash([]); ctx.font = F(700, 24); ctx.fillStyle = '#B3261E'; ctx.textBaseline = 'bottom';
+    ref.forEach(v => ctx.fillText(`${v > 0 ? '+' : v < 0 ? '−' : ''}${String(+Math.abs(v).toPrecision(4))}`, X(v), T - 14));
+    const rh = ph / spec.rows.length;
+    spec.rows.forEach((r, i) => { const y = T + rh * (i + 0.5);
+      ctx.fillStyle = '#222'; ctx.font = F(700, 26); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(r.label, L - 20, y);
+      ctx.strokeStyle = col; ctx.lineWidth = 5 * lw(st); ctx.beginPath(); ctx.moveTo(X(r.lo), y); ctx.lineTo(X(r.hi), y); ctx.stroke();
+      [r.lo, r.hi].forEach(v => { ctx.beginPath(); ctx.moveTo(X(v), y - 14); ctx.lineTo(X(v), y + 14); ctx.stroke(); });
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X(r.est), y, 12, 0, Math.PI * 2); ctx.fill(); });
+    ctx.font = F(700, 28); ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(spec.xLabel || 'Difference', L + pw / 2, T + ph + 60 * ts);
+    // which side favours which treatment
+    ctx.font = F(600, 24); ctx.fillStyle = '#555'; ctx.textBaseline = 'top';
+    const fl = up ? spec.favRef : spec.favNew, fr = up ? spec.favNew : spec.favRef;
+    if (fl) { ctx.textAlign = 'left'; ctx.fillText('← ' + fl, L + 6, T + ph + 108 * ts); }
+    if (fr) { ctx.textAlign = 'right'; ctx.fillText(fr + ' →', L + pw - 6, T + ph + 108 * ts); }
+    return c;
+  }
   /* ---------- effect curve with a CI band (restricted cubic splines) ---------- */
   function curveChart(spec, paletteName, st) {
     const pal = palette(paletteName), col = pal[0];

@@ -314,6 +314,9 @@ dialog.app-dlg::backdrop{background:rgba(20,17,34,.45)}
 dialog.app-dlg h3{margin:0 0 4px;color:var(--title)}
 .adv-out{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}.adv-out>summary{cursor:pointer;color:var(--title)}
 .adv-out-body{margin-top:8px}.adv-out .tcap{font-weight:700;margin:4px 0 6px}.adv-out .pfoot{font-size:12px;margin-top:6px;line-height:1.4;color:var(--muted,#666)}.adv-out .pcom{font-size:14px;margin-top:8px;line-height:1.5;text-align:justify;background:var(--soft,#F6F3FA);padding:8px 10px;border-radius:8px}.adv-out-sec{margin-bottom:14px}.adv-out-figs{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.adv-out-figs figure{margin:0;flex:1 1 320px;max-width:560px}.adv-out-figs img{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+.adv-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:8px}
+.adv-cat{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card)}.adv-cat h4{margin:0 0 2px;color:var(--title);font-size:14px}.adv-cat p{margin:0 0 8px}
+.adv-cat .btns{display:flex;flex-wrap:wrap;gap:4px}.adv-cat.hide,.adv-cat .btn.hide{display:none}.adv-sep{grid-column:1/-1;margin:10px 0 0;font-weight:700;color:var(--title);border-bottom:2px solid var(--line);padding-bottom:4px}
 .lv-list{list-style:none;margin:0;padding:0;max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
 .lv-list li{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--card)}
 .lv-list li:last-child{border-bottom:0}.lv-list li.drag{opacity:.4}.lv-list li.over{box-shadow:inset 0 2px 0 var(--accent,#7B2CBF)}
@@ -1040,42 +1043,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" id="advComApply" type="button" style="margin-bottom:4px">Apply to all analyses</button>
       </div>
       <div id="advList" class="grid"></div>
-      <div class="row" id="advAdd" style="margin-top:12px">
-        <button class="btn ghost small" data-advadd="correlation" type="button">+ Correlation</button>
-        <button class="btn ghost small" data-advadd="paired" type="button">+ Paired comparison</button>
-        <button class="btn ghost small" data-advadd="linear" type="button">+ Linear regression</button>
-        <button class="btn ghost small" data-advadd="logistic" type="button">+ Logistic regression</button>
-        <button class="btn ghost small" data-advadd="roc" type="button">+ ROC curve</button>
-        <button class="btn ghost small" data-advadd="ancova" type="button">+ ANCOVA</button>
-        <button class="btn ghost small" data-advadd="survival" type="button">+ Kaplan-Meier survival</button>
-        <button class="btn ghost small" data-advadd="cox" type="button">+ Cox regression</button>
-        <button class="btn ghost small" data-advadd="mcnemar" type="button">+ McNemar (paired categorical)</button>
-        <button class="btn ghost small" data-advadd="kappa" type="button">+ Cohen's kappa</button>
-        <button class="btn ghost small" data-advadd="agreement" type="button">+ ICC / Bland-Altman</button>
-        <button class="btn ghost small" data-advadd="diagnostic" type="button">+ Diagnostic accuracy (2×2)</button>
-        <button class="btn ghost small" data-advadd="cronbach" type="button">+ Cronbach's alpha</button>
-        <button class="btn ghost small" data-advadd="cochran" type="button">+ Cochran's Q (repeated yes/no)</button>
-        <button class="btn ghost small" data-advadd="tost" type="button">+ Equivalence (TOST)</button>
-        <button class="btn ghost small" data-advadd="mh" type="button">+ Mantel-Haenszel</button>
-        <button class="btn ghost small" data-advadd="clogit" type="button">+ Conditional logistic</button>
-        <button class="btn ghost small" data-advadd="count" type="button">+ Poisson / negative binomial</button>
-        <button class="btn ghost small" data-advadd="ordinal" type="button">+ Ordinal logistic</button>
-        <button class="btn ghost small" data-advadd="multinom" type="button">+ Multinomial logistic</button>
-        <button class="btn ghost small" data-advadd="methodcomp" type="button">+ Passing-Bablok / Deming</button>
-        <button class="btn ghost small" data-advadd="pca" type="button">+ PCA (items)</button>
-        <button class="btn ghost small" data-advadd="partial" type="button">+ Partial correlation</button>
-        <button class="btn ghost small" data-advadd="anova2" type="button">+ Two-way ANOVA</button>
-        <button class="btn ghost small" data-advadd="mediation" type="button">+ Mediation</button>
-        <button class="btn ghost small" data-advadd="psm" type="button">+ Propensity score</button>
-        <button class="btn ghost small" data-advadd="lmm" type="button">+ Mixed model (repeated + covariates)</button>
-        <button class="btn ghost small" data-advadd="cif" type="button">+ Competing risks</button>
-        <button class="btn ghost small" data-advadd="tdroc" type="button">+ Time-dependent ROC</button>
-        <button class="btn ghost small" data-advadd="quantreg" type="button">+ Quantile regression</button>
-        <button class="btn ghost small" data-advadd="fleiss" type="button">+ Fleiss' kappa</button>
-        <button class="btn ghost small" data-advadd="rmcorr" type="button">+ Repeated-measures correlation</button>
-        <button class="btn ghost small" data-advadd="firth" type="button">+ Firth logistic</button>
-        <button class="btn ghost small" data-advadd="mi" type="button">+ Multiple imputation</button>
-      </div>
+      <div class="row" style="margin-top:14px;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Add an analysis</h3><input type="search" id="advFind" placeholder="Find an analysis (e.g. kappa, survival, GEE)" style="width:280px"><span class="spacer"></span><button class="btn ghost small" id="advSortCat" type="button" title="Order the analyses above (and their tables in the report) by category">⇅ Group the analyses by category</button></div>
+      <div id="advAdd" class="adv-cats"></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="7">← Back</button><button class="btn primary" data-go="9">Next: Flowchart →</button></div>
   </section>
