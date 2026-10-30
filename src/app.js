@@ -14,7 +14,7 @@
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
@@ -33,7 +33,7 @@
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],

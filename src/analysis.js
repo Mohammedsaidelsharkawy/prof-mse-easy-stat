@@ -63,6 +63,23 @@ const Analysis = (() => {
   const cap = s => s && !keepCase(s) ? s[0].toUpperCase() + s.slice(1) : s;
   // label without a trailing unit, for use inside sentences: "Age (years)" → "Age"
   const plain = s => s.replace(/\s*\([^)]*\)\s*$/, '');
+  // the unit of a variable for the comments: the ⚙ unit, the brackets of its label ("Age (years)", "CRP (mg/L)") or a unit word at the end ("Weight kg")
+  const UNIT_TOK = /^(years?|yrs?|months?|mos?|weeks?|wks?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|ms|kg|g|mg|mcg|µg|μg|ug|ng|pg|l|dl|ml|µl|ul|mmol|µmol|umol|nmol|pmol|meq|iu|u|miu|mu|cm|mm|m|m2|m²|m3|mm3|µm|nm|mmhg|cmh2o|kpa|bpm|beats|breaths|%|percent|pct|°c|°f|kcal|cal|mosm|osm|cells|copies|x10|×10|10|gm|lb|lbs|in|ft|min|h|d|s|dl|mmol\/l|mg\/dl|g\/dl)$/i;
+  const STRONG_UNIT = /^(years?|months?|weeks?|days?|hours?|minutes?|mins?|kg|mg|g|cm|mm|ml|mmhg|bpm|%|°c|kcal|lbs?)$/i;
+  function unitOfText(u) {
+    u = String(u || '').trim(); if (!u || u.length > 18) return '';
+    const toks = u.replace(/\^-?\d+/g, '').split(/[\/\s·×*.\-]+/).filter(Boolean);
+    return toks.length && toks.every(t => /^\d+$/.test(t) || UNIT_TOK.test(t)) ? u.replace(/^percent$|^pct$/i, '%') : '';
+  }
+  let UNITS_ON = true;
+  function unitOfVar(v) {
+    if (!UNITS_ON || !v) return '';
+    if (v.unit) return unitOfText(v.unit) || String(v.unit).trim();
+    const m = /\(([^)]*)\)\s*$/.exec(v.label || ''); if (m) return unitOfText(m[1]);
+    const w = String(v.label || '').trim().split(/\s+/); return w.length > 1 && STRONG_UNIT.test(w[w.length - 1]) ? w[w.length - 1] : '';
+  }
+  // " years", "%" or "°C" after a value
+  const unitSuffix = u => !u ? '' : /^(%|°)/.test(u) ? u : ' ' + u, U = v => unitSuffix(unitOfVar(v));
   const lowerFirst = s => (s && !keepCase(s)) ? s[0].toLowerCase() + s.slice(1) : s;
   const nWord = n => NUMW[n] || String(n);
   // one-group studies (no group column): every patient belongs to the same group
@@ -1990,7 +2007,7 @@ const Analysis = (() => {
     [data, cfg] = withValueLabels(data, cfg);
     TP_TIME = cfg.tpTime || {};
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
-    setRO(opts);
+    setRO(opts); UNITS_ON = opts.unitsInText !== false;
     // descriptive: the detailed comment plus the test used, effect sizes, values of every group and an overview of each table
     const descriptive = opts.commentStyle === 'descriptive', detailed = opts.commentStyle === 'detailed' || descriptive;
     const wantEff = opts.commentEffect || descriptive;
@@ -2115,8 +2132,8 @@ const Analysis = (() => {
           if (opts.secondRow === 'none') trows.push([{ t: [v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] }, { t: [main] }]);
           else trows.push([{ t: [v.label], b: true, rs: 2 }, { t: [P ? meanSdName() : 'Median'] }, { t: [P ? main : fmt(dd.median, d)] }],
             [{ t: [P ? (opts.secondRow === 'ci' ? '95% CI' : 'Range') : 'IQR'] }, { t: [P ? (opts.secondRow === 'ci' ? ciOfMean(dd) : `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`) : iqrTxt(dd.q1, dd.q3, d)] }]);
-          sent.push(P ? `The ${meanSdName(true)} ${lowerFirst(lab)} of the studied patients was ${main} (range ${fmt(dd.min, d)} to ${fmt(dd.max, d)}).`
-            : `The median ${lowerFirst(lab)} of the studied patients was ${fmt(dd.median, d)} (IQR ${fmt(dd.q1, d)} to ${fmt(dd.q3, d)}; range ${fmt(dd.min, d)} to ${fmt(dd.max, d)}).`);
+          sent.push(P ? `The ${meanSdName(true)} ${lowerFirst(lab)} of the studied patients was ${main}${U(v)} (range ${fmt(dd.min, d)} to ${fmt(dd.max, d)}${U(v)}).`
+            : `The median ${lowerFirst(lab)} of the studied patients was ${fmt(dd.median, d)}${U(v)} (IQR ${fmt(dd.q1, d)} to ${fmt(dd.q3, d)}${U(v)}; range ${fmt(dd.min, d)} to ${fmt(dd.max, d)}${U(v)}).`);
           if (chart === 'none') continue;
           const ct = chart === 'auto' ? (opts.chartStyle === 'box' ? 'box' : opts.chartStyle === 'bar' ? 'bar' : 'hist') : chart;
           let f;
@@ -2177,7 +2194,7 @@ const Analysis = (() => {
         : (() => { const cells = tps.map((_, t) => normality(col(t))); return cells.filter(r => r && r.p <= 0.05).length <= cells.length * NONNORMAL_SHARE; })();
       used.add(param ? 'desc1Param' : 'desc1Nonparam');
       const desc = tps.map((_, t) => S.describe(col(t)));
-      const val = t => !desc[t].n ? '—' : param ? msd(desc[t].mean, desc[t].sd, d) : medIqr(desc[t], d);
+      const val = t => !desc[t].n ? '—' : (param ? msd(desc[t].mean, desc[t].sd, d) : medIqr(desc[t], d)) + U(v);
       const w = Y.length >= 3 ? analyzeWithin([Y], param, used, alpha)[0] : { p: NaN };
       const tn = WITHIN_NAME[w.test] || w.test || '', sig = w.p <= alpha;
       // P of each timepoint against the first: the paired test (two timepoints) or the Bonferroni post hoc (three or more, once significant)
@@ -2377,14 +2394,14 @@ const Analysis = (() => {
         // optional effect sizes for the significant timepoints of a two-group comparison
         if (wantEff && k === 2) {
           const sig = results.map((r, t) => ({ q: r.pairs[0], t, p: r.p })).filter(x => x.p <= alpha && x.q && isFinite(x.q.diff));
-          if (sig.length) comment += ` The ${param ? 'mean' : 'median'} difference${sig.length > 1 ? 's' : ''} (${gl[0]} − ${gl[1]}) ${sig.length > 1 ? 'were' : 'was'} ${listJoin(sig.map(x => `${fmt(x.q.diff, d)} (95% CI ${fmt(x.q.lo, d)} to ${fmt(x.q.hi, d)}) at ${tps[x.t]}`))}.`;
+          if (sig.length) comment += ` The ${param ? 'mean' : 'median'} difference${sig.length > 1 ? 's' : ''} (${gl[0]} − ${gl[1]}) ${sig.length > 1 ? 'were' : 'was'} ${listJoin(sig.map(x => `${fmt(x.q.diff, d)}${U(v)} (95% CI ${fmt(x.q.lo, d)} to ${fmt(x.q.hi, d)}${U(v)}) at ${tps[x.t]}`))}.`;
         }
         if (mixed) comment += mixed.interaction.p <= alpha
           ? ` There was a significant group × time interaction (P value ${pTxt(mixed.interaction.p)}), indicating that the change in ${lowerFirst(plain(v.label))} over time differed between the groups.`
           : ` The group × time interaction was insignificant (P value ${pTxt(mixed.interaction.p)}), indicating a similar pattern of change over time in the groups.`;
         // descriptive style: each group's values at the first and last timepoint
         if (descriptive && tps.length > 1) {
-          const at = (t, i) => { const dd = results[t].desc[i]; return dd && dd.n ? (param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)) : '—'; }, last = tps.length - 1;
+          const at = (t, i) => { const dd = results[t].desc[i]; return dd && dd.n ? (param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)) + U(v) : '—'; }, last = tps.length - 1;
           comment = `${cap(plain(v.label))} was compared ${amongTxt(k)} at ${listJoin(tps.map(t => lowerFirst(t)))} using the ${testNames(results) || 'tests described in the methods'}. ` + comment
             + ' ' + gl.map((g, i) => `In ${g}, the ${param ? meanSdName(true) : 'median (IQR)'} was ${at(0, i)} at ${lowerFirst(tps[0])} and ${at(last, i)} at ${lowerFirst(tps[last])}.`).join(' ');
         }
@@ -2533,7 +2550,7 @@ const Analysis = (() => {
         // comment
         // detailed style: "Age (Group A: 45.2 ± 8.1, Group B: 44.9 ± 7.6)" with P values on every sentence
         const values = r => {
-          if (r.num) return r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)}`).join(', ');
+          if (r.num) return r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)}${U(r.v)}`).join(', ');
           if (isCompact(r)) return r.cat.pct[0].map((p, i) => `${gl[i]}: ${fmt(p, 1)}%`).join(', ');
           return '';
         };
@@ -2541,16 +2558,16 @@ const Analysis = (() => {
         // optional effect size inside the P value brackets of a significant two-group comparison
         const effTxt = r => {
           if (!wantEff || k !== 2) return '';
-          if (r.num) { const q = r.num.pairs[0]; return q && isFinite(q.diff) ? `; MD = ${fmt(q.diff, d)}, 95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}` : ''; }
+          if (r.num) { const q = r.num.pairs[0], u = U(r.v); return q && isFinite(q.diff) ? `; MD = ${fmt(q.diff, d)}${u}, 95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}${u}` : ''; }
           const q = r.cat.rr && r.cat.rr[0];
           return q && q.rr !== null && q.rr !== undefined ? `; ${EF} = ${fmt(q.rr, 2)}, 95% CI ${fmt(q.lo, 2)}-${fmt(q.hi, 2)}` : '';
         };
         const effTxtAny = r => { if (k !== 2) return '';
-          if (r.num) { const q = r.num.pairs[0]; return q && isFinite(q.diff) ? `MD = ${fmt(q.diff, d)}, 95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}` : ''; }
+          if (r.num) { const q = r.num.pairs[0], u = U(r.v); return q && isFinite(q.diff) ? `MD = ${fmt(q.diff, d)}${u}, 95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}${u}` : ''; }
           const q = r.cat.rr && r.cat.rr[0]; return q && q.rr !== null && q.rr !== undefined ? `${EF} = ${fmt(q.rr, 2)}, 95% CI ${fmt(q.lo, 2)} to ${fmt(q.hi, 2)}` : ''; };
         const nsRes = res.filter(r => !((r.num || r.cat).p <= alpha));
         const sent = [];
-        if (noP) { const vals = r => r.num ? r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)}`).join(', ')
+        if (noP) { const vals = r => r.num ? r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)}${U(r.v)}`).join(', ')
             : isCompact(r) ? r.cat.pct[0].map((p, i) => `${gl[i]}: ${fmt(p, 1)}%`).join(', ') : r.levels.map((lv, li) => `${lv} ${r.cat.pct[li].map(p => fmt(p, 1) + '%').join(' vs ')}`).join('; ');
           sent.push(`The ${lowerFirst(plain(b.table))} of the studied groups are shown in the table: ${listJoin(res.map(r => `${lowerFirst(plain(r.v.label))} (${vals(r)})`))}.`); }
         else if (descriptive) sent.push(...descriptiveSentences(res, b.table));
@@ -2570,7 +2587,7 @@ const Analysis = (() => {
         }
         // optional: non-significant two-group results with their estimate and 95% CI, not only the P value
         if (opts.nsCI && k === 2 && !noP && !descriptive) nsRes.forEach(r => {
-          if (r.num) { const q = r.num.pairs[0]; if (q && isFinite(q.lo)) sent.push(`The ${r.num.param ? 'mean' : 'median'} difference in ${lowerFirst(plain(r.v.label))} was ${fmt(q.diff, d)} (95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}).`); }
+          if (r.num) { const q = r.num.pairs[0]; if (q && isFinite(q.lo)) sent.push(`The ${r.num.param ? 'mean' : 'median'} difference in ${lowerFirst(plain(r.v.label))} was ${fmt(q.diff, d)}${U(r.v)} (95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}${U(r.v)}).`); }
           else { const q = r.cat.rr && r.cat.rr[0]; if (q && q.rr !== null && q.rr !== undefined && isFinite(q.lo)) sent.push(`For ${lowerFirst(plain(r.v.label))}, the ${EF} was ${fmt(q.rr, 2)} (95% CI ${fmt(q.lo, 2)} to ${fmt(q.hi, 2)}).`); }
         });
         for (const r of res.filter(r => !descriptive && !noP && (r.num || r.cat).p <= alpha)) {
@@ -2579,7 +2596,7 @@ const Analysis = (() => {
           if (r.num) { const pd = pairDescription(r.num, gl, alpha); sent.push(`${cap(lab)} was ${fillP(pd.key, pd.ps).replace(/\)$/, effTxt(r) + ')')}.`);
             // the minimal clinically important difference of the variable (step 2 ⚙), two groups
             const mc = Math.abs(toNum(r.v.mcid)), q = r.num.pairs[0];
-            if (k === 2 && mc > 0 && q && isFinite(q.diff)) sent.push(`This difference (${fmt(Math.abs(q.diff), d)}) ${Math.abs(q.diff) >= mc ? 'exceeded' : 'was smaller than'} the minimal clinically important difference of ${fmt(mc, d)}.`); }
+            if (k === 2 && mc > 0 && q && isFinite(q.diff)) sent.push(`This difference (${fmt(Math.abs(q.diff), d)}${U(r.v)}) ${Math.abs(q.diff) >= mc ? 'exceeded' : 'was smaller than'} the minimal clinically important difference of ${fmt(mc, d)}${U(r.v)}.`); }
           else {
             const c = r.cat, row = 0;
             const best = c.pct[row].indexOf(Math.max(...c.pct[row]));
@@ -2605,7 +2622,7 @@ const Analysis = (() => {
             const st = x.stat && x.stat !== '—' && x.stat !== 'FE' ? `, ${x.stat}` : '';
             const pb = isFinite(x.p) ? `${TEST_NAME[x.test] || x.test}${st}, P value ${pTxt(x.p)}${sig ? effTxt(r) : ''}` : 'not testable';
             if (r.num) {
-              const P = r.num.param, vals = listJoin(r.num.desc.map((dd, i) => `${dd.n ? (P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)) : '—'} in ${gl[i]}`));
+              const P = r.num.param, vals = listJoin(r.num.desc.map((dd, i) => `${dd.n ? (P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)) + U(r.v) : '—'} in ${gl[i]}`));
               const what = P ? meanSdName(true) : 'median (IQR)';
               if (!sig) { out.push(`${cap(lab)} did not differ significantly ${amongTxt(k)}; the ${what} was ${vals} (${pb}).`); continue; }
               if (k === 2) {
@@ -2961,15 +2978,15 @@ const Analysis = (() => {
   /* ---------- journal-paper style text ---------- */
   // one short sentence per table: the significant variables with their direction, then the rest in one clause
   function briefSingle(res, gl, alpha, d) {
-    const k = gl.length, val = (n, i) => n.param ? msd(n.desc[i].mean, n.desc[i].sd, d) : `median ${fmt(n.desc[i].median, d)}, IQR ${fmt(n.desc[i].q1, d)}–${fmt(n.desc[i].q3, d)}`;
+    const k = gl.length, val = (n, i, v) => n.param ? msd(n.desc[i].mean, n.desc[i].sd, d) + U(v) : `median ${fmt(n.desc[i].median, d)}${U(v)}, IQR ${fmt(n.desc[i].q1, d)}–${fmt(n.desc[i].q3, d)}${U(v)}`;
     const sig = [], ns = [];
     res.forEach(r => {
       const x = r.num || r.cat, lab = lowerFirst(plain(r.v.label));
       if (!(x.p <= alpha)) { ns.push(lab); return; }
       if (r.num) {
         const c = r.num.desc.map(dd => r.num.param ? dd.mean : dd.median), lo = c.indexOf(Math.min(...c)), hi = c.indexOf(Math.max(...c));
-        sig.push(k === 2 ? `${lab} was lower in ${gl[lo]} than in ${gl[hi]} (${val(r.num, lo)} vs ${val(r.num, hi)}; P value ${pTxt(x.p)})`
-          : `${lab} differed among the groups (P value ${pTxt(x.p)}), being lowest in ${gl[lo]} (${val(r.num, lo)})`);
+        sig.push(k === 2 ? `${lab} was lower in ${gl[lo]} than in ${gl[hi]} (${val(r.num, lo, r.v)} vs ${val(r.num, hi, r.v)}; P value ${pTxt(x.p)})`
+          : `${lab} differed among the groups (P value ${pTxt(x.p)}), being lowest in ${gl[lo]} (${val(r.num, lo, r.v)})`);
       } else if (isCompact(r)) {
         const pc = r.cat.pct[0], hi = pc.indexOf(Math.max(...pc)), lo = pc.indexOf(Math.min(...pc));
         sig.push(k === 2 ? `${lab} was more frequent in ${gl[hi]} (${pctTxt(pc[hi])}% vs ${pctTxt(pc[lo])}%; P value ${pTxt(x.p)})`
