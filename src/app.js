@@ -2453,9 +2453,41 @@
         ${t === 'survival' ? '<p class="legend-note" style="margin:6px 0 0">Curves are drawn for each study group; patients without the event are censored at their follow-up time.</p>' : t === 'mcnemar' ? '<p class="legend-note" style="margin:6px 0 0">Tested in each study group and in all patients together.</p>' : !withPreds ? '' : `
         <label class="f" style="margin-top:8px">${predLabel}</label>
         <div class="predlist">${preds.filter(c => c.col !== a.outcome).map(c => `<label><input type="checkbox" data-apred="${esc(c.col)}" ${(a.predictors || []).includes(c.col) ? 'checked' : ''}>${esc(c.label)} <span class="legend-note">${c.kind === 'numeric' ? 'num' : 'cat'}</span></label>`).join('')}</div>`}
+        <details class="adv-out" data-advout="${ai}" ${advOpen.has(a) ? 'open' : ''}><summary><b>Show output</b> <span class="legend-note">— table, comment and figure of this analysis, as in the report</span></summary><div class="adv-out-body"></div></details>
       </div>`;
     }).join('') : '<p class="legend-note">No advanced analyses yet — add one below.</p>';
+    cfg.advanced.forEach((a, ai) => { if (advOpen.has(a)) advOutput(ai); });
   }
+  // the output of one advanced analysis (collapsed by default): only that analysis is run, with the report's options
+  const advOpen = new WeakSet(), advTimers = {};
+  function advOutput(ai, delay = 0) {
+    clearTimeout(advTimers[ai]);
+    advTimers[ai] = setTimeout(() => {
+      const box = document.querySelector(`[data-advout="${ai}"] .adv-out-body`), a = state.cfg.advanced[ai]; if (!box || !a) return;
+      box.innerHTML = '<p class="legend-note">Running…</p>';
+      setTimeout(() => {
+        let res;
+        try { const o = effOptions();
+          res = Analysis.run(state.data, { ...state.cfg, options: { ...o, correlation: false, summary: false, fdr: false }, variables: state.cfg.variables.map(v => ({ ...v, include: false })), advanced: [{ ...a, include: true }], timeline: null });
+          const secs = res.sections.filter(s => !['single', 'repeated'].includes(s.kind));
+          if (!secs.length) { box.innerHTML = '<p class="legend-note">No output yet: choose the variables this analysis needs (or there are too few complete patients).</p>'; return; }
+          const st = chartStyle(o), pal = chartPalette(o), place = o.commentPlace || 'after';
+          box.innerHTML = secs.map(s => { const cp = s.place && place !== 'none' ? s.place : place, com = cp !== 'none' && s.comment ? `<div class="pcom">${esc(s.comment)}</div>` : '';
+            return `<div class="adv-out-sec"><div class="cap tcap">${esc(s.title)}</div>${cp === 'before' ? com : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div class="pfoot">${esc(s.footnote || '')}</div>${cp !== 'before' ? com : ''}
+              <div class="adv-out-figs">${s.figures.map((f, fi) => { try { const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, pal, st); return `<figure><img src="${c.toDataURL('image/png')}" alt=""><figcaption class="legend-note">${esc(f.caption)}</figcaption></figure>`; } catch (e) { return ''; } }).join('')}</div></div>`; }).join('');
+        } catch (e) { box.innerHTML = `<p class="legend-note">This analysis could not be run with the current settings (${esc(e.message || String(e))}).</p>`; }
+      }, 20);
+    }, delay);
+  }
+  $('#advList').addEventListener('toggle', e => {
+    const d = e.target; if (!d.matches || !d.matches('[data-advout]')) return;
+    const ai = +d.dataset.advout, a = state.cfg.advanced[ai]; if (!a) return;
+    if (d.open) { advOpen.add(a); readAdvanced(); advOutput(ai); } else advOpen.delete(a);
+  }, true);
+  // a changed setting refreshes the open output of that analysis
+  const advRefresh = e => { const card = e.target.closest('[data-adv]'); if (!card || e.target.closest('.adv-out')) return; const ai = +card.dataset.adv, a = state.cfg.advanced[ai];
+    if (a && advOpen.has(a)) { readAdvanced(); advOutput(ai, e.type === 'input' ? 700 : 150); } };
+  $('#advList').addEventListener('change', advRefresh); $('#advList').addEventListener('input', advRefresh);
   // per-analysis options: title, patients (subset), variable selection and type-specific extras
   function advOptions(a) {
     const t = a.type, sel = (key, opts, v) => `<select data-af="${key}">${opts.map(([k, l]) => `<option value="${esc(k)}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;

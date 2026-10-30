@@ -312,6 +312,8 @@ dialog.app-dlg::backdrop{background:rgba(20,17,34,.45)}
 .keys-grid kbd{font-family:inherit;font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--soft);white-space:nowrap}
 .keys-grid .sec{grid-column:1/-1;font-weight:700;color:var(--title);margin-top:6px}
 dialog.app-dlg h3{margin:0 0 4px;color:var(--title)}
+.adv-out{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}.adv-out>summary{cursor:pointer;color:var(--title)}
+.adv-out-body{margin-top:8px}.adv-out .tcap{font-weight:700;margin:4px 0 6px}.adv-out .pfoot{font-size:12px;margin-top:6px;line-height:1.4;color:var(--muted,#666)}.adv-out .pcom{font-size:14px;margin-top:8px;line-height:1.5;text-align:justify;background:var(--soft,#F6F3FA);padding:8px 10px;border-radius:8px}.adv-out-sec{margin-bottom:14px}.adv-out-figs{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.adv-out-figs figure{margin:0;flex:1 1 320px;max-width:560px}.adv-out-figs img{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
 .lv-list{list-style:none;margin:0;padding:0;max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
 .lv-list li{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--card)}
 .lv-list li:last-child{border-bottom:0}.lv-list li.drag{opacity:.4}.lv-list li.over{box-shadow:inset 0 2px 0 var(--accent,#7B2CBF)}
@@ -31440,9 +31442,41 @@ if (typeof module !== 'undefined') module.exports = Sav;
         ${t === 'survival' ? '<p class="legend-note" style="margin:6px 0 0">Curves are drawn for each study group; patients without the event are censored at their follow-up time.</p>' : t === 'mcnemar' ? '<p class="legend-note" style="margin:6px 0 0">Tested in each study group and in all patients together.</p>' : !withPreds ? '' : `
         <label class="f" style="margin-top:8px">${predLabel}</label>
         <div class="predlist">${preds.filter(c => c.col !== a.outcome).map(c => `<label><input type="checkbox" data-apred="${esc(c.col)}" ${(a.predictors || []).includes(c.col) ? 'checked' : ''}>${esc(c.label)} <span class="legend-note">${c.kind === 'numeric' ? 'num' : 'cat'}</span></label>`).join('')}</div>`}
+        <details class="adv-out" data-advout="${ai}" ${advOpen.has(a) ? 'open' : ''}><summary><b>Show output</b> <span class="legend-note">— table, comment and figure of this analysis, as in the report</span></summary><div class="adv-out-body"></div></details>
       </div>`;
     }).join('') : '<p class="legend-note">No advanced analyses yet — add one below.</p>';
+    cfg.advanced.forEach((a, ai) => { if (advOpen.has(a)) advOutput(ai); });
   }
+  // the output of one advanced analysis (collapsed by default): only that analysis is run, with the report's options
+  const advOpen = new WeakSet(), advTimers = {};
+  function advOutput(ai, delay = 0) {
+    clearTimeout(advTimers[ai]);
+    advTimers[ai] = setTimeout(() => {
+      const box = document.querySelector(`[data-advout="${ai}"] .adv-out-body`), a = state.cfg.advanced[ai]; if (!box || !a) return;
+      box.innerHTML = '<p class="legend-note">Running…</p>';
+      setTimeout(() => {
+        let res;
+        try { const o = effOptions();
+          res = Analysis.run(state.data, { ...state.cfg, options: { ...o, correlation: false, summary: false, fdr: false }, variables: state.cfg.variables.map(v => ({ ...v, include: false })), advanced: [{ ...a, include: true }], timeline: null });
+          const secs = res.sections.filter(s => !['single', 'repeated'].includes(s.kind));
+          if (!secs.length) { box.innerHTML = '<p class="legend-note">No output yet: choose the variables this analysis needs (or there are too few complete patients).</p>'; return; }
+          const st = chartStyle(o), pal = chartPalette(o), place = o.commentPlace || 'after';
+          box.innerHTML = secs.map(s => { const cp = s.place && place !== 'none' ? s.place : place, com = cp !== 'none' && s.comment ? `<div class="pcom">${esc(s.comment)}</div>` : '';
+            return `<div class="adv-out-sec"><div class="cap tcap">${esc(s.title)}</div>${cp === 'before' ? com : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div class="pfoot">${esc(s.footnote || '')}</div>${cp !== 'before' ? com : ''}
+              <div class="adv-out-figs">${s.figures.map((f, fi) => { try { const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, pal, st); return `<figure><img src="${c.toDataURL('image/png')}" alt=""><figcaption class="legend-note">${esc(f.caption)}</figcaption></figure>`; } catch (e) { return ''; } }).join('')}</div></div>`; }).join('');
+        } catch (e) { box.innerHTML = `<p class="legend-note">This analysis could not be run with the current settings (${esc(e.message || String(e))}).</p>`; }
+      }, 20);
+    }, delay);
+  }
+  $('#advList').addEventListener('toggle', e => {
+    const d = e.target; if (!d.matches || !d.matches('[data-advout]')) return;
+    const ai = +d.dataset.advout, a = state.cfg.advanced[ai]; if (!a) return;
+    if (d.open) { advOpen.add(a); readAdvanced(); advOutput(ai); } else advOpen.delete(a);
+  }, true);
+  // a changed setting refreshes the open output of that analysis
+  const advRefresh = e => { const card = e.target.closest('[data-adv]'); if (!card || e.target.closest('.adv-out')) return; const ai = +card.dataset.adv, a = state.cfg.advanced[ai];
+    if (a && advOpen.has(a)) { readAdvanced(); advOutput(ai, e.type === 'input' ? 700 : 150); } };
+  $('#advList').addEventListener('change', advRefresh); $('#advList').addEventListener('input', advRefresh);
   // per-analysis options: title, patients (subset), variable selection and type-specific extras
   function advOptions(a) {
     const t = a.type, sel = (key, opts, v) => `<select data-af="${key}">${opts.map(([k, l]) => `<option value="${esc(k)}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
