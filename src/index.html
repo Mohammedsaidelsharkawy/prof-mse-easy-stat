@@ -1110,6 +1110,12 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
           <label class="check"><input type="checkbox" id="optBoxMean"><span><b>Mean marker</b> (◆) on box plots</span></label>
           <label class="check"><input type="checkbox" id="optBoxMeanVal"><span><b>Mean value</b> written beside each box</span></label>
+          <label class="check"><input type="checkbox" id="optFigNormCurve"><span><b>Normal curve</b> of each group over histograms</span></label>
+          <label class="check"><input type="checkbox" id="optFigRefBand"><span><b>Reference range shaded</b> on the charts of variables with a range (step 2 ⚙)</span></label>
+          <label class="check"><input type="checkbox" id="optFigUnitLine"><span><b>Units on a second line</b> of the axis titles</span></label>
+          <label class="check"><input type="checkbox" id="optFigStackSort"><span><b>Stacked bars ordered</b> by their first category</span></label>
+          <div class="row" style="gap:8px;margin:4px 0 6px"><div><label class="f">Watermark on the figures</label><input type="text" id="optFigWatermark" placeholder="e.g. DRAFT" style="width:140px"></div><button class="btn ghost small" id="cbCheck" type="button" style="align-self:flex-end;margin-bottom:6px">👁 Colour-blind check</button></div>
+          <div id="cbOut"></div>
           <label class="check"><input type="checkbox" id="optFigPanels"><span><b>Multi-panel figures</b> — the figures of a table joined as panels A, B, C (Word)</span></label>
           <label class="check"><input type="checkbox" id="optFigForestAll"><span><b>Forest plot of every effect</b> — standardized differences of all variables, two groups</span></label>
           <label class="check"><input type="checkbox" id="optFigHeat"><span><b>Correlation heat map</b> with the correlation table (step 4)</span></label>
@@ -1277,7 +1283,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost" id="btnPrint" title="Print the report preview, or save it as PDF">🖨 Print / PDF</button>
         <button class="btn ghost" id="btnXlsx" title="Every exported table in an Excel file, one sheet per table">⬇ Tables (Excel)</button><button class="btn ghost" id="btnXlsxF" title="The data and a summary sheet whose numbers are Excel formulas (n, mean, SD, median, counts and %) — they update when the data change">⬇ Excel with formulas</button>
         <button class="btn ghost" id="btnPngs" title="Export one, several or all figures as PNG, JPEG or TIFF, up to 1200 dpi, in colour or greyscale">⬇ Figures (PNG · JPG · TIFF)</button>
-        <button class="btn ghost" id="btnPdf" title="The report as a PDF file, laid out on A4 pages (pages are images: the text is not selectable)">⬇ PDF</button>
+        <button class="btn ghost" id="btnPptx" title="Every exported figure on its own PowerPoint slide, with its caption">⬇ PowerPoint</button><button class="btn ghost" id="btnFigPdf" title="Every exported figure on its own A4 page, with its caption">⬇ Figures (PDF)</button><button class="btn ghost" id="btnCombo" title="Join chosen figures into one figure with panels A, B, C …">🧩 Combine figures</button><button class="btn ghost" id="btnPdf" title="The report as a PDF file, laid out on A4 pages (pages are images: the text is not selectable)">⬇ PDF</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
       <div id="fmtBar">

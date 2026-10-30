@@ -1088,7 +1088,7 @@ const Analysis = (() => {
       const rs = rows.filter(r => toCat(r[a.outcome]) !== null && isFinite(toNum(r[col])));
       const pos = rs.map(r => toCat(r[a.outcome]) === a.positive);
       if (pos.filter(Boolean).length < 2 || pos.filter(x => !x).length < 2) return { col, label: columnLabel(cfg, col), r: null };
-      return { col, label: columnLabel(cfg, col), r: S.roc(rs.map(r => toNum(r[col])), pos, cutM, { direction: dir, manual }) };
+      const vals = rs.map(r => toNum(r[col])); return { col, label: columnLabel(cfg, col), r: S.roc(vals, pos, cutM, { direction: dir, manual }), vals, pos };
     });
     // all test variables combined into one score: the predicted probability of a logistic model
     const complete = rows.filter(r => toCat(r[a.outcome]) !== null && tests.every(c => isFinite(toNum(r[c]))));
@@ -1159,7 +1159,13 @@ const Analysis = (() => {
     const ok = res.filter(x => x.r);
     const n1 = ok.length ? ok[0].r.n1 : 0, n0 = ok.length ? ok[0].r.n0 : 0;
     // figure controls: one chart or one per test, AUC with its CI in the legend, the diagonal, line weight, the cut-off point
-    const serie = x => ({ name: `${x.combined ? 'Combined model' : plain(x.label)} (AUC = ${fmt(x.r.auc, 3)}${a.figAucCi ? `, 95% CI ${fmt(x.r.lo, 3)}-${fmt(x.r.hi, 3)}` : ''})`, points: x.r.points,
+    // 95% confidence band of the curve: bootstrap (200 resamples) of the sensitivity at each 1 − specificity
+    const rocBand = x => { if (!a.rocBand || !x.vals) return null; const grid = Array.from({ length: 51 }, (_, i) => i / 50), n = x.vals.length, rnd = S.seeded ? S.seeded(7) : Math.random, up = S.aucOf(x.vals, x.pos.map(Number)) >= 0.5, B = [];
+      for (let b2 = 0; b2 < 200; b2++) { const ix = Array.from({ length: n }, () => Math.floor(rnd() * n)), v = ix.map(i => up ? x.vals[i] : -x.vals[i]), p = ix.map(i => x.pos[i]), n1 = p.filter(Boolean).length, n0 = n - n1; if (!n1 || !n0) continue;
+        const cuts = [Infinity, ...[...new Set(v)].sort((q, w) => w - q)], pts = cuts.map(c => [v.filter((u, i) => !p[i] && u >= c).length / n0, v.filter((u, i) => p[i] && u >= c).length / n1]);
+        B.push(grid.map(f => Math.max(0, ...pts.filter(q => q[0] <= f + 1e-12).map(q => q[1])))); }
+      return B.length > 20 ? { fpr: grid, lo: grid.map((_, g) => S.quantile(B.map(r => r[g]), 0.025)), hi: grid.map((_, g) => S.quantile(B.map(r => r[g]), 0.975)) } : null; };
+    const serie = x => ({ name: `${x.combined ? 'Combined model' : plain(x.label)} (AUC = ${fmt(x.r.auc, 3)}${a.figAucCi ? `, 95% CI ${fmt(x.r.lo, 3)}-${fmt(x.r.hi, 3)}` : ''})`, points: x.r.points, ...(a.rocBand ? { band: rocBand(x) } : {}),
       ...(a.showCut ? { cut: { fpr: 1 - x.r.cutoff.spec, tpr: x.r.cutoff.sens, label: x.combined ? '' : cutTxt(x) } } : {}) });
     const figSpec = list => ({ type: 'roc', series: list.map(serie), note: `n = ${n1} with, ${n0} without`,
       ...(a.noDiagonal ? { diagonal: false } : {}), ...(a.figLines && a.figLines !== 'normal' ? { lineW: a.figLines } : {}), ...(a.figFill ? { fill: true } : {}) });
@@ -1306,7 +1312,7 @@ const Analysis = (() => {
     const sec = {
       kind: 'survival', title: `Kaplan-Meier survival analysis (${evLabel}) of the studied ${one ? 'patients' : 'groups'}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
       figures: [{ sig: one || lr.p <= alpha, caption: `Kaplan-Meier curve of ${lowerFirst(evLabel)}-free survival in the studied ${one ? 'patients' : 'groups'}`.replace('curve of', one ? 'curve of' : 'curves of'),
-        spec: { type: 'km', xLabel: timeLabel, ...(a.ciBand ? { band: true } : {}), series: km.map((m, g) => ({ name: gl[g], steps: m.steps, censored: m.censored })), ...(one ? { legend: false } : { note: `Log-rank P ${pTxt(lr.p)}` }) } }],
+        spec: { type: 'km', xLabel: timeLabel, ...(a.ciBand ? { band: true } : {}), series: km.map((m, g) => ({ name: gl[g], steps: m.steps, censored: m.censored })), ...(one ? { legend: false } : { note: `${(() => { if (!a.kmHR || k !== 2) return ''; const cx = S.coxRegression(times.flatMap((t, g) => t.map(() => [g])), times.flat(), ev.flat()); const t1 = cx && cx.terms[0]; return t1 && isFinite(t1.hr) ? `HR (${gl[1]} vs ${gl[0]}) = ${fmt(t1.hr, 2)} (95% CI ${fmt(t1.lo, 2)}-${fmt(t1.hi, 2)})\n` : ''; })()}Log-rank P ${pTxt(lr.p)}` }) } }],
       meta: { km, lr }
     };
     // swimmer plot: every patient's follow-up, event or censored
@@ -1460,10 +1466,11 @@ const Analysis = (() => {
     const f = [`*: Significant as P value ≤ ${alpha}`, `n = ${rs.length}`, `Bias = ${plain(l1)} − ${plain(l2)} (P by paired t-test)`, `ICC: Intraclass correlation coefficient (${cons ? 'two-way mixed effects, consistency' : 'two-way random effects, absolute agreement'})`, ...(pctBA ? [`Bland-Altman of percentage differences: (${plain(l1)} − ${plain(l2)}) / mean × 100${dropped ? ` (${dropped} pair${dropped > 1 ? 's' : ''} with a mean of 0 left out)` : ''}`] : []), 'Interpretation (Koo & Li): <0.5 poor, 0.5-0.75 moderate, 0.75-0.9 good, >0.9 excellent'];
     const sent = [`The agreement between ${lowerFirst(plain(l1))} and ${lowerFirst(plain(l2))} was ${grade(ic.single)} (ICC = ${fmt(ic.single, 3)}, 95% CI ${ci(ic.lo, ic.hi, 3)}).`,
       `The mean ${pctBA ? 'percentage ' : ''}difference was ${fmt(ba.bias, d)}${pctBA ? '%' : ''} (95% CI ${ci(ba.biasLo, ba.biasHi)}${ba.p <= alpha ? ', significantly different from zero' : ''}), with 95% limits of agreement from ${ci(ba.lo, ba.hi)}${pctBA ? '%' : ''}.`];
+    const baReg = a.baReg && ba.means && ba.means.length > 3 ? S.linearRegression(ba.means.map(m => [m]), ba.diffs) : null;
     return {
-      kind: 'agreement', title: `Agreement between ${lowerFirst(plain(l1))} and ${lowerFirst(plain(l2))}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
+      kind: 'agreement', title: `Agreement between ${lowerFirst(plain(l1))} and ${lowerFirst(plain(l2))}`, head, rows: trows, footnote: [...f, ...(baReg ? [`Proportional bias: slope of the differences on the means = ${fmt(baReg.coef[1], 3)} (P ${pTxt(baReg.terms[1].p)})`] : [])].join(', ') + '.', comment: sent.join(' ') + (baReg ? ` ${baReg.terms[1].p <= alpha ? 'There was significant proportional bias: the difference between the methods changed with the size of the measurement' : 'There was no significant proportional bias'} (slope ${fmt(baReg.coef[1], 3)}, P value ${pTxt(baReg.terms[1].p)}).` : ''),
       figures: [{ sig: true, caption: `Bland-Altman plot of ${lowerFirst(plain(l1))} versus ${lowerFirst(plain(l2))}`,
-        spec: { type: 'ba', x: ba.means, y: ba.diffs, bias: ba.bias, lo: ba.lo, hi: ba.hi, xLabel: `Mean of ${plain(l1)} and ${plain(l2)}`, yLabel: pctBA ? `Difference, % of the mean (${plain(l1)} − ${plain(l2)})` : `Difference (${plain(l1)} − ${plain(l2)})`, dec: d } }],
+        spec: { type: 'ba', x: ba.means, y: ba.diffs, bias: ba.bias, lo: ba.lo, hi: ba.hi, ...(baReg ? { reg: { a: baReg.coef[0], b: baReg.coef[1] } } : {}), xLabel: `Mean of ${plain(l1)} and ${plain(l2)}`, yLabel: pctBA ? `Difference, % of the mean (${plain(l1)} − ${plain(l2)})` : `Difference (${plain(l1)} − ${plain(l2)})`, dec: d } }],
       meta: { ic, ba }
     };
   }
@@ -1586,6 +1593,34 @@ const Analysis = (() => {
       figures: a.marginFig === false ? [] : [{ sig: true, caption: `${cap(DESIGN_NAME[design])} plot: difference in ${what} (${tl} − ${rl}) with its ${cpct}% CI and the margin`,
         spec: { type: 'margin', rows: res.map(r => ({ label: r.pop.name, est: r.est * sc, lo: r.lo * sc, hi: r.hi * sc })), margin: M * sc, design, better, xLabel: `${binary ? 'Risk difference (percentage points)' : 'Difference'}: ${tl} − ${rl}`, favNew: `Favours ${tl}`, favRef: `Favours ${rl}` } }],
       meta: { res } };
+  }
+  /* ---------- UpSet: how often each combination of several yes/no conditions occurs ---------- */
+  function upsetSection(a, cfg, rows, alpha, d, used) {
+    const cols = (a.predictors || []).slice(0, 8); if (cols.length < 2) return null;
+    const isYes = x => { const t = toCat(x); return t !== null && (POSITIVE.test(t) || /^(present|positive)$/i.test(t)); };
+    const rs = rows.filter(r => cols.every(c => toCat(r[c]) !== null)); if (rs.length < 5) return null;
+    const cnt = new Map(); rs.forEach(r => { const k2 = cols.map(c => isYes(r[c]) ? 1 : 0).join(''); cnt.set(k2, (cnt.get(k2) || 0) + 1); });
+    const combos = [...cnt.entries()].filter(([k2]) => k2.includes('1')).sort((x, y) => y[1] - x[1]).slice(0, a.topN ? +a.topN : 15).map(([k2, n]) => ({ mask: [...k2].map(Number), n }));
+    const names = cols.map(c => plain(columnLabel(cfg, c))), none = cnt.get('0'.repeat(cols.length)) || 0; used.add('upset');
+    return { kind: 'upset', title: `Combinations of ${listJoin(names.map(lowerFirst))} (n=${rs.length})`, head: ['Combination', 'Patients (%)'],
+      rows: [...combos.map(cb => [{ t: [names.filter((_, i) => cb.mask[i]).join(' + ')], b: true }, { t: [`${cb.n} (${fmt(100 * cb.n / rs.length, 1)}%)`] }]), [{ t: ['None of them'], b: true }, { t: [`${none} (${fmt(100 * none / rs.length, 1)}%)`] }]],
+      footnote: 'Each row counts the patients with exactly that combination (the others absent); the most frequent combinations are shown.',
+      comment: combos.length ? `The most frequent combination was ${names.filter((_, i) => combos[0].mask[i]).map(lowerFirst).join(' with ')}${combos[0].mask.filter(Boolean).length === 1 ? ' alone' : ''} (${combos[0].n} patients, ${fmt(100 * combos[0].n / rs.length, 1)}%), and ${none} patients (${fmt(100 * none / rs.length, 1)}%) had none of them.` : 'No patient had any of the conditions.',
+      figures: [{ sig: true, caption: `UpSet plot of ${listJoin(names.map(lowerFirst))}`, spec: { type: 'upset', sets: names, setSizes: cols.map(c => rs.filter(r => isYes(r[c])).length), combos } }], meta: {} };
+  }
+  /* ---------- alluvial: the categories of a repeated categorical outcome and the patients changing between them ---------- */
+  function alluvialSection(a, cfg, rows, alpha, d, used) {
+    const v = cfg.variables.find(x => x.id === a.rvar && x.kind === 'repeated' && x.type === 'categorical'); if (!v) return null;
+    const cols = v.cols.filter(c => c.include !== false); if (cols.length < 2) return null;
+    const lv = levelsOf(cfg, rows, cols[0].col).filter(l => cols.some(c => rows.some(r => toCat(r[c.col]) === l))), rs = rows.filter(r => cols.every(c => lv.includes(toCat(r[c.col])))); if (rs.length < 3) return null;
+    const tl = cols.map(c => c.label || cfg.tpLabels[c.tp] || c.tp), counts = cols.map(c => lv.map(l => rs.filter(r => toCat(r[c.col]) === l).length));
+    const flows = cols.slice(0, -1).map((c, t) => lv.map(l1 => lv.map(l2 => rs.filter(r => toCat(r[c.col]) === l1 && toCat(r[cols[t + 1].col]) === l2).length)));
+    const stay = flows.map(f => f.reduce((s2, row, i) => s2 + row[i], 0)); used.add('alluvial');
+    return { kind: 'alluvial', title: `${plain(v.label)} at each measurement and the changes between them (n=${rs.length})`, head: ['Category', ...tl],
+      rows: lv.map((l, k2) => [{ t: [l], b: true }, ...counts.map(cs => ({ t: [`${cs[k2]} (${fmt(100 * cs[k2] / rs.length, 1)}%)`] }))]),
+      footnote: `Patients with a value at every measurement; ${tl.slice(0, -1).map((t, i) => `${stay[i]} of ${rs.length} stayed in the same category from ${t} to ${tl[i + 1]}`).join('; ')}.`,
+      comment: `From ${tl[0]} to ${tl[tl.length - 1]}, ${lv.map((l, k2) => `${lowerFirst(l)} went from ${fmt(100 * counts[0][k2] / rs.length, 1)}% to ${fmt(100 * counts[counts.length - 1][k2] / rs.length, 1)}%`).join(', ')}.`,
+      figures: [{ sig: true, caption: `Alluvial plot of ${lowerFirst(plain(v.label))} over time`, spec: { type: 'alluvial', times: tl, levels: lv, counts, flows } }], meta: {} };
   }
   /* ---------- survey-weighted comparison of the study groups ---------- */
   function weightedSection(a, cfg, rows, alpha, d, used, G) {
@@ -2891,7 +2926,8 @@ const Analysis = (() => {
               const bin = v => Math.min(edges.length - 1, Math.floor((v - sc.min) / sc.step + 1e-9));
               return { caption: `Distribution of ${lowerFirst(plain(r.v.label))} in the studied groups`,
                 spec: { type: 'bar', integer: true, categories: edges.map(e => `${fmt(e, d)}-${fmt(e + sc.step, d)}`), xLabel: r.v.label, yLabel: 'Number of patients',
-                  series: withN(gl, r.num.desc.map(x => x.n)).map((g, i) => { const n = new Array(edges.length).fill(0); r.gv[i].forEach(v => n[bin(v)]++); return { name: g, values: n }; }) } };
+                  series: withN(gl, r.num.desc.map(x => x.n)).map((g, i) => { const n = new Array(edges.length).fill(0); r.gv[i].forEach(v => n[bin(v)]++); return { name: g, values: n }; }),
+                  ...(opts.figNormCurve ? { curves: r.num.desc.map((dd, i) => ({ si: i, values: edges.map(e => dd.sd > 0 ? dd.n * (jStat.normal.cdf(e + sc.step, dd.mean, dd.sd) - jStat.normal.cdf(e, dd.mean, dd.sd)) : 0) })) } : {}) } };
             }
             if (ct === 'violin' || ct === 'rain') return { caption: `${r.v.label} of the studied groups${ct === 'rain' ? ' (raincloud plot)' : ''}`,
               spec: { type: 'violin', ...(ct === 'rain' ? { rain: true } : {}), perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
@@ -2921,6 +2957,7 @@ const Analysis = (() => {
             caption: `${r.v.label} of the studied groups (mosaic plot: bar widths show the group sizes)`,
             spec: { type: 'stacked', widths: c.ns, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
+          if (ct === 'diverging') return { caption: `${r.v.label} of the studied groups`, spec: { type: 'diverging', categories: withN(gl, c.ns), series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) } };
           if (ct === 'stacked' || ct === 'pie' || ct === 'piefull') return {
             caption: `${r.v.label} of the studied groups`,
             spec: { type: ct === 'piefull' ? 'pie' : ct, ...(ct === 'piefull' ? { full: true } : {}), categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
@@ -2995,7 +3032,7 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw'].includes(a.type))) continue;
+      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw', 'upset', 'alluvial'].includes(a.type))) continue;
       const needs = {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
@@ -3003,14 +3040,14 @@ const Analysis = (() => {
         methodcomp: () => a.second, pca: () => (a.predictors || []).length >= 3, partial: () => a.second && (a.predictors || []).length, anova2: () => a.second, mediation: () => a.second && a.xvar, psm: () => (a.predictors || []).length, lmm: () => a.rvar, tost: () => a.margin !== undefined && a.margin !== '', mh: () => a.positive && a.second, clogit: () => a.positive && a.second && (a.predictors || []).length,
         correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second,
         cif: () => a.event && a.positive && a.competing, tdroc: () => a.event && a.positive && (a.predictors || []).length, quantreg: () => (a.predictors || []).length, fleiss: () => (a.predictors || []).length >= 2,
-        rmcorr: () => a.second && a.idcol, crossover: () => a.second && a.seqCol, weighted: () => a.wcol && (a.predictors || []).length, kendallw: () => (a.predictors || []).length >= 2, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
+        rmcorr: () => a.second && a.idcol, crossover: () => a.second && a.seqCol, upset: () => (a.predictors || []).length >= 2, alluvial: () => a.rvar, weighted: () => a.wcol && (a.predictors || []).length, kendallw: () => (a.predictors || []).length >= 2, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
         agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, count: countSection, ordinal: ordinalSection, multinom: ordinalSection, methodcomp: methodSection, pca: pcaSection, partial: partialSection, anova2: anova2Section, mediation: mediationSection, psm: psmSection, lmm: lmmSection, tost: tostSection, mh: mhSection, clogit: clogitSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection,
-        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, weighted: weightedSection, kendallw: kendallWSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection }[a.type];
+        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, upset: upsetSection, alluvial: alluvialSection, weighted: weightedSection, kendallw: kendallWSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
       const compares = ['ancova', 'survival', 'cif', 'noninf', 'gee', 'weighted', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
@@ -3069,7 +3106,7 @@ const Analysis = (() => {
     const f = [...(p <= alpha ? [`*: Significant as P value ≤ ${alpha}`] : []), `n = ${rs.length} patients with both values`, `P value: ${tn}${a.test === 'auto' || !a.test ? ` (differences ${param ? 'normally' : 'not normally'} distributed)` : ''}`,
       `Other test: ${param ? `Wilcoxon signed-rank P ${pTxt(w.p)}` : `paired t-test P ${pTxt(t.p)}`}`, eff];
     const figures = a.figure === 'none' ? [] : [{ sig: p <= alpha, caption: `${plain(l1)} and ${lowerFirst(plain(l2))} of each patient`,
-      spec: { type: 'line', categories: [plain(l1), plain(l2)], yLabel: a.ylabel || plain(l1), legend: false, individual: [x.map((v, i) => [v, y[i]])],
+      spec: { type: 'line', categories: [plain(l1), plain(l2)], yLabel: a.ylabel || plain(l1), legend: false, individual: [x.map((v, i) => [v, y[i]])], ...(a.figure === 'slope' ? { dirColor: true } : {}),
         errKind: 'sd', series: [{ name: 'Mean', values: param ? [dx.mean, dy.mean] : [dx.median, dy.median], err: param ? [dx.sd, dy.sd] : [null, null], lo: param ? null : [dx.q1, dy.q1], hi: param ? null : [dx.q3, dy.q3] }] } }];
     return { kind: 'paired', title: `${plain(l1)} versus ${lowerFirst(plain(l2))} (paired comparison)`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures, meta: { t, w } };
   }

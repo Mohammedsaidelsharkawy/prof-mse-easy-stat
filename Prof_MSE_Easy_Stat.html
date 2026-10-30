@@ -1110,6 +1110,12 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
           <label class="check"><input type="checkbox" id="optBoxMean"><span><b>Mean marker</b> (◆) on box plots</span></label>
           <label class="check"><input type="checkbox" id="optBoxMeanVal"><span><b>Mean value</b> written beside each box</span></label>
+          <label class="check"><input type="checkbox" id="optFigNormCurve"><span><b>Normal curve</b> of each group over histograms</span></label>
+          <label class="check"><input type="checkbox" id="optFigRefBand"><span><b>Reference range shaded</b> on the charts of variables with a range (step 2 ⚙)</span></label>
+          <label class="check"><input type="checkbox" id="optFigUnitLine"><span><b>Units on a second line</b> of the axis titles</span></label>
+          <label class="check"><input type="checkbox" id="optFigStackSort"><span><b>Stacked bars ordered</b> by their first category</span></label>
+          <div class="row" style="gap:8px;margin:4px 0 6px"><div><label class="f">Watermark on the figures</label><input type="text" id="optFigWatermark" placeholder="e.g. DRAFT" style="width:140px"></div><button class="btn ghost small" id="cbCheck" type="button" style="align-self:flex-end;margin-bottom:6px">👁 Colour-blind check</button></div>
+          <div id="cbOut"></div>
           <label class="check"><input type="checkbox" id="optFigPanels"><span><b>Multi-panel figures</b> — the figures of a table joined as panels A, B, C (Word)</span></label>
           <label class="check"><input type="checkbox" id="optFigForestAll"><span><b>Forest plot of every effect</b> — standardized differences of all variables, two groups</span></label>
           <label class="check"><input type="checkbox" id="optFigHeat"><span><b>Correlation heat map</b> with the correlation table (step 4)</span></label>
@@ -1277,7 +1283,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost" id="btnPrint" title="Print the report preview, or save it as PDF">🖨 Print / PDF</button>
         <button class="btn ghost" id="btnXlsx" title="Every exported table in an Excel file, one sheet per table">⬇ Tables (Excel)</button><button class="btn ghost" id="btnXlsxF" title="The data and a summary sheet whose numbers are Excel formulas (n, mean, SD, median, counts and %) — they update when the data change">⬇ Excel with formulas</button>
         <button class="btn ghost" id="btnPngs" title="Export one, several or all figures as PNG, JPEG or TIFF, up to 1200 dpi, in colour or greyscale">⬇ Figures (PNG · JPG · TIFF)</button>
-        <button class="btn ghost" id="btnPdf" title="The report as a PDF file, laid out on A4 pages (pages are images: the text is not selectable)">⬇ PDF</button>
+        <button class="btn ghost" id="btnPptx" title="Every exported figure on its own PowerPoint slide, with its caption">⬇ PowerPoint</button><button class="btn ghost" id="btnFigPdf" title="Every exported figure on its own A4 page, with its caption">⬇ Figures (PDF)</button><button class="btn ghost" id="btnCombo" title="Join chosen figures into one figure with panels A, B, C …">🧩 Combine figures</button><button class="btn ghost" id="btnPdf" title="The report as a PDF file, laid out on A4 pages (pages are images: the text is not selectable)">⬇ PDF</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
       <div id="fmtBar">
@@ -23321,7 +23327,7 @@ const Stats = (() => {
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
   return {
-    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, moodMedian, permutationTest, huberRegression, olsCluster, vanElteren, kendallW, powerTwoMeans, powerTwoProps, wlsRobust, weightedLogistic, bayesMeans, bayesProps, groupSequential, padjust, nMargin, gee, glmmLogit, gaussHermite,
+    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, seeded, moodMedian, permutationTest, huberRegression, olsCluster, vanElteren, kendallW, powerTwoMeans, powerTwoProps, wlsRobust, weightedLogistic, bayesMeans, bayesProps, groupSequential, padjust, nMargin, gee, glmmLogit, gaussHermite,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
@@ -24424,7 +24430,7 @@ const Analysis = (() => {
       const rs = rows.filter(r => toCat(r[a.outcome]) !== null && isFinite(toNum(r[col])));
       const pos = rs.map(r => toCat(r[a.outcome]) === a.positive);
       if (pos.filter(Boolean).length < 2 || pos.filter(x => !x).length < 2) return { col, label: columnLabel(cfg, col), r: null };
-      return { col, label: columnLabel(cfg, col), r: S.roc(rs.map(r => toNum(r[col])), pos, cutM, { direction: dir, manual }) };
+      const vals = rs.map(r => toNum(r[col])); return { col, label: columnLabel(cfg, col), r: S.roc(vals, pos, cutM, { direction: dir, manual }), vals, pos };
     });
     // all test variables combined into one score: the predicted probability of a logistic model
     const complete = rows.filter(r => toCat(r[a.outcome]) !== null && tests.every(c => isFinite(toNum(r[c]))));
@@ -24495,7 +24501,13 @@ const Analysis = (() => {
     const ok = res.filter(x => x.r);
     const n1 = ok.length ? ok[0].r.n1 : 0, n0 = ok.length ? ok[0].r.n0 : 0;
     // figure controls: one chart or one per test, AUC with its CI in the legend, the diagonal, line weight, the cut-off point
-    const serie = x => ({ name: `${x.combined ? 'Combined model' : plain(x.label)} (AUC = ${fmt(x.r.auc, 3)}${a.figAucCi ? `, 95% CI ${fmt(x.r.lo, 3)}-${fmt(x.r.hi, 3)}` : ''})`, points: x.r.points,
+    // 95% confidence band of the curve: bootstrap (200 resamples) of the sensitivity at each 1 − specificity
+    const rocBand = x => { if (!a.rocBand || !x.vals) return null; const grid = Array.from({ length: 51 }, (_, i) => i / 50), n = x.vals.length, rnd = S.seeded ? S.seeded(7) : Math.random, up = S.aucOf(x.vals, x.pos.map(Number)) >= 0.5, B = [];
+      for (let b2 = 0; b2 < 200; b2++) { const ix = Array.from({ length: n }, () => Math.floor(rnd() * n)), v = ix.map(i => up ? x.vals[i] : -x.vals[i]), p = ix.map(i => x.pos[i]), n1 = p.filter(Boolean).length, n0 = n - n1; if (!n1 || !n0) continue;
+        const cuts = [Infinity, ...[...new Set(v)].sort((q, w) => w - q)], pts = cuts.map(c => [v.filter((u, i) => !p[i] && u >= c).length / n0, v.filter((u, i) => p[i] && u >= c).length / n1]);
+        B.push(grid.map(f => Math.max(0, ...pts.filter(q => q[0] <= f + 1e-12).map(q => q[1])))); }
+      return B.length > 20 ? { fpr: grid, lo: grid.map((_, g) => S.quantile(B.map(r => r[g]), 0.025)), hi: grid.map((_, g) => S.quantile(B.map(r => r[g]), 0.975)) } : null; };
+    const serie = x => ({ name: `${x.combined ? 'Combined model' : plain(x.label)} (AUC = ${fmt(x.r.auc, 3)}${a.figAucCi ? `, 95% CI ${fmt(x.r.lo, 3)}-${fmt(x.r.hi, 3)}` : ''})`, points: x.r.points, ...(a.rocBand ? { band: rocBand(x) } : {}),
       ...(a.showCut ? { cut: { fpr: 1 - x.r.cutoff.spec, tpr: x.r.cutoff.sens, label: x.combined ? '' : cutTxt(x) } } : {}) });
     const figSpec = list => ({ type: 'roc', series: list.map(serie), note: `n = ${n1} with, ${n0} without`,
       ...(a.noDiagonal ? { diagonal: false } : {}), ...(a.figLines && a.figLines !== 'normal' ? { lineW: a.figLines } : {}), ...(a.figFill ? { fill: true } : {}) });
@@ -24642,7 +24654,7 @@ const Analysis = (() => {
     const sec = {
       kind: 'survival', title: `Kaplan-Meier survival analysis (${evLabel}) of the studied ${one ? 'patients' : 'groups'}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
       figures: [{ sig: one || lr.p <= alpha, caption: `Kaplan-Meier curve of ${lowerFirst(evLabel)}-free survival in the studied ${one ? 'patients' : 'groups'}`.replace('curve of', one ? 'curve of' : 'curves of'),
-        spec: { type: 'km', xLabel: timeLabel, ...(a.ciBand ? { band: true } : {}), series: km.map((m, g) => ({ name: gl[g], steps: m.steps, censored: m.censored })), ...(one ? { legend: false } : { note: `Log-rank P ${pTxt(lr.p)}` }) } }],
+        spec: { type: 'km', xLabel: timeLabel, ...(a.ciBand ? { band: true } : {}), series: km.map((m, g) => ({ name: gl[g], steps: m.steps, censored: m.censored })), ...(one ? { legend: false } : { note: `${(() => { if (!a.kmHR || k !== 2) return ''; const cx = S.coxRegression(times.flatMap((t, g) => t.map(() => [g])), times.flat(), ev.flat()); const t1 = cx && cx.terms[0]; return t1 && isFinite(t1.hr) ? `HR (${gl[1]} vs ${gl[0]}) = ${fmt(t1.hr, 2)} (95% CI ${fmt(t1.lo, 2)}-${fmt(t1.hi, 2)})\n` : ''; })()}Log-rank P ${pTxt(lr.p)}` }) } }],
       meta: { km, lr }
     };
     // swimmer plot: every patient's follow-up, event or censored
@@ -24796,10 +24808,11 @@ const Analysis = (() => {
     const f = [`*: Significant as P value ≤ ${alpha}`, `n = ${rs.length}`, `Bias = ${plain(l1)} − ${plain(l2)} (P by paired t-test)`, `ICC: Intraclass correlation coefficient (${cons ? 'two-way mixed effects, consistency' : 'two-way random effects, absolute agreement'})`, ...(pctBA ? [`Bland-Altman of percentage differences: (${plain(l1)} − ${plain(l2)}) / mean × 100${dropped ? ` (${dropped} pair${dropped > 1 ? 's' : ''} with a mean of 0 left out)` : ''}`] : []), 'Interpretation (Koo & Li): <0.5 poor, 0.5-0.75 moderate, 0.75-0.9 good, >0.9 excellent'];
     const sent = [`The agreement between ${lowerFirst(plain(l1))} and ${lowerFirst(plain(l2))} was ${grade(ic.single)} (ICC = ${fmt(ic.single, 3)}, 95% CI ${ci(ic.lo, ic.hi, 3)}).`,
       `The mean ${pctBA ? 'percentage ' : ''}difference was ${fmt(ba.bias, d)}${pctBA ? '%' : ''} (95% CI ${ci(ba.biasLo, ba.biasHi)}${ba.p <= alpha ? ', significantly different from zero' : ''}), with 95% limits of agreement from ${ci(ba.lo, ba.hi)}${pctBA ? '%' : ''}.`];
+    const baReg = a.baReg && ba.means && ba.means.length > 3 ? S.linearRegression(ba.means.map(m => [m]), ba.diffs) : null;
     return {
-      kind: 'agreement', title: `Agreement between ${lowerFirst(plain(l1))} and ${lowerFirst(plain(l2))}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
+      kind: 'agreement', title: `Agreement between ${lowerFirst(plain(l1))} and ${lowerFirst(plain(l2))}`, head, rows: trows, footnote: [...f, ...(baReg ? [`Proportional bias: slope of the differences on the means = ${fmt(baReg.coef[1], 3)} (P ${pTxt(baReg.terms[1].p)})`] : [])].join(', ') + '.', comment: sent.join(' ') + (baReg ? ` ${baReg.terms[1].p <= alpha ? 'There was significant proportional bias: the difference between the methods changed with the size of the measurement' : 'There was no significant proportional bias'} (slope ${fmt(baReg.coef[1], 3)}, P value ${pTxt(baReg.terms[1].p)}).` : ''),
       figures: [{ sig: true, caption: `Bland-Altman plot of ${lowerFirst(plain(l1))} versus ${lowerFirst(plain(l2))}`,
-        spec: { type: 'ba', x: ba.means, y: ba.diffs, bias: ba.bias, lo: ba.lo, hi: ba.hi, xLabel: `Mean of ${plain(l1)} and ${plain(l2)}`, yLabel: pctBA ? `Difference, % of the mean (${plain(l1)} − ${plain(l2)})` : `Difference (${plain(l1)} − ${plain(l2)})`, dec: d } }],
+        spec: { type: 'ba', x: ba.means, y: ba.diffs, bias: ba.bias, lo: ba.lo, hi: ba.hi, ...(baReg ? { reg: { a: baReg.coef[0], b: baReg.coef[1] } } : {}), xLabel: `Mean of ${plain(l1)} and ${plain(l2)}`, yLabel: pctBA ? `Difference, % of the mean (${plain(l1)} − ${plain(l2)})` : `Difference (${plain(l1)} − ${plain(l2)})`, dec: d } }],
       meta: { ic, ba }
     };
   }
@@ -24922,6 +24935,34 @@ const Analysis = (() => {
       figures: a.marginFig === false ? [] : [{ sig: true, caption: `${cap(DESIGN_NAME[design])} plot: difference in ${what} (${tl} − ${rl}) with its ${cpct}% CI and the margin`,
         spec: { type: 'margin', rows: res.map(r => ({ label: r.pop.name, est: r.est * sc, lo: r.lo * sc, hi: r.hi * sc })), margin: M * sc, design, better, xLabel: `${binary ? 'Risk difference (percentage points)' : 'Difference'}: ${tl} − ${rl}`, favNew: `Favours ${tl}`, favRef: `Favours ${rl}` } }],
       meta: { res } };
+  }
+  /* ---------- UpSet: how often each combination of several yes/no conditions occurs ---------- */
+  function upsetSection(a, cfg, rows, alpha, d, used) {
+    const cols = (a.predictors || []).slice(0, 8); if (cols.length < 2) return null;
+    const isYes = x => { const t = toCat(x); return t !== null && (POSITIVE.test(t) || /^(present|positive)$/i.test(t)); };
+    const rs = rows.filter(r => cols.every(c => toCat(r[c]) !== null)); if (rs.length < 5) return null;
+    const cnt = new Map(); rs.forEach(r => { const k2 = cols.map(c => isYes(r[c]) ? 1 : 0).join(''); cnt.set(k2, (cnt.get(k2) || 0) + 1); });
+    const combos = [...cnt.entries()].filter(([k2]) => k2.includes('1')).sort((x, y) => y[1] - x[1]).slice(0, a.topN ? +a.topN : 15).map(([k2, n]) => ({ mask: [...k2].map(Number), n }));
+    const names = cols.map(c => plain(columnLabel(cfg, c))), none = cnt.get('0'.repeat(cols.length)) || 0; used.add('upset');
+    return { kind: 'upset', title: `Combinations of ${listJoin(names.map(lowerFirst))} (n=${rs.length})`, head: ['Combination', 'Patients (%)'],
+      rows: [...combos.map(cb => [{ t: [names.filter((_, i) => cb.mask[i]).join(' + ')], b: true }, { t: [`${cb.n} (${fmt(100 * cb.n / rs.length, 1)}%)`] }]), [{ t: ['None of them'], b: true }, { t: [`${none} (${fmt(100 * none / rs.length, 1)}%)`] }]],
+      footnote: 'Each row counts the patients with exactly that combination (the others absent); the most frequent combinations are shown.',
+      comment: combos.length ? `The most frequent combination was ${names.filter((_, i) => combos[0].mask[i]).map(lowerFirst).join(' with ')}${combos[0].mask.filter(Boolean).length === 1 ? ' alone' : ''} (${combos[0].n} patients, ${fmt(100 * combos[0].n / rs.length, 1)}%), and ${none} patients (${fmt(100 * none / rs.length, 1)}%) had none of them.` : 'No patient had any of the conditions.',
+      figures: [{ sig: true, caption: `UpSet plot of ${listJoin(names.map(lowerFirst))}`, spec: { type: 'upset', sets: names, setSizes: cols.map(c => rs.filter(r => isYes(r[c])).length), combos } }], meta: {} };
+  }
+  /* ---------- alluvial: the categories of a repeated categorical outcome and the patients changing between them ---------- */
+  function alluvialSection(a, cfg, rows, alpha, d, used) {
+    const v = cfg.variables.find(x => x.id === a.rvar && x.kind === 'repeated' && x.type === 'categorical'); if (!v) return null;
+    const cols = v.cols.filter(c => c.include !== false); if (cols.length < 2) return null;
+    const lv = levelsOf(cfg, rows, cols[0].col).filter(l => cols.some(c => rows.some(r => toCat(r[c.col]) === l))), rs = rows.filter(r => cols.every(c => lv.includes(toCat(r[c.col])))); if (rs.length < 3) return null;
+    const tl = cols.map(c => c.label || cfg.tpLabels[c.tp] || c.tp), counts = cols.map(c => lv.map(l => rs.filter(r => toCat(r[c.col]) === l).length));
+    const flows = cols.slice(0, -1).map((c, t) => lv.map(l1 => lv.map(l2 => rs.filter(r => toCat(r[c.col]) === l1 && toCat(r[cols[t + 1].col]) === l2).length)));
+    const stay = flows.map(f => f.reduce((s2, row, i) => s2 + row[i], 0)); used.add('alluvial');
+    return { kind: 'alluvial', title: `${plain(v.label)} at each measurement and the changes between them (n=${rs.length})`, head: ['Category', ...tl],
+      rows: lv.map((l, k2) => [{ t: [l], b: true }, ...counts.map(cs => ({ t: [`${cs[k2]} (${fmt(100 * cs[k2] / rs.length, 1)}%)`] }))]),
+      footnote: `Patients with a value at every measurement; ${tl.slice(0, -1).map((t, i) => `${stay[i]} of ${rs.length} stayed in the same category from ${t} to ${tl[i + 1]}`).join('; ')}.`,
+      comment: `From ${tl[0]} to ${tl[tl.length - 1]}, ${lv.map((l, k2) => `${lowerFirst(l)} went from ${fmt(100 * counts[0][k2] / rs.length, 1)}% to ${fmt(100 * counts[counts.length - 1][k2] / rs.length, 1)}%`).join(', ')}.`,
+      figures: [{ sig: true, caption: `Alluvial plot of ${lowerFirst(plain(v.label))} over time`, spec: { type: 'alluvial', times: tl, levels: lv, counts, flows } }], meta: {} };
   }
   /* ---------- survey-weighted comparison of the study groups ---------- */
   function weightedSection(a, cfg, rows, alpha, d, used, G) {
@@ -26227,7 +26268,8 @@ const Analysis = (() => {
               const bin = v => Math.min(edges.length - 1, Math.floor((v - sc.min) / sc.step + 1e-9));
               return { caption: `Distribution of ${lowerFirst(plain(r.v.label))} in the studied groups`,
                 spec: { type: 'bar', integer: true, categories: edges.map(e => `${fmt(e, d)}-${fmt(e + sc.step, d)}`), xLabel: r.v.label, yLabel: 'Number of patients',
-                  series: withN(gl, r.num.desc.map(x => x.n)).map((g, i) => { const n = new Array(edges.length).fill(0); r.gv[i].forEach(v => n[bin(v)]++); return { name: g, values: n }; }) } };
+                  series: withN(gl, r.num.desc.map(x => x.n)).map((g, i) => { const n = new Array(edges.length).fill(0); r.gv[i].forEach(v => n[bin(v)]++); return { name: g, values: n }; }),
+                  ...(opts.figNormCurve ? { curves: r.num.desc.map((dd, i) => ({ si: i, values: edges.map(e => dd.sd > 0 ? dd.n * (jStat.normal.cdf(e + sc.step, dd.mean, dd.sd) - jStat.normal.cdf(e, dd.mean, dd.sd)) : 0) })) } : {}) } };
             }
             if (ct === 'violin' || ct === 'rain') return { caption: `${r.v.label} of the studied groups${ct === 'rain' ? ' (raincloud plot)' : ''}`,
               spec: { type: 'violin', ...(ct === 'rain' ? { rain: true } : {}), perGroup: true, categories: cats, yLabel: r.v.ylabel || r.v.label, points: opts.points, ...brackets(r.num), series: [{ name: r.v.label, data: r.gv }] } };
@@ -26257,6 +26299,7 @@ const Analysis = (() => {
             caption: `${r.v.label} of the studied groups (mosaic plot: bar widths show the group sizes)`,
             spec: { type: 'stacked', widths: c.ns, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
+          if (ct === 'diverging') return { caption: `${r.v.label} of the studied groups`, spec: { type: 'diverging', categories: withN(gl, c.ns), series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) } };
           if (ct === 'stacked' || ct === 'pie' || ct === 'piefull') return {
             caption: `${r.v.label} of the studied groups`,
             spec: { type: ct === 'piefull' ? 'pie' : ct, ...(ct === 'piefull' ? { full: true } : {}), categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
@@ -26331,7 +26374,7 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw'].includes(a.type))) continue;
+      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw', 'upset', 'alluvial'].includes(a.type))) continue;
       const needs = {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
@@ -26339,14 +26382,14 @@ const Analysis = (() => {
         methodcomp: () => a.second, pca: () => (a.predictors || []).length >= 3, partial: () => a.second && (a.predictors || []).length, anova2: () => a.second, mediation: () => a.second && a.xvar, psm: () => (a.predictors || []).length, lmm: () => a.rvar, tost: () => a.margin !== undefined && a.margin !== '', mh: () => a.positive && a.second, clogit: () => a.positive && a.second && (a.predictors || []).length,
         correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second,
         cif: () => a.event && a.positive && a.competing, tdroc: () => a.event && a.positive && (a.predictors || []).length, quantreg: () => (a.predictors || []).length, fleiss: () => (a.predictors || []).length >= 2,
-        rmcorr: () => a.second && a.idcol, crossover: () => a.second && a.seqCol, weighted: () => a.wcol && (a.predictors || []).length, kendallw: () => (a.predictors || []).length >= 2, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
+        rmcorr: () => a.second && a.idcol, crossover: () => a.second && a.seqCol, upset: () => (a.predictors || []).length >= 2, alluvial: () => a.rvar, weighted: () => a.wcol && (a.predictors || []).length, kendallw: () => (a.predictors || []).length >= 2, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
         agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, count: countSection, ordinal: ordinalSection, multinom: ordinalSection, methodcomp: methodSection, pca: pcaSection, partial: partialSection, anova2: anova2Section, mediation: mediationSection, psm: psmSection, lmm: lmmSection, tost: tostSection, mh: mhSection, clogit: clogitSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection,
-        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, weighted: weightedSection, kendallw: kendallWSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection }[a.type];
+        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, upset: upsetSection, alluvial: alluvialSection, weighted: weightedSection, kendallw: kendallWSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
       const compares = ['ancova', 'survival', 'cif', 'noninf', 'gee', 'weighted', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
@@ -26405,7 +26448,7 @@ const Analysis = (() => {
     const f = [...(p <= alpha ? [`*: Significant as P value ≤ ${alpha}`] : []), `n = ${rs.length} patients with both values`, `P value: ${tn}${a.test === 'auto' || !a.test ? ` (differences ${param ? 'normally' : 'not normally'} distributed)` : ''}`,
       `Other test: ${param ? `Wilcoxon signed-rank P ${pTxt(w.p)}` : `paired t-test P ${pTxt(t.p)}`}`, eff];
     const figures = a.figure === 'none' ? [] : [{ sig: p <= alpha, caption: `${plain(l1)} and ${lowerFirst(plain(l2))} of each patient`,
-      spec: { type: 'line', categories: [plain(l1), plain(l2)], yLabel: a.ylabel || plain(l1), legend: false, individual: [x.map((v, i) => [v, y[i]])],
+      spec: { type: 'line', categories: [plain(l1), plain(l2)], yLabel: a.ylabel || plain(l1), legend: false, individual: [x.map((v, i) => [v, y[i]])], ...(a.figure === 'slope' ? { dirColor: true } : {}),
         errKind: 'sd', series: [{ name: 'Mean', values: param ? [dx.mean, dy.mean] : [dx.median, dy.median], err: param ? [dx.sd, dy.sd] : [null, null], lo: param ? null : [dx.q1, dy.q1], hi: param ? null : [dx.q3, dy.q3] }] } }];
     return { kind: 'paired', title: `${plain(l1)} versus ${lowerFirst(plain(l2))} (paired comparison)`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures, meta: { t, w } };
   }
@@ -27103,6 +27146,11 @@ const Charts = (() => {
     const c = makeCanvas(W * res, H * res);
     const ctx = c.getContext('2d');
     ctx.scale(res, res);
+    // text with a line break: the lines stacked around the anchor (e.g. a unit on the second line of an axis title)
+    const ft = ctx.fillText.bind(ctx);
+    ctx.fillText = (t, x, y, mw) => { const s = String(t); if (!s.includes('\n')) return mw === undefined ? ft(s, x, y) : ft(s, x, y, mw);
+      const ls = s.split('\n'), lh = parseFloat((/(\d+(?:\.\d+)?)px/.exec(ctx.font) || [0, 24])[1]) * 1.15, b = ctx.textBaseline, y0 = b === 'top' || b === 'hanging' ? y : b === 'bottom' || b === 'alphabetic' ? y - lh * (ls.length - 1) : y - lh * (ls.length - 1) / 2;
+      ls.forEach((l, i) => ft(l, x, y0 + i * lh)); };
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
     return { c, ctx, W, H, ts, F: (weight, px) => `${weight} ${Math.round(px * ts)}px ${FONT}` };
   }
@@ -27255,11 +27303,23 @@ const Charts = (() => {
     HITS = [];
     // a figure may have its own shape (step 7)
     if (spec.aspect && ASPECTS[spec.aspect]) style = { ...style, aspect: spec.aspect };
+    if (style.unitLine) spec = { ...spec, ...(spec.yLabel ? { yLabel: String(spec.yLabel).replace(/\s*(\([^)]*\))\s*$/, '\n$1') } : {}), ...(spec.xLabel ? { xLabel: String(spec.xLabel).replace(/\s*(\([^)]*\))\s*$/, '\n$1') } : {}) };
+    // 100% stacked bars ordered by their first category
+    if (style.stackSort && spec.type === 'stacked' && spec.series && spec.series[0] && spec.categories) { const tot = spec.categories.map((_, ci) => spec.series.reduce((a, s) => a + (+s.values[ci] || 0), 0)), sh = spec.categories.map((_, ci) => tot[ci] ? spec.series[0].values[ci] / tot[ci] : 0), ord = spec.categories.map((_, i) => i).sort((a, b) => sh[b] - sh[a]);
+      spec = { ...spec, categories: ord.map(i => spec.categories[i]), series: spec.series.map(s => ({ ...s, values: ord.map(i => s.values[i]), ...(s.err ? { err: ord.map(i => s.err[i]) } : {}) })), ...(spec.widths ? { widths: ord.map(i => spec.widths[i]) } : {}) }; }
     // a chart of one series (one-group studies) needs no legend
     const c = drawChart(spec, paletteName, spec.legend === false ? { ...style, legend: 'none' } : style);
     const out = spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
     const res = VECTOR ? 1 : +style.res || 1, band = (out.height - c.height) / res;
     hitsOf = { W: out.width / res, H: out.height / res, list: HITS.map(h => ({ ...h, y: h.y + band })) };
+    // annotations of a figure (text and arrows at positions given as % of the width and height) and a watermark
+    if ((spec.annot && spec.annot.length) || style.watermark) { const x = out.getContext('2d'), r2 = VECTOR ? 1 : +style.res || 1, W2 = out.width, H2 = out.height; x.save(); x.setTransform(1, 0, 0, 1, 0, 0);
+      (spec.annot || []).forEach(a => { x.fillStyle = a.color || '#222'; x.strokeStyle = a.color || '#222';
+        if (a.type === 'text') { x.font = `700 ${Math.round((a.size || 26) * r2)}px ${FONT}`; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText(a.text, a.x / 100 * W2, a.y / 100 * H2); }
+        if (a.type === 'arrow') { const x1 = a.x1 / 100 * W2, y1 = a.y1 / 100 * H2, x2 = a.x2 / 100 * W2, y2 = a.y2 / 100 * H2, ang = Math.atan2(y2 - y1, x2 - x1), hl = 22 * r2; x.lineWidth = 4 * r2;
+          x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke(); x.beginPath(); x.moveTo(x2, y2); x.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45)); x.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45)); x.closePath(); x.fill(); } });
+      if (style.watermark) { x.translate(W2 / 2, H2 / 2); x.rotate(-Math.atan2(H2, W2)); x.font = `800 ${Math.round(Math.min(W2, H2) / 5)}px ${FONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = 'rgba(160,160,160,0.25)'; x.fillText(String(style.watermark).toUpperCase(), 0, 0); }
+      x.restore(); }
     if (style.frame) { const x = out.getContext('2d'), w = Math.max(2, 3 * (+style.res || 1)); x.setTransform(1, 0, 0, 1, 0, 0); x.strokeStyle = '#555'; x.lineWidth = w; x.strokeRect(w / 2, w / 2, out.width - w, out.height - w); }
     return out;
   }
@@ -27305,6 +27365,9 @@ const Charts = (() => {
     if (spec.type === 'forest') return forestChart(spec, paletteName, st);
     if (spec.type === 'scatter') return scatter(spec, paletteName, st);
     if (spec.type === 'roc') return rocChart(spec, paletteName, st);
+    if (spec.type === 'diverging') return divergingChart(spec, paletteName, st);
+    if (spec.type === 'upset') return upsetChart(spec, paletteName, st);
+    if (spec.type === 'alluvial') return alluvialChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
     if (spec.type === 'curve') return curveChart(spec, paletteName, st);
     if (spec.type === 'margin') return marginChart(spec, paletteName, st);
@@ -27435,7 +27498,8 @@ const Charts = (() => {
       if (spec.individual) spec.series.forEach((s, si) => {
         const off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
         ctx.strokeStyle = pal[si % pal.length]; ctx.globalAlpha = 0.22; ctx.lineWidth = 2; ctx.setLineDash([]);
-        (spec.individual[si] || []).forEach(p => { ctx.beginPath(); p.forEach((v, ci) => { const x = xAt(ci) + off; ci ? ctx.lineTo(x, y(v)) : ctx.moveTo(x, y(v)); }); ctx.stroke(); });
+        (spec.individual[si] || []).forEach(p => { if (spec.dirColor) { const up = p[p.length - 1] > p[0]; ctx.strokeStyle = p[p.length - 1] === p[0] ? '#888' : up ? '#2E7D32' : '#C62828'; ctx.globalAlpha = 0.5; }
+          ctx.beginPath(); p.forEach((v, ci) => { const x = xAt(ci) + off; ci ? ctx.lineTo(x, y(v)) : ctx.moveTo(x, y(v)); }); ctx.stroke(); });
         ctx.globalAlpha = 1;
       });
       spec.series.forEach((s, si) => {
@@ -27573,6 +27637,11 @@ const Charts = (() => {
     }
 
     if (fixY) ctx.restore();
+    // a shaded reference (normal) range
+    if (spec.band && isFinite(spec.band.lo) && isFinite(spec.band.hi)) { const a = Math.max(sc.min, spec.band.lo), b = Math.min(sc.max, spec.band.hi);
+      if (b > a) { ctx.fillStyle = 'rgba(46,125,50,0.10)'; ctx.fillRect(L, y(b), pw, y(a) - y(b)); ctx.font = F(600, 22); ctx.fillStyle = '#2E7D32'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(spec.band.label || 'Reference range', L + 8, y(b) + 4); } }
+    // fitted curves over the bars (e.g. the normal curve of each group over a histogram)
+    (spec.curves || []).forEach(cv => { ctx.strokeStyle = pal[(cv.si || 0) % pal.length]; ctx.lineWidth = 4; ctx.setLineDash([]); ctx.beginPath(); cv.values.forEach((v, ci) => { const X2 = xAt(ci); ci ? ctx.lineTo(X2, y(v)) : ctx.moveTo(X2, y(v)); }); ctx.stroke(); });
     // optional reference line (e.g. a normal limit), dashed, with its label at the right end
     if (isFinite(spec.refLine) && spec.refLine >= sc.min && spec.refLine <= sc.max) {
       ctx.strokeStyle = '#C0392B'; ctx.lineWidth = 3; ctx.setLineDash([14, 9]);
@@ -27844,6 +27913,7 @@ const Charts = (() => {
       ctx.font = F(700, 24); ctx.fillStyle = '#222'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
       ctx.fillText(name, L + pw + 14, Y(v) - 2); ctx.textBaseline = 'top'; ctx.font = F(600, 24); ctx.fillText(r(v), L + pw + 14, Y(v) + 2);
     });
+    if (spec.reg && isFinite(spec.reg.b)) { ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip(); ctx.strokeStyle = '#7B2CBF'; ctx.lineWidth = 3.5; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.moveTo(X(x0), Y(spec.reg.a + spec.reg.b * x0)); ctx.lineTo(X(x1), Y(spec.reg.a + spec.reg.b * x1)); ctx.stroke(); ctx.restore(); ctx.setLineDash([]); }
     return c;
   }
 
@@ -27898,6 +27968,52 @@ const Charts = (() => {
     return c;
   }
 
+  /* ---------- diverging stacked bars (Likert scales): the lower categories to the left of zero, the higher to the right ---------- */
+  function divergingChart(spec, paletteName, st) {
+    const { c, ctx, W, H, ts, F } = setup(st), K = spec.series.length, mid = (K - 1) / 2;
+    const shade = (k) => { const t = K > 1 ? k / (K - 1) : 0.5, a = [192, 57, 43], m = [215, 215, 215], b = [31, 78, 154], mix = (p, q, u) => p.map((v, j) => Math.round(v + (q[j] - v) * u));
+      const col = t < 0.5 ? mix(a, m, t * 2) : mix(m, b, (t - 0.5) * 2); return `rgb(${col.join(',')})`; };
+    ctx.font = F(700, 26); const lab = Math.max(...spec.categories.map(x => ctx.measureText(x).width)) + 40;
+    const L = 30 + lab, R = 50, T = 40, B = 150 * ts, pw = W - L - R, ph = H - T - B, X = v => L + (v + 100) / 200 * pw, rh = ph / spec.categories.length;
+    ctx.font = F(600, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; for (let v = -100; v <= 100; v += 25) { if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); } ctx.fillStyle = '#444'; ctx.fillText(Math.abs(v) + '%', X(v), T + ph + 10); }
+    spec.categories.forEach((cat, ci) => { const vals = spec.series.map(s => +s.values[ci] || 0), tot = vals.reduce((a, b) => a + b, 0) || 1, p = vals.map(v => 100 * v / tot), yy = T + ci * rh + rh * 0.18, hh = rh * 0.64;
+      const neg = p.reduce((a, v, k) => a + (k < mid ? v : k === mid ? v / 2 : 0), 0); let x0 = -neg;
+      p.forEach((v, k) => { ctx.fillStyle = shade(k); ctx.fillRect(X(x0), yy, X(x0 + v) - X(x0), hh); if (v >= 7) { ctx.fillStyle = Math.abs(k - mid) > K / 4 ? '#fff' : '#222'; ctx.font = F(700, 22); ctx.textBaseline = 'middle'; ctx.fillText(Math.round(v) + '%', X(x0 + v / 2), yy + hh / 2); } x0 += v; });
+      ctx.fillStyle = '#222'; ctx.font = F(700, 26); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(cat, L - 16, yy + hh / 2); ctx.textAlign = 'center'; });
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(X(0), T); ctx.lineTo(X(0), T + ph); ctx.stroke();
+    // legend under the axis
+    ctx.font = F(600, 22); let lx = L; const ly = T + ph + 60 * ts; spec.series.forEach((s, k) => { const w = ctx.measureText(s.name).width + 46; if (lx + w > L + pw) return; ctx.fillStyle = shade(k); ctx.fillRect(lx, ly, 26, 22); ctx.fillStyle = '#333'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(s.name, lx + 32, ly); lx += w; });
+    return c;
+  }
+  /* ---------- UpSet plot: the sizes of the combinations of several yes/no conditions ---------- */
+  function upsetChart(spec, paletteName, st) {
+    const pal = palette(paletteName), { c, ctx, W, H, ts, F } = setup({ ...st, aspect: st.aspect === 'wide' ? 'standard' : st.aspect }), S2 = spec.sets.length, C = spec.combos.length;
+    ctx.font = F(700, 24); const lab = Math.max(...spec.sets.map(x => ctx.measureText(x).width)) + 30, sbw = 150;
+    const L = 30 + sbw + lab, R = 30, T = 40, mh = Math.min(48, (H * 0.42) / S2), MT = H - 40 - mh * S2, ph = MT - T - 40, cw = (W - L - R) / C, mx = Math.max(...spec.combos.map(x => x.n)), sx = Math.max(...spec.setSizes);
+    spec.combos.forEach((cb, i) => { const x = L + cw * (i + 0.5), h = cb.n / mx * ph; ctx.fillStyle = pal[0]; ctx.fillRect(x - cw * 0.32, MT - 30 - h, cw * 0.64, h); ctx.fillStyle = '#222'; ctx.font = F(700, 22); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(String(cb.n), x, MT - 34 - h);
+      const rowsIn = cb.mask.map((m, k) => m ? k : -1).filter(k => k >= 0);
+      if (rowsIn.length > 1) { ctx.strokeStyle = '#333'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, MT + mh * (rowsIn[0] + 0.5)); ctx.lineTo(x, MT + mh * (rowsIn[rowsIn.length - 1] + 0.5)); ctx.stroke(); }
+      cb.mask.forEach((m, k) => { ctx.fillStyle = m ? '#333' : '#DDD'; ctx.beginPath(); ctx.arc(x, MT + mh * (k + 0.5), Math.min(13, mh * 0.3, cw * 0.3), 0, Math.PI * 2); ctx.fill(); }); });
+    spec.sets.forEach((s, k) => { const yy = MT + mh * (k + 0.5), w = spec.setSizes[k] / sx * (sbw - 20); ctx.fillStyle = pal[1 % pal.length]; ctx.fillRect(30 + sbw - w, yy - mh * 0.3, w, mh * 0.6);
+      ctx.fillStyle = '#222'; ctx.font = F(700, 24); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(s, 30 + sbw + 10, yy); });
+    ctx.font = F(700, 24); ctx.fillStyle = '#333'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(spec.yLabel || 'Patients with exactly this combination', L, T - 30);
+    return c;
+  }
+  /* ---------- alluvial plot: the categories at each timepoint and the patients moving between them ---------- */
+  function alluvialChart(spec, paletteName, st) {
+    const pal = palette(paletteName), { c, ctx, W, H, ts, F } = setup(st), Tn = spec.times.length, K = spec.levels.length;
+    const L = 60, R = 60, T = 50, B = 150 * ts, pw = W - L - R, ph = H - T - B, colW = Math.min(60, pw / (Tn * 3)), gap = 12, N = Math.max(...spec.counts.map(cs => cs.reduce((a, b) => a + b, 0))) || 1, scale = (ph - gap * (K - 1)) / N;
+    const xs = spec.times.map((_, t) => L + (pw - colW) * (Tn > 1 ? t / (Tn - 1) : 0.5));
+    const tops = spec.counts.map(cs => { let y0 = T; return cs.map(n => { const r = y0; y0 += n * scale + gap; return r; }); });
+    // ribbons first, under the columns
+    for (let t = 0; t + 1 < Tn; t++) { const out = tops[t].slice(), inn = tops[t + 1].slice(), fl = spec.flows[t];
+      for (let a = 0; a < K; a++) for (let b = 0; b < K; b++) { const n = fl[a][b]; if (!n) continue; const h = n * scale, x0 = xs[t] + colW, x1 = xs[t + 1], y0 = out[a], y1 = inn[b], mxp = (x0 + x1) / 2;
+        ctx.fillStyle = pal[a % pal.length]; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.bezierCurveTo(mxp, y0, mxp, y1, x1, y1); ctx.lineTo(x1, y1 + h); ctx.bezierCurveTo(mxp, y1 + h, mxp, y0 + h, x0, y0 + h); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; out[a] += h; inn[b] += h; } }
+    spec.counts.forEach((cs, t) => cs.forEach((n, k) => { if (!n) return; ctx.fillStyle = pal[k % pal.length]; ctx.fillRect(xs[t], tops[t][k], colW, n * scale); if (n * scale > 26) { ctx.fillStyle = '#fff'; ctx.font = F(700, 20); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(n), xs[t] + colW / 2, tops[t][k] + n * scale / 2); } }));
+    ctx.fillStyle = '#333'; ctx.font = F(700, 26); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; spec.times.forEach((tl, t) => ctx.fillText(tl, xs[t] + colW / 2, T + ph + 14));
+    ctx.font = F(600, 24); let lx = L; const ly = T + ph + 70 * ts; spec.levels.forEach((l, k) => { ctx.fillStyle = pal[k % pal.length]; ctx.fillRect(lx, ly, 26, 22); ctx.fillStyle = '#333'; ctx.textAlign = 'left'; ctx.fillText(l, lx + 32, ly); lx += ctx.measureText(l).width + 60; });
+    return c;
+  }
   /* ---------- non-inferiority / equivalence plot: each CI against the margin ---------- */
   function marginChart(spec, paletteName, st) {
     const pal = palette(paletteName), col = pal[0];
@@ -28013,6 +28129,7 @@ const Charts = (() => {
         ctx.fillStyle = items[i].color + '22'; ctx.beginPath(); ctx.moveTo(X(0), Y(0));
         pts.forEach(q => ctx.lineTo(X(q.fpr), Y(q.tpr))); ctx.lineTo(X(1), Y(0)); ctx.closePath(); ctx.fill();
       }
+      if (s.band) { ctx.fillStyle = items[i].color; ctx.globalAlpha = 0.13; ctx.beginPath(); s.band.fpr.forEach((f, k) => k ? ctx.lineTo(X(f), Y(s.band.hi[k])) : ctx.moveTo(X(f), Y(s.band.hi[k]))); [...s.band.fpr].reverse().forEach((f, k) => ctx.lineTo(X(f), Y(s.band.lo[s.band.fpr.length - 1 - k]))); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; }
       ctx.strokeStyle = items[i].color; ctx.lineWidth = ({ thin: 3, bold: 8 }[spec.lineW] || 5) * lw(st); ctx.setLineDash(items[i].dashArr || (items[i].dash ? [16, 10] : []));
       ctx.beginPath(); pts.forEach((q, k) => k ? ctx.lineTo(X(q.fpr), Y(q.tpr)) : ctx.moveTo(X(q.fpr), Y(q.tpr))); ctx.stroke();
     });
@@ -29925,7 +30042,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmAncova: false, rmSphReport: false, rmProfile: false, rmImpute: 'none', panelStyle: 'classic', axisSize: 'normal', titleSize: 'normal', valueSize: 'normal', boxMeanVal: false, figHeat: false, figForestAll: false, figPanels: false, capAbove: false, commentTpl: false, tplSig: '{Variable} differed significantly {groups} (P value {P}), being highest in {highest}.', tplNs: '{Variable} did not differ significantly {groups} (P value {P}).', varyWording: false, commentTone: 'standard', trendWord: false, nsCI: false, comMaxWords: '', boldSigText: false, phraseDict: '', keyFindings: false, absMaxWords: '', effConv: 'cohen', figRef: false, commentMerge: 'table', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmAncova: false, rmSphReport: false, rmProfile: false, rmImpute: 'none', panelStyle: 'classic', axisSize: 'normal', titleSize: 'normal', valueSize: 'normal', boxMeanVal: false, figHeat: false, figForestAll: false, figPanels: false, figNormCurve: false, figRefBand: false, figUnitLine: false, figStackSort: false, figWatermark: '', capAbove: false, commentTpl: false, tplSig: '{Variable} differed significantly {groups} (P value {P}), being highest in {highest}.', tplNs: '{Variable} did not differ significantly {groups} (P value {P}).', varyWording: false, commentTone: 'standard', trendWord: false, nsCI: false, comMaxWords: '', boldSigText: false, phraseDict: '', keyFindings: false, absMaxWords: '', effConv: 'cohen', figRef: false, commentMerge: 'table', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -29946,12 +30063,12 @@ if (typeof module !== 'undefined') module.exports = Sav;
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], panelStyle: ['optPanelStyle'], axisSize: ['optAxisSize'], titleSize: ['optTitleSize'], valueSize: ['optValueSize'], boxMeanVal: ['optBoxMeanVal', true], figHeat: ['optFigHeat', true], figForestAll: ['optFigForestAll', true], figPanels: ['optFigPanels', true], capAbove: ['optCapAbove', true], commentTpl: ['optCommentTpl', true], tplSig: ['optTplSig'], tplNs: ['optTplNs'], varyWording: ['optVaryWording', true], commentTone: ['optCommentTone'], trendWord: ['optTrendWord', true], nsCI: ['optNsCI', true], comMaxWords: ['optComMaxWords'], boldSigText: ['optBoldSigText', true], phraseDict: ['optPhraseDict'], keyFindings: ['optKeyFindings', true], absMaxWords: ['optAbsMaxWords'], effConv: ['optEffConv'], figRef: ['optFigRef', true], commentMerge: ['optCommentMerge'], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmAncova: ['optRmAncova', true], rmSphReport: ['optRmSphReport', true], rmProfile: ['optRmProfile', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], panelStyle: ['optPanelStyle'], axisSize: ['optAxisSize'], titleSize: ['optTitleSize'], valueSize: ['optValueSize'], boxMeanVal: ['optBoxMeanVal', true], figHeat: ['optFigHeat', true], figForestAll: ['optFigForestAll', true], figPanels: ['optFigPanels', true], figNormCurve: ['optFigNormCurve', true], figRefBand: ['optFigRefBand', true], figUnitLine: ['optFigUnitLine', true], figStackSort: ['optFigStackSort', true], figWatermark: ['optFigWatermark'], capAbove: ['optCapAbove', true], commentTpl: ['optCommentTpl', true], tplSig: ['optTplSig'], tplNs: ['optTplNs'], varyWording: ['optVaryWording', true], commentTone: ['optCommentTone'], trendWord: ['optTrendWord', true], nsCI: ['optNsCI', true], comMaxWords: ['optComMaxWords'], boldSigText: ['optBoldSigText', true], phraseDict: ['optPhraseDict'], keyFindings: ['optKeyFindings', true], absMaxWords: ['optAbsMaxWords'], effConv: ['optEffConv'], figRef: ['optFigRef', true], commentMerge: ['optCommentMerge'], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmAncova: ['optRmAncova', true], rmSphReport: ['optRmSphReport', true], rmProfile: ['optRmProfile', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
-  const chartStyle = o => ({ text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
+  const chartStyle = o => ({ unitLine: !!o.figUnitLine, stackSort: !!o.figStackSort, watermark: String(o.figWatermark || '').trim(), text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
     legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont, frame: o.figFrame,
     sigLabel: o.sigLabel, panel: o.panelStyle === 'classic' ? '' : o.panelStyle, axisSize: o.axisSize, titleSize: o.titleSize, valueSize: o.valueSize, boxMeanVal: !!o.boxMeanVal, series: o.seriesStyle, lineWeight: o.lineWeight, errBars: o.errBars, errColor: o.errColor, gridStyle: o.gridStyle, ticks: o.yTicks, pLead: +o.pLead !== 0 });
 
@@ -32351,7 +32468,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const CHART_TYPES = {
     repeated: [['auto', 'Auto (chart style)'], ['bar', 'Bars'], ['line', 'Lines over time'], ['meanci', 'Means with 95% CI over time'], ['box', 'Box plots'], ['dot', 'Box plots + every patient'], ['violin', 'Violin plots'], ['rain', 'Raincloud plots'], ['waterfall', 'Waterfall (each patient, first → last)'], ['none', 'No figure']],
     numeric: [['auto', 'Auto'], ['bar', 'Bars (mean ± error / median, IQR)'], ['box', 'Box plot'], ['violin', 'Violin plot'], ['dot', 'Dot plot (every patient)'], ['meanci', 'Mean with 95% CI (error plot)'], ['dotci', 'Every patient + mean with 95% CI'], ['rain', 'Raincloud plot'], ['hist', 'Histogram'], ['none', 'No figure']],
-    categorical: [['auto', 'Auto (bars)'], ['hbar', 'Horizontal bars'], ['stacked', '100% stacked bar'], ['pie', 'Donut'], ['piefull', 'Pie'], ['mosaic', 'Mosaic (widths = group sizes)'], ['none', 'No figure']]
+    categorical: [['auto', 'Auto (bars)'], ['hbar', 'Horizontal bars'], ['stacked', '100% stacked bar'], ['diverging', 'Diverging bars (Likert scales)'], ['pie', 'Donut'], ['piefull', 'Pie'], ['mosaic', 'Mosaic (widths = group sizes)'], ['none', 'No figure']]
   };
   const chartKind = v => v.kind === 'repeated' ? 'repeated' : v.type;
   // one chart type for every variable of a kind
@@ -32363,7 +32480,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   function renderFigureTable() {
     [['#fbNum', 'numeric'], ['#fbCat', 'categorical'], ['#fbRep', 'repeated']].forEach(([id, kind]) => { $(id).innerHTML = `<option value="">${kind}…</option>` + CHART_TYPES[kind].map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); });
     const vars = state.cfg.variables.filter(v => v.include);
-    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th>Y axis from – to</th><th>Reference line (value, label)</th><th>Log scale</th><th>Shape</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
+    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th>Y axis from – to</th><th>Reference line (value, label)</th><th>Log scale</th><th>Shape</th><th>Annotation</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
       <td><b>${esc(v.label)}</b>${v.memo ? ` <span title="${esc(v.memo)}" style="cursor:help">ℹ</span>` : ''}<div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
       <td><select data-fv="${v.id}" data-fk="chart">${CHART_TYPES[chartKind(v)].map(([k, l]) => `<option value="${k}" ${(v.chart || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input type="text" data-fv="${v.id}" data-fk="caption" value="${esc(v.caption || '')}" placeholder="${esc(v.label)} of the studied groups"></td>
@@ -32372,6 +32489,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       <td style="white-space:nowrap">${v.type === 'categorical' ? '<span class="legend-note">—</span>' : `<input type="text" class="mini" data-fv="${v.id}" data-fk="ref" value="${esc(v.ref || '')}" placeholder="value"> <input type="text" data-fv="${v.id}" data-fk="refLabel" value="${esc(v.refLabel || '')}" placeholder="label, e.g. Normal limit" style="min-width:120px;width:140px">`}</td>
       <td>${v.type === 'numeric' ? `<label class="check" style="margin:0"><input type="checkbox" data-fv="${v.id}" data-fk="logY" ${v.logY ? 'checked' : ''}><span>log</span></label>` : ''}</td>
       <td><select data-fv="${v.id}" data-fk="aspect">${[['', 'As in the style'], ['wide', 'Wide'], ['standard', '4:3'], ['square', 'Square'], ['tall', 'Tall']].map(([k, l]) => `<option value="${k}" ${(v.aspect || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+      <td><input type="text" data-fv="${v.id}" data-fk="annot" value="${esc(v.annot || '')}" placeholder="text @ 60,15; arrow 55,20 > 40,45" title="Text at x,y (% of the width and height), and arrows from x1,y1 to x2,y2; separate several with ;" style="min-width:150px"></td>
       <td><button class="btn ghost small" data-fprev="${v.id}" type="button" title="Preview this figure">👁</button></td></tr>`).join('')}</tbody>`;
     const cur = $('#figPrevVar').value;
     $('#figPrevVar').innerHTML = vars.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
@@ -32577,13 +32695,13 @@ if (typeof module !== 'undefined') module.exports = Sav;
     tost: 'Equivalence (TOST, two one-sided t-tests)', mh: 'Mantel-Haenszel (stratified odds ratio)', clogit: 'Conditional logistic regression (matched sets)',
     cif: 'Competing risks (cumulative incidence)', tdroc: 'Time-dependent ROC (AUC at set times)', quantreg: 'Quantile (median) regression', fleiss: "Fleiss' kappa (agreement of 3+ raters)",
     rmcorr: 'Repeated-measures correlation (long data)', firth: 'Firth logistic regression (small samples, separation)', mi: 'Regression with multiple imputation',
-    noninf: 'Non-inferiority / equivalence / superiority trial', crossover: 'Crossover trial (AB/BA)', weighted: 'Weighted comparison of the groups (survey weights)', kendallw: "Kendall's W (concordance of several raters)", gee: 'GEE / mixed-effects logistic (repeated binary, count or numeric outcome)' };
+    noninf: 'Non-inferiority / equivalence / superiority trial', crossover: 'Crossover trial (AB/BA)', upset: 'UpSet plot (combinations of yes/no conditions)', alluvial: 'Alluvial plot (category changes over time)', weighted: 'Weighted comparison of the groups (survey weights)', kendallw: "Kendall's W (concordance of several raters)", gee: 'GEE / mixed-effects logistic (repeated binary, count or numeric outcome)' };
   // the analyses by category: the add buttons, the headings of the list and the order of "group by category"
   const ADV_GROUPS = [
     ['Compare groups', 'Adjusted, stratified and matched comparisons of the study groups', [['ancova', 'ANCOVA'], ['anova2', 'Two-way ANOVA'], ['mh', 'Mantel-Haenszel'], ['psm', 'Propensity score'], ['weighted', 'Weighted (survey weights)']]],
     ['Non-inferiority & equivalence trials', 'A margin for the difference: non-inferiority, equivalence or superiority, ITT and per-protocol', [['noninf', 'Non-inferiority / equivalence / superiority'], ['tost', 'Equivalence of means (TOST)']]],
     ['Paired & repeated measurements', 'The same patients measured twice or more', [['paired', 'Paired comparison'], ['crossover', 'Crossover (AB/BA)'], ['mcnemar', 'McNemar (paired categorical)'], ['cochran', "Cochran's Q (repeated yes/no)"], ['lmm', 'Linear mixed model'], ['gee', 'GEE / mixed logistic (binary repeated)'], ['rmcorr', 'Repeated-measures correlation']]],
-    ['Correlation & mediation', 'Associations between numeric variables', [['correlation', 'Correlation'], ['partial', 'Partial correlation'], ['mediation', 'Mediation']]],
+    ['Correlation & mediation', 'Associations between numeric variables', [['correlation', 'Correlation'], ['partial', 'Partial correlation'], ['mediation', 'Mediation'], ['upset', 'UpSet plot (yes/no combinations)'], ['alluvial', 'Alluvial plot (changes over time)']]],
     ['Regression models', 'Predictors of an outcome', [['linear', 'Linear'], ['logistic', 'Logistic'], ['firth', 'Firth logistic'], ['mi', 'With multiple imputation'], ['quantreg', 'Quantile (median)'], ['count', 'Poisson / negative binomial'], ['ordinal', 'Ordinal logistic'], ['multinom', 'Multinomial logistic'], ['clogit', 'Conditional logistic']]],
     ['Survival & time to event', 'Follow-up time with an event', [['survival', 'Kaplan-Meier'], ['cox', 'Cox regression'], ['cif', 'Competing risks'], ['tdroc', 'Time-dependent ROC']]],
     ['Diagnostic accuracy & prediction', 'Tests against a reference standard', [['roc', 'ROC curve'], ['diagnostic', 'Diagnostic accuracy (2×2)']]],
@@ -32678,6 +32796,9 @@ if (typeof module !== 'undefined') module.exports = Sav;
           + sl('conf', 'Confidence interval', [['', 'Automatic (95% non-inferiority / superiority, 90% equivalence)'], ['95', '95% (one-sided α = 0.025)'], ['90', '90% (one-sided α = 0.05)'], ['99', '99%']], a.conf)
           + select('ppCol', 'Per-protocol population column (optional)', cats.filter(c => c.col !== a.outcome && c.col !== cfg.groupCol), a.ppCol) + (a.ppCol ? levelSelect('Per-protocol when', a.ppCol, a.ppVal, 'ppVal') : '<div></div>');
         predLabel = 'Adjust the mean difference for (ANCOVA, numeric outcome only)'; preds = isC ? [] : num.filter(c => c.col !== a.outcome); }
+      if (t === 'upset') { fields = '<p class="legend-note" style="margin:0">Tick 2 to 8 yes/no columns (e.g. comorbidities or symptoms); each patient counts once, in the combination they have.</p>'; predLabel = 'Conditions (yes/no)'; preds = cat; }
+      if (t === 'alluvial') { const reps = cfg.variables.filter(v => v.kind === 'repeated' && v.type === 'categorical');
+        fields = `<div><label class="f">Repeated categorical outcome</label><select data-af="rvar"><option value="">— choose —</option>${reps.map(v => `<option value="${esc(v.id)}" ${v.id === a.rvar ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></div><div></div>`; }
       if (t === 'weighted') { fields = select('wcol', 'Weight column (e.g. survey weight)', num, a.wcol) + '<div></div>'; predLabel = 'Variables compared between the study groups'; preds = cols.filter(c => c.col !== cfg.groupCol && c.col !== a.wcol); }
       if (t === 'kendallw') { fields = '<p class="legend-note" style="margin:0">Tick one column per rater (scores or ranks of the same patients). Patients scored by every rater are used.</p>'; predLabel = 'Raters'; preds = num; }
       if (t === 'crossover') fields = select('outcome', 'Outcome in period 1', num, a.outcome) + select('second', 'Outcome in period 2', num.filter(c => c.col !== a.outcome), a.second)
@@ -32693,7 +32814,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
           + sl('timeAs', 'Time', [['cat', 'Categories (each visit vs the first)'], ['linear', 'Continuous (a linear trend; time values of step 3)']], a.timeAs)
           + `<div><label class="check" style="margin-top:22px"><input type="checkbox" data-af="inter" ${a.inter !== false ? 'checked' : ''}><span>Group × time interaction</span></label></div>`;
         predLabel = 'Baseline covariates (optional)'; preds = cols.filter(c => c.col !== cfg.groupCol); }
-      const withPreds = ['weighted', 'kendallw', 'noninf', 'gee', 'tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
+      const withPreds = ['upset', 'weighted', 'kendallw', 'noninf', 'gee', 'tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
       const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
       const ci = ADV_CAT[t] ?? 99, prevC = ai ? ADV_CAT[cfg.advanced[ai - 1].type] ?? 99 : -1, sep = ci !== prevC && ADV_GROUPS[ci] ? `<div class="adv-sep">${esc(ADV_GROUPS[ci][0])}</div>` : '';
       return `${sep}<div class="gcard" data-adv="${ai}">
@@ -32787,12 +32908,15 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (t === 'psm') out.push(`<div><label class="f">Caliper (SD of the logit)</label>${sel('caliper', [['0.2', '0.2 (recommended)'], ['0.1', '0.1'], ['0.05', '0.05'], ['1', 'Wide (1)']], a.caliper || '0.2')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('modelRoc', 'ROC curve and AUC of the model')}</div>`,
       `<div><label class="f">Classification cut-off (predicted probability)</label><input type="text" data-af="cut" value="${esc(a.cut || '')}" placeholder="0.5"></div>`);
+    if (t === 'survival') out.push(`<div>${box('kmHR', 'Hazard ratio on the plot (two groups)')}</div>`);
+    if (t === 'agreement') out.push(`<div>${box('baReg', 'Proportional bias line on the Bland-Altman plot')}</div>`);
+    if (t === 'roc') out.push(`<div>${box('rocBand', '95% confidence band of the curve (bootstrap)')}</div>`);
     if (t === 'survival') out.push(`<div>${box('swimmer', 'Swimmer plot of every patient')}</div>`, `<div>${box('ciBand', '95% CI bands on the curves')}</div>`, `<div>${box('risk', 'Number at risk table')}</div>`, `<div>${box('pairwise', 'Pairwise log-rank tests (3+ groups, Bonferroni)')}</div>`);
     if (t === 'kappa') out.push(`<div><label class="f">Weighted kappa (ordered categories)</label>${sel('weights', [['none', 'No — Cohen\'s kappa only'], ['linear', 'Linear weights'], ['quadratic', 'Quadratic weights']], a.weights)}</div>`);
     if (t === 'agreement') out.push(`<div><label class="f">ICC type</label>${sel('iccType', [['agreement', 'Absolute agreement (A,1)'], ['consistency', 'Consistency (C,1)']], a.iccType)}</div>`, `<div>${box('baPct', 'Bland-Altman of % differences')}</div>`);
     if (t === 'diagnostic') out.push(`<div><label class="f">Predictive values at a prevalence of (%)</label><input type="text" data-af="prev" value="${esc(a.prev || '')}" placeholder="e.g. 10"></div>`);
     if (t === 'paired') out.push(`<div><label class="f">Test</label>${sel('test', [['auto', 'Automatic (normality of the differences)'], ['param', 'Paired t-test'], ['nonparam', 'Wilcoxon signed-rank test']], a.test)}</div>`,
-      `<div><label class="f">Figure</label>${sel('figure', [['lines', "Each patient's two values joined"], ['none', 'No figure']], a.figure)}</div>`);
+      `<div><label class="f">Figure</label>${sel('figure', [['lines', "Each patient's two values joined"], ['slope', 'Joined and coloured by direction (rise green, fall red)'], ['none', 'No figure']], a.figure)}</div>`);
     if (t === 'ancova') out.push(`<div>${box('slopes', 'Test homogeneity of regression slopes')}</div>`);
     if (t === 'cronbach') out.push(`<div>${box('split', 'Split-half reliability (Spearman-Brown)')}</div>`);
     if (t === 'logistic') out.push(`<div>${box('hl', 'Hosmer-Lemeshow goodness of fit')}</div>`);
@@ -33922,6 +34046,10 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const yMin = n(v.ymin), yMax = n(v.ymax), ref = n(v.ref);
     if (yMin !== undefined) f.spec.yMin = yMin; if (yMax !== undefined) f.spec.yMax = yMax;
     if (ref !== undefined) { f.spec.refLine = ref; if (v.refLabel) f.spec.refLabel = v.refLabel; }
+    // the variable's reference range shaded, and its annotations ("text @ x,y" and "arrow x1,y1 > x2,y2", in % of the figure)
+    if (state.cfg.options.figRefBand && (v.refLo !== undefined || v.refHi !== undefined) && !['hist'].includes(v.chart)) { const lo = n(v.refLo), hi = n(v.refHi); if (lo !== undefined || hi !== undefined) f.spec.band = { lo: lo ?? -1e12, hi: hi ?? 1e12, label: 'Reference range' }; }
+    if (v.annot) f.spec.annot = String(v.annot).split(';').map(p => { p = p.trim(); let m = /^arrow\s+([\d.]+)\s*,\s*([\d.]+)\s*(?:>|→|->)\s*([\d.]+)\s*,\s*([\d.]+)$/i.exec(p); if (m) return { type: 'arrow', x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4] };
+      m = /^(.+?)\s*@\s*([\d.]+)\s*,\s*([\d.]+)$/.exec(p); return m ? { type: 'text', text: m[1], x: +m[2], y: +m[3] } : null; }).filter(Boolean);
   }
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
   function renderFigure(f, o) {
@@ -34332,6 +34460,66 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     add(`trailer\n<< /Size ${info + 1} /Root 1 0 R /Info ${info} 0 R >>\nstartxref\n${xref}\n%%EOF`);
     return new Blob(parts, { type: 'application/pdf' });
   }
+  /* ---------- figures to PowerPoint (one slide each, with the caption), to a PDF, combined into panels ---------- */
+  const xmlEsc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const b64bytes = url => Uint8Array.from(atob(url.split(',')[1]), ch => ch.charCodeAt(0));
+  function exportedFigures() { syncEdits(); const r = exportModel(state.result), plan = exportPlan(state.result), out = [];
+    r.sections.forEach(s => s.figures.forEach(f => { if (f.url) out.push({ url: f.url, w: f.w, h: f.h, caption: `Figure ${plan.figNum.get(state.result.sections.flatMap(x => x.figures).find(g => g.key === f.key)) || out.length + 1}: ${f.caption}` }); }));
+    (state.combos || []).forEach(cb => { if (cb.url) out.push({ url: cb.url, w: cb.w, h: cb.h, caption: cb.caption }); }); return out; }
+  function buildPptx(figs, title) {
+    const NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+    const SW = 12192000, SH = 6858000, z = XLSX.CFB.utils.cfb_new(), add = (p, t) => XLSX.CFB.utils.cfb_add(z, p, typeof t === 'string' ? new TextEncoder().encode(t) : t), rel = (id, type, target) => `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`;
+    const RELS = x => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${x}</Relationships>`;
+    const sp0 = '<p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
+    add('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>${figs.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join('')}</Types>`);
+    add('_rels/.rels', RELS(rel('rId1', 'officeDocument', 'ppt/presentation.xml')));
+    add('ppt/presentation.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation ${NS}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>${figs.map((_, i) => `<p:sldId id="${256 + i}" r:id="rId${3 + i}"/>`).join('')}</p:sldIdLst><p:sldSz cx="${SW}" cy="${SH}"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`);
+    add('ppt/_rels/presentation.xml.rels', RELS(rel('rId1', 'slideMaster', 'slideMasters/slideMaster1.xml') + rel('rId2', 'theme', 'theme/theme1.xml') + figs.map((_, i) => rel(`rId${3 + i}`, 'slide', `slides/slide${i + 1}.xml`)).join('')));
+    add('ppt/slideMasters/slideMaster1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldMaster ${NS}>${sp0}</p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/><p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst></p:sldMaster>`);
+    add('ppt/slideMasters/_rels/slideMaster1.xml.rels', RELS(rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml') + rel('rId2', 'theme', '../theme/theme1.xml')));
+    add('ppt/slideLayouts/slideLayout1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sldLayout ${NS} type="blank" preserve="1">${sp0}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`);
+    add('ppt/slideLayouts/_rels/slideLayout1.xml.rels', RELS(rel('rId1', 'slideMaster', '../slideMasters/slideMaster1.xml')));
+    const clr = (n, v) => `<a:${n}><a:srgbClr val="${v}"/></a:${n}>`, fill = '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>', ln = '<a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>';
+    add('ppt/theme/theme1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Easy Stat"><a:themeElements><a:clrScheme name="Easy Stat"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>${clr('dk2', '1C1648')}${clr('lt2', 'EEE6F7')}${clr('accent1', '7B2CBF')}${clr('accent2', '1C1648')}${clr('accent3', 'E08A2E')}${clr('accent4', '2E7D32')}${clr('accent5', '1F4E9A')}${clr('accent6', 'C62828')}${clr('hlink', '0563C1')}${clr('folHlink', '954F72')}</a:clrScheme><a:fontScheme name="Easy Stat"><a:majorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme><a:fmtScheme name="Easy Stat"><a:fillStyleLst>${fill}${fill}${fill}</a:fillStyleLst><a:lnStyleLst>${ln}${ln}${ln}</a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst>${fill}${fill}${fill}</a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`);
+    figs.forEach((f, i) => { const n = i + 1, capH = 900000, mx = 400000, availW = SW - 2 * mx, availH = SH - capH - 2 * mx, sc = Math.min(availW / f.w, availH / f.h), w = Math.round(f.w * sc), h = Math.round(f.h * sc), x = Math.round((SW - w) / 2), y = mx + capH;
+      add(`ppt/media/image${n}.png`, b64bytes(f.url));
+      add(`ppt/slides/_rels/slide${n}.xml.rels`, RELS(rel('rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml') + rel('rId2', 'image', `../media/image${n}.png`)));
+      add(`ppt/slides/slide${n}.xml`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld ${NS}>${sp0}<p:sp><p:nvSpPr><p:cNvPr id="2" name="Caption"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${mx}" y="${mx - 100000}"/><a:ext cx="${availW}" cy="${capH}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square"><a:normAutofit/></a:bodyPr><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="2000" b="1"><a:solidFill><a:srgbClr val="1C1648"/></a:solidFill></a:rPr><a:t>${xmlEsc(f.caption)}</a:t></a:r></a:p></p:txBody></p:sp><p:pic><p:nvPicPr><p:cNvPr id="3" name="Figure ${n}" descr="${xmlEsc(f.caption)}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`); });
+    return new Blob([XLSX.CFB.write(z, { fileType: 'zip', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+  }
+  $('#btnPptx').onclick = () => { if (!state.result) return; const figs = exportedFigures(); if (!figs.length) { toast('No figure is selected for export'); return; }
+    saveUrl(URL.createObjectURL(buildPptx(figs, state.cfg.study.title || 'Figures')), `${baseName()} - Figures.pptx`); toast(`${figs.length} slide${figs.length > 1 ? 's' : ''} saved`); };
+  $('#btnFigPdf').onclick = async () => { if (!state.result) return; const figs = exportedFigures(); if (!figs.length) { toast('No figure is selected for export'); return; } busy(true);
+    try { const load = u => new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = u; }), pages = [];
+      for (const f of figs) { const im = await load(f.url), W = 1240, Hh = 1754, m = 90, c = document.createElement('canvas'); c.width = W; c.height = Hh; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, W, Hh);
+        x.fillStyle = '#1C1648'; x.font = '700 26px Calibri, Arial, sans-serif'; const words = f.caption.split(' '); let line = '', yy = m + 10; words.forEach(wd => { if (x.measureText(line + wd).width > W - 2 * m) { x.fillText(line, m, yy); line = ''; yy += 34; } line += wd + ' '; }); x.fillText(line, m, yy);
+        const sc = Math.min((W - 2 * m) / im.width, (Hh - yy - 2 * m) / im.height); x.drawImage(im, m, yy + 30, im.width * sc, im.height * sc);
+        pages.push({ w: W, h: Hh, bytes: b64bytes(c.toDataURL('image/jpeg', 0.92)) }); }
+      saveUrl(URL.createObjectURL(pdfFromJpegs(pages, 'Figures')), `${baseName()} - Figures.pdf`); toast(`${pages.length} figure page${pages.length > 1 ? 's' : ''} saved`); } catch (e) { toast('Failed: ' + e.message); } busy(false); };
+  // combined figures: chosen figures in a grid with panel letters, added to the exports
+  $('#btnCombo').onclick = () => { if (!state.result) return; syncEdits(); const figs = state.result.sections.flatMap(s => s.figures).filter(f => f.url);
+    let box = $('#comboBox'); if (!box) { box = document.createElement('div'); box.id = 'comboBox'; box.className = 'report-sec'; $('#report').prepend(box); } else if (box.innerHTML) { box.innerHTML = ''; return; }
+    box.innerHTML = `<h3>Combine figures</h3><p class="legend-note">Tick the figures in the order of the panels (A, B, C …). The combined figure is added to the PowerPoint and PDF exports and to Word at the end of the results.</p><div class="predlist" style="max-height:220px;overflow:auto">${figs.map((f, i) => `<label><input type="checkbox" data-cmb="${i}"> ${esc(f.caption)}</label>`).join('')}</div>
+      <div class="row" style="gap:8px;margin-top:8px"><div><label class="f">Panels per row</label><select id="cmbCols" style="width:auto"><option>2</option><option>3</option><option>1</option></select></div><div style="flex:1"><label class="f">Caption</label><input type="text" id="cmbCap" placeholder="e.g. Outcomes of the studied groups: (A) … (B) …" style="width:100%"></div><button class="btn primary small" id="cmbGo" type="button" style="align-self:flex-end">Add combined figure</button></div><div id="cmbList" class="legend-note" style="margin-top:6px">${(state.combos || []).map((c, i) => `${i + 1}. ${esc(c.caption)} <a href="#" data-cmbdel="${i}">remove</a>`).join('<br>')}</div>`;
+    const order = []; box.onchange = e => { const k = e.target.dataset.cmb; if (k === undefined) return; const i = order.indexOf(+k); if (e.target.checked) order.push(+k); else if (i >= 0) order.splice(i, 1); };
+    box.onclick = async e => { const del = e.target.closest('[data-cmbdel]'); if (del) { e.preventDefault(); state.combos.splice(+del.dataset.cmbdel, 1); box.innerHTML = ''; $('#btnCombo').click(); return; }
+      if (!e.target.closest('#cmbGo')) return; if (order.length < 2) { toast('Tick at least two figures'); return; }
+      const load = u => new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = u; }), ims = await Promise.all(order.map(i => load(figs[i].url))), cols = Math.min(+$('#cmbCols').value, ims.length), Wd = Math.max(...ims.map(i => i.width)), rowsN = Math.ceil(ims.length / cols);
+      const hs = ims.map(i => i.height * Wd / i.width), rowH = Array.from({ length: rowsN }, (_, k) => Math.max(...hs.slice(k * cols, k * cols + cols))), c = document.createElement('canvas'); c.width = Wd * cols; c.height = rowH.reduce((a, b) => a + b, 0); const x = c.getContext('2d');
+      x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); let y0 = 0;
+      ims.forEach((im, i) => { const col = i % cols, row = Math.floor(i / cols); if (col === 0 && i) y0 += rowH[row - 1]; x.drawImage(im, col * Wd, y0, Wd, hs[i]); x.fillStyle = '#111'; x.font = `800 ${Math.round(Wd / 18)}px Arial, sans-serif`; x.textBaseline = 'top'; x.fillText(String.fromCharCode(65 + i), col * Wd + Wd * 0.015, y0 + Wd * 0.01); });
+      state.combos = [...(state.combos || []), { url: c.toDataURL('image/png'), w: c.width, h: c.height, caption: $('#cmbCap').value.trim() || `Combined figure: ${order.map((i, k) => `(${String.fromCharCode(65 + k)}) ${figs[i].caption}`).join('; ')}` }];
+      box.innerHTML = ''; $('#btnCombo').click(); toast('Combined figure added'); }; };
+  // colour-blind check: the palette as seen with protanopia, deuteranopia and tritanopia (Machado et al. 2009), with the smallest colour difference
+  $('#cbCheck').onclick = () => { readUiIntoCfg(); const o = state.cfg.options, pal = Charts.PALETTES[chartPalette(o)] || o.customColors || [], n = Math.max(2, Math.min(pal.length, activeGroups().length || 3)), cols = pal.slice(0, n);
+    const M = { Protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]], Deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]], Tritanopia: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.303900]] };
+    const hex = h => [1, 3, 5].map(i => parseInt(String(h).replace('#', '').padEnd(6, '0').slice(i - 1, i + 1), 16) / 255), lin = c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4, gam = c => c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+    const sim = (h, m) => { const l = hex(h).map(lin), r = m.map(row => Math.min(1, Math.max(0, row[0] * l[0] + row[1] * l[1] + row[2] * l[2]))); return '#' + r.map(v => Math.round(gam(v) * 255).toString(16).padStart(2, '0')).join(''); };
+    const lab = h => { const [r, g, b] = hex(h).map(lin), X = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047, Y = 0.2126 * r + 0.7152 * g + 0.0722 * b, Z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883, f = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116; return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))]; };
+    const minDE = cs => { let m = Infinity; for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) { const a = lab(cs[i]), b = lab(cs[j]); m = Math.min(m, Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])); } return m; };
+    const rows = [['Normal vision', cols], ...Object.entries(M).map(([k, m]) => [k, cols.map(c => sim(c, m))])], worst = Math.min(...rows.slice(1).map(r => minDE(r[1])));
+    $('#cbOut').innerHTML = `<table class="t" style="margin:4px 0"><tbody>${rows.map(([k, cs]) => `<tr><td>${k}</td><td>${cs.map(c => `<span style="display:inline-block;width:34px;height:18px;background:${c};border:1px solid #999;margin-right:3px;vertical-align:middle"></span>`).join('')}</td><td class="legend-note">smallest difference ΔE = ${Math.round(minDE(cs))}</td></tr>`).join('')}</tbody></table><p class="legend-note">${worst >= 20 ? '✓ The groups stay distinguishable for colour-blind readers.' : `⚠ Some groups look alike for colour-blind readers (ΔE ${Math.round(worst)} &lt; 20). <a href="#" id="cbFix">Use the colour-blind safe (Okabe-Ito) palette</a> or add shapes and line styles.`}</p>`;
+    const fx = $('#cbFix'); if (fx) fx.onclick = e => { e.preventDefault(); state.cfg.options.palette = 'okabe'; renderOptions(); toast('Okabe-Ito palette chosen'); }; };
   $('#btnPdf').onclick = async () => { if (!state.result) return; busy(true); await new Promise(r => setTimeout(r, 30));
     try { const blob = await buildPdf(); saveUrl(URL.createObjectURL(blob), `${baseName()} - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.pdf`); toast('PDF saved'); }
     catch (err) { console.error(err); toast('PDF failed: ' + err.message); } busy(false); };
@@ -34618,6 +34806,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       syncEdits();
       const r = exportModel(state.result);
       if (effOptions().figPanels) await panelize(r);
+      (state.combos || []).forEach((cb, i) => r.sections.push({ kind: 'combo', title: cb.caption, head: [], rows: [], footnote: '', comment: '', tableOn: false, figures: [{ url: cb.url, w: cb.w, h: cb.h, caption: cb.caption, key: 'combo' + i }], meta: {} }));
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
       let blob = await Report.build(r, wordOptions());

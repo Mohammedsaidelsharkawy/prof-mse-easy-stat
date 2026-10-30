@@ -151,6 +151,11 @@ const Charts = (() => {
     const c = makeCanvas(W * res, H * res);
     const ctx = c.getContext('2d');
     ctx.scale(res, res);
+    // text with a line break: the lines stacked around the anchor (e.g. a unit on the second line of an axis title)
+    const ft = ctx.fillText.bind(ctx);
+    ctx.fillText = (t, x, y, mw) => { const s = String(t); if (!s.includes('\n')) return mw === undefined ? ft(s, x, y) : ft(s, x, y, mw);
+      const ls = s.split('\n'), lh = parseFloat((/(\d+(?:\.\d+)?)px/.exec(ctx.font) || [0, 24])[1]) * 1.15, b = ctx.textBaseline, y0 = b === 'top' || b === 'hanging' ? y : b === 'bottom' || b === 'alphabetic' ? y - lh * (ls.length - 1) : y - lh * (ls.length - 1) / 2;
+      ls.forEach((l, i) => ft(l, x, y0 + i * lh)); };
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
     return { c, ctx, W, H, ts, F: (weight, px) => `${weight} ${Math.round(px * ts)}px ${FONT}` };
   }
@@ -303,11 +308,23 @@ const Charts = (() => {
     HITS = [];
     // a figure may have its own shape (step 7)
     if (spec.aspect && ASPECTS[spec.aspect]) style = { ...style, aspect: spec.aspect };
+    if (style.unitLine) spec = { ...spec, ...(spec.yLabel ? { yLabel: String(spec.yLabel).replace(/\s*(\([^)]*\))\s*$/, '\n$1') } : {}), ...(spec.xLabel ? { xLabel: String(spec.xLabel).replace(/\s*(\([^)]*\))\s*$/, '\n$1') } : {}) };
+    // 100% stacked bars ordered by their first category
+    if (style.stackSort && spec.type === 'stacked' && spec.series && spec.series[0] && spec.categories) { const tot = spec.categories.map((_, ci) => spec.series.reduce((a, s) => a + (+s.values[ci] || 0), 0)), sh = spec.categories.map((_, ci) => tot[ci] ? spec.series[0].values[ci] / tot[ci] : 0), ord = spec.categories.map((_, i) => i).sort((a, b) => sh[b] - sh[a]);
+      spec = { ...spec, categories: ord.map(i => spec.categories[i]), series: spec.series.map(s => ({ ...s, values: ord.map(i => s.values[i]), ...(s.err ? { err: ord.map(i => s.err[i]) } : {}) })), ...(spec.widths ? { widths: ord.map(i => spec.widths[i]) } : {}) }; }
     // a chart of one series (one-group studies) needs no legend
     const c = drawChart(spec, paletteName, spec.legend === false ? { ...style, legend: 'none' } : style);
     const out = spec.title ? withTitle(c, spec.title, { ...DEFAULT_STYLE, ...style }) : c;
     const res = VECTOR ? 1 : +style.res || 1, band = (out.height - c.height) / res;
     hitsOf = { W: out.width / res, H: out.height / res, list: HITS.map(h => ({ ...h, y: h.y + band })) };
+    // annotations of a figure (text and arrows at positions given as % of the width and height) and a watermark
+    if ((spec.annot && spec.annot.length) || style.watermark) { const x = out.getContext('2d'), r2 = VECTOR ? 1 : +style.res || 1, W2 = out.width, H2 = out.height; x.save(); x.setTransform(1, 0, 0, 1, 0, 0);
+      (spec.annot || []).forEach(a => { x.fillStyle = a.color || '#222'; x.strokeStyle = a.color || '#222';
+        if (a.type === 'text') { x.font = `700 ${Math.round((a.size || 26) * r2)}px ${FONT}`; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText(a.text, a.x / 100 * W2, a.y / 100 * H2); }
+        if (a.type === 'arrow') { const x1 = a.x1 / 100 * W2, y1 = a.y1 / 100 * H2, x2 = a.x2 / 100 * W2, y2 = a.y2 / 100 * H2, ang = Math.atan2(y2 - y1, x2 - x1), hl = 22 * r2; x.lineWidth = 4 * r2;
+          x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke(); x.beginPath(); x.moveTo(x2, y2); x.lineTo(x2 - hl * Math.cos(ang - 0.45), y2 - hl * Math.sin(ang - 0.45)); x.lineTo(x2 - hl * Math.cos(ang + 0.45), y2 - hl * Math.sin(ang + 0.45)); x.closePath(); x.fill(); } });
+      if (style.watermark) { x.translate(W2 / 2, H2 / 2); x.rotate(-Math.atan2(H2, W2)); x.font = `800 ${Math.round(Math.min(W2, H2) / 5)}px ${FONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = 'rgba(160,160,160,0.25)'; x.fillText(String(style.watermark).toUpperCase(), 0, 0); }
+      x.restore(); }
     if (style.frame) { const x = out.getContext('2d'), w = Math.max(2, 3 * (+style.res || 1)); x.setTransform(1, 0, 0, 1, 0, 0); x.strokeStyle = '#555'; x.lineWidth = w; x.strokeRect(w / 2, w / 2, out.width - w, out.height - w); }
     return out;
   }
@@ -353,6 +370,9 @@ const Charts = (() => {
     if (spec.type === 'forest') return forestChart(spec, paletteName, st);
     if (spec.type === 'scatter') return scatter(spec, paletteName, st);
     if (spec.type === 'roc') return rocChart(spec, paletteName, st);
+    if (spec.type === 'diverging') return divergingChart(spec, paletteName, st);
+    if (spec.type === 'upset') return upsetChart(spec, paletteName, st);
+    if (spec.type === 'alluvial') return alluvialChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
     if (spec.type === 'curve') return curveChart(spec, paletteName, st);
     if (spec.type === 'margin') return marginChart(spec, paletteName, st);
@@ -483,7 +503,8 @@ const Charts = (() => {
       if (spec.individual) spec.series.forEach((s, si) => {
         const off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
         ctx.strokeStyle = pal[si % pal.length]; ctx.globalAlpha = 0.22; ctx.lineWidth = 2; ctx.setLineDash([]);
-        (spec.individual[si] || []).forEach(p => { ctx.beginPath(); p.forEach((v, ci) => { const x = xAt(ci) + off; ci ? ctx.lineTo(x, y(v)) : ctx.moveTo(x, y(v)); }); ctx.stroke(); });
+        (spec.individual[si] || []).forEach(p => { if (spec.dirColor) { const up = p[p.length - 1] > p[0]; ctx.strokeStyle = p[p.length - 1] === p[0] ? '#888' : up ? '#2E7D32' : '#C62828'; ctx.globalAlpha = 0.5; }
+          ctx.beginPath(); p.forEach((v, ci) => { const x = xAt(ci) + off; ci ? ctx.lineTo(x, y(v)) : ctx.moveTo(x, y(v)); }); ctx.stroke(); });
         ctx.globalAlpha = 1;
       });
       spec.series.forEach((s, si) => {
@@ -621,6 +642,11 @@ const Charts = (() => {
     }
 
     if (fixY) ctx.restore();
+    // a shaded reference (normal) range
+    if (spec.band && isFinite(spec.band.lo) && isFinite(spec.band.hi)) { const a = Math.max(sc.min, spec.band.lo), b = Math.min(sc.max, spec.band.hi);
+      if (b > a) { ctx.fillStyle = 'rgba(46,125,50,0.10)'; ctx.fillRect(L, y(b), pw, y(a) - y(b)); ctx.font = F(600, 22); ctx.fillStyle = '#2E7D32'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(spec.band.label || 'Reference range', L + 8, y(b) + 4); } }
+    // fitted curves over the bars (e.g. the normal curve of each group over a histogram)
+    (spec.curves || []).forEach(cv => { ctx.strokeStyle = pal[(cv.si || 0) % pal.length]; ctx.lineWidth = 4; ctx.setLineDash([]); ctx.beginPath(); cv.values.forEach((v, ci) => { const X2 = xAt(ci); ci ? ctx.lineTo(X2, y(v)) : ctx.moveTo(X2, y(v)); }); ctx.stroke(); });
     // optional reference line (e.g. a normal limit), dashed, with its label at the right end
     if (isFinite(spec.refLine) && spec.refLine >= sc.min && spec.refLine <= sc.max) {
       ctx.strokeStyle = '#C0392B'; ctx.lineWidth = 3; ctx.setLineDash([14, 9]);
@@ -892,6 +918,7 @@ const Charts = (() => {
       ctx.font = F(700, 24); ctx.fillStyle = '#222'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
       ctx.fillText(name, L + pw + 14, Y(v) - 2); ctx.textBaseline = 'top'; ctx.font = F(600, 24); ctx.fillText(r(v), L + pw + 14, Y(v) + 2);
     });
+    if (spec.reg && isFinite(spec.reg.b)) { ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip(); ctx.strokeStyle = '#7B2CBF'; ctx.lineWidth = 3.5; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.moveTo(X(x0), Y(spec.reg.a + spec.reg.b * x0)); ctx.lineTo(X(x1), Y(spec.reg.a + spec.reg.b * x1)); ctx.stroke(); ctx.restore(); ctx.setLineDash([]); }
     return c;
   }
 
@@ -946,6 +973,52 @@ const Charts = (() => {
     return c;
   }
 
+  /* ---------- diverging stacked bars (Likert scales): the lower categories to the left of zero, the higher to the right ---------- */
+  function divergingChart(spec, paletteName, st) {
+    const { c, ctx, W, H, ts, F } = setup(st), K = spec.series.length, mid = (K - 1) / 2;
+    const shade = (k) => { const t = K > 1 ? k / (K - 1) : 0.5, a = [192, 57, 43], m = [215, 215, 215], b = [31, 78, 154], mix = (p, q, u) => p.map((v, j) => Math.round(v + (q[j] - v) * u));
+      const col = t < 0.5 ? mix(a, m, t * 2) : mix(m, b, (t - 0.5) * 2); return `rgb(${col.join(',')})`; };
+    ctx.font = F(700, 26); const lab = Math.max(...spec.categories.map(x => ctx.measureText(x).width)) + 40;
+    const L = 30 + lab, R = 50, T = 40, B = 150 * ts, pw = W - L - R, ph = H - T - B, X = v => L + (v + 100) / 200 * pw, rh = ph / spec.categories.length;
+    ctx.font = F(600, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; for (let v = -100; v <= 100; v += 25) { if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); } ctx.fillStyle = '#444'; ctx.fillText(Math.abs(v) + '%', X(v), T + ph + 10); }
+    spec.categories.forEach((cat, ci) => { const vals = spec.series.map(s => +s.values[ci] || 0), tot = vals.reduce((a, b) => a + b, 0) || 1, p = vals.map(v => 100 * v / tot), yy = T + ci * rh + rh * 0.18, hh = rh * 0.64;
+      const neg = p.reduce((a, v, k) => a + (k < mid ? v : k === mid ? v / 2 : 0), 0); let x0 = -neg;
+      p.forEach((v, k) => { ctx.fillStyle = shade(k); ctx.fillRect(X(x0), yy, X(x0 + v) - X(x0), hh); if (v >= 7) { ctx.fillStyle = Math.abs(k - mid) > K / 4 ? '#fff' : '#222'; ctx.font = F(700, 22); ctx.textBaseline = 'middle'; ctx.fillText(Math.round(v) + '%', X(x0 + v / 2), yy + hh / 2); } x0 += v; });
+      ctx.fillStyle = '#222'; ctx.font = F(700, 26); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(cat, L - 16, yy + hh / 2); ctx.textAlign = 'center'; });
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(X(0), T); ctx.lineTo(X(0), T + ph); ctx.stroke();
+    // legend under the axis
+    ctx.font = F(600, 22); let lx = L; const ly = T + ph + 60 * ts; spec.series.forEach((s, k) => { const w = ctx.measureText(s.name).width + 46; if (lx + w > L + pw) return; ctx.fillStyle = shade(k); ctx.fillRect(lx, ly, 26, 22); ctx.fillStyle = '#333'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(s.name, lx + 32, ly); lx += w; });
+    return c;
+  }
+  /* ---------- UpSet plot: the sizes of the combinations of several yes/no conditions ---------- */
+  function upsetChart(spec, paletteName, st) {
+    const pal = palette(paletteName), { c, ctx, W, H, ts, F } = setup({ ...st, aspect: st.aspect === 'wide' ? 'standard' : st.aspect }), S2 = spec.sets.length, C = spec.combos.length;
+    ctx.font = F(700, 24); const lab = Math.max(...spec.sets.map(x => ctx.measureText(x).width)) + 30, sbw = 150;
+    const L = 30 + sbw + lab, R = 30, T = 40, mh = Math.min(48, (H * 0.42) / S2), MT = H - 40 - mh * S2, ph = MT - T - 40, cw = (W - L - R) / C, mx = Math.max(...spec.combos.map(x => x.n)), sx = Math.max(...spec.setSizes);
+    spec.combos.forEach((cb, i) => { const x = L + cw * (i + 0.5), h = cb.n / mx * ph; ctx.fillStyle = pal[0]; ctx.fillRect(x - cw * 0.32, MT - 30 - h, cw * 0.64, h); ctx.fillStyle = '#222'; ctx.font = F(700, 22); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(String(cb.n), x, MT - 34 - h);
+      const rowsIn = cb.mask.map((m, k) => m ? k : -1).filter(k => k >= 0);
+      if (rowsIn.length > 1) { ctx.strokeStyle = '#333'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, MT + mh * (rowsIn[0] + 0.5)); ctx.lineTo(x, MT + mh * (rowsIn[rowsIn.length - 1] + 0.5)); ctx.stroke(); }
+      cb.mask.forEach((m, k) => { ctx.fillStyle = m ? '#333' : '#DDD'; ctx.beginPath(); ctx.arc(x, MT + mh * (k + 0.5), Math.min(13, mh * 0.3, cw * 0.3), 0, Math.PI * 2); ctx.fill(); }); });
+    spec.sets.forEach((s, k) => { const yy = MT + mh * (k + 0.5), w = spec.setSizes[k] / sx * (sbw - 20); ctx.fillStyle = pal[1 % pal.length]; ctx.fillRect(30 + sbw - w, yy - mh * 0.3, w, mh * 0.6);
+      ctx.fillStyle = '#222'; ctx.font = F(700, 24); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(s, 30 + sbw + 10, yy); });
+    ctx.font = F(700, 24); ctx.fillStyle = '#333'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(spec.yLabel || 'Patients with exactly this combination', L, T - 30);
+    return c;
+  }
+  /* ---------- alluvial plot: the categories at each timepoint and the patients moving between them ---------- */
+  function alluvialChart(spec, paletteName, st) {
+    const pal = palette(paletteName), { c, ctx, W, H, ts, F } = setup(st), Tn = spec.times.length, K = spec.levels.length;
+    const L = 60, R = 60, T = 50, B = 150 * ts, pw = W - L - R, ph = H - T - B, colW = Math.min(60, pw / (Tn * 3)), gap = 12, N = Math.max(...spec.counts.map(cs => cs.reduce((a, b) => a + b, 0))) || 1, scale = (ph - gap * (K - 1)) / N;
+    const xs = spec.times.map((_, t) => L + (pw - colW) * (Tn > 1 ? t / (Tn - 1) : 0.5));
+    const tops = spec.counts.map(cs => { let y0 = T; return cs.map(n => { const r = y0; y0 += n * scale + gap; return r; }); });
+    // ribbons first, under the columns
+    for (let t = 0; t + 1 < Tn; t++) { const out = tops[t].slice(), inn = tops[t + 1].slice(), fl = spec.flows[t];
+      for (let a = 0; a < K; a++) for (let b = 0; b < K; b++) { const n = fl[a][b]; if (!n) continue; const h = n * scale, x0 = xs[t] + colW, x1 = xs[t + 1], y0 = out[a], y1 = inn[b], mxp = (x0 + x1) / 2;
+        ctx.fillStyle = pal[a % pal.length]; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.bezierCurveTo(mxp, y0, mxp, y1, x1, y1); ctx.lineTo(x1, y1 + h); ctx.bezierCurveTo(mxp, y1 + h, mxp, y0 + h, x0, y0 + h); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; out[a] += h; inn[b] += h; } }
+    spec.counts.forEach((cs, t) => cs.forEach((n, k) => { if (!n) return; ctx.fillStyle = pal[k % pal.length]; ctx.fillRect(xs[t], tops[t][k], colW, n * scale); if (n * scale > 26) { ctx.fillStyle = '#fff'; ctx.font = F(700, 20); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(n), xs[t] + colW / 2, tops[t][k] + n * scale / 2); } }));
+    ctx.fillStyle = '#333'; ctx.font = F(700, 26); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; spec.times.forEach((tl, t) => ctx.fillText(tl, xs[t] + colW / 2, T + ph + 14));
+    ctx.font = F(600, 24); let lx = L; const ly = T + ph + 70 * ts; spec.levels.forEach((l, k) => { ctx.fillStyle = pal[k % pal.length]; ctx.fillRect(lx, ly, 26, 22); ctx.fillStyle = '#333'; ctx.textAlign = 'left'; ctx.fillText(l, lx + 32, ly); lx += ctx.measureText(l).width + 60; });
+    return c;
+  }
   /* ---------- non-inferiority / equivalence plot: each CI against the margin ---------- */
   function marginChart(spec, paletteName, st) {
     const pal = palette(paletteName), col = pal[0];
@@ -1061,6 +1134,7 @@ const Charts = (() => {
         ctx.fillStyle = items[i].color + '22'; ctx.beginPath(); ctx.moveTo(X(0), Y(0));
         pts.forEach(q => ctx.lineTo(X(q.fpr), Y(q.tpr))); ctx.lineTo(X(1), Y(0)); ctx.closePath(); ctx.fill();
       }
+      if (s.band) { ctx.fillStyle = items[i].color; ctx.globalAlpha = 0.13; ctx.beginPath(); s.band.fpr.forEach((f, k) => k ? ctx.lineTo(X(f), Y(s.band.hi[k])) : ctx.moveTo(X(f), Y(s.band.hi[k]))); [...s.band.fpr].reverse().forEach((f, k) => ctx.lineTo(X(f), Y(s.band.lo[s.band.fpr.length - 1 - k]))); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; }
       ctx.strokeStyle = items[i].color; ctx.lineWidth = ({ thin: 3, bold: 8 }[spec.lineW] || 5) * lw(st); ctx.setLineDash(items[i].dashArr || (items[i].dash ? [16, 10] : []));
       ctx.beginPath(); pts.forEach((q, k) => k ? ctx.lineTo(X(q.fpr), Y(q.tpr)) : ctx.moveTo(X(q.fpr), Y(q.tpr))); ctx.stroke();
     });
