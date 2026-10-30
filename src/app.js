@@ -2646,7 +2646,7 @@
       if (as - ex !== n(p.studies) && n(p.studies)) w.push(`Reports assessed (${as}) − excluded (${ex}) = ${as - ex}, but ${n(p.studies)} studies are included (fine when several reports belong to one study)`); }
     return w;
   }
-  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {}, nFmt: 'tight', spacing: 'normal', exSide: 'right', res: '1', pct: false, emph: false, boxWidth: 'normal', arrowHead: 'filled', arrowColor: '', sideText: 'normal', legend: false };
+  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {}, nFmt: 'tight', spacing: 'normal', exSide: 'right', res: '1', pct: false, emph: false, boxWidth: 'normal', arrowHead: 'filled', arrowColor: '', sideText: 'normal', legend: false, direction: 'tb' };
   function readConsort() {
     const c = state.cfg && state.cfg.consort; if (!c || !$('#cForm').innerHTML) return;
     c.enabled = $('#cEnabled').checked;
@@ -2657,7 +2657,7 @@
     c.style = { theme: st.theme, color: st.colorMode === 'custom' ? st.color : '', corners: st.corners, lines: st.lines, textSize: st.textSize, font: st.font, pills: st.pills, shadow: st.shadow,
       pillColor: st.pillMode === 'custom' ? st.pillColor : '', pillTextColor: st.pillTextColor, labels,
       nFmt: st.nFmt, spacing: st.spacing, exSide: st.exSide, res: st.res, pct: st.pct, emph: st.emph,
-      boxWidth: st.boxWidth, arrowHead: st.arrowHead, arrowColor: st.arrowMode === 'custom' ? st.arrowColor : '', sideText: st.sideText, legend: st.legend };
+      direction: st.direction, boxWidth: st.boxWidth, arrowHead: st.arrowHead, arrowColor: st.arrowMode === 'custom' ? st.arrowColor : '', sideText: st.sideText, legend: st.legend };
     const val = el => el.type === 'checkbox' ? el.checked : el.type === 'number' ? (+el.value || 0) : el.value;
     document.querySelectorAll('#cForm [data-pr]').forEach(el => { c.prisma[el.dataset.pr] = val(el); });
     document.querySelectorAll('#cForm [data-prr]').forEach(el => { c.prisma.reasons[+el.dataset.prr][el.dataset.f] = val(el); });
@@ -2680,7 +2680,7 @@
   };
   function drawConsortPreview() {
     const c = state.cfg.consort, gl = activeGroups().map(g => state.cfg.groupLabels[g]);
-    flowPush(c);
+    if (!state.flowDrag) flowPush(c);
     const wn = flowWarnings(c); $('#cWarn').innerHTML = wn.length ? `<div class="chip warn" style="display:block;white-space:normal;padding:6px 10px"><b>Check the numbers:</b><br>${wn.map(esc).join('<br>')}</div>` : '';
     const cv = Charts.consort(c, gl, chartPalette(state.cfg.options));
     const tgt = $('#consortCanvas');
@@ -2707,6 +2707,22 @@
       if (to === 'lost') { G.lost = tot; G.lostReason = why; } else { G.excludedAnalysis = tot; G.excludedReason = why; } G.analysed = Math.max(0, G.allocated - G.lost - G.excludedAnalysis); });
     renderConsortForm(); toast(`Reasons taken from “${col}”`);
   }
+  // dragging boxes of the flowchart preview: the move is kept as an offset of that box (in the Word file and every export too)
+  const flowBoxAt = (e, cv) => { const h = Charts.flowHits(), r = cv.getBoundingClientRect(), k = h.W / r.width, x = (e.clientX - r.left) * k, y = (e.clientY - r.top) * k;
+    return { k, hit: [...h.list].reverse().find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h), W: h.W }; };
+  $('#consortCanvas').addEventListener('mousedown', e => {
+    const c = state.cfg && state.cfg.consort; if (!c) return; const { k, hit, W } = flowBoxAt(e, e.target); if (!hit) return;
+    e.preventDefault(); c.offsets = c.offsets || {}; const o0 = { ...(c.offsets[hit.key] || { dx: 0, dy: 0 }) }, x0 = e.clientX, y0 = e.clientY, base = { x: hit.x - o0.dx, y: hit.y - o0.dy, w: hit.w };
+    state.flowDrag = true;
+    const move = ev => { const snap = v => Math.round(v / 5) * 5;
+      let dx = snap(o0.dx + (ev.clientX - x0) * k), dy = snap(o0.dy + (ev.clientY - y0) * k);
+      dx = Math.max(-base.x, Math.min(W - base.x - base.w, dx)); dy = Math.max(-base.y, dy);
+      if (dx || dy) c.offsets[hit.key] = { dx, dy }; else delete c.offsets[hit.key]; drawConsortPreview(); };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); state.flowDrag = false; drawConsortPreview(); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  });
+  $('#consortCanvas').addEventListener('mousemove', e => { if (state.flowDrag || !state.cfg || !state.cfg.consort) return; e.target.style.cursor = flowBoxAt(e, e.target).hit ? 'move' : ''; });
+  $('#flowResetPos').onclick = () => { const c = state.cfg && state.cfg.consort; if (!c) return; c.offsets = {}; drawConsortPreview(); toast('Boxes back to their automatic positions'); };
   // undo / redo of the flowchart: snapshots of its settings
   const flowHist = { past: [], future: [], last: '' };
   function flowPush(c) { const j = JSON.stringify(c); if (j === flowHist.last) return; if (flowHist.last) { flowHist.past.push(flowHist.last); if (flowHist.past.length > 60) flowHist.past.shift(); } flowHist.future = []; flowHist.last = j; }

@@ -1070,6 +1070,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Image resolution</label><select data-fs="res"><option value="1">Standard</option><option value="2">High (2×)</option><option value="3">Very high (3×)</option></select></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="pct"><span>Percentages beside the numbers</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="emph"><span>Highlight the final (analysed) boxes</span></label></div>
+          <div><label class="f">Direction</label><select data-fs="direction"><option value="tb">Top to bottom</option><option value="lr">Left to right</option></select></div>
           <div><label class="f">Box width</label><select data-fs="boxWidth"><option value="narrow">Narrow</option><option value="normal">Normal</option><option value="wide">Wide</option></select></div>
           <div><label class="f">Arrow heads</label><select data-fs="arrowHead"><option value="filled">Filled</option><option value="open">Open</option><option value="none">None (lines)</option></select></div>
           <div><label class="f">Arrow colour</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select data-fs="arrowMode" style="width:auto"><option value="theme">As the theme</option><option value="custom">Custom</option></select><input type="color" data-fs="arrowColor" value="#222222" style="width:52px;padding:2px"></div></div>
@@ -1095,7 +1096,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div id="cWarn"></div>
       <div class="grid g2">
         <div id="cForm"></div>
-        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="flowCopy" type="button" title="Copy the flowchart, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button></div></div>
+        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><span class="legend-note" style="float:left">Drag any box to move it.</span><button class="btn ghost small" id="flowResetPos" type="button" title="Every box back to its automatic position">↺ Box positions</button> <button class="btn ghost small" id="flowCopy" type="button" title="Copy the flowchart, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button></div></div>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Next: Results by variable →</button></div>
@@ -26972,7 +26973,7 @@ const Charts = (() => {
       pill: /^#[0-9a-f]{6}$/i.test(st.pillColor || '') ? st.pillColor : accent, pillText: /^#[0-9a-f]{6}$/i.test(st.pillTextColor || '') ? st.pillTextColor : '#fff',
       // box widths, arrow colour and head, text size of the exclusion boxes, a legend of the box colours
       wScale: { narrow: 0.85, wide: 1.2 }[st.boxWidth] || 1, arrowColor: /^#[0-9a-f]{6}$/i.test(st.arrowColor || '') ? st.arrowColor : null, head: st.arrowHead || 'filled',
-      sideFs: { small: 0.85, large: 1.15 }[st.sideText] || 1, legend: !!st.legend, theme
+      sideFs: { small: 0.85, large: 1.15 }[st.sideText] || 1, legend: !!st.legend, theme, lr: st.direction === 'lr'
     };
   }
   function flowBox(ctx, S, x, y, w, h, role) {
@@ -27040,33 +27041,46 @@ const Charts = (() => {
     const own = ((c.style || {}).labels || {})[type] || [];
     const PILLS = (FLOW_LABELS[type] || FLOW_LABELS.consort).map((d, i) => String(own[i] || '').trim() || d);
 
+    if (S.lr) return consortLR({ c, S, k, fs, lh, assessed, excluded, randomized, pre, preEx, alloc, follow, anal, PILLS, exTotal, boxH0: boxH });
     const hA = boxH(assessed), hE = boxH(excluded, S.sideFs), hR = boxH(randomized);
     const hAl = Math.max(MIN_ROW, ...alloc.map(l => boxH(l))), hF = Math.max(MIN_ROW, ...follow.map(l => boxH(l))), hAn = Math.max(MIN_ROW, ...anal.map(l => boxH(l)));
     const gap = S.gap, hP = pre ? boxH(pre) : 0, hPE = preEx ? boxH(preEx, S.sideFs) : 0, y0 = pre ? 30 + hP + Math.max(gap, hPE + 40) : 30;
     const yA = y0, yE = yA + hA + 20, yR = Math.max(yE + hE + 20, yA + hA + gap);
     const yAl = yR + hR + gap + 20, yF = yAl + hAl + gap, yAn = yF + hF + gap;
-    // footnote and legend below the boxes
+    const midX = gutter + (CW - gutter) / 2, colX = i => gutter + pad + i * (colW + pad);
+    // every box placed first (moved by its drag offset), then drawn with the arrows between the placed boxes
+    const R = {}, place = (key, x, y, w, h, lines, align = 'center', role = 'main') => { const o = flowOff(c, key); R[key] = { x: x + o.dx, y: y + o.dy, w, h, lines, align, role }; };
+    if (pre) { place('pre', midX - topW / 2, 30, topW, hP, pre); if (preEx) { const exX = S.exLeft ? Math.max(gutter + 6, midX - 60 - exW) : midX + 60; place('preEx', exX, 30 + hP + (yA - 30 - hP - hPE) / 2, exW, hPE, preEx, 'left', 'side'); } }
+    place('assessed', midX - topW / 2, yA, topW, hA, assessed);
+    if (exTotal) place('excluded', S.exLeft ? Math.max(gutter + 6, midX - 60 - exW) : midX + 60, yE, exW, hE, excluded, 'left', 'side');
+    place('rand', midX - topW / 2, yR, topW, hR, randomized);
+    for (let i = 0; i < k; i++) { place('alloc' + i, colX(i), yAl, colW, hAl, alloc[i], 'center', 'col'); place('follow' + i, colX(i), yF, colW, hF, follow[i], 'center', 'col'); place('anal' + i, colX(i), yAn, colW, hAn, anal[i], 'center', S.emph ? 'final' : 'col'); }
+    // footnote and legend below the boxes; the chart grows when a box is dragged lower
     ctx.font = `400 ${Math.round(fs * 0.8)}px ${FONT}`;
     const foot = String(c.footnote || '').trim(), footH = foot ? measureLines(ctx, foot, CW - 60) * Math.round(lh * 0.8) + 16 : 0, legH = S.legend && S.theme !== 'classic' && S.theme !== 'bw' ? 50 : 0;
-    const Htot = yAn + hAn + 30 + footH + legH;
-    cv = makeCanvas(CW * S.res, Htot * S.res); const ctx0 = ctx; ctx = cv.getContext('2d'); ctx.scale(S.res, S.res);
+    const bottom = Math.max(yAn + hAn, ...Object.values(R).map(r => r.y + r.h)), Htot = bottom + 30 + footH + legH;
+    cv = makeCanvas(CW * S.res, Htot * S.res); ctx = cv.getContext('2d'); ctx.scale(S.res, S.res);
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, Htot);
-
-    const midX = gutter + (CW - gutter) / 2;
-    const box = (x, y, w, h, lines, align = 'center', role = 'main') => {
-      flowBox(ctx, S, x, y, w, h, role);
-      let yy = y + 14;
+    const box = r => {
+      flowBox(ctx, S, r.x, r.y, r.w, r.h, r.role);
+      let yy = r.y + 14;
       ctx.textBaseline = 'top';
-      lines.forEach(ln => {
-        const k = role === 'side' ? S.sideFs : 1; ctx.font = `${ln.b ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`;
+      r.lines.forEach(ln => {
+        const k = r.role === 'side' ? S.sideFs : 1; ctx.font = `${ln.b ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`;
         ln.t.split('\n').forEach(par => {
-          ctx.textAlign = align;
-          const n = wrapText(ctx, par, align === 'center' ? x + w / 2 : x + 14, yy, w - 28, Math.round(lh * k));
+          ctx.textAlign = r.align;
+          const n = wrapText(ctx, par, r.align === 'center' ? r.x + r.w / 2 : r.x + 14, yy, r.w - 28, Math.round(lh * k));
           yy += n * Math.round(lh * k);
         });
       });
     };
     const arrow = (x1, y1, x2, y2) => flowArrow(ctx, S, x1, y1, x2, y2);
+    // a box above another: a straight arrow, or an elbow when one was dragged sideways
+    const link = (a, b) => { const ax = a.x + a.w / 2, bx = b.x + b.w / 2, y1 = a.y + a.h, y2 = b.y;
+      if (Math.abs(ax - bx) < 0.5) { arrow(ax, y1, bx, y2); return; }
+      const my = (y1 + y2) / 2; ctx.strokeStyle = S.arrowColor || S.arrow; ctx.lineWidth = S.lw; ctx.beginPath(); ctx.moveTo(ax, y1); ctx.lineTo(ax, my); ctx.lineTo(bx, my); ctx.stroke(); arrow(bx, my, bx, y2); };
+    // an exclusion box beside the path: a horizontal arrow from the path to its edge
+    const side = (from, r) => { const cx = from.x + from.w / 2, y = r.y + r.h / 2; arrow(cx, y, r.x + r.w / 2 < cx ? r.x + r.w : r.x, y); };
     const pill = (label, y1, y2) => {
       if (!S.pills) return;
       ctx.fillStyle = S.pill;
@@ -27081,38 +27095,71 @@ const Charts = (() => {
     };
 
     pill(PILLS[0], pre ? 30 : yA, yR + hR);
-    if (pre) { box(midX - topW / 2, 30, topW, hP, pre);
-      if (preEx) { const exX = S.exLeft ? Math.max(gutter + 6, midX - 60 - exW) : midX + 60, ey = 30 + hP + (yA - 30 - hP - hPE) / 2; box(exX, ey, exW, hPE, preEx, 'left', 'side'); arrow(midX, ey + hPE / 2, S.exLeft ? exX + exW : exX, ey + hPE / 2); }
-      arrow(midX, 30 + hP, midX, yA); }
+    if (pre) { box(R.pre); if (R.preEx) { box(R.preEx); side(R.pre, R.preEx); } link(R.pre, R.assessed); }
     pill(PILLS[1], yAl, yAl + hAl);
     pill(PILLS[2], yF, yF + hF);
     pill(PILLS[3], yAn, yAn + hAn);
 
-    box(midX - topW / 2, yA, topW, hA, assessed);
-    if (exTotal) {
-      // the exclusion box to the right (default) or the left of the main path
-      const exX = S.exLeft ? Math.max(gutter + 6, midX - 60 - exW) : midX + 60;
-      box(exX, yE, exW, hE, excluded, 'left', 'side');
-      arrow(midX, yE + hE / 2, S.exLeft ? exX + exW : exX, yE + hE / 2);
-    }
-    arrow(midX, yA + hA, midX, yR);
-    box(midX - topW / 2, yR, topW, hR, randomized);
+    box(R.assessed);
+    if (R.excluded) { box(R.excluded); side(R.assessed, R.excluded); }
+    link(R.assessed, R.rand);
+    box(R.rand);
 
-    const colX = i => gutter + pad + i * (colW + pad);
-    const busY = yR + hR + gap / 2 + 10;
+    const rc = R.rand.x + R.rand.w / 2, busY = R.rand.y + R.rand.h + gap / 2 + 10, cxs = Array.from({ length: k }, (_, i) => R['alloc' + i].x + R['alloc' + i].w / 2);
     ctx.strokeStyle = S.arrowColor || S.arrow; ctx.lineWidth = S.lw;
-    ctx.beginPath(); ctx.moveTo(midX, yR + hR); ctx.lineTo(midX, busY);
-    ctx.moveTo(colX(0) + colW / 2, busY); ctx.lineTo(colX(k - 1) + colW / 2, busY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rc, R.rand.y + R.rand.h); ctx.lineTo(rc, busY);
+    ctx.moveTo(Math.min(...cxs, rc), busY); ctx.lineTo(Math.max(...cxs, rc), busY); ctx.stroke();
     for (let i = 0; i < k; i++) {
-      const x = colX(i), cx = x + colW / 2;
-      arrow(cx, busY, cx, yAl);
-      box(x, yAl, colW, hAl, alloc[i], 'center', 'col');
-      arrow(cx, yAl + hAl, cx, yF);
-      box(x, yF, colW, hF, follow[i], 'center', 'col');
-      arrow(cx, yF + hF, cx, yAn);
-      box(x, yAn, colW, hAn, anal[i], 'center', S.emph ? 'final' : 'col');
+      const A = R['alloc' + i], Fo = R['follow' + i], An = R['anal' + i];
+      arrow(cxs[i], busY, cxs[i], A.y); box(A); link(A, Fo); box(Fo); link(Fo, An); box(An);
     }
-    flowFoot(ctx, S, foot, legH, CW, yAn + hAn + 30, fs, lh);
+    flowFoot(ctx, S, foot, legH, CW, bottom + 30, fs, lh);
+    FLOW_HITS = { W: CW, H: Htot, list: Object.entries(R).map(([key, r]) => ({ key, x: r.x, y: r.y, w: r.w, h: r.h })) };
+    return cv;
+  }
+  // drag offsets of the flowchart boxes (step 9), and the boxes of the last flowchart for dragging
+  let FLOW_HITS = { W: 1, H: 1, list: [] };
+  const flowOff = (c, key) => { const o = (c.offsets || {})[key]; return { dx: o ? +o.dx || 0 : 0, dy: o ? +o.dy || 0 : 0 }; };
+  // left-to-right flowchart: the stages as columns, the groups as rows, section labels across the top
+  function consortLR(P) {
+    const { c, S, k, fs, lh, PILLS } = P, wM = Math.round(300 * S.wScale), wX = Math.round(290 * S.wScale), wC = Math.round(320 * S.wScale), gX = 70, gY = 26;
+    let cv = makeCanvas(100, 100), ctx = cv.getContext('2d');
+    const W = (lines, w) => lines.map(l => ({ ...l, w })), bh = (lines, kk = 1) => lines.reduce((h, ln) => { ctx.font = `${ln.b ? 700 : 400} ${Math.round(fs * kk)}px ${FONT}`; return h + measureLines(ctx, ln.t, ln.w - 28) * Math.round(lh * kk); }, 0) + 26;
+    const pre = P.pre && W(P.pre, wM), preEx = P.preEx && W(P.preEx, wX), as = W(P.assessed, wM), ex = P.exTotal ? W(P.excluded, wX) : null, ra = W(P.randomized, wM);
+    const al = P.alloc.map(l => W(l, wC)), fo = P.follow.map(l => W(l, wC)), an = P.anal.map(l => W(l, wC));
+    const rowH = al.map((_, i) => Math.max(bh(al[i]), bh(fo[i]), bh(an[i]))), T0 = S.pills ? 90 : 30, groupsH = rowH.reduce((t, h) => t + h, 0) + gY * (k - 1), midY = T0 + Math.max(groupsH, bh(as), bh(ra)) / 2;
+    let x = 20; const X = {};
+    if (pre) { X.pre = x; x += wM + gX; if (preEx) { X.preEx = x; x += wX + gX; } }
+    X.as = x; x += wM + gX; if (ex) { X.ex = x; x += wX + gX; } X.ra = x; x += wM + gX; X.al = x; x += wC + gX; X.fo = x; x += wC + gX; X.an = x; const CW = x + wC + 20;
+    const R = {}, place = (key, x0, y0, w, h, lines, align = 'center', role = 'main') => { const o = flowOff(c, key); R[key] = { x: x0 + o.dx, y: y0 + o.dy, w, h, lines, align, role }; };
+    const mid = (key, x0, w, lines) => { const h = bh(lines); place(key, x0, midY - h / 2, w, h, lines); };
+    if (pre) { mid('pre', X.pre, wM, pre); if (preEx) place('preEx', X.preEx, midY + 40, wX, bh(preEx, S.sideFs), preEx, 'left', 'side'); }
+    mid('assessed', X.as, wM, as); if (ex) place('excluded', X.ex, midY + 40, wX, bh(ex, S.sideFs), ex, 'left', 'side'); mid('rand', X.ra, wM, ra);
+    let y = midY - groupsH / 2; for (let i = 0; i < k; i++) { place('alloc' + i, X.al, y, wC, rowH[i], al[i], 'center', 'col'); place('follow' + i, X.fo, y, wC, rowH[i], fo[i], 'center', 'col'); place('anal' + i, X.an, y, wC, rowH[i], an[i], 'center', S.emph ? 'final' : 'col'); y += rowH[i] + gY; }
+    ctx.font = `400 ${Math.round(fs * 0.8)}px ${FONT}`;
+    const foot = String(c.footnote || '').trim(), footH = foot ? measureLines(ctx, foot, CW - 60) * Math.round(lh * 0.8) + 16 : 0, legH = S.legend && S.theme !== 'classic' && S.theme !== 'bw' ? 50 : 0;
+    const bottom = Math.max(...Object.values(R).map(r => r.y + r.h)), Htot = bottom + 30 + footH + legH;
+    cv = makeCanvas(CW * S.res, Htot * S.res); ctx = cv.getContext('2d'); ctx.scale(S.res, S.res); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, Htot);
+    const box = r => { flowBox(ctx, S, r.x, r.y, r.w, r.h, r.role); let yy = r.y + 14; ctx.textBaseline = 'top';
+      r.lines.forEach(ln => { const kk = r.role === 'side' ? S.sideFs : 1; ctx.font = `${ln.b ? 700 : 400} ${Math.round(fs * kk)}px ${FONT}`; ctx.textAlign = r.align;
+        ln.t.split('\n').forEach(par => { yy += wrapText(ctx, par, r.align === 'center' ? r.x + r.w / 2 : r.x + 14, yy, r.w - 28, Math.round(lh * kk)) * Math.round(lh * kk); }); }); };
+    const arrow = (x1, y1, x2, y2) => flowArrow(ctx, S, x1, y1, x2, y2), pen = () => { ctx.strokeStyle = S.arrowColor || S.arrow; ctx.lineWidth = S.lw; };
+    // left to right: straight, or an elbow when a box was dragged up or down
+    const link = (a, b) => { const y1 = a.y + a.h / 2, y2 = b.y + b.h / 2, x1 = a.x + a.w, x2 = b.x; if (Math.abs(y1 - y2) < 0.5) { arrow(x1, y1, x2, y2); return; }
+      const mx = (x1 + x2) / 2; pen(); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(mx, y1); ctx.lineTo(mx, y2); ctx.stroke(); arrow(mx, y2, x2, y2); };
+    // exclusion boxes hang below the arrow between two stages
+    const drop = (a, r) => { const xm = r.x + r.w / 2, y = a.y + a.h / 2; arrow(xm, y, xm, r.y < y ? r.y + r.h : r.y); };
+    if (S.pills) { const band = (label, x1, x2) => { ctx.fillStyle = S.pill; ctx.beginPath(); ctx.roundRect(x1, 20, x2 - x1, 46, 18); ctx.fill(); ctx.fillStyle = S.pillText; ctx.font = `700 24px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const tw = ctx.measureText(label).width; if (tw > x2 - x1 - 16) ctx.font = `700 ${Math.max(14, Math.floor(24 * (x2 - x1 - 16) / tw))}px ${FONT}`; ctx.fillText(label, (x1 + x2) / 2, 43); };
+      band(PILLS[0], pre ? X.pre : X.as, X.ra + wM); band(PILLS[1], X.al, X.al + wC); band(PILLS[2], X.fo, X.fo + wC); band(PILLS[3], X.an, X.an + wC); }
+    const chain = [R.pre, R.assessed, R.rand].filter(Boolean);
+    chain.forEach(box); chain.slice(1).forEach((b, i) => link(chain[i], b));
+    if (R.preEx) { box(R.preEx); drop(R.pre, R.preEx); } if (R.excluded) { box(R.excluded); drop(R.assessed, R.excluded); }
+    const ys = Array.from({ length: k }, (_, i) => R['alloc' + i].y + R['alloc' + i].h / 2), ry = R.rand.y + R.rand.h / 2, busX = R.rand.x + R.rand.w + gX / 2;
+    pen(); ctx.beginPath(); ctx.moveTo(R.rand.x + R.rand.w, ry); ctx.lineTo(busX, ry); ctx.moveTo(busX, Math.min(...ys, ry)); ctx.lineTo(busX, Math.max(...ys, ry)); ctx.stroke();
+    for (let i = 0; i < k; i++) { const A = R['alloc' + i], Fo = R['follow' + i], An = R['anal' + i]; arrow(busX, ys[i], A.x, ys[i]); box(A); link(A, Fo); box(Fo); link(Fo, An); box(An); }
+    flowFoot(ctx, S, foot, legH, CW, bottom + 30, fs, lh);
+    FLOW_HITS = { W: CW, H: Htot, list: Object.entries(R).map(([key, r]) => ({ key, x: r.x, y: r.y, w: r.w, h: r.h })) };
     return cv;
   }
   // arrows: filled head (default), open head or none, in the theme's or a chosen colour
@@ -27138,58 +27185,80 @@ const Charts = (() => {
   /* ---------- simple flowchart: a chain of steps with optional exclusions, optionally split into the groups ---------- */
   function simpleFlow(c, groupLabels, palName, S) {
     let cv = makeCanvas(1200, 100), ctx = cv.getContext('2d');
-    const CW = 1200, fs = S.fs, lh = S.lh, boxW = Math.round(520 * S.wScale), exW = Math.round(420 * S.wScale), gap = S.gap - 4;
+    const lr = S.lr, fs = S.fs, lh = S.lh, boxW = Math.round((lr ? 300 : 520) * S.wScale), exW = Math.round((lr ? 280 : 420) * S.wScale), gap = S.gap - 4;
     const boxH = (text, w, bold, k = 1) => { ctx.font = `${bold ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`; return text.split('\n').reduce((h, par) => h + measureLines(ctx, par, w - 28) * Math.round(lh * k), 0) + 26; };
     const steps = c.steps.filter(s => String(s.full || s.text).trim());
-    // PRISMA: section labels at the side (Identification, Screening, Included)
-    const secs = c.sections && S.pills ? c.sections : null, gut = secs ? 80 : 0;
-    const midX = gut / 2 + CW / 2 - (steps.some(s => +s.exN > 0) ? 160 : 0);
-    let y = 30;
-    const layout = steps.map(s => {
+    // PRISMA: section labels at the side (Identification, Screening, Included), across the top when left to right
+    const secs = c.sections && S.pills ? c.sections : null, gut = secs && !lr ? 80 : 0;
+    const items = steps.map(s => {
       const text = s.full || `${s.text} (${S.N(+s.n || 0)})`, h = boxH(text, boxW, true);
       const ex = +s.exN > 0 ? { text: s.exFull || `${s.exText || 'Excluded'} (${S.N(s.exN)}${S.pct && +s.n > 0 ? `, ${Math.round(1000 * s.exN / s.n) / 10}%` : ''})`, h: 0 } : null;
       if (ex) ex.h = boxH(ex.text, exW, false, S.sideFs);
-      const box = { text, y, h, ex };
-      y += h + gap + (ex ? ex.h + 24 : 0);
-      return box;
+      return { text, h, ex };
     });
-    const k = groupLabels.length, split = c.splitGroups && k > 1 && c.groups;
-    const pad = 18, colW = split ? Math.min(360, (CW - pad * (k + 1)) / k) : 0;
-    const gH = split ? Math.max(...groupLabels.map((g, i) => boxH(`${g}\n(${S.N(c.groups[i].analysed)})`, colW, true))) : 0;
-    const busY = y - gap / 2;
+    const k = groupLabels.length, split = c.splitGroups && k > 1 && c.groups, pad = 18;
+    const R = {}, place = (key, x, y, w, h, text, bold, align = 'center', role = 'main') => { const o = flowOff(c, key); R[key] = { x: x + o.dx, y: y + o.dy, w, h, text, bold, align, role }; };
+    let CW, H0, busY, busX, y = 30;
+    if (!lr) {
+      CW = 1200; const midX = gut / 2 + CW / 2 - (steps.some(s => +s.exN > 0) ? 160 : 0);
+      items.forEach((it, i) => { place('step' + i, midX - boxW / 2, y, boxW, it.h, it.text, true);
+        if (it.ex) place('ex' + i, midX + 60, y + it.h + (gap + 24) / 2, exW, it.ex.h, it.ex.text, false, 'left', 'side');
+        it.y = y; y += it.h + gap + (it.ex ? it.ex.h + 24 : 0); });
+      const colW = split ? Math.min(360, (CW - pad * (k + 1)) / k) : 0, gH = split ? Math.max(...groupLabels.map((g, i) => boxH(`${g}\n(${S.N(c.groups[i].analysed)})`, colW, true))) : 0;
+      busY = y - gap / 2;
+      if (split) { const cx = i => pad + colW / 2 + i * ((CW - 2 * pad - colW) / (k - 1)); groupLabels.forEach((g, i) => place('grp' + i, cx(i) - colW / 2, y, colW, gH, `${g}\n(${S.N(c.groups[i].analysed)})`, true, 'center', S.emph ? 'final' : 'col')); }
+      H0 = split ? y + gH + 30 : y - gap + 30;
+    } else {
+      const T0 = secs ? 90 : 30, mainH = Math.max(...items.map(it => it.h)), midY = T0 + mainH / 2, colW = Math.round(300 * S.wScale);
+      const gH = split ? groupLabels.map((g, i) => boxH(`${g}\n(${S.N(c.groups[i].analysed)})`, colW, true)) : [], gTot = gH.reduce((t, h) => t + h, 0) + 24 * Math.max(0, gH.length - 1);
+      const cy = split ? Math.max(midY, T0 + gTot / 2) : midY;
+      let x = 20; items.forEach((it, i) => { place('step' + i, x, cy - it.h / 2, boxW, it.h, it.text, true); it.x = x; x += boxW;
+        if (it.ex) { place('ex' + i, x + 30, cy + 50, exW, it.ex.h, it.ex.text, false, 'left', 'side'); x += exW + 60; } else x += 70; });
+      busX = x - 35;
+      if (split) { let gy = cy - gTot / 2; groupLabels.forEach((g, i) => { place('grp' + i, x, gy, colW, gH[i], `${g}\n(${S.N(c.groups[i].analysed)})`, true, 'center', S.emph ? 'final' : 'col'); gy += gH[i] + 24; }); x += colW; }
+      else x -= 70;
+      CW = x + 20; H0 = Math.max(...Object.values(R).map(r => r.y + r.h)) + 30;
+    }
+    H0 = Math.max(H0, Math.max(...Object.values(R).map(r => r.y + r.h)) + 30);
     ctx.font = `400 ${Math.round(fs * 0.8)}px ${FONT}`;
     const foot = String(c.footnote || '').trim(), footH = foot ? measureLines(ctx, foot, CW - 60) * Math.round(lh * 0.8) + 16 : 0, legH = S.legend && S.theme !== 'classic' && S.theme !== 'bw' ? 50 : 0;
-    const H0 = split ? y + gH + 30 : y - gap + 30, Hc = H0 + footH + legH;
+    const Hc = H0 + footH + legH;
     cv = makeCanvas(CW * S.res, Hc * S.res); ctx = cv.getContext('2d'); ctx.scale(S.res, S.res);
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, Hc);
-    const box = (x, yy, w, h, text, bold, align = 'center', role = 'main') => {
-      flowBox(ctx, S, x, yy, w, h, role);
-      const k = role === 'side' ? S.sideFs : 1, L2 = Math.round(lh * k);
-      ctx.textBaseline = 'top'; ctx.font = `${bold ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`; ctx.textAlign = align;
-      let ty = yy + 13;
-      text.split('\n').forEach(par => { ty += wrapText(ctx, par, align === 'center' ? x + w / 2 : x + 14, ty, w - 28, L2) * L2; });
+    const box = r => {
+      flowBox(ctx, S, r.x, r.y, r.w, r.h, r.role);
+      const k = r.role === 'side' ? S.sideFs : 1, L2 = Math.round(lh * k);
+      ctx.textBaseline = 'top'; ctx.font = `${r.bold ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`; ctx.textAlign = r.align;
+      let ty = r.y + 13;
+      r.text.split('\n').forEach(par => { ty += wrapText(ctx, par, r.align === 'center' ? r.x + r.w / 2 : r.x + 14, ty, r.w - 28, L2) * L2; });
     };
-    const arrow = (x1, y1, x2, y2) => flowArrow(ctx, S, x1, y1, x2, y2);
-    if (secs) secs.forEach(([lab, a, b]) => { const l0 = layout[a], l1 = layout[Math.min(b, layout.length - 1)]; if (!l0 || !l1) return;
-      const y1 = l0.y, y2 = l1.y + l1.h + (l1.ex ? l1.ex.h + 24 : 0); ctx.fillStyle = S.pill; ctx.beginPath(); ctx.roundRect(10, y1, 54, y2 - y1, 18); ctx.fill();
-      ctx.save(); ctx.translate(37, (y1 + y2) / 2); ctx.rotate(-Math.PI / 2); ctx.fillStyle = S.pillText; ctx.font = `700 24px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const room = y2 - y1 - 16, tw = ctx.measureText(lab).width; if (tw > room) ctx.font = `700 ${Math.max(14, Math.floor(24 * room / tw))}px ${FONT}`; ctx.fillText(lab, 0, 0); ctx.restore(); });
-    layout.forEach((b, i) => {
-      box(midX - boxW / 2, b.y, boxW, b.h, b.text, true);
-      if (b.ex) {
-        const ey = b.y + b.h + (gap + 24) / 2, ex0 = midX + 60;
-        box(ex0, ey, exW, b.ex.h, b.ex.text, false, 'left', 'side');
-        arrow(midX, ey + b.ex.h / 2, ex0, ey + b.ex.h / 2);
-      }
-      if (i < layout.length - 1) arrow(midX, b.y + b.h, midX, layout[i + 1].y);
+    const arrow = (x1, y1, x2, y2) => flowArrow(ctx, S, x1, y1, x2, y2), pen = () => { ctx.strokeStyle = S.arrowColor || S.arrow; ctx.lineWidth = S.lw; };
+    const linkV = (a, b) => { const ax = a.x + a.w / 2, bx = b.x + b.w / 2; if (Math.abs(ax - bx) < 0.5) { arrow(ax, a.y + a.h, bx, b.y); return; } const my = (a.y + a.h + b.y) / 2; pen(); ctx.beginPath(); ctx.moveTo(ax, a.y + a.h); ctx.lineTo(ax, my); ctx.lineTo(bx, my); ctx.stroke(); arrow(bx, my, bx, b.y); };
+    const linkH = (a, b) => { const ay = a.y + a.h / 2, by = b.y + b.h / 2; if (Math.abs(ay - by) < 0.5) { arrow(a.x + a.w, ay, b.x, by); return; } const mx = (a.x + a.w + b.x) / 2; pen(); ctx.beginPath(); ctx.moveTo(a.x + a.w, ay); ctx.lineTo(mx, ay); ctx.lineTo(mx, by); ctx.stroke(); arrow(mx, by, b.x, by); };
+    const lab = (t, x1, y1, x2, y2, vertical) => { ctx.fillStyle = S.pill; ctx.beginPath(); ctx.roundRect(x1, y1, x2 - x1, y2 - y1, 18); ctx.fill(); ctx.save(); ctx.translate((x1 + x2) / 2, (y1 + y2) / 2); if (vertical) ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = S.pillText; ctx.font = `700 24px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const room = (vertical ? y2 - y1 : x2 - x1) - 16, tw = ctx.measureText(t).width; if (tw > room) ctx.font = `700 ${Math.max(14, Math.floor(24 * room / tw))}px ${FONT}`; ctx.fillText(t, 0, 0); ctx.restore(); };
+    if (secs) secs.forEach(([t, a, b]) => { const l0 = R['step' + a], i1 = Math.min(b, items.length - 1), l1 = R['step' + i1]; if (!l0 || !l1) return;
+      if (lr) lab(t, l0.x, 20, R['ex' + i1] && b < items.length - 1 ? R['ex' + i1].x + R['ex' + i1].w : l1.x + l1.w, 66, false);
+      else lab(t, 10, l0.y, 64, l1.y + l1.h + (R['ex' + i1] ? R['ex' + i1].h + 24 : 0), true); });
+    items.forEach((it, i) => {
+      const r = R['step' + i]; box(r);
+      if (R['ex' + i]) { const e = R['ex' + i]; box(e);
+        if (lr) { const xm = e.x + e.w / 2, yy = r.y + r.h / 2; arrow(xm, yy, xm, e.y < yy ? e.y + e.h : e.y); }
+        else { const cx = r.x + r.w / 2; arrow(cx, e.y + e.h / 2, e.x + e.w / 2 < cx ? e.x + e.w : e.x, e.y + e.h / 2); } }
+      if (i < items.length - 1) (lr ? linkH : linkV)(r, R['step' + (i + 1)]);
     });
     if (split) {
-      const last = layout[layout.length - 1], cx = i => pad + colW / 2 + i * ((CW - 2 * pad - colW) / (k - 1));
-      ctx.strokeStyle = S.arrow; ctx.lineWidth = S.lw;
-      ctx.beginPath(); ctx.moveTo(midX, last.y + last.h); ctx.lineTo(midX, busY); ctx.moveTo(cx(0), busY); ctx.lineTo(cx(k - 1), busY); ctx.stroke();
-      groupLabels.forEach((g, i) => { arrow(cx(i), busY, cx(i), y); box(cx(i) - colW / 2, y, colW, gH, `${g}\n(${S.N(c.groups[i].analysed)})`, true, 'center', S.emph ? 'final' : 'col'); });
+      const last = R['step' + (items.length - 1)];
+      if (!lr) { const cxs = groupLabels.map((_, i) => R['grp' + i].x + R['grp' + i].w / 2), lc = last.x + last.w / 2;
+        ctx.strokeStyle = S.arrow; ctx.lineWidth = S.lw;
+        ctx.beginPath(); ctx.moveTo(lc, last.y + last.h); ctx.lineTo(lc, busY); ctx.moveTo(Math.min(...cxs, lc), busY); ctx.lineTo(Math.max(...cxs, lc), busY); ctx.stroke();
+        groupLabels.forEach((g, i) => { arrow(cxs[i], busY, cxs[i], R['grp' + i].y); box(R['grp' + i]); }); }
+      else { const ys = groupLabels.map((_, i) => R['grp' + i].y + R['grp' + i].h / 2), ly = last.y + last.h / 2;
+        pen(); ctx.beginPath(); ctx.moveTo(last.x + last.w, ly); ctx.lineTo(busX, ly); ctx.moveTo(busX, Math.min(...ys, ly)); ctx.lineTo(busX, Math.max(...ys, ly)); ctx.stroke();
+        groupLabels.forEach((g, i) => { arrow(busX, ys[i], R['grp' + i].x, ys[i]); box(R['grp' + i]); }); }
     }
     flowFoot(ctx, S, foot, legH, CW, H0, fs, lh);
+    FLOW_HITS = { W: CW, H: Hc, list: Object.entries(R).map(([key, r]) => ({ key, x: r.x, y: r.y, w: r.w, h: r.h })) };
     return cv;
   }
 
@@ -27276,7 +27345,7 @@ const Charts = (() => {
 
   // the flowchart as SVG
   function flowSVG(c, gl, pal) { VECTOR = true; try { return consort(c, gl, pal, 1).toSVG(); } finally { VECTOR = false; } }
-  return { draw, drawSVG, flowSVG, makeCanvas, hits: () => hitsOf, consort, exportImage, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
+  return { draw, drawSVG, flowSVG, flowHits: () => FLOW_HITS, makeCanvas, hits: () => hitsOf, consort, exportImage, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
 })();
 
 /* Prof MSE Easy Stat — Word (.docx) export using docx.js */
@@ -30903,7 +30972,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       if (as - ex !== n(p.studies) && n(p.studies)) w.push(`Reports assessed (${as}) − excluded (${ex}) = ${as - ex}, but ${n(p.studies)} studies are included (fine when several reports belong to one study)`); }
     return w;
   }
-  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {}, nFmt: 'tight', spacing: 'normal', exSide: 'right', res: '1', pct: false, emph: false, boxWidth: 'normal', arrowHead: 'filled', arrowColor: '', sideText: 'normal', legend: false };
+  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {}, nFmt: 'tight', spacing: 'normal', exSide: 'right', res: '1', pct: false, emph: false, boxWidth: 'normal', arrowHead: 'filled', arrowColor: '', sideText: 'normal', legend: false, direction: 'tb' };
   function readConsort() {
     const c = state.cfg && state.cfg.consort; if (!c || !$('#cForm').innerHTML) return;
     c.enabled = $('#cEnabled').checked;
@@ -30914,7 +30983,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     c.style = { theme: st.theme, color: st.colorMode === 'custom' ? st.color : '', corners: st.corners, lines: st.lines, textSize: st.textSize, font: st.font, pills: st.pills, shadow: st.shadow,
       pillColor: st.pillMode === 'custom' ? st.pillColor : '', pillTextColor: st.pillTextColor, labels,
       nFmt: st.nFmt, spacing: st.spacing, exSide: st.exSide, res: st.res, pct: st.pct, emph: st.emph,
-      boxWidth: st.boxWidth, arrowHead: st.arrowHead, arrowColor: st.arrowMode === 'custom' ? st.arrowColor : '', sideText: st.sideText, legend: st.legend };
+      direction: st.direction, boxWidth: st.boxWidth, arrowHead: st.arrowHead, arrowColor: st.arrowMode === 'custom' ? st.arrowColor : '', sideText: st.sideText, legend: st.legend };
     const val = el => el.type === 'checkbox' ? el.checked : el.type === 'number' ? (+el.value || 0) : el.value;
     document.querySelectorAll('#cForm [data-pr]').forEach(el => { c.prisma[el.dataset.pr] = val(el); });
     document.querySelectorAll('#cForm [data-prr]').forEach(el => { c.prisma.reasons[+el.dataset.prr][el.dataset.f] = val(el); });
@@ -30937,7 +31006,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   };
   function drawConsortPreview() {
     const c = state.cfg.consort, gl = activeGroups().map(g => state.cfg.groupLabels[g]);
-    flowPush(c);
+    if (!state.flowDrag) flowPush(c);
     const wn = flowWarnings(c); $('#cWarn').innerHTML = wn.length ? `<div class="chip warn" style="display:block;white-space:normal;padding:6px 10px"><b>Check the numbers:</b><br>${wn.map(esc).join('<br>')}</div>` : '';
     const cv = Charts.consort(c, gl, chartPalette(state.cfg.options));
     const tgt = $('#consortCanvas');
@@ -30964,6 +31033,22 @@ if (typeof module !== 'undefined') module.exports = Sav;
       if (to === 'lost') { G.lost = tot; G.lostReason = why; } else { G.excludedAnalysis = tot; G.excludedReason = why; } G.analysed = Math.max(0, G.allocated - G.lost - G.excludedAnalysis); });
     renderConsortForm(); toast(`Reasons taken from “${col}”`);
   }
+  // dragging boxes of the flowchart preview: the move is kept as an offset of that box (in the Word file and every export too)
+  const flowBoxAt = (e, cv) => { const h = Charts.flowHits(), r = cv.getBoundingClientRect(), k = h.W / r.width, x = (e.clientX - r.left) * k, y = (e.clientY - r.top) * k;
+    return { k, hit: [...h.list].reverse().find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h), W: h.W }; };
+  $('#consortCanvas').addEventListener('mousedown', e => {
+    const c = state.cfg && state.cfg.consort; if (!c) return; const { k, hit, W } = flowBoxAt(e, e.target); if (!hit) return;
+    e.preventDefault(); c.offsets = c.offsets || {}; const o0 = { ...(c.offsets[hit.key] || { dx: 0, dy: 0 }) }, x0 = e.clientX, y0 = e.clientY, base = { x: hit.x - o0.dx, y: hit.y - o0.dy, w: hit.w };
+    state.flowDrag = true;
+    const move = ev => { const snap = v => Math.round(v / 5) * 5;
+      let dx = snap(o0.dx + (ev.clientX - x0) * k), dy = snap(o0.dy + (ev.clientY - y0) * k);
+      dx = Math.max(-base.x, Math.min(W - base.x - base.w, dx)); dy = Math.max(-base.y, dy);
+      if (dx || dy) c.offsets[hit.key] = { dx, dy }; else delete c.offsets[hit.key]; drawConsortPreview(); };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); state.flowDrag = false; drawConsortPreview(); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  });
+  $('#consortCanvas').addEventListener('mousemove', e => { if (state.flowDrag || !state.cfg || !state.cfg.consort) return; e.target.style.cursor = flowBoxAt(e, e.target).hit ? 'move' : ''; });
+  $('#flowResetPos').onclick = () => { const c = state.cfg && state.cfg.consort; if (!c) return; c.offsets = {}; drawConsortPreview(); toast('Boxes back to their automatic positions'); };
   // undo / redo of the flowchart: snapshots of its settings
   const flowHist = { past: [], future: [], last: '' };
   function flowPush(c) { const j = JSON.stringify(c); if (j === flowHist.last) return; if (flowHist.last) { flowHist.past.push(flowHist.last); if (flowHist.past.length > 60) flowHist.past.shift(); } flowHist.future = []; flowHist.last = j; }

@@ -1070,6 +1070,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Image resolution</label><select data-fs="res"><option value="1">Standard</option><option value="2">High (2×)</option><option value="3">Very high (3×)</option></select></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="pct"><span>Percentages beside the numbers</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="emph"><span>Highlight the final (analysed) boxes</span></label></div>
+          <div><label class="f">Direction</label><select data-fs="direction"><option value="tb">Top to bottom</option><option value="lr">Left to right</option></select></div>
           <div><label class="f">Box width</label><select data-fs="boxWidth"><option value="narrow">Narrow</option><option value="normal">Normal</option><option value="wide">Wide</option></select></div>
           <div><label class="f">Arrow heads</label><select data-fs="arrowHead"><option value="filled">Filled</option><option value="open">Open</option><option value="none">None (lines)</option></select></div>
           <div><label class="f">Arrow colour</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select data-fs="arrowMode" style="width:auto"><option value="theme">As the theme</option><option value="custom">Custom</option></select><input type="color" data-fs="arrowColor" value="#222222" style="width:52px;padding:2px"></div></div>
@@ -1095,7 +1096,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div id="cWarn"></div>
       <div class="grid g2">
         <div id="cForm"></div>
-        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="flowCopy" type="button" title="Copy the flowchart, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button></div></div>
+        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><span class="legend-note" style="float:left">Drag any box to move it.</span><button class="btn ghost small" id="flowResetPos" type="button" title="Every box back to its automatic position">↺ Box positions</button> <button class="btn ghost small" id="flowCopy" type="button" title="Copy the flowchart, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button></div></div>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Next: Results by variable →</button></div>
