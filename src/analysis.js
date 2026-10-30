@@ -2722,7 +2722,7 @@ const Analysis = (() => {
     const items = cols.map(c => ({ label: columnLabel(cfg, c), vals: rows.map(r => toNum(r[c])) }));
     const target = !!a.outcome && cols[0] === a.outcome;
     const title = target ? `Correlation of ${lowerFirst(plain(items[0].label))} with the studied variables (n=${rows.length})` : `Correlation between the studied variables (n=${rows.length})`;
-    const sec = corrTable(items, rows, cfg, alpha, d, { method: ['pearson', 'spearman', 'kendall'].includes(a.method) ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter ?? '2', ci: !!a.ci, detail: a.commentDetail, figWhich: a.figWhich,
+    const sec = corrTable(items, rows, cfg, alpha, d, { method: ['pearson', 'spearman', 'kendall'].includes(a.method) ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter || 'all', ci: !!a.ci, detail: a.commentDetail, figWhich: a.figWhich,
       fig: { fit: a.figFit, pt: a.figPt, note: a.figNote, byGroup: !!a.figGroup, zero: !!a.figZero, heat: !!a.figHeat } }, title);
     if (sec.meta.pairs.some(q => q.method === 'pearson')) used.add('pearson');
     if (sec.meta.pairs.some(q => q.method === 'spearman')) used.add('spearman');
@@ -2781,7 +2781,8 @@ const Analysis = (() => {
       items.push({ label, vals: rows.map(r => toNum(r[c.col])) });
     }
     if (items.length < 2) return null;
-    return corrTable(items, rows, cfg, alpha, d, {}, `Correlation between the studied variables in all patients (n=${rows.length})`);
+    const o = cfg.options || {};
+    return corrTable(items, rows, cfg, alpha, d, { scatter: o.corrN || 'all', figWhich: o.corrWhich, fig: { fit: o.corrFit, pt: o.corrPt, note: o.corrNote, byGroup: !!o.corrGroup, zero: !!o.corrZero, heat: !!o.corrHeat } }, `Correlation between the studied variables in all patients (n=${rows.length})`);
   }
   // o: method (auto / pearson / spearman), layout (auto / matrix / pairs), target (item 0 against the others), scatter (number of scatter plots), ci
   function corrTable(items, rows, cfg, alpha, d, o, title) {

@@ -14,7 +14,7 @@
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false,
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
@@ -33,7 +33,7 @@
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
@@ -2508,7 +2508,7 @@
     if (t === 'correlation') out.push(`<div><label class="f">Coefficient</label>${sel('method', [['auto', 'Automatic (Pearson if normal, else Spearman)'], ['pearson', 'Pearson'], ['spearman', 'Spearman'], ['kendall', "Kendall's tau-b"]], a.method)}</div>`,
       `<div><label class="f">Table layout</label>${sel('layout', [['auto', 'Automatic'], ['matrix', 'Matrix'], ['pairs', 'List of pairs']], a.layout)}</div>`,
       `<div><label class="f">Scatter plots of</label>${sel('figWhich', [['sig', 'Significant pairs only'], ['all', 'All pairs (also non-significant)']], a.figWhich)}</div>`,
-      `<div><label class="f">Number of scatter plots (strongest first)</label>${sel('scatter', [['2', 'Up to 2'], ['0', 'None'], ['1', 'Up to 1'], ['4', 'Up to 4'], ['6', 'Up to 6'], ['10', 'Up to 10'], ['all', 'All']], a.scatter)}</div>`,
+      `<div><label class="f">Number of scatter plots (strongest first)</label>${sel('scatter', [['all', 'All'], ['0', 'None'], ['1', 'Up to 1'], ['2', 'Up to 2'], ['4', 'Up to 4'], ['6', 'Up to 6'], ['10', 'Up to 10']], a.scatter)}</div>`,
       `<div><label class="f">Line on the scatter plot</label>${sel('figFit', [['linear', 'Regression line'], ['band', 'Regression line with 95% CI band'], ['none', 'No line']], a.figFit)}</div>`,
       `<div><label class="f">Text on the plot</label>${sel('figNote', [['coef', 'Coefficient and P value'], ['eq', 'Coefficient, P, equation and R²'], ['none', 'None']], a.figNote)}</div>`,
       `<div><label class="f">Point size</label>${sel('figPt', [['normal', 'Normal'], ['small', 'Small'], ['large', 'Large']], a.figPt)}</div>`,

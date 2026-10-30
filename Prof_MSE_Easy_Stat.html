@@ -716,7 +716,17 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         </div>
         <div>
           <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
-          <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots of significant pairs</span></label>
+          <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots</span></label>
+          <div class="corr-fig" style="margin:2px 0 10px 28px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px">
+            <div><label class="f">Scatter plots of</label><select id="optCorrWhich" style="width:100%"><option value="sig" selected>Significant pairs only</option><option value="all">All pairs (also non-significant)</option></select></div>
+            <div><label class="f">Number of scatter plots (strongest first)</label><select id="optCorrN" style="width:100%"><option value="all" selected>All</option><option value="0">None</option><option value="1">Up to 1</option><option value="2">Up to 2</option><option value="4">Up to 4</option><option value="6">Up to 6</option><option value="10">Up to 10</option></select></div>
+            <div><label class="f">Line on the scatter plot</label><select id="optCorrFit" style="width:100%"><option value="linear" selected>Regression line</option><option value="band">Regression line with 95% CI band</option><option value="none">No line</option></select></div>
+            <div><label class="f">Text on the plot</label><select id="optCorrNote" style="width:100%"><option value="coef" selected>Coefficient and P value</option><option value="eq">Coefficient, P, equation and R²</option><option value="none">None</option></select></div>
+            <div><label class="f">Point size</label><select id="optCorrPt" style="width:100%"><option value="normal" selected>Normal</option><option value="small">Small</option><option value="large">Large</option></select></div>
+            <label class="check" style="margin:4px 0 0"><input type="checkbox" id="optCorrGroup"><span>Colour the points by study group</span></label>
+            <label class="check" style="margin:4px 0 0"><input type="checkbox" id="optCorrZero"><span>Axes start at zero</span></label>
+            <label class="check" style="margin:4px 0 0"><input type="checkbox" id="optCorrHeat"><span>Heat map of the coefficients</span></label>
+          </div>
           <label class="check"><input type="checkbox" id="optChiPost" checked><span><b>Pairwise post hoc for categorical variables</b> — Chi-square / Fisher between each two groups (Bonferroni), 3+ groups</span></label>
           <label class="check"><input type="checkbox" id="optMixed"><span><b>Group × time interaction</b> — mixed (split-plot) ANOVA with Greenhouse-Geisser, parametric repeated outcomes</span></label>
         </div>
@@ -25700,7 +25710,7 @@ const Analysis = (() => {
     const items = cols.map(c => ({ label: columnLabel(cfg, c), vals: rows.map(r => toNum(r[c])) }));
     const target = !!a.outcome && cols[0] === a.outcome;
     const title = target ? `Correlation of ${lowerFirst(plain(items[0].label))} with the studied variables (n=${rows.length})` : `Correlation between the studied variables (n=${rows.length})`;
-    const sec = corrTable(items, rows, cfg, alpha, d, { method: ['pearson', 'spearman', 'kendall'].includes(a.method) ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter ?? '2', ci: !!a.ci, detail: a.commentDetail, figWhich: a.figWhich,
+    const sec = corrTable(items, rows, cfg, alpha, d, { method: ['pearson', 'spearman', 'kendall'].includes(a.method) ? a.method : 'auto', layout: a.layout, target, scatter: a.scatter || 'all', ci: !!a.ci, detail: a.commentDetail, figWhich: a.figWhich,
       fig: { fit: a.figFit, pt: a.figPt, note: a.figNote, byGroup: !!a.figGroup, zero: !!a.figZero, heat: !!a.figHeat } }, title);
     if (sec.meta.pairs.some(q => q.method === 'pearson')) used.add('pearson');
     if (sec.meta.pairs.some(q => q.method === 'spearman')) used.add('spearman');
@@ -25759,7 +25769,8 @@ const Analysis = (() => {
       items.push({ label, vals: rows.map(r => toNum(r[c.col])) });
     }
     if (items.length < 2) return null;
-    return corrTable(items, rows, cfg, alpha, d, {}, `Correlation between the studied variables in all patients (n=${rows.length})`);
+    const o = cfg.options || {};
+    return corrTable(items, rows, cfg, alpha, d, { scatter: o.corrN || 'all', figWhich: o.corrWhich, fig: { fit: o.corrFit, pt: o.corrPt, note: o.corrNote, byGroup: !!o.corrGroup, zero: !!o.corrZero, heat: !!o.corrHeat } }, `Correlation between the studied variables in all patients (n=${rows.length})`);
   }
   // o: method (auto / pearson / spearman), layout (auto / matrix / pairs), target (item 0 against the others), scatter (number of scatter plots), ci
   function corrTable(items, rows, cfg, alpha, d, o, title) {
@@ -29025,7 +29036,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, sigMarks: true, points: false,
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
@@ -29044,7 +29055,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    branding: ['optBrand', true], notSig: ['optNotSig', true], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
@@ -31519,7 +31530,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (t === 'correlation') out.push(`<div><label class="f">Coefficient</label>${sel('method', [['auto', 'Automatic (Pearson if normal, else Spearman)'], ['pearson', 'Pearson'], ['spearman', 'Spearman'], ['kendall', "Kendall's tau-b"]], a.method)}</div>`,
       `<div><label class="f">Table layout</label>${sel('layout', [['auto', 'Automatic'], ['matrix', 'Matrix'], ['pairs', 'List of pairs']], a.layout)}</div>`,
       `<div><label class="f">Scatter plots of</label>${sel('figWhich', [['sig', 'Significant pairs only'], ['all', 'All pairs (also non-significant)']], a.figWhich)}</div>`,
-      `<div><label class="f">Number of scatter plots (strongest first)</label>${sel('scatter', [['2', 'Up to 2'], ['0', 'None'], ['1', 'Up to 1'], ['4', 'Up to 4'], ['6', 'Up to 6'], ['10', 'Up to 10'], ['all', 'All']], a.scatter)}</div>`,
+      `<div><label class="f">Number of scatter plots (strongest first)</label>${sel('scatter', [['all', 'All'], ['0', 'None'], ['1', 'Up to 1'], ['2', 'Up to 2'], ['4', 'Up to 4'], ['6', 'Up to 6'], ['10', 'Up to 10']], a.scatter)}</div>`,
       `<div><label class="f">Line on the scatter plot</label>${sel('figFit', [['linear', 'Regression line'], ['band', 'Regression line with 95% CI band'], ['none', 'No line']], a.figFit)}</div>`,
       `<div><label class="f">Text on the plot</label>${sel('figNote', [['coef', 'Coefficient and P value'], ['eq', 'Coefficient, P, equation and R²'], ['none', 'None']], a.figNote)}</div>`,
       `<div><label class="f">Point size</label>${sel('figPt', [['normal', 'Normal'], ['small', 'Small'], ['large', 'Large']], a.figPt)}</div>`,

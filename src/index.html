@@ -716,7 +716,17 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         </div>
         <div>
           <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
-          <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots of significant pairs</span></label>
+          <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots</span></label>
+          <div class="corr-fig" style="margin:2px 0 10px 28px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px">
+            <div><label class="f">Scatter plots of</label><select id="optCorrWhich" style="width:100%"><option value="sig" selected>Significant pairs only</option><option value="all">All pairs (also non-significant)</option></select></div>
+            <div><label class="f">Number of scatter plots (strongest first)</label><select id="optCorrN" style="width:100%"><option value="all" selected>All</option><option value="0">None</option><option value="1">Up to 1</option><option value="2">Up to 2</option><option value="4">Up to 4</option><option value="6">Up to 6</option><option value="10">Up to 10</option></select></div>
+            <div><label class="f">Line on the scatter plot</label><select id="optCorrFit" style="width:100%"><option value="linear" selected>Regression line</option><option value="band">Regression line with 95% CI band</option><option value="none">No line</option></select></div>
+            <div><label class="f">Text on the plot</label><select id="optCorrNote" style="width:100%"><option value="coef" selected>Coefficient and P value</option><option value="eq">Coefficient, P, equation and R²</option><option value="none">None</option></select></div>
+            <div><label class="f">Point size</label><select id="optCorrPt" style="width:100%"><option value="normal" selected>Normal</option><option value="small">Small</option><option value="large">Large</option></select></div>
+            <label class="check" style="margin:4px 0 0"><input type="checkbox" id="optCorrGroup"><span>Colour the points by study group</span></label>
+            <label class="check" style="margin:4px 0 0"><input type="checkbox" id="optCorrZero"><span>Axes start at zero</span></label>
+            <label class="check" style="margin:4px 0 0"><input type="checkbox" id="optCorrHeat"><span>Heat map of the coefficients</span></label>
+          </div>
           <label class="check"><input type="checkbox" id="optChiPost" checked><span><b>Pairwise post hoc for categorical variables</b> — Chi-square / Fisher between each two groups (Bonferroni), 3+ groups</span></label>
           <label class="check"><input type="checkbox" id="optMixed"><span><b>Group × time interaction</b> — mixed (split-plot) ANOVA with Greenhouse-Geisser, parametric repeated outcomes</span></label>
         </div>
