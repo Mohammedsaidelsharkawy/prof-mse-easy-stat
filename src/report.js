@@ -396,6 +396,8 @@ const Report = (() => {
         it.tables.forEach(t => children.push(...block(t, false)));
         (it.data || []).forEach(t => children.push(...block(t, true)));
       }
+      // your own note on the variable (step 10)
+      if (it.note) children.push(para(`Note: ${it.note}`, { size: 22, line: 300, after: 120, italic: true }));
     });
     const doc = new Document({
       creator: 'Prof MSE Easy Stat', title: opts.title || 'Results by variable',

@@ -197,6 +197,9 @@ table.rt td.s{font-size:.9em}
 table.rt tr.band td{background:#F2F2F2}
 table.rt tr td.hl{background:#FFF2CC}
 table.rt td.left{text-align:left}
+.xp-dash{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.xp-dash div{background:var(--lav);border-radius:10px;padding:8px 14px;display:flex;flex-direction:column;min-width:96px}.xp-dash b{font-size:20px}.xp-dash span{font-size:12px;color:var(--muted)}
+.xp-tools{display:inline-flex;gap:2px;margin-left:6px}.xp-tools .btn{padding:2px 6px}.xp-lab{margin:8px 0;padding:8px;border:1px dashed var(--line);border-radius:10px}.xp-labgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}.xp-lt h5{margin:0 0 4px}
+td.xp-hit{background:#FFF2A8!important}.xp-note textarea{min-height:50px}.xp-hist{margin:0;padding-left:18px;font-size:12px}
 .fig-tip{display:none;position:absolute;pointer-events:none;background:#1C1648;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:5}
 label.cc{display:inline-flex;flex-direction:column;align-items:center;font-size:11px;gap:2px}
 .gloss{margin:6px 0;padding:8px 10px;background:var(--lav);border-radius:8px;font-size:13px}.gloss dt{font-weight:700;margin-top:4px}.gloss dd{margin:0 0 0 12px}
@@ -1114,6 +1117,12 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
  <button class="btn ghost small" id="xpPrint" type="button" title="Print the results shown, or save them as PDF">🖨 Print / PDF</button>
         <button class="btn ghost small" id="xpXlsx" type="button" title="Every table shown here in Excel, one sheet per variable">⬇ Excel</button>
         <button class="btn primary small" id="xpWord" type="button">⬇ Word</button></div>
+      <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap"><label class="f" style="margin:0">Compare with</label><select data-xo="cmp" id="xpCmp" style="width:auto;max-width:260px"></select>
+        <label class="f" style="margin:0">Search in the tables</label><input type="search" data-xo="tq" placeholder="e.g. Welch, 0.03" style="width:180px">
+        <label class="check" style="margin:0" title="The report's comment right after the table of the test it came from"><input type="checkbox" data-xo="comBeside"><span>Comment beside its test</span></label>
+        <button class="btn ghost small" id="xpCollAll" type="button" title="Collapse or expand every variable">▾ Collapse / expand all</button>
+        <select id="xpViewList" style="width:auto"></select><button class="btn ghost small" id="xpViewSave" type="button">💾 Save view…</button>
+        <span class="legend-note">J / K: next / previous variable · ★ pin · 🔬 sensitivity, subgroups, assumptions, bootstrap</span></div>
       <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>
       <details class="fl-style" id="xpOpts"><summary><b>⚙ Options</b> — filter, tables, statistics, figure, outliers</summary>
         <div class="grid g4" style="margin-top:8px">
@@ -24180,10 +24189,10 @@ const Analysis = (() => {
         nt ? `${P(nt.p)}${nt.p > 0.05 ? ' (normal)' : ' (non-normal)'}` : '—'];
     };
     // the between-group tests of one numeric measurement, the one used in the report marked ✓
-    const numericTests = (gv, dist) => {
+    const numericTests = (gv, dist, vtest) => {
       const ok = gv.filter(x => x.length >= 2).length === k;
       if (k < 2 || !ok) return null;
-      const chosen = analyzeNumeric(gv, dist, used, opts).test, out = [];
+      const chosen = analyzeNumeric(gv, dist, used, opts, vtest).test, out = [];
       out.push(["Levene's test (equal variances)", '', '', P(S.levene(gv)), '', '']);
       if (k === 2) {
         const t = S.tTest(gv[0], gv[1], true), w = S.tTest(gv[0], gv[1], false), m = S.mannWhitney(gv[0], gv[1]), hl = S.hodgesLehmann(gv[0], gv[1]);
@@ -24258,12 +24267,12 @@ const Analysis = (() => {
       if (v.kind !== 'repeated' && v.type === 'numeric') {
         const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toNum(r[col])).filter(isFinite)), miss = byGroup.map(rs => rs.filter(r => !isFinite(toNum(r[col]))).length);
         it.tables.push({ cat: 'desc', title: 'Descriptive statistics', head: descHead, rows: [...gv.map((x, g) => descRow(gl[g], x, miss[g])), ...(k > 1 ? [descRow('All patients', gv.flat(), S.sum(miss))] : [])] });
-        const t = numericTests(gv, v.dist); if (t) it.tables.push(t);
+        const t = numericTests(gv, v.dist, v.test); if (t) it.tables.push(t);
         const pt = pairTable(gv); if (pt) it.tables.push(pt);
         const er = effRows(gv); if (er) it.effects = { title: 'Pairwise comparisons and effect estimates', head: EFF_HEAD, rows: er, note: EFF_NOTE };
         if (xo.extra) it.tables.push(extraTable([...gl.map((g, i) => [g, gv[i]]), ...(k > 1 ? [['All patients', gv.flat()]] : [])]));
         it.spec = numSpec(gv, v.label);
-        const used2 = new Set(), res = k > 1 && gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts) : null;
+        const used2 = new Set(), res = k > 1 && gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts, v.test) : null;
         it.sig = !!res && res.p <= alpha;
         const nn = gv.map(x => x.length >= 3 ? normality(x) : null).filter(Boolean);
         Object.assign(it, { n: gv.flat().length, test: res ? TEST_NAME[res.test] || res.test : '', p: res ? res.p : NaN,
@@ -24285,7 +24294,7 @@ const Analysis = (() => {
             ['Missing', ...byGroup.map(rs => String(rs.filter(r => toCat(r[col]) === null).length)), ...(k > 1 ? [String(byGroup.flat().filter(r => toCat(r[col]) === null).length)] : [])]] });
         const nonEmpty = tab.filter(r => S.sum(r) > 0);
         if (k > 1 && nonEmpty.length >= 2) {
-          const cs = S.chiSquare(nonEmpty), cres = analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null), chosen = cres.test, out = [];
+          const cs = S.chiSquare(nonEmpty), cres = analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null, v.test), chosen = cres.test, out = [];
           it.sig = cres.p <= alpha;
           Object.assign(it, { test: TEST_NAME[cres.test] || cres.test, p: cres.p });
           out.push(['Chi-square test', `χ² = ${F(cs.chi, 2)}`, String(cs.df), P(cs.p), `smallest expected count ${F(cs.minE, 1)}; ${F(100 * cs.pctSmall, 0)}% of cells < 5`, chosen === 'Chi-square' ? yes : '']);
@@ -27642,6 +27651,8 @@ const Report = (() => {
         it.tables.forEach(t => children.push(...block(t, false)));
         (it.data || []).forEach(t => children.push(...block(t, true)));
       }
+      // your own note on the variable (step 10)
+      if (it.note) children.push(para(`Note: ${it.note}`, { size: 22, line: 300, after: 120, italic: true }));
     });
     const doc = new Document({
       creator: 'Prof MSE Easy Stat', title: opts.title || 'Results by variable',
@@ -30992,14 +31003,14 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   // options of the stage, saved with the setup / project
-  const XP_DEFAULT = { type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true, comments: true, sort: 'sheet' };
+  const XP_DEFAULT = { tq: '', cmp: '', subBy: '', comBeside: false, type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true, comments: true, sort: 'sheet' };
   const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
   function renderXpOpts() {
     const o = xpo();
     document.querySelectorAll('[data-xo]').forEach(el => { const v = o[el.dataset.xo]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v); });
     $('#xpView').value = o.view;
   }
-  $('#xpOpts').addEventListener('input', e => {
+  $('#p10').addEventListener('input', e => {
     const k = e.target.dataset.xo; if (!k) return;
     const o = xpo(); o[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     // the statistics themselves change with these; the rest only filters what is shown
@@ -31008,11 +31019,16 @@ if (typeof module !== 'undefined') module.exports = Sav;
   // the variables shown: type, search and "significant only"
   const xpList = () => {
     const x = state.explore, o = xpo(), q = o.q.trim().toLowerCase(), id = $('#xpVar').value;
-    const list = x.items.filter(it => (!id || it.id === id) && (o.type === 'all' || it.kind === o.type) && (!q || it.label.toLowerCase().includes(q)) && (!o.sig || it.sig));
+    // one variable (its own export), two variables side by side, or the filters; text searched in the labels or, with "in tables", in every result table
+    const tq = (o.tq || '').trim().toLowerCase(), inTables = it => JSON.stringify(it.tables).toLowerCase().includes(tq);
+    const list = state.xpOnly ? x.items.filter(it => it.id === state.xpOnly) : x.items.filter(it => (!id || it.id === id || (o.cmp && it.id === o.cmp)) && (o.type === 'all' || it.kind === o.type) && (!q || it.label.toLowerCase().includes(q)) && (!o.sig || it.sig) && (!tq || inTables(it)));
+    const pins = state.cfg.xpPins || [];
+    if (pins.length && !state.xpOnly) list.sort((a, b) => (pins.includes(b.id) ? 1 : 0) - (pins.includes(a.id) ? 1 : 0));
     // order: as in the sheet, significant first, smallest P first (repeated measures, without one P, after), A–Z, or by type
     const pv = it => isFinite(it.p) ? it.p : it.sig ? 0.0499 : 2, KIND = { numeric: 0, categorical: 1, repeated: 2 };
     const by = { sig: (a, b) => (b.sig ? 1 : 0) - (a.sig ? 1 : 0), p: (a, b) => pv(a) - pv(b), az: (a, b) => a.label.localeCompare(b.label), kind: (a, b) => KIND[a.kind] - KIND[b.kind] }[o.sort];
-    return by ? list.map((it, i) => [it, i]).sort((a, b) => by(a[0], b[0]) || a[1] - b[1]).map(x => x[0]) : list;
+    const pinFirst = (a, b) => (pins.includes(b.id) ? 1 : 0) - (pins.includes(a.id) ? 1 : 0);
+    return by ? list.map((it, i) => [it, i]).sort((a, b) => pinFirst(a[0], b[0]) || by(a[0], b[0]) || a[1] - b[1]).map(x => x[0]) : list;
   };
   const xpTables = it => { const o = xpo(); return it.tables.filter(t => !t.cat || o[t.cat] !== false); };
   function renderExplore() {
@@ -31024,6 +31040,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const sel = $('#xpVar'), cur = sel.value, kinds = { numeric: 'numeric', categorical: 'categorical', repeated: 'repeated' };
     sel.innerHTML = `<option value="">All variables (${x.items.length})</option>` + x.items.map(it => `<option value="${esc(it.id)}">${esc(it.label)} — ${kinds[it.kind]}</option>`).join('');
     if (x.items.some(it => it.id === cur)) sel.value = cur;
+    $('#xpCmp').innerHTML = `<option value="">— one variable (choose it above) —</option>` + x.items.map(it => `<option value="${esc(it.id)}">${esc(it.label)}</option>`).join(''); $('#xpCmp').value = o.cmp || '';
     drawExplore();
   }
   // every patient's value in each group, editable; outliers (beyond 1.5 × IQR in the group) and missing values marked
@@ -31105,7 +31122,59 @@ if (typeof module !== 'undefined') module.exports = Sav;
     cache.set(it.id, txt);
     return txt;
   }
-  const commentHtml = it => { const t = xpComment(it); return t ? `<div class="xp-comment">${esc(t)}</div>` : ''; };
+  const commentHtml = it => { if (xpo().comBeside) return ''; const t = xpComment(it); return t ? `<div class="xp-comment">${esc(t)}</div>` : ''; };
+  // the result tables; with "comment beside the test", the report's comment follows the table of the test it came from (✓)
+  const tablesHtml = it => { let done = false; return xpTables(it).map(t => { let h = tblHtml(t);
+    if (xpo().comBeside && !done && t.rows.some(r => r[r.length - 1] === '✓')) { done = true; const c = xpComment(it); if (c) h += `<div class="xp-comment"><b>Report comment from this test:</b> ${esc(c)}</div>`; } return h; }).join(''); };
+  // the 🔬 panel of a variable: sensitivity without outliers, subgroups, assumptions (Q-Q plot, Levene), bootstrap CIs, the test chosen live, outliers in the sheet and the edits made
+  state.xpLab = new Set(); state.xpCollapsed = new Set(); state.xpNoteOpen = new Set(); state.xpHist = [];
+  function labHtml(it) {
+    const cfg = state.cfg, rows = state.data.rows, gs = activeGroups(), gl = gs.map(g => cfg.groupLabels[g] || g), o = xpo(), out = [];
+    const v = cfg.variables.find(q => q.id === it.id || it.id.startsWith(q.id + '_')), col = it.cols[0].col, num = it.kind === 'numeric';
+    const F = (x, d = 3) => isFinite(x) ? (+x).toFixed(d) : '—', P = p => Analysis.fmtP(p, cfg.options.alpha);
+    const vals = (rs, c = col) => gs.map(g => rs.filter(r => Analysis.groupOf(cfg, r) === g).map(r => Analysis.toNum(r[c])).filter(isFinite));
+    const testP = (gv, param) => gv.length === 2 ? (param ? Stats.tTest(gv[0], gv[1]).p : Stats.mannWhitney(gv[0], gv[1]).p) : (param ? Stats.anova(gv).p : Stats.kruskalWallis(gv).p);
+    const param = /t-test|ANOVA/i.test(it.test || '');
+    if (num && gs.length >= 2) {
+      // sensitivity: the same test with every patient and without the outliers of each group
+      const all = vals(rows), fences = all.map(a => Analysis.outFence(a, o.out === 'none' ? '1.5' : o.out)), trimmed = all.map((a, i) => fences[i] ? a.filter(x => x >= fences[i][0] && x <= fences[i][1]) : a);
+      if (all.every(a => a.length > 1) && trimmed.every(a => a.length > 1)) { const p1 = testP(all, param), p2 = testP(trimmed, param);
+        out.push(`<div class="xp-lt"><h5>Sensitivity: without outliers</h5><table class="t xp"><thead><tr><th></th>${gl.map(g => `<th>${esc(g)} n</th>`).join('')}<th>P (${param ? 'parametric' : 'non-parametric'})</th></tr></thead><tbody>
+          <tr><td class="b">All patients</td>${all.map(a => `<td>${a.length}</td>`).join('')}<td>${esc(P(p1))}</td></tr><tr><td class="b">Without outliers</td>${trimmed.map(a => `<td>${a.length}</td>`).join('')}<td>${esc(P(p2))}</td></tr></tbody></table>
+          <div class="legend-note">${(p1 <= cfg.options.alpha) === (p2 <= cfg.options.alpha) ? 'The conclusion does not change without the outliers.' : '⚠ The conclusion changes without the outliers.'}</div></div>`); }
+      // assumptions: Levene's test and a normal Q-Q plot per group
+      const lev = Stats.levene(all.filter(a => a.length > 1));
+      let qq = ''; try { qq = Charts.draw({ type: 'qq', series: gl.map((g, i) => ({ name: g, data: all[i] })) }, chartPalette(cfg.options), { ...chartStyle(cfg.options), aspect: 'standard', res: 1 }).toDataURL('image/png'); } catch (e) { }
+      out.push(`<div class="xp-lt"><h5>Assumptions</h5><div>Levene's test of equal variances: P ${esc(P(lev))} — ${lev < 0.05 ? 'unequal variances' : 'equal variances'}</div>${qq ? `<img src="${qq}" alt="" style="max-width:100%">` : ''}</div>`);
+      // bootstrap 95% CIs of each group's mean and median (1000 resamples, seeded)
+      const boot = a => { let s0 = 7; const rnd = () => (s0 = (s0 * 16807) % 2147483647) / 2147483647, mm = [], md = [];
+        for (let b = 0; b < 1000; b++) { const x = a.map(() => a[Math.floor(rnd() * a.length)]); mm.push(Stats.mean(x)); md.push(Stats.median(x)); }
+        const q = (arr, p) => Stats.quantile(arr, p); return [q(mm, 0.025), q(mm, 0.975), q(md, 0.025), q(md, 0.975)]; };
+      out.push(`<div class="xp-lt"><h5>Bootstrap 95% CIs (1000 resamples)</h5><table class="t xp"><thead><tr><th>Group</th><th>Mean (95% CI)</th><th>Median (95% CI)</th></tr></thead><tbody>${all.map((a, i) => { if (a.length < 2) return ''; const b = boot(a);
+        return `<tr><td class="b">${esc(gl[i])}</td><td>${F(Stats.mean(a), 2)} (${F(b[0], 2)} to ${F(b[1], 2)})</td><td>${F(Stats.median(a), 2)} (${F(b[2], 2)} to ${F(b[3], 2)})</td></tr>`; }).join('')}</tbody></table></div>`);
+      // outliers: jump to their row in the sheet
+      const outs = rows.map((r, i) => [r, i]).filter(([r]) => { const gi = gs.indexOf(Analysis.groupOf(cfg, r)), x = Analysis.toNum(r[col]); return gi >= 0 && fences[gi] && isFinite(x) && (x < fences[gi][0] || x > fences[gi][1]); });
+      out.push(`<div class="xp-lt"><h5>Outliers (${outs.length})</h5>${outs.length ? outs.map(([r, i]) => `<a href="#" data-xprow="${i}">row ${i + 1}: ${esc(r[col])}${cfg.idCols[0] ? ` (${esc(cfg.idCols[0])} ${esc(r[cfg.idCols[0]] ?? '')})` : ''}</a>`).join(' · ') + ` <a href="#" data-xprows="${outs.map(x => x[1]).join(',')}">all in the sheet →</a>` : '<span class="legend-note">none</span>'}</div>`);
+    }
+    // subgroups: the P value of the report's test within each level of a chosen column
+    const sub = o.subBy && state.data.headers.includes(o.subBy) ? o.subBy : '';
+    const subCols = state.data.headers.filter(h => h !== cfg.groupCol && !cfg.idCols.includes(h) && (n => n >= 2 && n <= 6)(new Set(rows.map(r => r[h]).filter(x => x !== null && x !== undefined && x !== '')).size));
+    let subTbl = '';
+    if (sub && v) { const levels = [...new Set(rows.map(r => r[sub]).filter(x => x !== null && x !== undefined && x !== ''))];
+      subTbl = `<table class="t xp"><thead><tr><th>${esc(sub)}</th><th>n</th><th>Test</th><th>P value</th></tr></thead><tbody>${levels.map(l => { const rs = rows.filter(r => String(r[sub]) === String(l));
+        let x = null; try { x = Analysis.explore({ ...state.data, rows: rs }, { ...cfg, variables: [{ ...v, include: true }] }, {}).items.find(q => q.id === it.id); } catch (e) { }
+        return `<tr><td class="b">${esc(l)}</td><td>${rs.length}</td><td>${esc(x ? x.test || '—' : '—')}</td><td>${x && isFinite(x.p) ? esc(P(x.p)) : '—'}</td></tr>`; }).join('')}</tbody></table>`; }
+    out.push(`<div class="xp-lt"><h5>Subgroups</h5><select data-xpsub="1"><option value="">— by a column —</option>${subCols.map(h => `<option ${h === sub ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select>${subTbl}</div>`);
+    // the test of this variable, changed here (the report follows)
+    if (v && (v.type === 'numeric' || v.type === 'categorical') && v.kind === 'single') {
+      const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis']] : [['chi', 'Chi-square'], ['fisher', "Fisher's exact (2×2)"], ['ffh', 'Fisher-Freeman-Halton']];
+      out.push(`<div class="xp-lt"><h5>Test in the report</h5><select data-xptest="${esc(v.id)}"><option value="">Automatic (step 4)</option>${tests.map(([k, l]) => `<option value="${k}" ${v.test === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`);
+    }
+    // edits of this variable's data made in this step
+    const hist = state.xpHist.filter(h => it.cols.some(c => c.col === h.col));
+    out.push(`<div class="xp-lt"><h5>Edits of the data here (${hist.length})</h5>${hist.length ? `<ul class="xp-hist">${hist.slice(-12).reverse().map(h => `<li>${esc(h.time)} — row ${h.row + 1}, ${esc(h.col)}: ${esc(h.old ?? '(empty)')} → ${esc(h.val ?? '(empty)')}</li>`).join('')}</ul>` : '<span class="legend-note">none</span>'}</div>`);
+    return `<div class="xp-labgrid">${out.join('')}</div>`;
+  }
   const sumHtml = it => { const t = summaryTable(it); return t ? tblHtml(t) + (t.note ? `<div class="xp-sum-note">${esc(t.note)}</div>` : '') : xpTables(it).map(tblHtml).join(''); };
   // a card's lines: each group's mean ± SD or median (IQR), its frequencies, or the values at the first and last timepoint
   function keyLines(it) {
@@ -31143,27 +31212,75 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const html = list.map(it => {
       const u = figUrl(it), img = u ? `<img class="xp-fig" src="${u}" alt="">` : '';
       const memo = (state.cfg.variables.find(q => q.id === it.id || it.id.startsWith(q.id + '_')) || {}).memo;
-      const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3>${memo ? `<span class="chip" title="${esc(memo)}" style="cursor:help">ℹ note</span>` : ''}<span class="chip info">${it.kind}</span><span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>`;
+      const pinned = (state.cfg.xpPins || []).includes(it.id), coll = state.xpCollapsed.has(it.id);
+      const tools = `<span class="xp-tools"><button class="btn ghost small" data-xt="pin" data-id="${esc(it.id)}" title="${pinned ? 'Unpin' : 'Pin to the top'}">${pinned ? '★' : '☆'}</button><button class="btn ghost small" data-xt="coll" data-id="${esc(it.id)}" title="${coll ? 'Expand' : 'Collapse'}">${coll ? '▸' : '▾'}</button><button class="btn ghost small" data-xt="lab" data-id="${esc(it.id)}" title="Sensitivity, subgroups, assumptions, bootstrap, test, outliers, edits">🔬</button><button class="btn ghost small" data-xt="note" data-id="${esc(it.id)}" title="Your note (in the Word file)">✎</button><button class="btn ghost small" data-xt="fig" data-id="${esc(it.id)}" title="Copy the figure">⧉</button><button class="btn ghost small" data-xt="print" data-id="${esc(it.id)}" title="Print this variable">🖨</button><button class="btn ghost small" data-xt="word" data-id="${esc(it.id)}" title="This variable alone in Word">W</button><button class="btn ghost small" data-xt="xlsx" data-id="${esc(it.id)}" title="This variable alone in Excel">X</button></span>`;
+      const flag = it.disagree ? `<span class="chip warn" title="The parametric and non-parametric tests disagree on significance">⚠ tests disagree</span>` : '';
+      const note = (state.cfg.xpNotes || {})[it.id], noteBox = state.xpNoteOpen.has(it.id) || note ? `<div class="xp-note"><label class="f">Your note (in the Word file)</label><textarea data-xpnote="${esc(it.id)}" placeholder="Your interpretation of this variable">${esc(note || '')}</textarea></div>` : '';
+      const lab = state.xpLab.has(it.id) ? `<div class="xp-lab">${labHtml(it)}</div>` : '';
+      const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3>${memo ? `<span class="chip" title="${esc(memo)}" style="cursor:help">ℹ note</span>` : ''}<span class="chip info">${it.kind}</span>${flag}${tools}<span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>` + noteBox + lab;
+      if (coll) return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-coll" data-xpitem="${esc(it.id)}">${headRow}</div>`;
       // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
-      if (view === 'side') return `<div class="report-sec xp-item">${headRow}
-        <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
+      if (view === 'side') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
+        <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${tablesHtml(it)}</div></div>
         ${img ? `<div class="xp-fig-below">${img}</div>` : ''}${commentHtml(it)}</div>`;
       // data of each group in the left half, the summary table (and the figure) in the right half
-      if (view === 'half') return `<div class="report-sec xp-item">${headRow}
+      if (view === 'half') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
         <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div><div class="xp-sumcopy">${sumWordHtml(it)}${effWordHtml(it)}</div><div style="text-align:right"><button class="btn ghost small" data-xpcopy="${esc(it.id)}" type="button" title="Copy these tables, to paste into Word">⧉ Copy tables</button></div>${img}${commentHtml(it)}</div></div></div>`;
-      if (view === 'stacked') return `<div class="report-sec xp-item xp-stacked">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div>
+      if (view === 'stacked') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-stacked">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${tablesHtml(it)}</div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-      if (view === 'tables') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div></div>`;
-      if (view === 'twocol') return `<div class="report-sec xp-item">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>`;
-      if (view === 'compact') return `<div class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${xpTables(it).map(tblHtml).join('')}</div>
+      if (view === 'tables') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${tablesHtml(it)}</div></div>`;
+      if (view === 'twocol') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${tablesHtml(it)}</div></div>`;
+      if (view === 'compact') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${tablesHtml(it)}</div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-      return `<div class="report-sec xp-item">${headRow}
-        <div class="xp-body">${img ? `<div class="xp-figcol">${img}${commentHtml(it)}</div>` : ''}<div class="xp-tables">${xpTables(it).map(tblHtml).join('')}</div></div>
+      return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
+        <div class="xp-body">${img ? `<div class="xp-figcol">${img}${commentHtml(it)}</div>` : ''}<div class="xp-tables">${tablesHtml(it)}</div></div>
         <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
     }).join('');
-    $('#explore').innerHTML = ov + (list.length ? (view === 'twocol' ? `<div class="xp-twocol">${html}</div>` : html) : empty);
+    // dashboard: variables, patients, missing values and significant results of what is shown
+    const nMiss = list.reduce((t, it) => t + it.cols.reduce((u, c) => u + state.data.rows.filter(r => Analysis.groupOf(state.cfg, r) !== null && (r[c.col] === null || r[c.col] === undefined || String(r[c.col]).trim() === '')).length, 0), 0);
+    const dash = `<div class="xp-dash"><div><b>${list.length}</b><span>variables</span></div><div><b>${state.data.rows.length}</b><span>patients</span></div><div><b>${list.filter(it => it.sig).length}</b><span>significant</span></div><div><b>${nMiss}</b><span>missing values</span></div><div><b>${list.filter(it => it.disagree).length}</b><span>tests disagree</span></div></div>`;
+    const cmp = $('#xpVar').value && xpo().cmp && list.length === 2;
+    $('#explore').innerHTML = dash + ov + (list.length ? (view === 'twocol' || cmp ? `<div class="xp-twocol">${html}</div>` : html) : empty);
+    // matches of the table search highlighted
+    const tq = (xpo().tq || '').trim().toLowerCase(); if (tq) document.querySelectorAll('#explore td').forEach(td => { if (td.textContent.toLowerCase().includes(tq)) td.classList.add('xp-hit'); });
     $('#xpUndo').disabled = !state.undo || !state.undo.length; $('#xpRedo').disabled = !(state.redo && state.redo.length);
   }
+  $('#explore').addEventListener('click', e => {
+    const b = e.target.closest('[data-xt]'), rw = e.target.closest('[data-xprow],[data-xprows]');
+    if (rw) { e.preventDefault(); const rs = (rw.dataset.xprows || rw.dataset.xprow).split(',').map(Number); go(1); showRows(rs, 'Outliers from step 10'); return; }
+    if (!b) return; const id = b.dataset.id, it = state.explore.items.find(q => q.id === id), t = b.dataset.xt, y = window.scrollY;
+    const toggle = (set, k) => { set.has(k) ? set.delete(k) : set.add(k); };
+    if (t === 'pin') { const p = state.cfg.xpPins = state.cfg.xpPins || []; const i = p.indexOf(id); i >= 0 ? p.splice(i, 1) : p.push(id); }
+    if (t === 'coll') toggle(state.xpCollapsed, id);
+    if (t === 'lab') toggle(state.xpLab, id);
+    if (t === 'note') toggle(state.xpNoteOpen, id);
+    if (t === 'fig') { if (!it || !it.spec) { toast('No figure'); return; } copyImage(Charts.draw(it.spec, chartPalette(state.cfg.options), { ...chartStyle(state.cfg.options), res: 2 }).toDataURL('image/png')); return; }
+    if (t === 'print') { const node = document.querySelector(`[data-xpitem="${CSS.escape(id)}"]`); if (node) printPart(it.label, node); return; }
+    if (t === 'word' || t === 'xlsx') { state.xpOnly = id; Promise.resolve($(t === 'word' ? '#xpWord' : '#xpXlsx').onclick()).finally(() => { state.xpOnly = null; }); return; }
+    drawExplore(); window.scrollTo(0, y);
+  });
+  $('#explore').addEventListener('input', e => { const n = e.target.dataset.xpnote; if (n === undefined) return; const m = state.cfg.xpNotes = state.cfg.xpNotes || {}; if (e.target.value.trim()) m[n] = e.target.value; else delete m[n]; });
+  $('#explore').addEventListener('change', e => {
+    const y = window.scrollY;
+    if (e.target.dataset.xpsub) { xpo().subBy = e.target.value; drawExplore(); window.scrollTo(0, y); }
+    if (e.target.dataset.xptest !== undefined) { const v = state.cfg.variables.find(q => q.id === e.target.dataset.xptest); if (v) { if (e.target.value) v.test = e.target.value; else delete v.test; } renderExplore(); window.scrollTo(0, y); toast('Test changed — the results and the report follow it'); }
+  });
+  // J / K: next / previous variable
+  document.addEventListener('keydown', e => {
+    if (!isActive(10) || typing(document.activeElement) || e.ctrlKey || e.metaKey || e.altKey || !/^[jk]$/i.test(e.key)) return;
+    const items = [...document.querySelectorAll('#explore [data-xpitem]')]; if (!items.length) return;
+    const top = items.findIndex(n => n.getBoundingClientRect().top > 90), cur = top < 0 ? items.length : top;
+    const next = e.key.toLowerCase() === 'j' ? items[Math.min(items.length - 1, cur)] : items[Math.max(0, cur - 2)];
+    if (next) { next.scrollIntoView({ behavior: 'smooth', block: 'start' }); e.preventDefault(); }
+  });
+  // saved views of this step
+  const XV_KEY = 'pmse-xp-views', xpViews = () => { try { return JSON.parse(localStorage.getItem(XV_KEY) || '{}'); } catch (e) { return {}; } };
+  const renderXpViews = () => { $('#xpViewList').innerHTML = '<option value="">— saved views —</option>' + Object.keys(xpViews()).map(n => `<option>${esc(n)}</option>`).join(''); };
+  $('#xpViewSave').onclick = () => { const name = (prompt('Name of this view:', 'My view') || '').trim(); if (!name) return; const all = xpViews(); const { q, tq, ...keep } = xpo(); all[name] = keep;
+    try { localStorage.setItem(XV_KEY, JSON.stringify(all)); } catch (e) { toast('This browser does not allow saving'); return; } renderXpViews(); $('#xpViewList').value = name; toast(`View “${name}” saved`); };
+  $('#xpViewList').onchange = e => { const v = xpViews()[e.target.value]; if (!v) return; state.cfg.explore = { ...xpo(), ...v }; renderExplore(); toast(`View “${e.target.value}” applied`); };
+  $('#xpCollAll').onclick = () => { const ids = xpList().map(it => it.id), all = ids.every(id => state.xpCollapsed.has(id)); ids.forEach(id => all ? state.xpCollapsed.delete(id) : state.xpCollapsed.add(id)); drawExplore(); };
+  renderXpViews();
   // the data panel is filled when opened, and stays open when the results are redrawn
   $('#explore').addEventListener('toggle', e => {
     const d = e.target.closest && e.target.closest('[data-xpdata]'); if (!d || d !== e.target) return;
@@ -31177,6 +31294,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const i = +td.dataset.xr, col = td.dataset.xc, old = state.data.rows[i][col], v = parseCell(td.textContent);
     if ((old ?? null) === v || String(old ?? '') === String(v ?? '')) return;
     pushUndo();
+    state.xpHist.push({ row: i, col, old, val: v, time: new Date().toLocaleTimeString() });
     state.data.rows[i][col] = v; state.xpChanged.add(i + '|' + col);
     if (col === state.cfg.groupCol && !state.cfg.noGroups) refreshGroups();
     const y = window.scrollY; renderExplore(); renderGrid(); window.scrollTo(0, y);
@@ -31257,6 +31375,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
         const view = xpo().view, out = { label: it.label, summary: it.summary, test: it.test, p: isFinite(it.p) ? Analysis.fmtP(it.p, o.alpha) : '', sig: it.sig, key: keyLines(it).map(l => l.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")), n: it.n, tables: xpTables(it), data: view === 'side' || view === 'half' ? [sideData(it)] : xpo().wordData ? dataTables(it) : [] };
         if (view === 'half') { const t = summaryTable(it); if (t) out.tables = [t.note ? { ...t, title: `Summary — ${t.note}` } : t, ...(it.effects ? [{ ...it.effects, title: it.effects.note ? `${it.effects.title} — ${it.effects.note}` : it.effects.title }] : [])]; }
         if (!['cards', 'gallery', 'tables', 'compact'].includes(view)) out.comment = xpComment(it);
+        out.note = (state.cfg.xpNotes || {})[it.id] || '';
         if (figs && it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), chartStyle(o)); Object.assign(out, { url: c.toDataURL('image/png'), w: c.width, h: c.height }); } catch (e) { /* no figure */ } }
         return out;
       });

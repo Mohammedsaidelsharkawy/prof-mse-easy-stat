@@ -1413,10 +1413,10 @@ const Analysis = (() => {
         nt ? `${P(nt.p)}${nt.p > 0.05 ? ' (normal)' : ' (non-normal)'}` : '—'];
     };
     // the between-group tests of one numeric measurement, the one used in the report marked ✓
-    const numericTests = (gv, dist) => {
+    const numericTests = (gv, dist, vtest) => {
       const ok = gv.filter(x => x.length >= 2).length === k;
       if (k < 2 || !ok) return null;
-      const chosen = analyzeNumeric(gv, dist, used, opts).test, out = [];
+      const chosen = analyzeNumeric(gv, dist, used, opts, vtest).test, out = [];
       out.push(["Levene's test (equal variances)", '', '', P(S.levene(gv)), '', '']);
       if (k === 2) {
         const t = S.tTest(gv[0], gv[1], true), w = S.tTest(gv[0], gv[1], false), m = S.mannWhitney(gv[0], gv[1]), hl = S.hodgesLehmann(gv[0], gv[1]);
@@ -1491,12 +1491,12 @@ const Analysis = (() => {
       if (v.kind !== 'repeated' && v.type === 'numeric') {
         const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toNum(r[col])).filter(isFinite)), miss = byGroup.map(rs => rs.filter(r => !isFinite(toNum(r[col]))).length);
         it.tables.push({ cat: 'desc', title: 'Descriptive statistics', head: descHead, rows: [...gv.map((x, g) => descRow(gl[g], x, miss[g])), ...(k > 1 ? [descRow('All patients', gv.flat(), S.sum(miss))] : [])] });
-        const t = numericTests(gv, v.dist); if (t) it.tables.push(t);
+        const t = numericTests(gv, v.dist, v.test); if (t) it.tables.push(t);
         const pt = pairTable(gv); if (pt) it.tables.push(pt);
         const er = effRows(gv); if (er) it.effects = { title: 'Pairwise comparisons and effect estimates', head: EFF_HEAD, rows: er, note: EFF_NOTE };
         if (xo.extra) it.tables.push(extraTable([...gl.map((g, i) => [g, gv[i]]), ...(k > 1 ? [['All patients', gv.flat()]] : [])]));
         it.spec = numSpec(gv, v.label);
-        const used2 = new Set(), res = k > 1 && gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts) : null;
+        const used2 = new Set(), res = k > 1 && gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts, v.test) : null;
         it.sig = !!res && res.p <= alpha;
         const nn = gv.map(x => x.length >= 3 ? normality(x) : null).filter(Boolean);
         Object.assign(it, { n: gv.flat().length, test: res ? TEST_NAME[res.test] || res.test : '', p: res ? res.p : NaN,
@@ -1518,7 +1518,7 @@ const Analysis = (() => {
             ['Missing', ...byGroup.map(rs => String(rs.filter(r => toCat(r[col]) === null).length)), ...(k > 1 ? [String(byGroup.flat().filter(r => toCat(r[col]) === null).length)] : [])]] });
         const nonEmpty = tab.filter(r => S.sum(r) > 0);
         if (k > 1 && nonEmpty.length >= 2) {
-          const cs = S.chiSquare(nonEmpty), cres = analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null), chosen = cres.test, out = [];
+          const cs = S.chiSquare(nonEmpty), cres = analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null, v.test), chosen = cres.test, out = [];
           it.sig = cres.p <= alpha;
           Object.assign(it, { test: TEST_NAME[cres.test] || cres.test, p: cres.p });
           out.push(['Chi-square test', `χ² = ${F(cs.chi, 2)}`, String(cs.df), P(cs.p), `smallest expected count ${F(cs.minE, 1)}; ${F(100 * cs.pctSmall, 0)}% of cells < 5`, chosen === 'Chi-square' ? yes : '']);

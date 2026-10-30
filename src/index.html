@@ -197,6 +197,9 @@ table.rt td.s{font-size:.9em}
 table.rt tr.band td{background:#F2F2F2}
 table.rt tr td.hl{background:#FFF2CC}
 table.rt td.left{text-align:left}
+.xp-dash{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.xp-dash div{background:var(--lav);border-radius:10px;padding:8px 14px;display:flex;flex-direction:column;min-width:96px}.xp-dash b{font-size:20px}.xp-dash span{font-size:12px;color:var(--muted)}
+.xp-tools{display:inline-flex;gap:2px;margin-left:6px}.xp-tools .btn{padding:2px 6px}.xp-lab{margin:8px 0;padding:8px;border:1px dashed var(--line);border-radius:10px}.xp-labgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}.xp-lt h5{margin:0 0 4px}
+td.xp-hit{background:#FFF2A8!important}.xp-note textarea{min-height:50px}.xp-hist{margin:0;padding-left:18px;font-size:12px}
 .fig-tip{display:none;position:absolute;pointer-events:none;background:#1C1648;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:5}
 label.cc{display:inline-flex;flex-direction:column;align-items:center;font-size:11px;gap:2px}
 .gloss{margin:6px 0;padding:8px 10px;background:var(--lav);border-radius:8px;font-size:13px}.gloss dt{font-weight:700;margin-top:4px}.gloss dd{margin:0 0 0 12px}
@@ -1114,6 +1117,12 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
  <button class="btn ghost small" id="xpPrint" type="button" title="Print the results shown, or save them as PDF">🖨 Print / PDF</button>
         <button class="btn ghost small" id="xpXlsx" type="button" title="Every table shown here in Excel, one sheet per variable">⬇ Excel</button>
         <button class="btn primary small" id="xpWord" type="button">⬇ Word</button></div>
+      <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap"><label class="f" style="margin:0">Compare with</label><select data-xo="cmp" id="xpCmp" style="width:auto;max-width:260px"></select>
+        <label class="f" style="margin:0">Search in the tables</label><input type="search" data-xo="tq" placeholder="e.g. Welch, 0.03" style="width:180px">
+        <label class="check" style="margin:0" title="The report's comment right after the table of the test it came from"><input type="checkbox" data-xo="comBeside"><span>Comment beside its test</span></label>
+        <button class="btn ghost small" id="xpCollAll" type="button" title="Collapse or expand every variable">▾ Collapse / expand all</button>
+        <select id="xpViewList" style="width:auto"></select><button class="btn ghost small" id="xpViewSave" type="button">💾 Save view…</button>
+        <span class="legend-note">J / K: next / previous variable · ★ pin · 🔬 sensitivity, subgroups, assumptions, bootstrap</span></div>
       <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>
       <details class="fl-style" id="xpOpts"><summary><b>⚙ Options</b> — filter, tables, statistics, figure, outliers</summary>
         <div class="grid g4" style="margin-top:8px">
