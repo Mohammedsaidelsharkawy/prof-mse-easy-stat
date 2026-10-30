@@ -14,7 +14,7 @@
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
@@ -33,7 +33,7 @@
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
@@ -1216,7 +1216,7 @@
       $('#vdRefCat').textContent = v.type === 'categorical' && lv0.length ? `In regression models this variable is compared with its reference category “${ref}” (change the order with ↕ in the list).` : ''; $('#vdRareBox').style.display = v.type === 'categorical' && v.kind === 'single' ? '' : 'none'; }
     $('#vdOrd').checked = !!v.ordinal; $('#vdOrd').disabled = v.type !== 'categorical'; $('#vdOrdTest').value = v.ordTest || 'rank';
     $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || ''; $('#vdNoSecond').checked = !!v.noSecond; $('#vdMcid').value = v.mcid || ''; $('#vdMcid').disabled = v.type !== 'numeric'; $('#vdNoSecondBox').style.display = v.type === 'numeric' && v.kind === 'single' ? '' : 'none';
-    const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis']]
+    const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis'], ['median', "Mood's median test"], ['perm', 'Permutation test (two groups)'], ['huber', 'Huber robust regression']]
       : [['chi', 'Chi-square'], ['fisher', "Fisher's exact (2×2)"], ['ffh', 'Fisher-Freeman-Halton (larger tables)']];
     $('#vdTest').innerHTML = `<option value="">Automatic (step 4 settings)</option>` + tests.map(([k, l]) => `<option value="${k}" ${v.test === k ? 'selected' : ''}>${esc(l)}</option>`).join('');
     const lv = v.type === 'categorical' ? (v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct) : [];
@@ -2112,6 +2112,11 @@
   // option controls of steps 4–8 show the saved options
   function renderOptions() {
     const o = state.cfg.options;
+    // column choices of step 4: clustering, strata and the per-protocol population
+    if (state.data) { const h = state.data.headers, opt = list => '<option value="">— none —</option>' + list.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      const cats = h.filter(c => c !== state.cfg.groupCol && (n => n >= 2 && n <= 40)(columnInfo(state.data.rows, c).distinct.length));
+      $('#optClusterCol').innerHTML = opt(h.filter(c => c !== state.cfg.groupCol)); $('#optStrataCol').innerHTML = opt(cats); $('#optPpCol').innerHTML = opt(cats);
+      $('#optPpVal').innerHTML = o.ppCol ? columnInfo(state.data.rows, o.ppCol).distinct.map(v => `<option>${esc(v)}</option>`).join('') : '<option value="">—</option>'; }
     for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
     const gNames = state.data && !state.cfg.noGroups ? activeGroups().map(g => state.cfg.groupLabels[g] || g) : [];
     $('#customColors').innerHTML = o.customColors.map((col, i) => `<label class="cc"><input type="color" data-ccol="${i}" value="${esc(col)}" title="${esc(gNames[i] || `Colour ${i + 1}`)}"><span>${esc(gNames[i] || `Colour ${i + 1}`)}</span></label>`).join('');
@@ -2602,6 +2607,25 @@
   }
   ['#pwKind', '#pwAlpha', '#pwPower', '#pwRatio', '#pwA', '#pwB', '#pwDrop'].forEach(id => { const el = $(id); if (el) el.addEventListener('input', renderPower); });
   if ($('#pwKind')) renderPower();
+  $('#optPpCol').addEventListener('change', () => { const c = $('#optPpCol').value, d = c ? columnInfo(state.data.rows, c).distinct : []; $('#optPpVal').innerHTML = d.length ? d.map(v => `<option ${Analysis.POSITIVE.test(v) ? 'selected' : ''}>${esc(v)}</option>`).join('') : '<option value="">—</option>'; });
+  // group-sequential boundaries
+  $('#gsGo').onclick = () => { const K = +$('#gsK').value, al = +$('#gsA').value, ty = $('#gsT').value; $('#gsOut').innerHTML = '<p class="legend-note">Computing…</p>';
+    setTimeout(() => { const b = Stats.groupSequential(K, al, ty); state.gsText = `${ty === 'obf' ? "O'Brien-Fleming" : 'Pocock'} boundaries for ${K} equally spaced looks (two-sided α = ${al}): ` + b.map(x => `look ${x.look} (${Math.round(100 * x.info)}% of patients): |z| ≥ ${x.z.toFixed(3)}, P ≤ ${x.p < 0.0001 ? x.p.toExponential(2) : x.p.toFixed(4)}`).join('; ') + '.';
+      $('#gsOut').innerHTML = `<table class="t"><thead><tr><th>Look</th><th>Information (patients analysed)</th><th>Stop when |z| ≥</th><th>Nominal P ≤</th></tr></thead><tbody>${b.map(x => `<tr><td>${x.look}</td><td>${Math.round(100 * x.info)}%</td><td>${x.z.toFixed(3)}</td><td>${x.p < 0.0001 ? x.p.toExponential(2) : x.p.toFixed(4)}</td></tr>`).join('')}</tbody></table><p class="legend-note">Exact boundaries by numerical integration (they match the published tables); stop for efficacy when the test statistic crosses the boundary at a look. Overall type I error = ${al}.</p>`; }, 30); };
+  $('#gsCopy').onclick = () => { if (!state.gsText) $('#gsGo').click(); setTimeout(() => navigator.clipboard && navigator.clipboard.writeText(state.gsText || '').then(() => toast('Boundaries copied')), 400); };
+  // prespecified plan: each variable's distribution and test, exported and imported
+  const TEST_CODES = [[/welch.*anova/i, 'welchanova'], [/welch/i, 'welch'], [/anova/i, 'anova'], [/t-?test|student/i, 't'], [/mann|whitney/i, 'mw'], [/kruskal/i, 'kw'], [/freeman/i, 'ffh'], [/fisher/i, 'fisher'], [/chi/i, 'chi'], [/mood|median test/i, 'median'], [/permut/i, 'perm'], [/huber|robust/i, 'huber']];
+  $('#planPre').onclick = () => { readUiIntoCfg(); const names = { t: "Student's t-test", welch: "Welch's t-test", anova: 'One-way ANOVA', welchanova: "Welch's ANOVA", mw: 'Mann-Whitney U', kw: 'Kruskal-Wallis', chi: 'Chi-square', fisher: "Fisher's exact", ffh: 'Fisher-Freeman-Halton', median: "Mood's median test", perm: 'Permutation test', huber: 'Huber robust regression' };
+    const aoa = [['Column', 'Label', 'Type', 'Distribution', 'Test']].concat(state.cfg.variables.filter(v => v.include).map(v => [v.cols.map(c => c.col).join(', '), v.label, v.type, v.type === 'numeric' ? v.dist || 'auto' : '', names[v.test] || 'Automatic']));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Plan'); XLSX.writeFile(wb, `${baseName()} - Prespecified plan.xlsx`); };
+  $('#planImp').onclick = () => $('#planFile').click();
+  $('#planFile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try { const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }), aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' }), hd = aoa[0].map(x => String(x).toLowerCase());
+      const cC = hd.findIndex(x => /column/.test(x)), cD = hd.findIndex(x => /distribution/.test(x)), cT = hd.findIndex(x => /test/.test(x)); if (cC < 0) throw new Error('no “Column” column');
+      let n = 0; aoa.slice(1).forEach(r => { const v = state.cfg.variables.find(x => x.cols.map(c => c.col).join(', ') === String(r[cC]).trim()); if (!v) return;
+        if (cD >= 0 && ['auto', 'param', 'nonparam'].includes(String(r[cD]).trim())) v.dist = String(r[cD]).trim();
+        if (cT >= 0) { const t = String(r[cT]).trim(), code = (TEST_CODES.find(([re]) => re.test(t)) || [])[1]; if (/automatic/i.test(t) || !t) delete v.test; else if (code) v.test = code; } n++; });
+      renderTestPlan(); toast(`Plan applied to ${n} variable${n === 1 ? '' : 's'}`); } catch (err) { toast('Could not read the plan: ' + err.message); } };
   $('#planXlsx').onclick = () => { const wb = XLSX.utils.table_to_book($('#testPlan'), { sheet: 'Test plan' }); XLSX.writeFile(wb, `${baseName()} - Test plan.xlsx`); };
   function renderTablePreview() {
     const box = $('#tblPreview'); if (!box || !state.cfg || !state.data) return;
@@ -2654,17 +2678,17 @@
     tost: 'Equivalence (TOST, two one-sided t-tests)', mh: 'Mantel-Haenszel (stratified odds ratio)', clogit: 'Conditional logistic regression (matched sets)',
     cif: 'Competing risks (cumulative incidence)', tdroc: 'Time-dependent ROC (AUC at set times)', quantreg: 'Quantile (median) regression', fleiss: "Fleiss' kappa (agreement of 3+ raters)",
     rmcorr: 'Repeated-measures correlation (long data)', firth: 'Firth logistic regression (small samples, separation)', mi: 'Regression with multiple imputation',
-    noninf: 'Non-inferiority / equivalence / superiority trial', crossover: 'Crossover trial (AB/BA)', gee: 'GEE / mixed-effects logistic (repeated binary, count or numeric outcome)' };
+    noninf: 'Non-inferiority / equivalence / superiority trial', crossover: 'Crossover trial (AB/BA)', weighted: 'Weighted comparison of the groups (survey weights)', kendallw: "Kendall's W (concordance of several raters)", gee: 'GEE / mixed-effects logistic (repeated binary, count or numeric outcome)' };
   // the analyses by category: the add buttons, the headings of the list and the order of "group by category"
   const ADV_GROUPS = [
-    ['Compare groups', 'Adjusted, stratified and matched comparisons of the study groups', [['ancova', 'ANCOVA'], ['anova2', 'Two-way ANOVA'], ['mh', 'Mantel-Haenszel'], ['psm', 'Propensity score']]],
+    ['Compare groups', 'Adjusted, stratified and matched comparisons of the study groups', [['ancova', 'ANCOVA'], ['anova2', 'Two-way ANOVA'], ['mh', 'Mantel-Haenszel'], ['psm', 'Propensity score'], ['weighted', 'Weighted (survey weights)']]],
     ['Non-inferiority & equivalence trials', 'A margin for the difference: non-inferiority, equivalence or superiority, ITT and per-protocol', [['noninf', 'Non-inferiority / equivalence / superiority'], ['tost', 'Equivalence of means (TOST)']]],
     ['Paired & repeated measurements', 'The same patients measured twice or more', [['paired', 'Paired comparison'], ['crossover', 'Crossover (AB/BA)'], ['mcnemar', 'McNemar (paired categorical)'], ['cochran', "Cochran's Q (repeated yes/no)"], ['lmm', 'Linear mixed model'], ['gee', 'GEE / mixed logistic (binary repeated)'], ['rmcorr', 'Repeated-measures correlation']]],
     ['Correlation & mediation', 'Associations between numeric variables', [['correlation', 'Correlation'], ['partial', 'Partial correlation'], ['mediation', 'Mediation']]],
     ['Regression models', 'Predictors of an outcome', [['linear', 'Linear'], ['logistic', 'Logistic'], ['firth', 'Firth logistic'], ['mi', 'With multiple imputation'], ['quantreg', 'Quantile (median)'], ['count', 'Poisson / negative binomial'], ['ordinal', 'Ordinal logistic'], ['multinom', 'Multinomial logistic'], ['clogit', 'Conditional logistic']]],
     ['Survival & time to event', 'Follow-up time with an event', [['survival', 'Kaplan-Meier'], ['cox', 'Cox regression'], ['cif', 'Competing risks'], ['tdroc', 'Time-dependent ROC']]],
     ['Diagnostic accuracy & prediction', 'Tests against a reference standard', [['roc', 'ROC curve'], ['diagnostic', 'Diagnostic accuracy (2×2)']]],
-    ['Agreement, reliability & questionnaires', 'Raters, methods and scales', [['kappa', "Cohen's kappa"], ['fleiss', "Fleiss' kappa"], ['agreement', 'ICC / Bland-Altman'], ['methodcomp', 'Passing-Bablok / Deming'], ['cronbach', "Cronbach's alpha"], ['pca', 'PCA (items)']]]];
+    ['Agreement, reliability & questionnaires', 'Raters, methods and scales', [['kappa', "Cohen's kappa"], ['fleiss', "Fleiss' kappa"], ['kendallw', "Kendall's W"], ['agreement', 'ICC / Bland-Altman'], ['methodcomp', 'Passing-Bablok / Deming'], ['cronbach', "Cronbach's alpha"], ['pca', 'PCA (items)']]]];
   const ADV_CAT = {}; ADV_GROUPS.forEach(([g, , list], gi) => list.forEach(([t]) => { ADV_CAT[t] = gi; }));
   $('#advAdd').innerHTML = ADV_GROUPS.map(([g, note, list]) => `<div class="adv-cat"><h4>${esc(g)}</h4><p class="legend-note">${esc(note)}</p><div class="btns">${list.map(([t, l]) => `<button class="btn ghost small" data-advadd="${t}" type="button" title="${esc(ADV_TYPES[t] || l)}" data-find="${esc((l + ' ' + (ADV_TYPES[t] || '') + ' ' + g).toLowerCase())}">+ ${esc(l)}</button>`).join('')}</div></div>`).join('');
   $('#advFind').oninput = e => { const q = e.target.value.trim().toLowerCase();
@@ -2755,6 +2779,8 @@
           + sl('conf', 'Confidence interval', [['', 'Automatic (95% non-inferiority / superiority, 90% equivalence)'], ['95', '95% (one-sided α = 0.025)'], ['90', '90% (one-sided α = 0.05)'], ['99', '99%']], a.conf)
           + select('ppCol', 'Per-protocol population column (optional)', cats.filter(c => c.col !== a.outcome && c.col !== cfg.groupCol), a.ppCol) + (a.ppCol ? levelSelect('Per-protocol when', a.ppCol, a.ppVal, 'ppVal') : '<div></div>');
         predLabel = 'Adjust the mean difference for (ANCOVA, numeric outcome only)'; preds = isC ? [] : num.filter(c => c.col !== a.outcome); }
+      if (t === 'weighted') { fields = select('wcol', 'Weight column (e.g. survey weight)', num, a.wcol) + '<div></div>'; predLabel = 'Variables compared between the study groups'; preds = cols.filter(c => c.col !== cfg.groupCol && c.col !== a.wcol); }
+      if (t === 'kendallw') { fields = '<p class="legend-note" style="margin:0">Tick one column per rater (scores or ranks of the same patients). Patients scored by every rater are used.</p>'; predLabel = 'Raters'; preds = num; }
       if (t === 'crossover') fields = select('outcome', 'Outcome in period 1', num, a.outcome) + select('second', 'Outcome in period 2', num.filter(c => c.col !== a.outcome), a.second)
         + select('seqCol', 'Sequence column (e.g. AB / BA)', cat, a.seqCol) + (a.seqCol ? levelSelect('Sequence that got treatment A first', a.seqCol, a.seqA, 'seqA') : '<div></div>')
         + `<div><label class="f">Treatment A / B names</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="text" data-af="trtA" value="${esc(a.trtA || '')}" placeholder="A, e.g. Drug"><input type="text" data-af="trtB" value="${esc(a.trtB || '')}" placeholder="B, e.g. Placebo"></div></div>`
@@ -2768,7 +2794,7 @@
           + sl('timeAs', 'Time', [['cat', 'Categories (each visit vs the first)'], ['linear', 'Continuous (a linear trend; time values of step 3)']], a.timeAs)
           + `<div><label class="check" style="margin-top:22px"><input type="checkbox" data-af="inter" ${a.inter !== false ? 'checked' : ''}><span>Group × time interaction</span></label></div>`;
         predLabel = 'Baseline covariates (optional)'; preds = cols.filter(c => c.col !== cfg.groupCol); }
-      const withPreds = ['noninf', 'gee', 'tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
+      const withPreds = ['weighted', 'kendallw', 'noninf', 'gee', 'tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
       const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
       const ci = ADV_CAT[t] ?? 99, prevC = ai ? ADV_CAT[cfg.advanced[ai - 1].type] ?? 99 : -1, sep = ci !== prevC && ADV_GROUPS[ci] ? `<div class="adv-sep">${esc(ADV_GROUPS[ci][0])}</div>` : '';
       return `${sep}<div class="gcard" data-adv="${ai}">
@@ -2830,7 +2856,7 @@
       `<div><label class="f">Text before the comment (optional)</label><input type="text" data-af="commentPre" value="${esc(a.commentPre || '')}" placeholder="e.g. To identify the predictors of …"></div>`,
       `<div><label class="f">Text after the comment (optional)</label><input type="text" data-af="commentPost" value="${esc(a.commentPost || '')}" placeholder="e.g. This supports the hypothesis that …"></div>`,
       `<div style="grid-column:1/-1"><label class="f">Your own comment (optional — replaces the automatic one)</label><textarea data-af="commentCustom" rows="2" placeholder="Leave empty for the automatic comment">${esc(a.commentCustom || '')}</textarea></div>`].join('')}</div></details>`); }
-    if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm', 'noninf', 'gee', 'crossover'].includes(t))
+    if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm', 'noninf', 'gee', 'crossover', 'weighted'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
       out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
@@ -3875,6 +3901,13 @@
         postRepeated(res, state.cfg);
         if (cfg.options.rmImpute === 'locf') res.methods += ' Missing follow-up values were replaced by the last observation carried forward.';
         // subgroup analysis: every table again within each category of the chosen column
+        // sensitivity analysis: every table again in the per-protocol population
+        const ppc = cfg.options.ppCol, ppv = cfg.options.ppVal;
+        if (ppc && ppv !== '' && state.data.headers.includes(ppc)) {
+          try { const r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true }], advanced: [] });
+            const nPP = Analysis.filterRows({ ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true }] }, state.data.rows).length;
+            r2.sections.forEach(s => { s.title = `${s.title} — per-protocol population`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (per-protocol)`; }); res.sections.push(s); });
+            res.methods += ` As a sensitivity analysis, all comparisons were repeated in the per-protocol population (${ppc} = ${ppv}; n=${nPP}).`; } catch (e) { console.error(e); } }
         const sg = state.cfg.subgroup, sgCols = subCols(sg).filter(c => state.data.headers.includes(c));
         if (sgCols.length) {
           const subs = [], done = [];

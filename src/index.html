@@ -760,9 +760,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="grid g4" style="margin-bottom:8px">
         <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
         <div><label class="f">Normality test</label><select id="optNormality"><option value="sw" selected>Shapiro-Wilk</option><option value="ks">Kolmogorov-Smirnov (Lilliefors)</option><option value="skewkurt">Skewness &amp; kurtosis z-scores (|z| &gt; 1.96)</option></select></div>
-        <div><label class="f">Effect of binary variables</label><select id="optCatEffect"><option value="rr" selected>Relative risk (RR)</option><option value="or">Odds ratio (OR)</option></select></div>
-        <div><label class="f">Pairwise Mann-Whitney tests (3+ groups, without Dunn)</label><select id="optMwAdjust"><option value="none" selected>Unadjusted</option><option value="bonferroni">Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option></select></div>
-        <div><label class="f">Pairwise categorical comparisons</label><select id="optChiAdjust"><option value="bonferroni" selected>Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option><option value="none">No correction</option></select></div>
+        <div><label class="f">Effect of binary variables</label><select id="optCatEffect"><option value="rr" selected>Relative risk (RR)</option><option value="or">Odds ratio (OR)</option><option value="rd">Risk difference (percentage points)</option></select></div>
+        <div><label class="f">Pairwise Mann-Whitney tests (3+ groups, without Dunn)</label><select id="optMwAdjust"><option value="none" selected>Unadjusted</option><option value="bonferroni">Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option><option value="hochberg">Hochberg-adjusted</option><option value="sidak">Šidák-adjusted</option></select></div>
+        <div><label class="f">Pairwise categorical comparisons</label><select id="optChiAdjust"><option value="bonferroni" selected>Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option><option value="hochberg">Hochberg-adjusted</option><option value="sidak">Šidák-adjusted</option><option value="none">No correction</option></select></div>
         <div><label class="f">Confidence level of intervals</label><select id="optConfLevel"><option value="90">90%</option><option value="95" selected>95%</option><option value="99">99%</option></select></div>
         <div><label class="f">Hypothesis (two groups)</label><select id="optAlternative"><option value="two" selected>Two-sided</option><option value="greater">One-sided: first group greater</option><option value="less">One-sided: first group smaller</option></select></div>
         <div><label class="f">Median difference CI</label><select id="optNpEffect"><option value="hl" selected>Hodges-Lehmann</option><option value="boot">Bootstrap (2000 resamples)</option></select></div>
@@ -805,6 +805,22 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optCompleteCase"><span><b>Complete cases only</b> — analyse only patients with no missing value in the studied variables</span></label>
         </div>
       </div>
+      <div class="grid g2" style="margin-top:6px">
+        <div>
+          <label class="check"><input type="checkbox" id="optWelchUnequalN"><span><b>Welch's tests when group sizes differ</b> by 50% or more (whatever Levene's test says)</span></label>
+          <label class="check"><input type="checkbox" id="optPermAll"><span><b>Permutation tests</b> for every two-group numeric comparison (10,000 re-allocations)</span></label>
+          <label class="check"><input type="checkbox" id="optNnt"><span><b>Number needed to treat</b> (or harm) for significant yes/no outcomes, two groups</span></label>
+          <label class="check"><input type="checkbox" id="optEvalue"><span><b>E-values</b> for significant yes/no outcomes (robustness to unmeasured confounding)</span></label>
+          <label class="check"><input type="checkbox" id="optBayesEst"><span><b>Bayesian estimates</b> — posterior probability of a difference with 95% credible intervals, two groups</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optPowerCol"><span><b>Power column</b> — power at the observed difference and the n per group for 80%, two groups</span></label>
+          <label class="check"><input type="checkbox" id="optAssumptions"><span><b>Assumption table</b> — normality per group, Levene's test and the test used, for every numeric variable</span></label>
+          <div><label class="f">Confidence interval of each percentage</label><select id="optCatCI" style="width:auto"><option value="">None</option><option value="wilson">Wilson</option><option value="exact">Exact (Clopper-Pearson)</option></select></div>
+          <div class="row" style="gap:8px;margin-top:6px"><div><label class="f">P adjusted for clustering by</label><select id="optClusterCol" style="width:auto"></select></div><div><label class="f">P stratified by (two groups)</label><select id="optStrataCol" style="width:auto"></select></div></div>
+          <div class="row" style="gap:8px;margin-top:6px"><div><label class="f">Sensitivity analysis: per-protocol population column</label><select id="optPpCol" style="width:auto"></select></div><div><label class="f">Per-protocol when</label><select id="optPpVal" style="width:auto"></select></div></div>
+        </div>
+      </div>
       </details>
     </div>
     <div class="card">
@@ -812,7 +828,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <p class="hint">How outcomes measured several times in the same patients are tested. Change within each group needs <b>Change over time within each group</b> ticked above (one-group studies always test it).</p>
       <div class="grid g4">
         <div><label class="f">Post hoc comparisons over time</label><select id="optRmPost"><option value="first" selected>Each timepoint against the first</option><option value="consecutive">Consecutive timepoints</option><option value="all">All pairs of timepoints</option><option value="last">First versus last timepoint only</option></select></div>
-        <div><label class="f">Adjustment for multiple comparisons</label><select id="optRmAdjust"><option value="bonferroni" selected>Bonferroni</option><option value="holm">Holm (less conservative)</option><option value="none">None</option></select></div>
+        <div><label class="f">Adjustment for multiple comparisons</label><select id="optRmAdjust"><option value="bonferroni" selected>Bonferroni</option><option value="holm">Holm (less conservative)</option><option value="hochberg">Hochberg (step-up)</option><option value="sidak">Šidák</option><option value="none">None</option></select></div>
         <div><label class="f">Sphericity correction (repeated-measures ANOVA)</label><select id="optRmSph"><option value="gg" selected>Greenhouse-Geisser</option><option value="hf">Huynh-Feldt</option><option value="none">None (sphericity assumed)</option></select></div>
         <div><label class="f">Compare the change between the groups</label><select id="optRmChange"><option value="none" selected>No</option><option value="abs">Change from the first timepoint</option><option value="pct">% change from the first timepoint</option></select></div>
       </div>
@@ -830,7 +846,15 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       </div>
     </div>
     <div class="card">
-      <div class="row"><h2 style="margin:0">Test plan</h2><span class="spacer"></span><span class="legend-note">Which test each variable gets with the settings above — updated as you change them.</span><button class="btn ghost small" id="planXlsx" type="button">⬇ Excel</button></div>
+      <div class="row"><h2 style="margin:0">Interim analyses</h2><span class="spacer"></span><span class="legend-note">Group-sequential stopping boundaries for a trial with equally spaced interim looks (two-sided).</span></div>
+      <div class="row" style="gap:10px;align-items:flex-end;margin-top:8px"><div><label class="f">Number of looks (incl. final)</label><select id="gsK" style="width:auto"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></div>
+        <div><label class="f">Overall α (two-sided)</label><select id="gsA" style="width:auto"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option><option value="0.1">0.10</option></select></div>
+        <div><label class="f">Boundary</label><select id="gsT" style="width:auto"><option value="obf">O'Brien-Fleming</option><option value="pocock">Pocock</option></select></div>
+        <button class="btn ghost small" id="gsGo" type="button" style="margin-bottom:6px">Compute</button><button class="btn ghost small" id="gsCopy" type="button" style="margin-bottom:6px">⧉ Copy</button></div>
+      <div id="gsOut" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Test plan</h2><span class="spacer"></span><span class="legend-note">Which test each variable gets with the settings above — updated as you change them.</span><button class="btn ghost small" id="planPre" type="button" title="Each variable’s distribution and test, to fix them before seeing the results (import it later)">⬇ Prespecified plan</button><button class="btn ghost small" id="planImp" type="button" title="Apply a prespecified plan saved earlier">⬆ Import plan</button><input type="file" id="planFile" accept=".xlsx,.xls,.csv" hidden><button class="btn ghost small" id="planXlsx" type="button">⬇ Excel</button></div>
       <div class="tbl-wrap" style="margin-top:8px;max-height:420px"><table class="t" id="testPlan"></table></div>
     </div>
     <div class="card">

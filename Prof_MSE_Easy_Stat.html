@@ -760,9 +760,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="grid g4" style="margin-bottom:8px">
         <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
         <div><label class="f">Normality test</label><select id="optNormality"><option value="sw" selected>Shapiro-Wilk</option><option value="ks">Kolmogorov-Smirnov (Lilliefors)</option><option value="skewkurt">Skewness &amp; kurtosis z-scores (|z| &gt; 1.96)</option></select></div>
-        <div><label class="f">Effect of binary variables</label><select id="optCatEffect"><option value="rr" selected>Relative risk (RR)</option><option value="or">Odds ratio (OR)</option></select></div>
-        <div><label class="f">Pairwise Mann-Whitney tests (3+ groups, without Dunn)</label><select id="optMwAdjust"><option value="none" selected>Unadjusted</option><option value="bonferroni">Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option></select></div>
-        <div><label class="f">Pairwise categorical comparisons</label><select id="optChiAdjust"><option value="bonferroni" selected>Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option><option value="none">No correction</option></select></div>
+        <div><label class="f">Effect of binary variables</label><select id="optCatEffect"><option value="rr" selected>Relative risk (RR)</option><option value="or">Odds ratio (OR)</option><option value="rd">Risk difference (percentage points)</option></select></div>
+        <div><label class="f">Pairwise Mann-Whitney tests (3+ groups, without Dunn)</label><select id="optMwAdjust"><option value="none" selected>Unadjusted</option><option value="bonferroni">Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option><option value="hochberg">Hochberg-adjusted</option><option value="sidak">Šidák-adjusted</option></select></div>
+        <div><label class="f">Pairwise categorical comparisons</label><select id="optChiAdjust"><option value="bonferroni" selected>Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option><option value="hochberg">Hochberg-adjusted</option><option value="sidak">Šidák-adjusted</option><option value="none">No correction</option></select></div>
         <div><label class="f">Confidence level of intervals</label><select id="optConfLevel"><option value="90">90%</option><option value="95" selected>95%</option><option value="99">99%</option></select></div>
         <div><label class="f">Hypothesis (two groups)</label><select id="optAlternative"><option value="two" selected>Two-sided</option><option value="greater">One-sided: first group greater</option><option value="less">One-sided: first group smaller</option></select></div>
         <div><label class="f">Median difference CI</label><select id="optNpEffect"><option value="hl" selected>Hodges-Lehmann</option><option value="boot">Bootstrap (2000 resamples)</option></select></div>
@@ -805,6 +805,22 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optCompleteCase"><span><b>Complete cases only</b> — analyse only patients with no missing value in the studied variables</span></label>
         </div>
       </div>
+      <div class="grid g2" style="margin-top:6px">
+        <div>
+          <label class="check"><input type="checkbox" id="optWelchUnequalN"><span><b>Welch's tests when group sizes differ</b> by 50% or more (whatever Levene's test says)</span></label>
+          <label class="check"><input type="checkbox" id="optPermAll"><span><b>Permutation tests</b> for every two-group numeric comparison (10,000 re-allocations)</span></label>
+          <label class="check"><input type="checkbox" id="optNnt"><span><b>Number needed to treat</b> (or harm) for significant yes/no outcomes, two groups</span></label>
+          <label class="check"><input type="checkbox" id="optEvalue"><span><b>E-values</b> for significant yes/no outcomes (robustness to unmeasured confounding)</span></label>
+          <label class="check"><input type="checkbox" id="optBayesEst"><span><b>Bayesian estimates</b> — posterior probability of a difference with 95% credible intervals, two groups</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optPowerCol"><span><b>Power column</b> — power at the observed difference and the n per group for 80%, two groups</span></label>
+          <label class="check"><input type="checkbox" id="optAssumptions"><span><b>Assumption table</b> — normality per group, Levene's test and the test used, for every numeric variable</span></label>
+          <div><label class="f">Confidence interval of each percentage</label><select id="optCatCI" style="width:auto"><option value="">None</option><option value="wilson">Wilson</option><option value="exact">Exact (Clopper-Pearson)</option></select></div>
+          <div class="row" style="gap:8px;margin-top:6px"><div><label class="f">P adjusted for clustering by</label><select id="optClusterCol" style="width:auto"></select></div><div><label class="f">P stratified by (two groups)</label><select id="optStrataCol" style="width:auto"></select></div></div>
+          <div class="row" style="gap:8px;margin-top:6px"><div><label class="f">Sensitivity analysis: per-protocol population column</label><select id="optPpCol" style="width:auto"></select></div><div><label class="f">Per-protocol when</label><select id="optPpVal" style="width:auto"></select></div></div>
+        </div>
+      </div>
       </details>
     </div>
     <div class="card">
@@ -812,7 +828,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <p class="hint">How outcomes measured several times in the same patients are tested. Change within each group needs <b>Change over time within each group</b> ticked above (one-group studies always test it).</p>
       <div class="grid g4">
         <div><label class="f">Post hoc comparisons over time</label><select id="optRmPost"><option value="first" selected>Each timepoint against the first</option><option value="consecutive">Consecutive timepoints</option><option value="all">All pairs of timepoints</option><option value="last">First versus last timepoint only</option></select></div>
-        <div><label class="f">Adjustment for multiple comparisons</label><select id="optRmAdjust"><option value="bonferroni" selected>Bonferroni</option><option value="holm">Holm (less conservative)</option><option value="none">None</option></select></div>
+        <div><label class="f">Adjustment for multiple comparisons</label><select id="optRmAdjust"><option value="bonferroni" selected>Bonferroni</option><option value="holm">Holm (less conservative)</option><option value="hochberg">Hochberg (step-up)</option><option value="sidak">Šidák</option><option value="none">None</option></select></div>
         <div><label class="f">Sphericity correction (repeated-measures ANOVA)</label><select id="optRmSph"><option value="gg" selected>Greenhouse-Geisser</option><option value="hf">Huynh-Feldt</option><option value="none">None (sphericity assumed)</option></select></div>
         <div><label class="f">Compare the change between the groups</label><select id="optRmChange"><option value="none" selected>No</option><option value="abs">Change from the first timepoint</option><option value="pct">% change from the first timepoint</option></select></div>
       </div>
@@ -830,7 +846,15 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       </div>
     </div>
     <div class="card">
-      <div class="row"><h2 style="margin:0">Test plan</h2><span class="spacer"></span><span class="legend-note">Which test each variable gets with the settings above — updated as you change them.</span><button class="btn ghost small" id="planXlsx" type="button">⬇ Excel</button></div>
+      <div class="row"><h2 style="margin:0">Interim analyses</h2><span class="spacer"></span><span class="legend-note">Group-sequential stopping boundaries for a trial with equally spaced interim looks (two-sided).</span></div>
+      <div class="row" style="gap:10px;align-items:flex-end;margin-top:8px"><div><label class="f">Number of looks (incl. final)</label><select id="gsK" style="width:auto"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></div>
+        <div><label class="f">Overall α (two-sided)</label><select id="gsA" style="width:auto"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option><option value="0.1">0.10</option></select></div>
+        <div><label class="f">Boundary</label><select id="gsT" style="width:auto"><option value="obf">O'Brien-Fleming</option><option value="pocock">Pocock</option></select></div>
+        <button class="btn ghost small" id="gsGo" type="button" style="margin-bottom:6px">Compute</button><button class="btn ghost small" id="gsCopy" type="button" style="margin-bottom:6px">⧉ Copy</button></div>
+      <div id="gsOut" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Test plan</h2><span class="spacer"></span><span class="legend-note">Which test each variable gets with the settings above — updated as you change them.</span><button class="btn ghost small" id="planPre" type="button" title="Each variable’s distribution and test, to fix them before seeing the results (import it later)">⬇ Prespecified plan</button><button class="btn ghost small" id="planImp" type="button" title="Apply a prespecified plan saved earlier">⬆ Import plan</button><input type="file" id="planFile" accept=".xlsx,.xls,.csv" hidden><button class="btn ghost small" id="planXlsx" type="button">⬇ Excel</button></div>
       <div class="tbl-wrap" style="margin-top:8px;max-height:420px"><table class="t" id="testPlan"></table></div>
     </div>
     <div class="card">
@@ -21891,7 +21915,7 @@ const Stats = (() => {
       const p = useFisher && sub.length === 2 && cs.minE < 5 ? fisher2x2(sub).p : cs.p;
       out.push({ i, j, p: adjust === 'bonferroni' ? bonferroni(p, m) : p });
     }
-    if (adjust === 'holm') { const h = holm(out.map(q => q.p)); out.forEach((q, n) => { q.p = h[n]; }); }
+    if (adjust === 'holm' || adjust === 'hochberg' || adjust === 'sidak') { const h = padjust(out.map(q => q.p), adjust); out.forEach((q, n) => { q.p = h[n]; }); }
     return out;
   }
 
@@ -22443,6 +22467,15 @@ const Stats = (() => {
     const flat = { T2, F: fF, df1: p, df2: fdf2, p: 1 - jStat.centralF.cdf(fF, p, fdf2) };
     const lev = g > 1 ? anova(G.map(Y => Y.map(r => mean(r)))) : null;
     return { parallel, flatness: flat, levels: lev ? { F: lev.F, df1: lev.df1, df2: lev.df2, p: lev.p } : null, N, g, T };
+  }
+  // P values adjusted for multiple comparisons: Bonferroni, Holm (step-down), Hochberg (step-up), Šidák or none (same order back)
+  function padjust(ps, method = 'bonferroni') {
+    const m = ps.length;
+    if (method === 'holm') return holm(ps);
+    if (method === 'sidak') return ps.map(p => 1 - (1 - p) ** m);
+    if (method === 'hochberg') { const idx = ps.map((p, i) => i).sort((a, b) => ps[b] - ps[a]), out = new Array(m); let run = 1; idx.forEach((i, r) => { run = Math.min(run, (r + 1) * ps[i]); out[i] = Math.min(1, run); }); return out; }
+    if (method === 'none') return ps.slice();
+    return ps.map(p => Math.min(1, p * m));
   }
   // Holm step-down adjustment of a list of P values (same order back)
   function holm(ps) {
@@ -23039,6 +23072,116 @@ const Stats = (() => {
     return (a + b) / 2;
   }
   const boxCox = (v, l) => Math.abs(l) < 1e-12 ? Math.log(v) : (v ** l - 1) / l;
+  /* ---------- more tests: Mood's median, permutation, Huber robust regression, cluster-robust OLS, van Elteren, Kendall's W ---------- */
+  // Mood's median test (as scipy.stats.median_test: values equal to the grand median count as below, Yates for 2 groups)
+  function moodMedian(groups) {
+    const gm = median(groups.flat()), T = [groups.map(g => g.filter(v => v > gm).length), groups.map(g => g.filter(v => v <= gm).length)];
+    const N = sum(T[0]) + sum(T[1]), k = groups.length, rs = T.map(r => sum(r)), cs = groups.map((_, j) => T[0][j] + T[1][j]);
+    let chi = 0; for (let i = 0; i < 2; i++) for (let j = 0; j < k; j++) { const e = rs[i] * cs[j] / N; if (e > 0) chi += (k === 2 ? Math.max(0, Math.abs(T[i][j] - e) - 0.5) : Math.abs(T[i][j] - e)) ** 2 / e; }
+    return { chi, df: k - 1, p: 1 - jStat.chisquare.cdf(chi, k - 1), median: gm, table: T };
+  }
+  // two-sided permutation test of the difference in means (seeded, B shuffles)
+  function permutationTest(x, y, B = 10000, seed = 1) {
+    const all = [...x, ...y], n1 = x.length, obs = Math.abs(mean(x) - mean(y)), rnd = seeded(seed); let hit = 0;
+    for (let b = 0; b < B; b++) { const a = all.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      let s1 = 0; for (let i = 0; i < n1; i++) s1 += a[i]; const d = Math.abs(s1 / n1 - (sum(a) - s1) / (a.length - n1)); if (d >= obs - 1e-12) hit++; }
+    return { p: (hit + 1) / (B + 1), diff: mean(x) - mean(y), B };
+  }
+  // Huber M-estimation (as statsmodels RLM with HuberT(1.345), MAD scale, H1 covariance); X with intercept
+  function huberRegression(y, X, t = 1.345) {
+    const n = y.length, p = X[0].length, XtX = X[0].map((_, a) => X[0].map((_, b) => sum(X.map(r => r[a] * r[b])))), XtXi = invert(XtX); if (!XtXi) return null;
+    const wls = w => { const A = X[0].map((_, a) => X[0].map((_, b) => sum(X.map((r, i) => w[i] * r[a] * r[b])))), bv = X[0].map((_, a) => sum(X.map((r, i) => w[i] * r[a] * y[i]))), Ai = invert(A); return Ai ? Ai.map(r => sum(r.map((v, j) => v * bv[j]))) : null; };
+    const res = b => y.map((v, i) => v - sum(X[i].map((x, j) => x * b[j]))), mad = r => median(r.map(Math.abs)) / 0.6744897501960817;
+    const rho = z => Math.abs(z) <= t ? z * z / 2 : t * Math.abs(z) - t * t / 2;
+    let b = wls(new Array(n).fill(1)), r = res(b), scale = mad(r), dev = sum(r.map(v => rho(v / scale))), it = 0;
+    for (it = 1; it < 50; it++) {
+      const w = r.map(v => { const z = Math.abs(v / scale); return z <= t ? 1 : t / z; }); b = wls(w); if (!b) return null; r = res(b); scale = mad(r);
+      const d2 = sum(r.map(v => rho(v / scale))); if (Math.abs(d2 - dev) <= 1e-8) { dev = d2; break; } dev = d2;
+    }
+    const sr = r.map(v => v / scale), pd = sr.map(z => Math.abs(z) <= t ? 1 : 0), m = mean(pd), vpd = mean(pd.map(v => (v - m) ** 2)), k = 1 + p / n * vpd / (m * m);
+    const ssPsi = sum(sr.map(z => Math.max(-t, Math.min(t, z)) ** 2)), sPd = sum(pd);
+    const f = k * k * (ssPsi / (n - p) * scale * scale) / ((sPd / n) ** 2), cov = XtXi.map(row => row.map(v => v * f));
+    return { beta: b, se: cov.map((row, j) => Math.sqrt(row[j])), cov, scale, iter: it, wald: idx => waldTest(b, cov, idx) };
+  }
+  // OLS with cluster-robust (CR1) covariance, as statsmodels OLS(cov_type='cluster'); t with G − 1 df
+  function olsCluster(y, X, cl) {
+    const n = y.length, p = X[0].length, XtXi = invert(X[0].map((_, a) => X[0].map((_, b) => sum(X.map(r => r[a] * r[b]))))); if (!XtXi) return null;
+    const b = XtXi.map(row => sum(row.map((v, j) => v * sum(X.map((r, i) => r[j] * y[i]))))), e = y.map((v, i) => v - sum(X[i].map((x, j) => x * b[j])));
+    const ids = [...new Set(cl)], G = ids.length; if (G < 2) return null;
+    const M = Array.from({ length: p }, () => new Array(p).fill(0));
+    ids.forEach(id => { const u = new Array(p).fill(0); cl.forEach((c, i) => { if (c === id) for (let j = 0; j < p; j++) u[j] += X[i][j] * e[i]; }); for (let a = 0; a < p; a++) for (let c = 0; c < p; c++) M[a][c] += u[a] * u[c]; });
+    const fc = G / (G - 1) * (n - 1) / (n - p), cov = XtXi.map((row, a) => XtXi.map((_, c) => fc * sum(row.map((v, k) => v * sum(M[k].map((w, l) => w * XtXi[l][c]))))));
+    const se = cov.map((r, j) => Math.sqrt(r[j]));
+    return { beta: b, se, cov, G, df: G - 1, wald: idx => { const w = waldTest(b, cov, idx); if (!w) return null; const F = w.chi / idx.length; return { ...w, F, df1: idx.length, df2: G - 1, p: 1 - jStat.centralF.cdf(F, idx.length, G - 1) }; } };
+  }
+  // van Elteren's stratified Wilcoxon test (two groups, weights 1 / (N_s + 1))
+  function vanElteren(x, y, sx, sy) {
+    const strata = [...new Set([...sx, ...sy])]; let num = 0, den = 0, used = 0;
+    strata.forEach(s => { const a = x.filter((_, i) => sx[i] === s), b = y.filter((_, i) => sy[i] === s); if (!a.length || !b.length) return;
+      const all = [...a, ...b], N = all.length, rk = rank(all).ranks, W = sum(rk.slice(0, a.length)), E = a.length * (N + 1) / 2;
+      const cnt = {}; all.forEach(v => { cnt[v] = (cnt[v] || 0) + 1; }); const tie = sum(Object.values(cnt).map(t2 => t2 ** 3 - t2));
+      const V = a.length * b.length / 12 * (N + 1 - tie / (N * (N - 1))), w = 1 / (N + 1); num += w * (W - E); den += w * w * V; used++; });
+    const z = den > 0 ? num / Math.sqrt(den) : NaN; return { z, p: isFinite(z) ? 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1)) : NaN, strata: used };
+  }
+  // Kendall's coefficient of concordance W: rows = subjects (objects), columns = raters; tie-corrected
+  function kendallW(M) {
+    const n = M.length, m = M[0].length, R = M[0].map((_, j) => rank(M.map(r => r[j])).ranks);
+    const Ri = M.map((_, i) => sum(R.map(col => col[i]))), mR = mean(Ri), S2 = sum(Ri.map(v => (v - mR) ** 2));
+    const T = sum(M[0].map((_, j) => { const cnt = {}; M.forEach(r => { cnt[r[j]] = (cnt[r[j]] || 0) + 1; }); return sum(Object.values(cnt).map(t2 => t2 ** 3 - t2)); }));
+    const W = 12 * S2 / (m * m * (n ** 3 - n) - m * T), chi = m * (n - 1) * W;
+    return { W, chi, df: n - 1, p: 1 - jStat.chisquare.cdf(chi, n - 1), n, m };
+  }
+  // weighted least squares with a robust (HC1) covariance — survey weights, each patient a sampling unit
+  function wlsRobust(y, X, w) {
+    const n = y.length, p = X[0].length, A = X[0].map((_, a) => X[0].map((_, b) => sum(X.map((r, i) => w[i] * r[a] * r[b])))), Ai = invert(A); if (!Ai) return null;
+    const beta = Ai.map(row => sum(row.map((v, j) => v * sum(X.map((r, i) => w[i] * r[j] * y[i]))))), e = y.map((v, i) => v - sum(X[i].map((x, j) => x * beta[j])));
+    const M = X[0].map((_, a) => X[0].map((_, b) => sum(X.map((r, i) => w[i] * w[i] * e[i] * e[i] * r[a] * r[b]))));
+    const cov = Ai.map((row, a) => Ai.map((_, b) => n / (n - p) * sum(row.map((v, k) => v * sum(M[k].map((u, l) => u * Ai[l][b]))))));
+    return { beta, cov, se: cov.map((r, j) => Math.sqrt(r[j])), wald: idx => waldTest(beta, cov, idx) };
+  }
+  // weighted logistic regression (IRLS) with a robust (HC0) covariance
+  function weightedLogistic(y, X, w) {
+    const p = X[0].length; let beta = new Array(p).fill(0), Ai = null;
+    for (let it = 0; it < 50; it++) { const mu = X.map(r => 1 / (1 + Math.exp(-sum(r.map((v, j) => v * beta[j])))));
+      const A = X[0].map((_, a) => X[0].map((_, b) => sum(X.map((r, i) => w[i] * mu[i] * (1 - mu[i]) * r[a] * r[b])))); Ai = invert(A); if (!Ai) return null;
+      const U = X[0].map((_, a) => sum(X.map((r, i) => w[i] * (y[i] - mu[i]) * r[a]))), st = Ai.map(row => sum(row.map((v, j) => v * U[j]))); beta = beta.map((b, j) => b + st[j]);
+      if (Math.max(...st.map(Math.abs)) < 1e-10) break; }
+    const mu = X.map(r => 1 / (1 + Math.exp(-sum(r.map((v, j) => v * beta[j]))))), M = X[0].map((_, a) => X[0].map((_, b) => sum(X.map((r, i) => (w[i] * (y[i] - mu[i])) ** 2 * r[a] * r[b]))));
+    const cov = Ai.map((row, a) => Ai.map((_, b) => sum(row.map((v, k) => v * sum(M[k].map((u, l) => u * Ai[l][b]))))));
+    return { beta, cov, se: cov.map((r, j) => Math.sqrt(r[j])), wald: idx => waldTest(beta, cov, idx) };
+  }
+  // power of the two-sided two-sample t-test (noncentral t), and of the two-proportion z-test
+  function powerTwoMeans(diff, sdv, n1, n2, alpha = 0.05) { const df = n1 + n2 - 2, ncp = Math.abs(diff) / (sdv * Math.sqrt(1 / n1 + 1 / n2)), tc = jStat.studentt.inv(1 - alpha / 2, df); return 1 - nctCdf(tc, df, ncp) + nctCdf(-tc, df, ncp); }
+  function powerTwoProps(p1, p2, n1, n2, alpha = 0.05) { const za = jStat.normal.inv(1 - alpha / 2, 0, 1), pb = (p1 * n1 + p2 * n2) / (n1 + n2), s0 = Math.sqrt(pb * (1 - pb) * (1 / n1 + 1 / n2)), s1 = Math.sqrt(p1 * (1 - p1) / n1 + p2 * (1 - p2) / n2); if (!(s1 > 0)) return NaN;
+    const d = Math.abs(p1 - p2); return jStat.normal.cdf((d - za * s0) / s1, 0, 1) + jStat.normal.cdf((-d - za * s0) / s1, 0, 1); }
+  // Bayesian two-group estimates: means (flat priors → Student t posterior of the difference) and proportions (Beta(1, 1) priors, seeded draws)
+  function bayesMeans(x, y) { const t = tTest(x, y, true), se = (t.hi - t.diff) / jStat.studentt.inv(QU(), t.df); return { diff: t.diff, lo: t.lo, hi: t.hi, pGreater: 1 - jStat.studentt.cdf(-t.diff / se, t.df) }; }
+  function bayesProps(a1, n1, a2, n2, draws = 40000, seed = 3) {
+    const rnd = seeded(seed), nrm = () => Math.sqrt(-2 * Math.log(rnd() || 1e-12)) * Math.cos(2 * Math.PI * rnd());
+    const gam = k => { if (k < 1) return gam(k + 1) * rnd() ** (1 / k); const d = k - 1 / 3, c = 1 / Math.sqrt(9 * d); for (;;) { let x, v; do { x = nrm(); v = 1 + c * x; } while (v <= 0); v = v ** 3; const u = rnd(); if (u < 1 - 0.0331 * x ** 4 || Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v; } };
+    const beta = (a, b) => { const g1 = gam(a), g2 = gam(b); return g1 / (g1 + g2); }, dif = [];
+    for (let i = 0; i < draws; i++) dif.push(beta(a1 + 1, n1 - a1 + 1) - beta(a2 + 1, n2 - a2 + 1));
+    return { diff: a1 / n1 - a2 / n2, lo: quantile(dif, QL()), hi: quantile(dif, QU()), pGreater: dif.filter(v => v > 0).length / draws };
+  }
+  // group-sequential boundaries (two-sided, equally spaced looks): O'Brien-Fleming (C·√(K/k)) or Pocock (C), by numerical integration
+  function groupSequential(K, alpha = 0.05, type = 'obf') {
+    // the sub-density of z among the paths still inside is kept on a Simpson grid spanning exactly (−b, b); crossing probabilities
+    // at the next look are integrated analytically: z_k √k = z_(k−1) √(k−1) + N(0, 1) under H0 (equally spaced looks)
+    const n = 401, phi = z => Math.exp(-z * z / 2) / Math.sqrt(2 * Math.PI), Phi = z => jStat.normal.cdf(z, 0, 1);
+    const bounds = C => Array.from({ length: K }, (_, k) => type === 'pocock' ? C : C * Math.sqrt(K / (k + 1)));
+    const cross = b => {
+      let xs = Array.from({ length: n }, (_, i) => -b[0] + 2 * b[0] * i / (n - 1)), w = xs.map((_, i) => (i === 0 || i === n - 1 ? 1 : i % 2 ? 4 : 2) * (2 * b[0] / (n - 1)) / 3), f = xs.map(phi), tot = 2 * (1 - Phi(b[0]));
+      for (let k = 1; k < K; k++) { const r0 = Math.sqrt(k), r1 = Math.sqrt(k + 1), B = b[k];
+        tot += xs.reduce((a, x, i) => a + w[i] * f[i] * (1 - Phi(B * r1 - x * r0) + Phi(-B * r1 - x * r0)), 0);
+        if (k === K - 1) break;
+        const ys = Array.from({ length: n }, (_, i) => -B + 2 * B * i / (n - 1)), g = ys.map(z1 => r1 * xs.reduce((a, x, i) => a + w[i] * f[i] * phi(z1 * r1 - x * r0), 0));
+        xs = ys; f = g; w = ys.map((_, i) => (i === 0 || i === n - 1 ? 1 : i % 2 ? 4 : 2) * (2 * B / (n - 1)) / 3); }
+      return tot; };
+    let a = 1.5, c = 6; for (let it = 0; it < 40; it++) { const m = (a + c) / 2; if (cross(bounds(m)) > alpha) a = m; else c = m; }
+    const b = bounds((a + c) / 2); return b.map((z, k) => ({ look: k + 1, info: (k + 1) / K, z, p: 2 * (1 - jStat.normal.cdf(z, 0, 1)) }));
+  }
+
+
   /* ---------- non-inferiority / equivalence / superiority with a margin ---------- */
   const wilsonCI = (x, n, z) => { const p = x / n, den = 1 + z * z / n, c = (p + z * z / (2 * n)) / den, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den; return [c - h, c + h]; };
   // Newcombe's hybrid score interval of p1 − p2 (method 10)
@@ -23152,7 +23295,7 @@ const Stats = (() => {
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
   return {
-    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, nMargin, gee, glmmLogit, gaussHermite,
+    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, moodMedian, permutationTest, huberRegression, olsCluster, vanElteren, kendallW, powerTwoMeans, powerTwoProps, wlsRobust, weightedLogistic, bayesMeans, bayesProps, groupSequential, padjust, nMargin, gee, glmmLogit, gaussHermite,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
@@ -23218,7 +23361,9 @@ const Analysis = (() => {
   const pctTxt = v => fmt(v, FMT.pct);
   // a count in a table cell: 19 (63.3%), 19 (63.3), 19/30 (63.3%) or 63.3% (19)
   const npc = (cnt, pc, n) => { const p = pctTxt(pc);
-    return FMT.cat === 'npctNoSign' ? `${cnt} (${p})` : FMT.cat === 'nN' ? `${cnt}/${n} (${p}%)` : FMT.cat === 'pctN' ? `${p}% (${cnt})` : `${cnt} (${p}%)`; };
+    const ci = FMT.ci && n > 0 ? (([l, h]) => ` [${pctTxt(100 * l)}-${pctTxt(100 * h)}]`)(FMT.ci === 'exact' ? S.clopperPearson(cnt, n) : wilsonPair(cnt, n)) : '';
+    return (FMT.cat === 'npctNoSign' ? `${cnt} (${p})` : FMT.cat === 'nN' ? `${cnt}/${n} (${p}%)` : FMT.cat === 'pctN' ? `${p}% (${cnt})` : `${cnt} (${p}%)`) + ci; };
+  const wilsonPair = (x, n) => { const z = S.ZC(), ph = x / n, den = 1 + z * z / n, c = (ph + z * z / (2 * n)) / den, h = z * Math.sqrt(ph * (1 - ph) / n + z * z / (4 * n * n)) / den; return [Math.max(0, c - h), Math.min(1, c + h)]; };
   const meanSdName = lower => (FMT.mean === 'paren' ? 'Mean (SD)' : 'Mean ± SD').replace(/^M/, lower ? 'm' : 'M');
   function listJoin(a) {
     if (a.length <= 1) return a.join('');
@@ -23286,7 +23431,7 @@ const Analysis = (() => {
   }
   // test names as written in the descriptive comments
   const TEST_NAME = { 't-test': 'independent t-test', 'Welch t-test': "Welch's t-test", ANOVA: 'one-way ANOVA', 'Welch ANOVA': "Welch's ANOVA", 'Mann-Whitney': 'Mann-Whitney U test',
-    'Kruskal-Wallis': 'Kruskal-Wallis test', 'Chi-square': 'Chi-square test', "Fisher's exact": "Fisher's exact test", 'Fisher-Freeman-Halton': 'Fisher-Freeman-Halton exact test', 'Linear-by-linear': 'Chi-square test for trend (linear-by-linear association)' };
+    'Kruskal-Wallis': 'Kruskal-Wallis test', 'Chi-square': 'Chi-square test', "Fisher's exact": "Fisher's exact test", 'Fisher-Freeman-Halton': 'Fisher-Freeman-Halton exact test', 'Linear-by-linear': 'Chi-square test for trend (linear-by-linear association)', "Mood's median": "Mood's median test", Permutation: 'permutation test', 'Huber robust regression': 'Huber robust regression' };
   const testNames = rs => listJoin([...new Set(rs.map(r => TEST_NAME[r.test]).filter(Boolean))]);
   const amongTxt = k => k === 2 ? 'between the two groups' : `among the ${nWord(k)} groups`;
 
@@ -23319,14 +23464,30 @@ const Analysis = (() => {
     if (groupVals.some(g => g.length < 2)) return { desc, sw, normal, param, p: NaN, pairs: [], test: '—' };
     const pr = pairs(k);
     let p, test, pw = [], stat = '—';
+    // groups of very different size: Welch's t-test / ANOVA whatever Levene's test says
+    const unequalN = !!opts.welchUnequalN && Math.max(...groupVals.map(g => g.length)) >= 1.5 * Math.min(...groupVals.map(g => g.length));
+    // tests chosen per variable or for the whole report: Mood's median test, a permutation test, Huber robust regression
+    const perm = vtest === 'perm' || (!vtest && opts.permAll && k === 2);
+    if (vtest === 'median' || perm || vtest === 'huber') {
+      if (vtest === 'median') { const m = S.moodMedian(groupVals); p = m.p; test = "Mood's median"; stat = `χ² = ${fmt(m.chi, 2)}`; used.add('moodMed'); param = false;
+        pw = k === 2 ? [{ i: 0, j: 1, p, ...S.hodgesLehmann(groupVals[0], groupVals[1]) }] : (ps => pr.map(([i, j], q) => ({ i, j, p: ps[q], ...S.hodgesLehmann(groupVals[i], groupVals[j]) })))(S.padjust(pr.map(([i, j]) => S.moodMedian([groupVals[i], groupVals[j]]).p), opts.mwAdjust === 'none' ? 'none' : opts.mwAdjust || 'bonferroni')); }
+      else if (perm && k === 2) { const t = S.tTest(groupVals[0], groupVals[1], true), m = S.permutationTest(groupVals[0], groupVals[1], 10000, 1); p = m.p; test = 'Permutation'; stat = `${m.B} permutations`; used.add('perm'); param = true;
+        pw = [{ i: 0, j: 1, p, diff: t.diff, lo: t.lo, hi: t.hi }]; }
+      else { const y = groupVals.flat(), X = groupVals.flatMap((g, gi) => g.map(() => [1, ...Array.from({ length: k - 1 }, (_, q) => +(gi === q + 1))])), h = S.huberRegression(y, X);
+        if (h) { const w = h.wald(Array.from({ length: k - 1 }, (_, q) => q + 1)); p = w.p; test = 'Huber robust regression'; stat = `χ² = ${fmt(w.chi, 2)}`; used.add('huber'); param = true;
+          const bj = j => j ? h.beta[j] : 0, cv = (i2, j2) => i2 && j2 ? h.cov[i2][j2] : 0, z = S.ZC();
+          pw = pr.map(([i, j]) => { const diff = bj(i) - bj(j), se = Math.sqrt(cv(i, i) + cv(j, j) - 2 * cv(i, j)); return { i, j, diff, lo: diff - z * se, hi: diff + z * se, p: 2 * (1 - jStat.normal.cdf(Math.abs(diff / se), 0, 1)) }; }); } }
+      if (isFinite(p)) { p = hookP(p); if (k === 2 && pw[0]) pw[0].p = p; return { desc, sw, normal, param, p, test, stat, pairs: pw }; }
+    }
     if (param) {
       if (k === 2) {
-        const lev = S.levene(groupVals), eq = vtest === 't' ? true : vtest === 'welch' ? false : !(lev < 0.05);
+        const lev = S.levene(groupVals), eq = vtest === 't' ? true : vtest === 'welch' ? false : unequalN ? false : !(lev < 0.05);
+        if (unequalN && !vtest) used.add('welchN');
         const t = S.tTest(groupVals[0], groupVals[1], eq);
         p = t.p; test = eq ? 't-test' : 'Welch t-test'; stat = `t = ${fmt(t.t, 2)}`;
         used.add(eq ? 'ttest' : 'welch');
         pw = [{ i: 0, j: 1, p: t.p, diff: t.diff, lo: t.lo, hi: t.hi }];
-      } else if (vtest === 'welchanova' || (vtest !== 'anova' && opts.welch && S.levene(groupVals) < 0.05)) {
+      } else if (vtest === 'welchanova' || (vtest !== 'anova' && ((opts.welch && S.levene(groupVals) < 0.05) || unequalN))) {
         // unequal variances: Welch's ANOVA with Games–Howell post hoc
         const w = S.welchAnova(groupVals);
         p = w.p; test = 'Welch ANOVA'; stat = `F = ${fmt(w.F, 2)}`;
@@ -23358,8 +23519,8 @@ const Analysis = (() => {
         pw = pr.map(([i, j], q) => ({ i, j, p: dn ? dn[q].p : S.mannWhitney(groupVals[i], groupVals[j]).p, ...(opts.npEffect === 'boot' ? S.bootMedianDiff(groupVals[i], groupVals[j]) : S.hodgesLehmann(groupVals[i], groupVals[j])) }));
         if (opts.npEffect === 'boot') used.add('boot');
         // optional adjustment of the pairwise Mann-Whitney tests (Dunn's test is already Bonferroni-adjusted)
-        if (!dn && (opts.mwAdjust === 'bonferroni' || opts.mwAdjust === 'holm')) {
-          const adj = opts.mwAdjust === 'holm' ? S.holm(pw.map(q => q.p)) : pw.map(q => S.bonferroni(q.p, pw.length));
+        if (!dn && ['bonferroni', 'holm', 'hochberg', 'sidak'].includes(opts.mwAdjust)) {
+          const adj = S.padjust(pw.map(q => q.p), opts.mwAdjust);
           pw.forEach((q, n) => { q.p = adj[n]; }); used.add('mwAdj:' + opts.mwAdjust);
         }
       }
@@ -23374,6 +23535,7 @@ const Analysis = (() => {
     return { desc, sw, normal, param, p, test, stat, pairs: pw };
   }
 
+  const CONF_OF = o => (+o.confLevel || 95) / 100;
   /* ---------- categorical analysis between groups ---------- */
   // the time of each timepoint of an outcome: its value from step 3 (e.g. hours) when every one has a value, else 0, 1, 2 …
   let TP_TIME = {};
@@ -23416,7 +23578,9 @@ const Analysis = (() => {
     const binary = levels.length === 2;
     const rrRow = binary ? 0 : -1;
     // effect of the first level: relative risk (default) or odds ratio, stored under the same keys
-    const effect = (i, j) => { if (opts.catEffect !== 'or') return S.relativeRisk(table, rrRow, i, j); const o = S.oddsRatio(table, rrRow, i, j); return o && { rr: o.or, lo: o.lo, hi: o.hi }; };
+    const effect = (i, j) => {
+      if (opts.catEffect === 'rd') { const nc = S.newcombeDiff(table[0][i], ns[i], table[0][j], ns[j], CONF_OF(opts)); return ns[i] && ns[j] ? { rr: 100 * nc.d, lo: 100 * nc.lo, hi: 100 * nc.hi } : null; }
+      if (opts.catEffect !== 'or') return S.relativeRisk(table, rrRow, i, j); const o = S.oddsRatio(table, rrRow, i, j); return o && { rr: o.or, lo: o.lo, hi: o.hi }; };
     const rr = binary ? pairs(k).map(([i, j]) => ({ i, j, ...(effect(i, j) || { rr: null }) })) : [];
     // optional Bonferroni-adjusted pairwise comparisons once the overall test is significant (3+ groups)
     let catPairs = null;
@@ -23435,7 +23599,7 @@ const Analysis = (() => {
   const rmPairs = T => RO.post === 'all' ? pairs(T) : RO.post === 'consecutive' ? Array.from({ length: T - 1 }, (_, t) => [t, t + 1]) : RO.post === 'last' ? [[0, T - 1]] : Array.from({ length: T - 1 }, (_, t) => [0, t + 1]);
   const ADJ_NAME = { bonferroni: 'Bonferroni-adjusted', holm: 'Holm-adjusted', none: 'unadjusted' };
   const POST_WHAT = (tps) => RO.post === 'all' ? 'between each pair of timepoints' : RO.post === 'consecutive' ? 'between consecutive timepoints' : RO.post === 'last' ? `between ${tps[0]} and ${tps[tps.length - 1]}` : `versus ${tps[0]}`;
-  const adjust = ps => RO.adjust === 'holm' ? S.holm(ps) : RO.adjust === 'none' ? ps : ps.map(p => S.bonferroni(p, ps.length));
+  const adjust = ps => S.padjust(ps, RO.adjust || 'bonferroni');
   // Two timepoints → paired t / Wilcoxon; more → RM ANOVA / Friedman with post hoc paired comparisons (by default Bonferroni, against the first timepoint)
   function analyzeWithin(matrixByGroup, param, used, alpha) {
     return matrixByGroup.map(Y => {
@@ -24733,6 +24897,38 @@ const Analysis = (() => {
         spec: { type: 'margin', rows: res.map(r => ({ label: r.pop.name, est: r.est * sc, lo: r.lo * sc, hi: r.hi * sc })), margin: M * sc, design, better, xLabel: `${binary ? 'Risk difference (percentage points)' : 'Difference'}: ${tl} − ${rl}`, favNew: `Favours ${tl}`, favRef: `Favours ${rl}` } }],
       meta: { res } };
   }
+  /* ---------- survey-weighted comparison of the study groups ---------- */
+  function weightedSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G, k = groups.length; if (!a.wcol || k < 2) return null;
+    const vars = (a.predictors || []).filter(c => c !== a.wcol && !isGroupCol(cfg, c)); if (!vars.length) return null;
+    const rs = rows.filter(r => toNum(r[a.wcol]) > 0 && groups.includes(groupOf(cfg, r))), W = r => toNum(r[a.wcol]), gi = r => groups.indexOf(groupOf(cfg, r)), dm = i => [1, ...Array.from({ length: k - 1 }, (_, q) => +(i === q + 1))];
+    const head = ['', ...gl, 'P value'], trows = [], sent = [], idx = Array.from({ length: k - 1 }, (_, q) => q + 1);
+    vars.forEach(c => { const lab = plain(columnLabel(cfg, c));
+      if (columnKind(cfg, rows, c) === 'numeric') { const q = rs.filter(r => isFinite(toNum(r[c]))); if (q.length < k + 3) return;
+        const cells = groups.map((_, i) => { const g2 = q.filter(r => gi(r) === i), sw = S.sum(g2.map(W)); if (!sw) return '—'; const m = S.sum(g2.map(r => W(r) * toNum(r[c]))) / sw, v = S.sum(g2.map(r => W(r) * (toNum(r[c]) - m) ** 2)) / sw; return `${fmt(m, d)} ± ${fmt(Math.sqrt(v), d)}`; });
+        const m = S.wlsRobust(q.map(r => toNum(r[c])), q.map(r => dm(gi(r))), q.map(W)), w = m && m.wald(idx);
+        trows.push([{ t: [lab], b: true }, ...cells.map(t => ({ t: [t] })), { t: [w ? fmtP(w.p, alpha) : '—'] }]); if (w && w.p <= alpha) sent.push(lab);
+      } else { const lv = levelsOf(cfg, rows, c), q = rs.filter(r => lv.includes(toCat(r[c]))); if (lv.length < 2 || q.length < k + 3) return; let w = null;
+        if (lv.length === 2) { const pos = lv.find(l => POSITIVE.test(l)) || lv[0], m = S.weightedLogistic(q.map(r => +(toCat(r[c]) === pos)), q.map(r => dm(gi(r))), q.map(W)); w = m && m.wald(idx); }
+        lv.forEach((l, li) => trows.push([li ? { t: [`${lab}: ${l}`] } : { t: [`${lab}: ${l}`], b: true }, ...groups.map((_, i) => { const g2 = q.filter(r => gi(r) === i), sw = S.sum(g2.map(W)); return { t: [sw ? `${fmt(100 * S.sum(g2.filter(r => toCat(r[c]) === l).map(W)) / sw, 1)}%` : '—'] }; }),
+          ...(li ? [] : [{ t: [w ? fmtP(w.p, alpha) : '—'], rs: lv.length }])]));
+        if (w && w.p <= alpha) sent.push(lab); } });
+    if (!trows.length) return null; used.add('weighted');
+    return { kind: 'weighted', title: `Weighted comparison of the studied groups (weights: ${plain(columnLabel(cfg, a.wcol))})`, head, rows: trows,
+      footnote: `Weighted mean ± weighted SD, or weighted %. P: weighted linear regression (numeric) or weighted logistic regression (yes/no) with robust standard errors; categories with more than two levels are described only. Weights from ${a.wcol}; n=${rs.length}.`,
+      comment: sent.length ? `After weighting, ${listJoin(sent.map(lowerFirst))} differed significantly ${amongTxt(k)}.` : `After weighting, none of the studied variables differed significantly ${amongTxt(k)}.`, figures: [], meta: {} };
+  }
+  // Kendall's coefficient of concordance: agreement of several raters ranking or scoring the same patients
+  function kendallWSection(a, cfg, rows, alpha, d, used) {
+    const rc = a.predictors || []; if (rc.length < 2) return null;
+    const M = rows.map(r => rc.map(c => toNum(r[c]))).filter(x => x.every(isFinite)); if (M.length < 3) return null;
+    const m = S.kendallW(M); if (!isFinite(m.W)) return null; used.add('kendallW');
+    const grade = m.W < 0.1 ? 'very weak' : m.W < 0.3 ? 'weak' : m.W < 0.5 ? 'moderate' : m.W < 0.7 ? 'strong' : 'very strong';
+    return { kind: 'kendallW', title: `Concordance of ${m.m} raters (${listJoin(rc.map(c => plain(columnLabel(cfg, c))))})`, head: ['', 'Value'],
+      rows: [[{ t: ['Patients / raters'], b: true }, { t: [`${m.n} / ${m.m}`] }], [{ t: ["Kendall's W"], b: true }, { t: [fmt(m.W, 3)] }], [{ t: ['χ² (df)'], b: true }, { t: [`${fmt(m.chi, 2)} (${m.df})`] }], [{ t: ['P value'], b: true }, { t: [fmtP(m.p, alpha)] }]],
+      footnote: "Kendall's coefficient of concordance W (0 = no agreement, 1 = complete agreement), tie-corrected; χ² = m(n − 1)W.",
+      comment: `The concordance between the ${m.m} raters was ${grade} (Kendall's W = ${fmt(m.W, 3)}, P value ${pTxt(m.p)}).`, figures: [], meta: { m } };
+  }
   /* ---------- AB/BA crossover trial (Hills-Armitage): treatment, period and carry-over effects ---------- */
   function crossoverSection(a, cfg, rows, alpha, d, used) {
     if (!a.second || !a.seqCol || !a.seqA) return null;
@@ -25230,7 +25426,7 @@ const Analysis = (() => {
       if (opts.pWord && opts.pWord !== 'P value') s = s.replace(/\bP value\b/g, opts.pWord);
       return s;
     };
-    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct' };
+    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct', ci: opts.catCI || '' };
     const used = new Set();
     // error bars of mean charts: SD (default), SEM or 95% CI of the mean
     const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
@@ -25256,7 +25452,27 @@ const Analysis = (() => {
     const pairNames = pr.map(([i, j]) => `${gl[i]} and ${gl[j]}`);
     const numbered = k > 2;
     const sections = [];
-    const vars = effectiveVariables(cfg), ROLE_RANK = { primary: 0, secondary: 1, safety: 2 };
+    const vars = effectiveVariables(cfg), ROLE_RANK = { primary: 0, secondary: 1, safety: 2 }, ASSUME = [];
+    // extra P values per variable: adjusted for clustering, stratified (van Elteren / Cochran-Mantel-Haenszel), and the power of two-group tests
+    const cluCol = opts.clusterCol && data.headers.includes(opts.clusterCol) ? opts.clusterCol : '', strCol = k === 2 && opts.strataCol && data.headers.includes(opts.strataCol) ? opts.strataCol : '', powOn = !!opts.powerCol && k === 2;
+    const isMissing = x => x === null || x === undefined || String(x).trim() === '';
+    function extraTests(r) {
+      const col = r.v.cols[0].col, out = {}, dm = gi => Array.from({ length: k - 1 }, (_, q) => +(gi === q + 1)), gIdx = Array.from({ length: k - 1 }, (_, q) => q + 1);
+      const pts = byGroup.flatMap((rs, gi) => rs.map(x => ({ gi, y: r.num ? toNum(x[col]) : toCat(x[col]), c: cluCol ? x[cluCol] : null, s: strCol ? toCat(x[strCol]) : null }))).filter(o => r.num ? isFinite(o.y) : o.y !== null);
+      const pos = r.cat ? r.levels[0] : null;
+      if (cluCol) { const q = pts.filter(o => !isMissing(o.c)); let m = null;
+        if (r.num) m = S.olsCluster(q.map(o => o.y), q.map(o => [1, ...dm(o.gi)]), q.map(o => String(o.c)));
+        else if (r.cat.binary) m = S.gee(q.map(o => +(o.y === pos)), q.map(o => [1, ...dm(o.gi)]), q.map(o => String(o.c)), q.map(() => 0), 'binomial', 'independence');
+        const w = m ? m.wald(gIdx) : null; out.clu = w ? w.p : NaN; }
+      if (strCol) { const q = pts.filter(o => o.s !== null), A = q.filter(o => o.gi === 0), B = q.filter(o => o.gi === 1);
+        if (r.num) out.str = S.vanElteren(A.map(o => o.y), B.map(o => o.y), A.map(o => o.s), B.map(o => o.s)).p;
+        else if (r.cat.binary) { const T = [...new Set(q.map(o => o.s))].map(st => [A, B].map(G2 => { const g2 = G2.filter(o => o.s === st); return [g2.filter(o => o.y === pos).length, g2.filter(o => o.y !== pos).length]; })).filter(t => t[0][0] + t[0][1] > 0 && t[1][0] + t[1][1] > 0);
+          out.str = T.length ? S.mantelHaenszel(T).p : NaN; } else out.str = NaN; }
+      if (powOn) { if (r.num) { const d0 = r.num.desc, diff = d0[0].mean - d0[1].mean, sp = Math.sqrt(((d0[0].n - 1) * d0[0].sd ** 2 + (d0[1].n - 1) * d0[1].sd ** 2) / (d0[0].n + d0[1].n - 2));
+          out.pow = sp > 0 ? S.powerTwoMeans(diff, sp, d0[0].n, d0[1].n, alpha) : NaN; out.need = diff && sp > 0 ? S.nTwoMeans(Math.abs(diff), sp, alpha, 0.8).n1 : Infinity; }
+        else if (r.cat.binary) { const c = r.cat, p1 = c.table[0][0] / c.ns[0], p2 = c.table[0][1] / c.ns[1]; out.pow = S.powerTwoProps(p1, p2, c.ns[0], c.ns[1], alpha); out.need = p1 !== p2 ? S.nTwoProps(p1, p2, alpha, 0.8).n1 : Infinity; } }
+      return out;
+    }
 
     // Group single variables into their named tables, in column order
     const blocks = [];
@@ -25273,9 +25489,9 @@ const Analysis = (() => {
 
     const effectLines = res => res.pairs.map((q, idx) =>
       `${numbered ? 'M' + (idx + 1) + '=' : ''}${fmt(q.diff, d)} (${fmt(q.lo, d)}:${fmt(q.hi, d)})`);
-    const EF = opts.catEffect === 'or' ? 'OR' : 'RR', efName = EF === 'OR' ? 'Odds ratio' : 'Relative risk';
+    const EF = opts.catEffect === 'or' ? 'OR' : opts.catEffect === 'rd' ? 'RD' : 'RR', efName = { OR: 'Odds ratio', RD: 'Risk difference (percentage points, Newcombe CI)', RR: 'Relative risk' }[EF], rsep = EF === 'RD' ? ' to ' : '-';
     const rrLines = c => c.rr.map((q, idx) => q.rr === null ? `${numbered ? EF + (idx + 1) + ': ' : ''}—` :
-      `${numbered ? EF + (idx + 1) + ': ' : ''}${fmt(q.rr, 2)} (${fmt(q.lo, 2)}-${fmt(q.hi, 2)})`);
+      `${numbered ? EF + (idx + 1) + ': ' : ''}${fmt(q.rr, EF === 'RD' ? 1 : 2)} (${fmt(q.lo, EF === 'RD' ? 1 : 2)}${rsep}${fmt(q.hi, EF === 'RD' ? 1 : 2)})`);
     const postHocLines = res => res.pairs.map((q, idx) => `P${idx + 1}=${fmtP(q.p, alpha)}`);
 
     // the tests behind a table's P values: listed in its footnote, or as letters after each P value (testNote = 'list' / 'marks')
@@ -25747,6 +25963,8 @@ const Analysis = (() => {
         const tot = (on, f) => totalCol ? [{ t: [on ? f() : ''] }] : [];
         if (showPost) head.push('Post hoc');
         if (effOn) head.push(effHead);
+        if (!noP && cluCol) head.push(`P (adjusted for clustering by ${cluCol})`); if (!noP && strCol) head.push(`P (stratified by ${strCol})`); if (!noP && powOn) head.push('Power (n per group for 80%)');
+        res.forEach(r => { r.extra = cluCol || strCol || powOn ? extraTests(r) : {}; }); if (!noP) ASSUME.push(...res.filter(r => r.num));
         const trows = [];
         const tail = (r, span) => {
           if (noP) return [];
@@ -25755,6 +25973,10 @@ const Analysis = (() => {
           if (opts.showStat) cells.push({ t: [(r.num || r.cat).stat], rs: span, small: true });
           if (showPost) cells.push({ t: r.num && r.num.p <= alpha ? postHocLines(r.num) : r.cat && r.cat.pairs ? postHocLines(r.cat) : ['---'], rs: span, small: true });
           if (effOn) cells.push({ t: r.num ? (effNum ? effectLines(r.num) : ['---']) : (r.cat.binary && effCat ? rrLines(r.cat) : ['---']), rs: span, small: true });
+          const ex = r.extra || {};
+          if (cluCol) cells.push({ t: [isFinite(ex.clu) ? fmtP(ex.clu, alpha) : '—'], rs: span });
+          if (strCol) cells.push({ t: [isFinite(ex.str) ? fmtP(ex.str, alpha) : '—'], rs: span });
+          if (powOn) cells.push({ t: [isFinite(ex.pow) ? `${fmt(100 * ex.pow, 0)}% (${isFinite(ex.need) ? ex.need : '—'})` : '—'], rs: span, small: true });
           return cells;
         };
         for (const r of res) {
@@ -25813,7 +26035,7 @@ const Analysis = (() => {
           if (!wantEff || k !== 2) return '';
           if (r.num) { const q = r.num.pairs[0], u = U(r.v); return q && isFinite(q.diff) ? `; MD = ${fmt(q.diff, d)}${u}, 95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}${u}` : ''; }
           const q = r.cat.rr && r.cat.rr[0];
-          return q && q.rr !== null && q.rr !== undefined ? `; ${EF} = ${fmt(q.rr, 2)}, 95% CI ${fmt(q.lo, 2)}-${fmt(q.hi, 2)}` : '';
+          return q && q.rr !== null && q.rr !== undefined ? `; ${EF} = ${fmt(q.rr, EF === 'RD' ? 1 : 2)}${EF === 'RD' ? ' percentage points' : ''}, 95% CI ${fmt(q.lo, EF === 'RD' ? 1 : 2)}${rsep}${fmt(q.hi, EF === 'RD' ? 1 : 2)}` : '';
         };
         const effTxtAny = r => { if (k !== 2) return '';
           if (r.num) { const q = r.num.pairs[0], u = U(r.v); return q && isFinite(q.diff) ? `MD = ${fmt(q.diff, d)}${u}, 95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}${u}` : ''; }
@@ -25839,6 +26061,17 @@ const Analysis = (() => {
             sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`); }
         }
         // optional: non-significant two-group results with their estimate and 95% CI, not only the P value
+        if (k === 2 && !noP) res.forEach(r => {
+          const lab = lowerFirst(plain(r.v.label));
+          if (r.cat && r.cat.binary && r.cat.ns[0] && r.cat.ns[1]) { const c = r.cat, x1 = c.table[0][0], n1 = c.ns[0], x2 = c.table[0][1], n2 = c.ns[1], ev = r.levels[0];
+            if (opts.nnt && c.p <= alpha) { const nc = S.newcombeDiff(x1, n1, x2, n2, CONF_OF(opts)), more = nc.d > 0 ? 0 : 1, ex = nc.lo > 0 || nc.hi < 0;
+              sent.push(`The absolute difference in ${lab} (${ev}) was ${fmt(Math.abs(100 * nc.d), 1)} percentage points: one more patient with ${ev.toLowerCase() === 'yes' ? lab : `${lab} ${ev}`} in ${gl[more]} for every ${Math.ceil(1 / Math.abs(nc.d))} patients (number needed to treat or harm${ex ? `, 95% CI ${Math.ceil(1 / Math.max(Math.abs(nc.lo), Math.abs(nc.hi)))} to ${Math.ceil(1 / Math.min(Math.abs(nc.lo), Math.abs(nc.hi)))}` : ''}).`); used.add('nnt'); }
+            if (opts.evalue && c.p <= alpha) { const q = S.relativeRisk(c.table, 0, 0, 1); if (q && isFinite(q.rr) && q.rr > 0) { const inv = q.rr < 1, R = inv ? 1 / q.rr : q.rr, L = inv ? 1 / q.hi : q.lo, E = x => x + Math.sqrt(x * (x - 1));
+              sent.push(`The E-value was ${fmt(E(R), 2)} (${fmt(L > 1 ? E(L) : 1, 2)} for the confidence limit): an unmeasured confounder would need a relative risk of at least that size with both the group and ${lab} to explain the association away.`); used.add('evalue'); } }
+            if (opts.bayesEst) { const bp = S.bayesProps(x1, n1, x2, n2); sent.push(`With uniform priors, the posterior probability that ${lab} (${ev}) was more frequent in ${gl[0]} than in ${gl[1]} was ${fmt(100 * bp.pGreater, 1)}% (95% credible interval of the difference ${fmt(100 * bp.lo, 1)} to ${fmt(100 * bp.hi, 1)} percentage points).`); used.add('bayesEst'); } }
+          if (r.num && opts.bayesEst && r.gv[0].length > 1 && r.gv[1].length > 1) { const bm = S.bayesMeans(r.gv[0], r.gv[1]);
+            sent.push(`With non-informative priors, the posterior probability that the mean ${lab} was higher in ${gl[0]} than in ${gl[1]} was ${fmt(100 * bm.pGreater, 1)}% (95% credible interval of the difference ${fmt(bm.lo, d)} to ${fmt(bm.hi, d)}${U(r.v)}).`); used.add('bayesEst'); }
+        });
         if (opts.nsCI && k === 2 && !noP && !descriptive) nsRes.forEach(r => {
           if (r.num) { const q = r.num.pairs[0]; if (q && isFinite(q.lo)) sent.push(`The ${r.num.param ? 'mean' : 'median'} difference in ${lowerFirst(plain(r.v.label))} was ${fmt(q.diff, d)}${U(r.v)} (95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}${U(r.v)}).`); }
           else { const q = r.cat.rr && r.cat.rr[0]; if (q && q.rr !== null && q.rr !== undefined && isFinite(q.lo)) sent.push(`For ${lowerFirst(plain(r.v.label))}, the ${EF} was ${fmt(q.rr, 2)} (95% CI ${fmt(q.lo, 2)} to ${fmt(q.hi, 2)}).`); }
@@ -25926,7 +26159,11 @@ const Analysis = (() => {
           stats: res.map(r => (r.num || r.cat).stat), ci: opts.secondRow === 'ci' && res.some(r => r.num && r.num.param),
           missing: res.map(r => [plain(r.v.label), missingIn(r.v.cols[0].col, !!r.num)]).filter(x => x[1]).map(([l, m]) => `${l} (n=${m})`) };
         const lettersUsed = letters && res.some(r => cldOf(r));
-        const notes = [noP ? '' : tm.note, lettersUsed ? `Values in a row with no superscript letter in common differ significantly (post hoc, P value ≤ ${alpha})` : '', ...b.vars.map(v => v.note)].filter(Boolean).join(', ');
+        const notes = [noP ? '' : tm.note, lettersUsed ? `Values in a row with no superscript letter in common differ significantly (post hoc, P value ≤ ${alpha})` : '', ...b.vars.map(v => v.note),
+          !noP && cluCol ? `P adjusted for clustering by ${cluCol}: linear regression (numeric) or GEE logistic regression (yes/no) with cluster-robust standard errors, t with ${new Set(byGroup.flat().map(x => x[cluCol]).filter(x => !isMissing(x))).size - 1} df for numeric variables` : '',
+          !noP && strCol ? `P stratified by ${strCol}: van Elteren test (numeric) or Cochran-Mantel-Haenszel test (yes/no)` : '',
+          !noP && powOn ? 'Power: of the two-group test at the observed difference and α, with the n per group needed for 80% power (post hoc power is descriptive)' : ''].filter(Boolean).join(', ');
+        if (!noP && cluCol) used.add('cluster'); if (!noP && strCol) used.add('strata'); if (!noP && powOn) used.add('power');
         // significance brackets between groups: pairwise P values once the overall test is significant
         const brackets = x => {
           if (!opts.sigMarks || !(x.p <= alpha)) return {};
@@ -26006,6 +26243,14 @@ const Analysis = (() => {
 
     // enrolment over time: patients per month from a date column (step 9)
     if (cfg.timeline && cfg.timeline.col) { const sec = timelineSection(cfg, rows, groups, gl); if (sec) sections.unshift(sec); }
+    if (opts.assumptions && ASSUME.length && k > 1) {
+      const nn = opts.normality === 'ks' ? 'Kolmogorov-Smirnov' : 'Shapiro-Wilk';
+      sections.push({ kind: 'assumptions', title: 'Assumption checks of the numeric variables', head: ['Variable', ...gl.map(g => `${nn} P (${g})`), "Levene's P", 'Test used'],
+        rows: ASSUME.map(r => [{ t: [plain(r.v.label)], b: true }, ...r.num.sw.map(x => ({ t: [x ? fmtP(x.p, 0.05) : '—'] })), { t: [r.gv.every(g => g.length > 1) ? fmtP(S.levene(r.gv), 0.05) : '—'] }, { t: [TEST_NAME[r.num.test] || r.num.test] }]),
+        footnote: `*: P value ≤ 0.05 (normality or equal variances rejected). ${nn} test of normality in each group; Levene's test of equal variances (mean-centred).`, comment: (() => { const nonN = ASSUME.filter(r => r.num.sw.some(x => x && x.p <= 0.05)).map(r => lowerFirst(plain(r.v.label))), lev = ASSUME.filter(r => r.gv.every(g => g.length > 1) && S.levene(r.gv) <= 0.05).map(r => lowerFirst(plain(r.v.label)));
+          return `${nonN.length ? `${cap(listJoin(nonN))} ${nonN.length > 1 ? 'were' : 'was'} not normally distributed in at least one group` : 'All numeric variables were normally distributed in every group'}${lev.length ? `, and the variances of ${listJoin(lev)} differed between the groups` : ', and their variances did not differ significantly between the groups'}.`; })(), figures: [], meta: {} });
+      used.add('assumptions');
+    }
     if (opts.correlation) {
       const sec = correlationSection(vars, rows, cfg, alpha, d);
       if (sec) {
@@ -26017,7 +26262,7 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee'].includes(a.type))) continue;
+      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw'].includes(a.type))) continue;
       const needs = {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
@@ -26025,16 +26270,16 @@ const Analysis = (() => {
         methodcomp: () => a.second, pca: () => (a.predictors || []).length >= 3, partial: () => a.second && (a.predictors || []).length, anova2: () => a.second, mediation: () => a.second && a.xvar, psm: () => (a.predictors || []).length, lmm: () => a.rvar, tost: () => a.margin !== undefined && a.margin !== '', mh: () => a.positive && a.second, clogit: () => a.positive && a.second && (a.predictors || []).length,
         correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second,
         cif: () => a.event && a.positive && a.competing, tdroc: () => a.event && a.positive && (a.predictors || []).length, quantreg: () => (a.predictors || []).length, fleiss: () => (a.predictors || []).length >= 2,
-        rmcorr: () => a.second && a.idcol, crossover: () => a.second && a.seqCol, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
+        rmcorr: () => a.second && a.idcol, crossover: () => a.second && a.seqCol, weighted: () => a.wcol && (a.predictors || []).length, kendallw: () => (a.predictors || []).length >= 2, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
         agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, count: countSection, ordinal: ordinalSection, multinom: ordinalSection, methodcomp: methodSection, pca: pcaSection, partial: partialSection, anova2: anova2Section, mediation: mediationSection, psm: psmSection, lmm: lmmSection, tost: tostSection, mh: mhSection, clogit: clogitSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection,
-        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection }[a.type];
+        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, weighted: weightedSection, kendallw: kendallWSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
-      const compares = ['ancova', 'survival', 'cif', 'noninf', 'gee', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
+      const compares = ['ancova', 'survival', 'cif', 'noninf', 'gee', 'weighted', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
         : a.subset === 'each' ? groups.map(g => ({ g, rows: rows.filter(r => groupOf(cfg, r) === g) }))
         : groups.includes(a.subset) ? [{ g: a.subset, rows: rows.filter(r => groupOf(cfg, r) === a.subset) }] : [{ g: null, rows }];
@@ -26358,7 +26603,7 @@ const Analysis = (() => {
       const e = [];
       if (used.has('param')) e.push(k === 2 ? 'mean differences' : 'mean differences (Tukey-adjusted)');
       if (used.has('nonparam')) e.push('Hodges-Lehmann median differences');
-      if (used.has('cat')) e.push(o.catEffect === 'or' ? 'odds ratios (OR)' : 'relative risks (RR)');
+      if (used.has('cat')) e.push(o.catEffect === 'or' ? 'odds ratios (OR)' : o.catEffect === 'rd' ? 'risk differences (RD, Newcombe)' : 'relative risks (RR)');
       if (e.length) s.push(`Effect estimates were reported as ${listJoin(e)} with 95% confidence intervals (CI).`);
     }
     const within = [];
@@ -26403,6 +26648,11 @@ const Analysis = (() => {
       lmmAdv: 'Repeated outcomes were analysed with linear mixed models with a random intercept per patient, adjusted for covariates.', interaction: 'Interaction terms were added to the regression models where stated.',
       optimism: 'Models were internally validated by bootstrapping (200 resamples) with optimism-corrected AUC.', nri: 'The added value of a predictor was assessed with the continuous net reclassification improvement (NRI) and the integrated discrimination improvement (IDI).',
       dca: 'Clinical usefulness was assessed with decision curve analysis (net benefit).',
+      moodMed: "Mood's median test was used where stated.", weighted: 'Weighted comparisons used weighted linear or logistic regression with robust standard errors.', kendallW: "Agreement between several raters' rankings was assessed with Kendall's coefficient of concordance (W).", perm: 'Permutation tests (10,000 random re-allocations, difference in means) were used where stated.', huber: 'Huber robust regression (M-estimation) was used where stated, to limit the influence of outliers.',
+      welchN: "Welch's tests were used when the group sizes differed by 50% or more.", cluster: 'P values adjusted for clustering used cluster-robust standard errors.', strata: 'Stratified comparisons used the van Elteren test (numeric) and the Cochran-Mantel-Haenszel test (yes/no).',
+      power: 'The power of each two-group comparison at the observed difference was reported descriptively, with the sample size needed for 80% power.', nnt: 'For significant yes/no outcomes, the number needed to treat (or harm) was derived from the risk difference (Newcombe CI).',
+      evalue: 'E-values were calculated to assess the robustness of significant associations to unmeasured confounding.', bayesEst: 'Bayesian estimates (non-informative priors) gave the posterior probability of a difference with 95% credible intervals.',
+      assumptions: 'Normality (per group) and homogeneity of variances (Levene) were summarised in an assumption table.',
       rmAncova: 'Later measurements were also compared between the groups by analysis of covariance (ANCOVA) adjusted for the baseline value.',
       rmIuw: 'Patients were classified as improved, unchanged or worse according to a prespecified change from baseline, and the groups were compared with the Chi-square or Fisher\'s exact test.',
       rmSph: "Sphericity was tested with Mauchly's test, and the Greenhouse-Geisser and Huynh-Feldt epsilons were reported.",
@@ -29586,7 +29836,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figPerRow: 1, valueLabels: false,
     chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
@@ -29605,7 +29855,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
@@ -30788,7 +31038,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       $('#vdRefCat').textContent = v.type === 'categorical' && lv0.length ? `In regression models this variable is compared with its reference category “${ref}” (change the order with ↕ in the list).` : ''; $('#vdRareBox').style.display = v.type === 'categorical' && v.kind === 'single' ? '' : 'none'; }
     $('#vdOrd').checked = !!v.ordinal; $('#vdOrd').disabled = v.type !== 'categorical'; $('#vdOrdTest').value = v.ordTest || 'rank';
     $('#vdAr').value = v.labelAr || ''; $('#vdMemo').value = v.memo || ''; $('#vdNoSecond').checked = !!v.noSecond; $('#vdMcid').value = v.mcid || ''; $('#vdMcid').disabled = v.type !== 'numeric'; $('#vdNoSecondBox').style.display = v.type === 'numeric' && v.kind === 'single' ? '' : 'none';
-    const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis']]
+    const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis'], ['median', "Mood's median test"], ['perm', 'Permutation test (two groups)'], ['huber', 'Huber robust regression']]
       : [['chi', 'Chi-square'], ['fisher', "Fisher's exact (2×2)"], ['ffh', 'Fisher-Freeman-Halton (larger tables)']];
     $('#vdTest').innerHTML = `<option value="">Automatic (step 4 settings)</option>` + tests.map(([k, l]) => `<option value="${k}" ${v.test === k ? 'selected' : ''}>${esc(l)}</option>`).join('');
     const lv = v.type === 'categorical' ? (v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct) : [];
@@ -31684,6 +31934,11 @@ if (typeof module !== 'undefined') module.exports = Sav;
   // option controls of steps 4–8 show the saved options
   function renderOptions() {
     const o = state.cfg.options;
+    // column choices of step 4: clustering, strata and the per-protocol population
+    if (state.data) { const h = state.data.headers, opt = list => '<option value="">— none —</option>' + list.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      const cats = h.filter(c => c !== state.cfg.groupCol && (n => n >= 2 && n <= 40)(columnInfo(state.data.rows, c).distinct.length));
+      $('#optClusterCol').innerHTML = opt(h.filter(c => c !== state.cfg.groupCol)); $('#optStrataCol').innerHTML = opt(cats); $('#optPpCol').innerHTML = opt(cats);
+      $('#optPpVal').innerHTML = o.ppCol ? columnInfo(state.data.rows, o.ppCol).distinct.map(v => `<option>${esc(v)}</option>`).join('') : '<option value="">—</option>'; }
     for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
     const gNames = state.data && !state.cfg.noGroups ? activeGroups().map(g => state.cfg.groupLabels[g] || g) : [];
     $('#customColors').innerHTML = o.customColors.map((col, i) => `<label class="cc"><input type="color" data-ccol="${i}" value="${esc(col)}" title="${esc(gNames[i] || `Colour ${i + 1}`)}"><span>${esc(gNames[i] || `Colour ${i + 1}`)}</span></label>`).join('');
@@ -32174,6 +32429,25 @@ if (typeof module !== 'undefined') module.exports = Sav;
   }
   ['#pwKind', '#pwAlpha', '#pwPower', '#pwRatio', '#pwA', '#pwB', '#pwDrop'].forEach(id => { const el = $(id); if (el) el.addEventListener('input', renderPower); });
   if ($('#pwKind')) renderPower();
+  $('#optPpCol').addEventListener('change', () => { const c = $('#optPpCol').value, d = c ? columnInfo(state.data.rows, c).distinct : []; $('#optPpVal').innerHTML = d.length ? d.map(v => `<option ${Analysis.POSITIVE.test(v) ? 'selected' : ''}>${esc(v)}</option>`).join('') : '<option value="">—</option>'; });
+  // group-sequential boundaries
+  $('#gsGo').onclick = () => { const K = +$('#gsK').value, al = +$('#gsA').value, ty = $('#gsT').value; $('#gsOut').innerHTML = '<p class="legend-note">Computing…</p>';
+    setTimeout(() => { const b = Stats.groupSequential(K, al, ty); state.gsText = `${ty === 'obf' ? "O'Brien-Fleming" : 'Pocock'} boundaries for ${K} equally spaced looks (two-sided α = ${al}): ` + b.map(x => `look ${x.look} (${Math.round(100 * x.info)}% of patients): |z| ≥ ${x.z.toFixed(3)}, P ≤ ${x.p < 0.0001 ? x.p.toExponential(2) : x.p.toFixed(4)}`).join('; ') + '.';
+      $('#gsOut').innerHTML = `<table class="t"><thead><tr><th>Look</th><th>Information (patients analysed)</th><th>Stop when |z| ≥</th><th>Nominal P ≤</th></tr></thead><tbody>${b.map(x => `<tr><td>${x.look}</td><td>${Math.round(100 * x.info)}%</td><td>${x.z.toFixed(3)}</td><td>${x.p < 0.0001 ? x.p.toExponential(2) : x.p.toFixed(4)}</td></tr>`).join('')}</tbody></table><p class="legend-note">Exact boundaries by numerical integration (they match the published tables); stop for efficacy when the test statistic crosses the boundary at a look. Overall type I error = ${al}.</p>`; }, 30); };
+  $('#gsCopy').onclick = () => { if (!state.gsText) $('#gsGo').click(); setTimeout(() => navigator.clipboard && navigator.clipboard.writeText(state.gsText || '').then(() => toast('Boundaries copied')), 400); };
+  // prespecified plan: each variable's distribution and test, exported and imported
+  const TEST_CODES = [[/welch.*anova/i, 'welchanova'], [/welch/i, 'welch'], [/anova/i, 'anova'], [/t-?test|student/i, 't'], [/mann|whitney/i, 'mw'], [/kruskal/i, 'kw'], [/freeman/i, 'ffh'], [/fisher/i, 'fisher'], [/chi/i, 'chi'], [/mood|median test/i, 'median'], [/permut/i, 'perm'], [/huber|robust/i, 'huber']];
+  $('#planPre').onclick = () => { readUiIntoCfg(); const names = { t: "Student's t-test", welch: "Welch's t-test", anova: 'One-way ANOVA', welchanova: "Welch's ANOVA", mw: 'Mann-Whitney U', kw: 'Kruskal-Wallis', chi: 'Chi-square', fisher: "Fisher's exact", ffh: 'Fisher-Freeman-Halton', median: "Mood's median test", perm: 'Permutation test', huber: 'Huber robust regression' };
+    const aoa = [['Column', 'Label', 'Type', 'Distribution', 'Test']].concat(state.cfg.variables.filter(v => v.include).map(v => [v.cols.map(c => c.col).join(', '), v.label, v.type, v.type === 'numeric' ? v.dist || 'auto' : '', names[v.test] || 'Automatic']));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Plan'); XLSX.writeFile(wb, `${baseName()} - Prespecified plan.xlsx`); };
+  $('#planImp').onclick = () => $('#planFile').click();
+  $('#planFile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try { const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }), aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' }), hd = aoa[0].map(x => String(x).toLowerCase());
+      const cC = hd.findIndex(x => /column/.test(x)), cD = hd.findIndex(x => /distribution/.test(x)), cT = hd.findIndex(x => /test/.test(x)); if (cC < 0) throw new Error('no “Column” column');
+      let n = 0; aoa.slice(1).forEach(r => { const v = state.cfg.variables.find(x => x.cols.map(c => c.col).join(', ') === String(r[cC]).trim()); if (!v) return;
+        if (cD >= 0 && ['auto', 'param', 'nonparam'].includes(String(r[cD]).trim())) v.dist = String(r[cD]).trim();
+        if (cT >= 0) { const t = String(r[cT]).trim(), code = (TEST_CODES.find(([re]) => re.test(t)) || [])[1]; if (/automatic/i.test(t) || !t) delete v.test; else if (code) v.test = code; } n++; });
+      renderTestPlan(); toast(`Plan applied to ${n} variable${n === 1 ? '' : 's'}`); } catch (err) { toast('Could not read the plan: ' + err.message); } };
   $('#planXlsx').onclick = () => { const wb = XLSX.utils.table_to_book($('#testPlan'), { sheet: 'Test plan' }); XLSX.writeFile(wb, `${baseName()} - Test plan.xlsx`); };
   function renderTablePreview() {
     const box = $('#tblPreview'); if (!box || !state.cfg || !state.data) return;
@@ -32226,17 +32500,17 @@ if (typeof module !== 'undefined') module.exports = Sav;
     tost: 'Equivalence (TOST, two one-sided t-tests)', mh: 'Mantel-Haenszel (stratified odds ratio)', clogit: 'Conditional logistic regression (matched sets)',
     cif: 'Competing risks (cumulative incidence)', tdroc: 'Time-dependent ROC (AUC at set times)', quantreg: 'Quantile (median) regression', fleiss: "Fleiss' kappa (agreement of 3+ raters)",
     rmcorr: 'Repeated-measures correlation (long data)', firth: 'Firth logistic regression (small samples, separation)', mi: 'Regression with multiple imputation',
-    noninf: 'Non-inferiority / equivalence / superiority trial', crossover: 'Crossover trial (AB/BA)', gee: 'GEE / mixed-effects logistic (repeated binary, count or numeric outcome)' };
+    noninf: 'Non-inferiority / equivalence / superiority trial', crossover: 'Crossover trial (AB/BA)', weighted: 'Weighted comparison of the groups (survey weights)', kendallw: "Kendall's W (concordance of several raters)", gee: 'GEE / mixed-effects logistic (repeated binary, count or numeric outcome)' };
   // the analyses by category: the add buttons, the headings of the list and the order of "group by category"
   const ADV_GROUPS = [
-    ['Compare groups', 'Adjusted, stratified and matched comparisons of the study groups', [['ancova', 'ANCOVA'], ['anova2', 'Two-way ANOVA'], ['mh', 'Mantel-Haenszel'], ['psm', 'Propensity score']]],
+    ['Compare groups', 'Adjusted, stratified and matched comparisons of the study groups', [['ancova', 'ANCOVA'], ['anova2', 'Two-way ANOVA'], ['mh', 'Mantel-Haenszel'], ['psm', 'Propensity score'], ['weighted', 'Weighted (survey weights)']]],
     ['Non-inferiority & equivalence trials', 'A margin for the difference: non-inferiority, equivalence or superiority, ITT and per-protocol', [['noninf', 'Non-inferiority / equivalence / superiority'], ['tost', 'Equivalence of means (TOST)']]],
     ['Paired & repeated measurements', 'The same patients measured twice or more', [['paired', 'Paired comparison'], ['crossover', 'Crossover (AB/BA)'], ['mcnemar', 'McNemar (paired categorical)'], ['cochran', "Cochran's Q (repeated yes/no)"], ['lmm', 'Linear mixed model'], ['gee', 'GEE / mixed logistic (binary repeated)'], ['rmcorr', 'Repeated-measures correlation']]],
     ['Correlation & mediation', 'Associations between numeric variables', [['correlation', 'Correlation'], ['partial', 'Partial correlation'], ['mediation', 'Mediation']]],
     ['Regression models', 'Predictors of an outcome', [['linear', 'Linear'], ['logistic', 'Logistic'], ['firth', 'Firth logistic'], ['mi', 'With multiple imputation'], ['quantreg', 'Quantile (median)'], ['count', 'Poisson / negative binomial'], ['ordinal', 'Ordinal logistic'], ['multinom', 'Multinomial logistic'], ['clogit', 'Conditional logistic']]],
     ['Survival & time to event', 'Follow-up time with an event', [['survival', 'Kaplan-Meier'], ['cox', 'Cox regression'], ['cif', 'Competing risks'], ['tdroc', 'Time-dependent ROC']]],
     ['Diagnostic accuracy & prediction', 'Tests against a reference standard', [['roc', 'ROC curve'], ['diagnostic', 'Diagnostic accuracy (2×2)']]],
-    ['Agreement, reliability & questionnaires', 'Raters, methods and scales', [['kappa', "Cohen's kappa"], ['fleiss', "Fleiss' kappa"], ['agreement', 'ICC / Bland-Altman'], ['methodcomp', 'Passing-Bablok / Deming'], ['cronbach', "Cronbach's alpha"], ['pca', 'PCA (items)']]]];
+    ['Agreement, reliability & questionnaires', 'Raters, methods and scales', [['kappa', "Cohen's kappa"], ['fleiss', "Fleiss' kappa"], ['kendallw', "Kendall's W"], ['agreement', 'ICC / Bland-Altman'], ['methodcomp', 'Passing-Bablok / Deming'], ['cronbach', "Cronbach's alpha"], ['pca', 'PCA (items)']]]];
   const ADV_CAT = {}; ADV_GROUPS.forEach(([g, , list], gi) => list.forEach(([t]) => { ADV_CAT[t] = gi; }));
   $('#advAdd').innerHTML = ADV_GROUPS.map(([g, note, list]) => `<div class="adv-cat"><h4>${esc(g)}</h4><p class="legend-note">${esc(note)}</p><div class="btns">${list.map(([t, l]) => `<button class="btn ghost small" data-advadd="${t}" type="button" title="${esc(ADV_TYPES[t] || l)}" data-find="${esc((l + ' ' + (ADV_TYPES[t] || '') + ' ' + g).toLowerCase())}">+ ${esc(l)}</button>`).join('')}</div></div>`).join('');
   $('#advFind').oninput = e => { const q = e.target.value.trim().toLowerCase();
@@ -32327,6 +32601,8 @@ if (typeof module !== 'undefined') module.exports = Sav;
           + sl('conf', 'Confidence interval', [['', 'Automatic (95% non-inferiority / superiority, 90% equivalence)'], ['95', '95% (one-sided α = 0.025)'], ['90', '90% (one-sided α = 0.05)'], ['99', '99%']], a.conf)
           + select('ppCol', 'Per-protocol population column (optional)', cats.filter(c => c.col !== a.outcome && c.col !== cfg.groupCol), a.ppCol) + (a.ppCol ? levelSelect('Per-protocol when', a.ppCol, a.ppVal, 'ppVal') : '<div></div>');
         predLabel = 'Adjust the mean difference for (ANCOVA, numeric outcome only)'; preds = isC ? [] : num.filter(c => c.col !== a.outcome); }
+      if (t === 'weighted') { fields = select('wcol', 'Weight column (e.g. survey weight)', num, a.wcol) + '<div></div>'; predLabel = 'Variables compared between the study groups'; preds = cols.filter(c => c.col !== cfg.groupCol && c.col !== a.wcol); }
+      if (t === 'kendallw') { fields = '<p class="legend-note" style="margin:0">Tick one column per rater (scores or ranks of the same patients). Patients scored by every rater are used.</p>'; predLabel = 'Raters'; preds = num; }
       if (t === 'crossover') fields = select('outcome', 'Outcome in period 1', num, a.outcome) + select('second', 'Outcome in period 2', num.filter(c => c.col !== a.outcome), a.second)
         + select('seqCol', 'Sequence column (e.g. AB / BA)', cat, a.seqCol) + (a.seqCol ? levelSelect('Sequence that got treatment A first', a.seqCol, a.seqA, 'seqA') : '<div></div>')
         + `<div><label class="f">Treatment A / B names</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="text" data-af="trtA" value="${esc(a.trtA || '')}" placeholder="A, e.g. Drug"><input type="text" data-af="trtB" value="${esc(a.trtB || '')}" placeholder="B, e.g. Placebo"></div></div>`
@@ -32340,7 +32616,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
           + sl('timeAs', 'Time', [['cat', 'Categories (each visit vs the first)'], ['linear', 'Continuous (a linear trend; time values of step 3)']], a.timeAs)
           + `<div><label class="check" style="margin-top:22px"><input type="checkbox" data-af="inter" ${a.inter !== false ? 'checked' : ''}><span>Group × time interaction</span></label></div>`;
         predLabel = 'Baseline covariates (optional)'; preds = cols.filter(c => c.col !== cfg.groupCol); }
-      const withPreds = ['noninf', 'gee', 'tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
+      const withPreds = ['weighted', 'kendallw', 'noninf', 'gee', 'tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
       const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
       const ci = ADV_CAT[t] ?? 99, prevC = ai ? ADV_CAT[cfg.advanced[ai - 1].type] ?? 99 : -1, sep = ci !== prevC && ADV_GROUPS[ci] ? `<div class="adv-sep">${esc(ADV_GROUPS[ci][0])}</div>` : '';
       return `${sep}<div class="gcard" data-adv="${ai}">
@@ -32402,7 +32678,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       `<div><label class="f">Text before the comment (optional)</label><input type="text" data-af="commentPre" value="${esc(a.commentPre || '')}" placeholder="e.g. To identify the predictors of …"></div>`,
       `<div><label class="f">Text after the comment (optional)</label><input type="text" data-af="commentPost" value="${esc(a.commentPost || '')}" placeholder="e.g. This supports the hypothesis that …"></div>`,
       `<div style="grid-column:1/-1"><label class="f">Your own comment (optional — replaces the automatic one)</label><textarea data-af="commentCustom" rows="2" placeholder="Leave empty for the automatic comment">${esc(a.commentCustom || '')}</textarea></div>`].join('')}</div></details>`); }
-    if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm', 'noninf', 'gee', 'crossover'].includes(t))
+    if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm', 'noninf', 'gee', 'crossover', 'weighted'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
       out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
@@ -33447,6 +33723,13 @@ if (typeof module !== 'undefined') module.exports = Sav;
         postRepeated(res, state.cfg);
         if (cfg.options.rmImpute === 'locf') res.methods += ' Missing follow-up values were replaced by the last observation carried forward.';
         // subgroup analysis: every table again within each category of the chosen column
+        // sensitivity analysis: every table again in the per-protocol population
+        const ppc = cfg.options.ppCol, ppv = cfg.options.ppVal;
+        if (ppc && ppv !== '' && state.data.headers.includes(ppc)) {
+          try { const r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true }], advanced: [] });
+            const nPP = Analysis.filterRows({ ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true }] }, state.data.rows).length;
+            r2.sections.forEach(s => { s.title = `${s.title} — per-protocol population`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (per-protocol)`; }); res.sections.push(s); });
+            res.methods += ` As a sensitivity analysis, all comparisons were repeated in the per-protocol population (${ppc} = ${ppv}; n=${nPP}).`; } catch (e) { console.error(e); } }
         const sg = state.cfg.subgroup, sgCols = subCols(sg).filter(c => state.data.headers.includes(c));
         if (sgCols.length) {
           const subs = [], done = [];

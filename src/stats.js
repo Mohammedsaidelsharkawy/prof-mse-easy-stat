@@ -341,7 +341,7 @@ const Stats = (() => {
       const p = useFisher && sub.length === 2 && cs.minE < 5 ? fisher2x2(sub).p : cs.p;
       out.push({ i, j, p: adjust === 'bonferroni' ? bonferroni(p, m) : p });
     }
-    if (adjust === 'holm') { const h = holm(out.map(q => q.p)); out.forEach((q, n) => { q.p = h[n]; }); }
+    if (adjust === 'holm' || adjust === 'hochberg' || adjust === 'sidak') { const h = padjust(out.map(q => q.p), adjust); out.forEach((q, n) => { q.p = h[n]; }); }
     return out;
   }
 
@@ -893,6 +893,15 @@ const Stats = (() => {
     const flat = { T2, F: fF, df1: p, df2: fdf2, p: 1 - jStat.centralF.cdf(fF, p, fdf2) };
     const lev = g > 1 ? anova(G.map(Y => Y.map(r => mean(r)))) : null;
     return { parallel, flatness: flat, levels: lev ? { F: lev.F, df1: lev.df1, df2: lev.df2, p: lev.p } : null, N, g, T };
+  }
+  // P values adjusted for multiple comparisons: Bonferroni, Holm (step-down), Hochberg (step-up), Šidák or none (same order back)
+  function padjust(ps, method = 'bonferroni') {
+    const m = ps.length;
+    if (method === 'holm') return holm(ps);
+    if (method === 'sidak') return ps.map(p => 1 - (1 - p) ** m);
+    if (method === 'hochberg') { const idx = ps.map((p, i) => i).sort((a, b) => ps[b] - ps[a]), out = new Array(m); let run = 1; idx.forEach((i, r) => { run = Math.min(run, (r + 1) * ps[i]); out[i] = Math.min(1, run); }); return out; }
+    if (method === 'none') return ps.slice();
+    return ps.map(p => Math.min(1, p * m));
   }
   // Holm step-down adjustment of a list of P values (same order back)
   function holm(ps) {
@@ -1489,6 +1498,116 @@ const Stats = (() => {
     return (a + b) / 2;
   }
   const boxCox = (v, l) => Math.abs(l) < 1e-12 ? Math.log(v) : (v ** l - 1) / l;
+  /* ---------- more tests: Mood's median, permutation, Huber robust regression, cluster-robust OLS, van Elteren, Kendall's W ---------- */
+  // Mood's median test (as scipy.stats.median_test: values equal to the grand median count as below, Yates for 2 groups)
+  function moodMedian(groups) {
+    const gm = median(groups.flat()), T = [groups.map(g => g.filter(v => v > gm).length), groups.map(g => g.filter(v => v <= gm).length)];
+    const N = sum(T[0]) + sum(T[1]), k = groups.length, rs = T.map(r => sum(r)), cs = groups.map((_, j) => T[0][j] + T[1][j]);
+    let chi = 0; for (let i = 0; i < 2; i++) for (let j = 0; j < k; j++) { const e = rs[i] * cs[j] / N; if (e > 0) chi += (k === 2 ? Math.max(0, Math.abs(T[i][j] - e) - 0.5) : Math.abs(T[i][j] - e)) ** 2 / e; }
+    return { chi, df: k - 1, p: 1 - jStat.chisquare.cdf(chi, k - 1), median: gm, table: T };
+  }
+  // two-sided permutation test of the difference in means (seeded, B shuffles)
+  function permutationTest(x, y, B = 10000, seed = 1) {
+    const all = [...x, ...y], n1 = x.length, obs = Math.abs(mean(x) - mean(y)), rnd = seeded(seed); let hit = 0;
+    for (let b = 0; b < B; b++) { const a = all.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      let s1 = 0; for (let i = 0; i < n1; i++) s1 += a[i]; const d = Math.abs(s1 / n1 - (sum(a) - s1) / (a.length - n1)); if (d >= obs - 1e-12) hit++; }
+    return { p: (hit + 1) / (B + 1), diff: mean(x) - mean(y), B };
+  }
+  // Huber M-estimation (as statsmodels RLM with HuberT(1.345), MAD scale, H1 covariance); X with intercept
+  function huberRegression(y, X, t = 1.345) {
+    const n = y.length, p = X[0].length, XtX = X[0].map((_, a) => X[0].map((_, b) => sum(X.map(r => r[a] * r[b])))), XtXi = invert(XtX); if (!XtXi) return null;
+    const wls = w => { const A = X[0].map((_, a) => X[0].map((_, b) => sum(X.map((r, i) => w[i] * r[a] * r[b])))), bv = X[0].map((_, a) => sum(X.map((r, i) => w[i] * r[a] * y[i]))), Ai = invert(A); return Ai ? Ai.map(r => sum(r.map((v, j) => v * bv[j]))) : null; };
+    const res = b => y.map((v, i) => v - sum(X[i].map((x, j) => x * b[j]))), mad = r => median(r.map(Math.abs)) / 0.6744897501960817;
+    const rho = z => Math.abs(z) <= t ? z * z / 2 : t * Math.abs(z) - t * t / 2;
+    let b = wls(new Array(n).fill(1)), r = res(b), scale = mad(r), dev = sum(r.map(v => rho(v / scale))), it = 0;
+    for (it = 1; it < 50; it++) {
+      const w = r.map(v => { const z = Math.abs(v / scale); return z <= t ? 1 : t / z; }); b = wls(w); if (!b) return null; r = res(b); scale = mad(r);
+      const d2 = sum(r.map(v => rho(v / scale))); if (Math.abs(d2 - dev) <= 1e-8) { dev = d2; break; } dev = d2;
+    }
+    const sr = r.map(v => v / scale), pd = sr.map(z => Math.abs(z) <= t ? 1 : 0), m = mean(pd), vpd = mean(pd.map(v => (v - m) ** 2)), k = 1 + p / n * vpd / (m * m);
+    const ssPsi = sum(sr.map(z => Math.max(-t, Math.min(t, z)) ** 2)), sPd = sum(pd);
+    const f = k * k * (ssPsi / (n - p) * scale * scale) / ((sPd / n) ** 2), cov = XtXi.map(row => row.map(v => v * f));
+    return { beta: b, se: cov.map((row, j) => Math.sqrt(row[j])), cov, scale, iter: it, wald: idx => waldTest(b, cov, idx) };
+  }
+  // OLS with cluster-robust (CR1) covariance, as statsmodels OLS(cov_type='cluster'); t with G − 1 df
+  function olsCluster(y, X, cl) {
+    const n = y.length, p = X[0].length, XtXi = invert(X[0].map((_, a) => X[0].map((_, b) => sum(X.map(r => r[a] * r[b]))))); if (!XtXi) return null;
+    const b = XtXi.map(row => sum(row.map((v, j) => v * sum(X.map((r, i) => r[j] * y[i]))))), e = y.map((v, i) => v - sum(X[i].map((x, j) => x * b[j])));
+    const ids = [...new Set(cl)], G = ids.length; if (G < 2) return null;
+    const M = Array.from({ length: p }, () => new Array(p).fill(0));
+    ids.forEach(id => { const u = new Array(p).fill(0); cl.forEach((c, i) => { if (c === id) for (let j = 0; j < p; j++) u[j] += X[i][j] * e[i]; }); for (let a = 0; a < p; a++) for (let c = 0; c < p; c++) M[a][c] += u[a] * u[c]; });
+    const fc = G / (G - 1) * (n - 1) / (n - p), cov = XtXi.map((row, a) => XtXi.map((_, c) => fc * sum(row.map((v, k) => v * sum(M[k].map((w, l) => w * XtXi[l][c]))))));
+    const se = cov.map((r, j) => Math.sqrt(r[j]));
+    return { beta: b, se, cov, G, df: G - 1, wald: idx => { const w = waldTest(b, cov, idx); if (!w) return null; const F = w.chi / idx.length; return { ...w, F, df1: idx.length, df2: G - 1, p: 1 - jStat.centralF.cdf(F, idx.length, G - 1) }; } };
+  }
+  // van Elteren's stratified Wilcoxon test (two groups, weights 1 / (N_s + 1))
+  function vanElteren(x, y, sx, sy) {
+    const strata = [...new Set([...sx, ...sy])]; let num = 0, den = 0, used = 0;
+    strata.forEach(s => { const a = x.filter((_, i) => sx[i] === s), b = y.filter((_, i) => sy[i] === s); if (!a.length || !b.length) return;
+      const all = [...a, ...b], N = all.length, rk = rank(all).ranks, W = sum(rk.slice(0, a.length)), E = a.length * (N + 1) / 2;
+      const cnt = {}; all.forEach(v => { cnt[v] = (cnt[v] || 0) + 1; }); const tie = sum(Object.values(cnt).map(t2 => t2 ** 3 - t2));
+      const V = a.length * b.length / 12 * (N + 1 - tie / (N * (N - 1))), w = 1 / (N + 1); num += w * (W - E); den += w * w * V; used++; });
+    const z = den > 0 ? num / Math.sqrt(den) : NaN; return { z, p: isFinite(z) ? 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1)) : NaN, strata: used };
+  }
+  // Kendall's coefficient of concordance W: rows = subjects (objects), columns = raters; tie-corrected
+  function kendallW(M) {
+    const n = M.length, m = M[0].length, R = M[0].map((_, j) => rank(M.map(r => r[j])).ranks);
+    const Ri = M.map((_, i) => sum(R.map(col => col[i]))), mR = mean(Ri), S2 = sum(Ri.map(v => (v - mR) ** 2));
+    const T = sum(M[0].map((_, j) => { const cnt = {}; M.forEach(r => { cnt[r[j]] = (cnt[r[j]] || 0) + 1; }); return sum(Object.values(cnt).map(t2 => t2 ** 3 - t2)); }));
+    const W = 12 * S2 / (m * m * (n ** 3 - n) - m * T), chi = m * (n - 1) * W;
+    return { W, chi, df: n - 1, p: 1 - jStat.chisquare.cdf(chi, n - 1), n, m };
+  }
+  // weighted least squares with a robust (HC1) covariance — survey weights, each patient a sampling unit
+  function wlsRobust(y, X, w) {
+    const n = y.length, p = X[0].length, A = X[0].map((_, a) => X[0].map((_, b) => sum(X.map((r, i) => w[i] * r[a] * r[b])))), Ai = invert(A); if (!Ai) return null;
+    const beta = Ai.map(row => sum(row.map((v, j) => v * sum(X.map((r, i) => w[i] * r[j] * y[i]))))), e = y.map((v, i) => v - sum(X[i].map((x, j) => x * beta[j])));
+    const M = X[0].map((_, a) => X[0].map((_, b) => sum(X.map((r, i) => w[i] * w[i] * e[i] * e[i] * r[a] * r[b]))));
+    const cov = Ai.map((row, a) => Ai.map((_, b) => n / (n - p) * sum(row.map((v, k) => v * sum(M[k].map((u, l) => u * Ai[l][b]))))));
+    return { beta, cov, se: cov.map((r, j) => Math.sqrt(r[j])), wald: idx => waldTest(beta, cov, idx) };
+  }
+  // weighted logistic regression (IRLS) with a robust (HC0) covariance
+  function weightedLogistic(y, X, w) {
+    const p = X[0].length; let beta = new Array(p).fill(0), Ai = null;
+    for (let it = 0; it < 50; it++) { const mu = X.map(r => 1 / (1 + Math.exp(-sum(r.map((v, j) => v * beta[j])))));
+      const A = X[0].map((_, a) => X[0].map((_, b) => sum(X.map((r, i) => w[i] * mu[i] * (1 - mu[i]) * r[a] * r[b])))); Ai = invert(A); if (!Ai) return null;
+      const U = X[0].map((_, a) => sum(X.map((r, i) => w[i] * (y[i] - mu[i]) * r[a]))), st = Ai.map(row => sum(row.map((v, j) => v * U[j]))); beta = beta.map((b, j) => b + st[j]);
+      if (Math.max(...st.map(Math.abs)) < 1e-10) break; }
+    const mu = X.map(r => 1 / (1 + Math.exp(-sum(r.map((v, j) => v * beta[j]))))), M = X[0].map((_, a) => X[0].map((_, b) => sum(X.map((r, i) => (w[i] * (y[i] - mu[i])) ** 2 * r[a] * r[b]))));
+    const cov = Ai.map((row, a) => Ai.map((_, b) => sum(row.map((v, k) => v * sum(M[k].map((u, l) => u * Ai[l][b]))))));
+    return { beta, cov, se: cov.map((r, j) => Math.sqrt(r[j])), wald: idx => waldTest(beta, cov, idx) };
+  }
+  // power of the two-sided two-sample t-test (noncentral t), and of the two-proportion z-test
+  function powerTwoMeans(diff, sdv, n1, n2, alpha = 0.05) { const df = n1 + n2 - 2, ncp = Math.abs(diff) / (sdv * Math.sqrt(1 / n1 + 1 / n2)), tc = jStat.studentt.inv(1 - alpha / 2, df); return 1 - nctCdf(tc, df, ncp) + nctCdf(-tc, df, ncp); }
+  function powerTwoProps(p1, p2, n1, n2, alpha = 0.05) { const za = jStat.normal.inv(1 - alpha / 2, 0, 1), pb = (p1 * n1 + p2 * n2) / (n1 + n2), s0 = Math.sqrt(pb * (1 - pb) * (1 / n1 + 1 / n2)), s1 = Math.sqrt(p1 * (1 - p1) / n1 + p2 * (1 - p2) / n2); if (!(s1 > 0)) return NaN;
+    const d = Math.abs(p1 - p2); return jStat.normal.cdf((d - za * s0) / s1, 0, 1) + jStat.normal.cdf((-d - za * s0) / s1, 0, 1); }
+  // Bayesian two-group estimates: means (flat priors → Student t posterior of the difference) and proportions (Beta(1, 1) priors, seeded draws)
+  function bayesMeans(x, y) { const t = tTest(x, y, true), se = (t.hi - t.diff) / jStat.studentt.inv(QU(), t.df); return { diff: t.diff, lo: t.lo, hi: t.hi, pGreater: 1 - jStat.studentt.cdf(-t.diff / se, t.df) }; }
+  function bayesProps(a1, n1, a2, n2, draws = 40000, seed = 3) {
+    const rnd = seeded(seed), nrm = () => Math.sqrt(-2 * Math.log(rnd() || 1e-12)) * Math.cos(2 * Math.PI * rnd());
+    const gam = k => { if (k < 1) return gam(k + 1) * rnd() ** (1 / k); const d = k - 1 / 3, c = 1 / Math.sqrt(9 * d); for (;;) { let x, v; do { x = nrm(); v = 1 + c * x; } while (v <= 0); v = v ** 3; const u = rnd(); if (u < 1 - 0.0331 * x ** 4 || Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v; } };
+    const beta = (a, b) => { const g1 = gam(a), g2 = gam(b); return g1 / (g1 + g2); }, dif = [];
+    for (let i = 0; i < draws; i++) dif.push(beta(a1 + 1, n1 - a1 + 1) - beta(a2 + 1, n2 - a2 + 1));
+    return { diff: a1 / n1 - a2 / n2, lo: quantile(dif, QL()), hi: quantile(dif, QU()), pGreater: dif.filter(v => v > 0).length / draws };
+  }
+  // group-sequential boundaries (two-sided, equally spaced looks): O'Brien-Fleming (C·√(K/k)) or Pocock (C), by numerical integration
+  function groupSequential(K, alpha = 0.05, type = 'obf') {
+    // the sub-density of z among the paths still inside is kept on a Simpson grid spanning exactly (−b, b); crossing probabilities
+    // at the next look are integrated analytically: z_k √k = z_(k−1) √(k−1) + N(0, 1) under H0 (equally spaced looks)
+    const n = 401, phi = z => Math.exp(-z * z / 2) / Math.sqrt(2 * Math.PI), Phi = z => jStat.normal.cdf(z, 0, 1);
+    const bounds = C => Array.from({ length: K }, (_, k) => type === 'pocock' ? C : C * Math.sqrt(K / (k + 1)));
+    const cross = b => {
+      let xs = Array.from({ length: n }, (_, i) => -b[0] + 2 * b[0] * i / (n - 1)), w = xs.map((_, i) => (i === 0 || i === n - 1 ? 1 : i % 2 ? 4 : 2) * (2 * b[0] / (n - 1)) / 3), f = xs.map(phi), tot = 2 * (1 - Phi(b[0]));
+      for (let k = 1; k < K; k++) { const r0 = Math.sqrt(k), r1 = Math.sqrt(k + 1), B = b[k];
+        tot += xs.reduce((a, x, i) => a + w[i] * f[i] * (1 - Phi(B * r1 - x * r0) + Phi(-B * r1 - x * r0)), 0);
+        if (k === K - 1) break;
+        const ys = Array.from({ length: n }, (_, i) => -B + 2 * B * i / (n - 1)), g = ys.map(z1 => r1 * xs.reduce((a, x, i) => a + w[i] * f[i] * phi(z1 * r1 - x * r0), 0));
+        xs = ys; f = g; w = ys.map((_, i) => (i === 0 || i === n - 1 ? 1 : i % 2 ? 4 : 2) * (2 * B / (n - 1)) / 3); }
+      return tot; };
+    let a = 1.5, c = 6; for (let it = 0; it < 40; it++) { const m = (a + c) / 2; if (cross(bounds(m)) > alpha) a = m; else c = m; }
+    const b = bounds((a + c) / 2); return b.map((z, k) => ({ look: k + 1, info: (k + 1) / K, z, p: 2 * (1 - jStat.normal.cdf(z, 0, 1)) }));
+  }
+
+
   /* ---------- non-inferiority / equivalence / superiority with a margin ---------- */
   const wilsonCI = (x, n, z) => { const p = x / n, den = 1 + z * z / n, c = (p + z * z / (2 * n)) / den, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den; return [c - h, c + h]; };
   // Newcombe's hybrid score interval of p1 − p2 (method 10)
@@ -1602,7 +1721,7 @@ const Stats = (() => {
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
   return {
-    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, nMargin, gee, glmmLogit, gaussHermite,
+    cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, moodMedian, permutationTest, huberRegression, olsCluster, vanElteren, kendallW, powerTwoMeans, powerTwoProps, wlsRobust, weightedLogistic, bayesMeans, bayesProps, groupSequential, padjust, nMargin, gee, glmmLogit, gaussHermite,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
     sum, mean, sd, variance, quantile, median, describe, rank, shapiroWilk,
