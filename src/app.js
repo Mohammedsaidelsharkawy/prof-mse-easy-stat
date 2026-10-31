@@ -393,8 +393,10 @@
     $('#gridColCount').textContent = g.hidden.length ? `(${headers.length} of ${allHeaders.length})` : '';
     const tbl = $('#preview');
     ['compact', 'comfy'].forEach(d => tbl.classList.toggle(d, g.density === d));
-    tbl.classList.toggle('wrap', g.wrap); tbl.classList.toggle('freeze', g.freeze); tbl.classList.toggle('stripes', g.stripes);
-    const cc = (h, ci) => [kinds[h] === 'num' ? 'num' : '', ci === 0 ? 'c1' : ''].filter(Boolean).join(' ');
+    tbl.classList.toggle('wrap', g.wrap); const nF = g.freeze === true ? 1 : Math.max(0, Math.min(3, +g.freeze || 0)); tbl.classList.toggle('freeze', nF > 0); tbl.classList.toggle('stripes', g.stripes);
+    // frozen columns: the first 1–3 stay in view when scrolling sideways
+    const fz = ci => ci < nF ? `c1 fz${ci}${ci === Math.min(nF, headers.length) - 1 ? ' fzl' : ''}` : '';
+    const cc = (h, ci) => [kinds[h] === 'num' ? 'num' : '', fz(ci)].filter(Boolean).join(' ');
     const typeTag = h => g.types ? `<span class="ty" title="${kinds[h] === 'num' ? 'Numeric' : 'Text / categories'}">${kinds[h] === 'num' ? '123' : 'abc'}</span>` : '';
     $('#dims').textContent = `${rows.length} rows × ${headers.length} columns`;
     const q = g.q.trim().toLowerCase();
@@ -421,11 +423,12 @@
     if (g.summary) summary = `<tr class="gsum"><td class="rn">Summary</td>${headers.map((h, ci) => {
       const info = columnInfo(rows, h), miss = rows.length - info.n, nums = rows.map(r => Analysis.toNum(r[h])).filter(isFinite);
       const desc = info.numeric && nums.length ? `num · ${Analysis.fmt(Math.min(...nums), 2)}–${Analysis.fmt(Math.max(...nums), 2)}` : `text · ${info.distinct.length} values`;
-      return `<td class="${ci === 0 ? 'c1' : ''}">${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
+      return `<td class="${fz(ci)}">${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
     const body = shown.map(i => `<tr><td class="rn">${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
       headers.map((h, ci) => `<td class="${cc(h, ci)}${g.hlMissing && isMissing(rows[i][h]) ? ' miss' : ''}${isOut(h, rows[i][h]) ? ' gout' : ''}" title="${esc(rows[i][h] ?? '')}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`).join('')}</tr>`).join('');
     $('#preview').innerHTML = `<thead><tr><th class="rn">#</th>${head}</tr></thead><tbody>${summary}${body || `<tr><td colspan="${headers.length + 1}" class="legend-note">No rows match.</td></tr>`}</tbody>`;
     const rn = tbl.querySelector('th.rn'); if (rn) tbl.style.setProperty('--rnw', rn.getBoundingClientRect().width + 'px');
+    let left = rn ? rn.getBoundingClientRect().width : 40; for (let k = 0; k < nF; k++) { tbl.style.setProperty(`--fz${k}`, left + 'px'); const th = tbl.querySelector(`thead th.fz${k}`); left += th ? th.getBoundingClientRect().width : 0; }
     const notes = [Object.keys(g.cf).length ? `<span class="flt-chip chip warn">${Object.keys(g.cf).length} column filter${Object.keys(g.cf).length > 1 ? 's' : ''} <a href="#" data-cfclear="1">clear</a></span>` : '', g.rowsOnly ? `<span class="flt-chip chip warn">${esc(g.rowsOnly.label)} <a href="#" data-roclear="1">show all</a></span>` : ''].join(' ');
     $('#gridNotes').innerHTML = notes;
     $('#gridInfo').textContent = idx.length ? `Rows ${g.page * per + 1}–${Math.min(idx.length, g.page * per + per)} of ${idx.length}${idx.length < rows.length ? ` (filtered from ${rows.length})` : ''}` : '0 rows';
@@ -740,7 +743,7 @@
     else if (t.id === 'gridDensity') g.density = t.value;
     else if (t.id === 'gridTypes') g.types = t.checked;
     else if (t.id === 'gridWrapText') g.wrap = t.checked;
-    else if (t.id === 'gridFreeze') g.freeze = t.checked;
+    else if (t.id === 'gridFreeze') g.freeze = +t.value;
     else if (t.id === 'gridStripes') g.stripes = t.checked;
     else if (t.id === 'gridOut') g.outliers = t.checked;
     else if (t.dataset.gcol !== undefined) g.hidden = t.checked ? g.hidden.filter(h => h !== t.dataset.gcol) : [...g.hidden, t.dataset.gcol];

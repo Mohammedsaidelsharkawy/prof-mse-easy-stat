@@ -29,7 +29,17 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 .brand h1{margin:0;font-size:22px;letter-spacing:.3px}
 .brand h1 span{color:#C9A2EC}
 .brand p{margin:0;font-size:12.5px;opacity:.75}
-.top-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;min-width:0;flex:1 1 auto}
+.top-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:nowrap;align-items:center;justify-content:flex-end;min-width:0;flex:1 1 auto}
+.top-actions > .btn,.top-actions > label.btn{white-space:nowrap}
+.ux-more{position:relative}
+.ux-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:220px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(28,22,72,.28);padding:6px;display:none;flex-direction:column;gap:2px;z-index:40}
+.ux-menu.open{display:flex}
+.ux-menu .btn{background:transparent!important;color:var(--ink)!important;border:0!important;box-shadow:none!important;width:100%;justify-content:flex-start;text-align:left;padding:8px 10px;border-radius:8px}
+.ux-menu .btn:hover,.ux-menu .btn:focus-visible{background:var(--lav)!important}
+.top-actions .ux-saved{color:#fff}
+@media (max-width:1500px){.top-actions .ux-saved{display:none}}
+@media (max-width:1280px){.top-actions > .btn .tl,.top-actions > label.btn .tl{display:none}.top-actions{gap:6px}}
+@media (max-width:640px){.brand h1{font-size:17px}.logo{width:40px;height:40px}}
 .brand{flex-shrink:0}
 .pulse{height:4px;background:linear-gradient(90deg,var(--purple),#C9A2EC,var(--purple));background-size:200% 100%;animation:pulse 6s linear infinite}
 @keyframes pulse{to{background-position:-200% 0}}
@@ -147,7 +157,9 @@ table.dgrid td.num{text-align:right;font-variant-numeric:tabular-nums}
 table.dgrid th.num{text-align:right}
 table.dgrid.stripes tbody tr:nth-child(even) td{background:var(--soft)}
 table.dgrid .ty{display:inline-block;margin-left:5px;font-size:10px;font-weight:600;padding:0 5px;border-radius:4px;background:var(--card);color:var(--muted);vertical-align:1px}
-table.dgrid.freeze td.c1,table.dgrid.freeze th.c1{position:sticky;left:var(--rnw,40px);background:var(--card);z-index:2;box-shadow:1px 0 0 var(--line)}
+table.dgrid.freeze td.c1,table.dgrid.freeze th.c1{position:sticky;left:var(--rnw,40px);background:var(--card);z-index:2}
+table.dgrid.freeze th.fz0,table.dgrid.freeze td.fz0{left:var(--fz0,40px)}table.dgrid.freeze th.fz1,table.dgrid.freeze td.fz1{left:var(--fz1)}table.dgrid.freeze th.fz2,table.dgrid.freeze td.fz2{left:var(--fz2)}
+table.dgrid.freeze .fzl{box-shadow:2px 0 0 var(--line)}
 table.dgrid.freeze th.c1{z-index:3;background:var(--lav)}
 .colpick{position:relative}.colpick summary{list-style:none}.colpick summary::-webkit-details-marker{display:none}
 .colpick-box{position:absolute;z-index:20;top:110%;left:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:340px;overflow:auto;min-width:240px}
@@ -565,7 +577,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
             <details class="colpick"><summary class="btn ghost small">Columns <span id="gridColCount"></span></summary><div class="colpick-box"><div class="row" style="gap:6px;margin-bottom:6px"><button class="btn ghost small" type="button" data-gcols="all">All</button><button class="btn ghost small" type="button" data-gcols="none">None</button><button class="btn ghost small" type="button" data-gcols="num">Numeric</button><button class="btn ghost small" type="button" data-gcols="text">Text</button></div><div id="gridCols"></div></div></details>
             <label class="check" style="margin:0"><input type="checkbox" id="gridTypes" checked><span>Column types</span></label>
             <label class="check" style="margin:0"><input type="checkbox" id="gridWrapText"><span>Wrap long text</span></label>
-            <label class="check" style="margin:0"><input type="checkbox" id="gridFreeze"><span>Freeze first column</span></label>
+            <label class="f" style="margin:0" title="These columns stay in view when you scroll sideways">Freeze</label><select id="gridFreeze" style="width:auto"><option value="0">No columns</option><option value="1">First column</option><option value="2">First 2 columns</option><option value="3">First 3 columns</option></select>
             <label class="check" style="margin:0"><input type="checkbox" id="gridStripes" checked><span>Striped rows</span></label>
             <label class="check" style="margin:0" title="Numeric values beyond 1.5 × IQR of their column"><input type="checkbox" id="gridOut"><span>Highlight outliers</span></label>
             <span class="spacer"></span>
