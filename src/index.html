@@ -242,6 +242,12 @@ footer b{color:var(--purple)}
 .design-grid figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px}
 .design-grid img{width:100%;display:block}
 .design-grid figcaption{font-size:12px;color:#555;text-align:center;margin-top:4px}
+/* step 10: dark tables */
+#explore.xp-dark table.t { background: #1f1b26; color: #ece8f2; }
+#explore.xp-dark table.t th { background: #2c2636; color: #fff; }
+#explore.xp-dark table.t td { border-color: #3a3346; }
+#explore.xp-dark table.t td.sig { color: #ffb4a8; }
+#explore.xp-dark table.t a { color: #cdb6ff; }
 /* step 10: more views */
 .xp-stacked .xp-fig{width:100%;max-width:820px;display:block;margin:10px auto}
 .xp-twocol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
@@ -1245,8 +1251,10 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <label class="f" style="margin:0">Search in the tables</label><input type="search" data-xo="tq" placeholder="e.g. Welch, 0.03" style="width:180px">
         <label class="check" style="margin:0" title="The report's comment right after the table of the test it came from"><input type="checkbox" data-xo="comBeside"><span>Comment beside its test</span></label>
         <button class="btn ghost small" id="xpCollAll" type="button" title="Collapse or expand every variable">▾ Collapse / expand all</button>
+        <button class="btn ghost small" id="xpQueueBtn" type="button" title="Every outlier, one by one: keep it, set it missing or cap it">🧹 Outlier queue</button><button class="btn ghost small" id="xpHistBtn" type="button" title="The P values of each run of this step">🕘 History</button>
+        <label class="check" style="margin:0"><input type="checkbox" data-xo="flagged"><span>Only ⚑ flagged</span></label><label class="check" style="margin:0"><input type="checkbox" data-xo="dark"><span>Dark tables</span></label>
         <select id="xpViewList" style="width:auto"></select><button class="btn ghost small" id="xpViewSave" type="button">💾 Save view…</button>
-        <span class="legend-note">J / K: next / previous variable · ★ pin · 🔬 sensitivity, subgroups, assumptions, bootstrap</span></div>
+        <span class="legend-note">J / K: next / previous variable · ★ pin (pinned summary on top) · ⚑ check later · 📋 report sentence · 🔬 why this test, normality, effect sizes, power, what-if, bootstrap, figure, sensitivity, subgroups</span></div>
       <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>
       <details class="fl-style" id="xpOpts"><summary><b>⚙ Options</b> — filter, tables, statistics, figure, outliers</summary>
         <div class="grid g4" style="margin-top:8px">

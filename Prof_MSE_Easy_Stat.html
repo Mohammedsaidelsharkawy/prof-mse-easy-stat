@@ -242,6 +242,12 @@ footer b{color:var(--purple)}
 .design-grid figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px}
 .design-grid img{width:100%;display:block}
 .design-grid figcaption{font-size:12px;color:#555;text-align:center;margin-top:4px}
+/* step 10: dark tables */
+#explore.xp-dark table.t { background: #1f1b26; color: #ece8f2; }
+#explore.xp-dark table.t th { background: #2c2636; color: #fff; }
+#explore.xp-dark table.t td { border-color: #3a3346; }
+#explore.xp-dark table.t td.sig { color: #ffb4a8; }
+#explore.xp-dark table.t a { color: #cdb6ff; }
 /* step 10: more views */
 .xp-stacked .xp-fig{width:100%;max-width:820px;display:block;margin:10px auto}
 .xp-twocol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
@@ -1245,8 +1251,10 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <label class="f" style="margin:0">Search in the tables</label><input type="search" data-xo="tq" placeholder="e.g. Welch, 0.03" style="width:180px">
         <label class="check" style="margin:0" title="The report's comment right after the table of the test it came from"><input type="checkbox" data-xo="comBeside"><span>Comment beside its test</span></label>
         <button class="btn ghost small" id="xpCollAll" type="button" title="Collapse or expand every variable">▾ Collapse / expand all</button>
+        <button class="btn ghost small" id="xpQueueBtn" type="button" title="Every outlier, one by one: keep it, set it missing or cap it">🧹 Outlier queue</button><button class="btn ghost small" id="xpHistBtn" type="button" title="The P values of each run of this step">🕘 History</button>
+        <label class="check" style="margin:0"><input type="checkbox" data-xo="flagged"><span>Only ⚑ flagged</span></label><label class="check" style="margin:0"><input type="checkbox" data-xo="dark"><span>Dark tables</span></label>
         <select id="xpViewList" style="width:auto"></select><button class="btn ghost small" id="xpViewSave" type="button">💾 Save view…</button>
-        <span class="legend-note">J / K: next / previous variable · ★ pin · 🔬 sensitivity, subgroups, assumptions, bootstrap</span></div>
+        <span class="legend-note">J / K: next / previous variable · ★ pin (pinned summary on top) · ⚑ check later · 📋 report sentence · 🔬 why this test, normality, effect sizes, power, what-if, bootstrap, figure, sensitivity, subgroups</span></div>
       <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>
       <details class="fl-style" id="xpOpts"><summary><b>⚙ Options</b> — filter, tables, statistics, figure, outliers</summary>
         <div class="grid g4" style="margin-top:8px">
@@ -34180,7 +34188,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const tblHtml = t => `<div class="xp-tbl"><h4>${esc(t.title)}</h4><div style="overflow-x:auto"><table class="t xp"><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === 0 ? 'b' : ''}${/\*$/.test(c) ? ' sig' : ''}${c === '✓' ? ' used' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   // options of the stage, saved with the setup / project
-  const XP_DEFAULT = { tq: '', cmp: '', subBy: '', comBeside: false, type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true, comments: true, sort: 'sheet' };
+  const XP_DEFAULT = { flagged: false, dark: false, tq: '', cmp: '', subBy: '', comBeside: false, type: 'all', q: '', sig: false, desc: true, extra: false, tests: true, pairs: true, time: true, fig: 'auto', out: '1.5', dec: '', openData: false, wordData: false, view: 'half', overview: true, comments: true, sort: 'sheet' };
   const xpo = () => (state.cfg.explore = { ...XP_DEFAULT, ...(state.cfg.explore || {}) });
   function renderXpOpts() {
     const o = xpo();
@@ -34199,6 +34207,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     // one variable (its own export), two variables side by side, or the filters; text searched in the labels or, with "in tables", in every result table
     const tq = (o.tq || '').trim().toLowerCase(), inTables = it => JSON.stringify(it.tables).toLowerCase().includes(tq);
     const list = state.xpOnly ? x.items.filter(it => it.id === state.xpOnly) : x.items.filter(it => (!id || it.id === id || (o.cmp && it.id === o.cmp)) && (o.type === 'all' || it.kind === o.type) && (!q || it.label.toLowerCase().includes(q)) && (!o.sig || it.sig) && (!tq || inTables(it)));
+    if (o.flagged && !state.xpOnly) { const f = state.cfg.xpFlags || []; for (let i = list.length - 1; i >= 0; i--) if (!f.includes(list[i].id)) list.splice(i, 1); }
     const pins = state.cfg.xpPins || [];
     if (pins.length && !state.xpOnly) list.sort((a, b) => (pins.includes(b.id) ? 1 : 0) - (pins.includes(a.id) ? 1 : 0));
     // order: as in the sheet, significant first, smallest P first (repeated measures, without one P, after), A–Z, or by type
@@ -34214,6 +34223,9 @@ if (typeof module !== 'undefined') module.exports = Sav;
     let x;
     try { x = Analysis.explore(state.data, state.cfg, { dec: o.dec, extra: o.extra, fig: o.fig === 'none' ? 'auto' : o.fig, out: o.out }); } catch (err) { console.error(err); box.innerHTML = `<p style="color:var(--bad)">${esc(err.message)}</p>`; return; }
     state.explore = x; state.xpComments = new Map();
+    // results history: the P value of every variable at each run of this step (this session)
+    const snap = { time: new Date().toLocaleTimeString(), p: Object.fromEntries(x.items.map(it => [it.id, it.p])) }, runs = state.xpRuns = state.xpRuns || [], last = runs[runs.length - 1];
+    if (!last || JSON.stringify(last.p) !== JSON.stringify(snap.p)) { runs.push(snap); if (runs.length > 8) runs.shift(); }
     const sel = $('#xpVar'), cur = sel.value, kinds = { numeric: 'numeric', categorical: 'categorical', repeated: 'repeated' };
     sel.innerHTML = `<option value="">All variables (${x.items.length})</option>` + x.items.map(it => `<option value="${esc(it.id)}">${esc(it.label)} — ${kinds[it.kind]}</option>`).join('');
     if (x.items.some(it => it.id === cur)) sel.value = cur;
@@ -34347,10 +34359,73 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const tests = v.type === 'numeric' ? [['t', "Student's t-test"], ['welch', "Welch's t-test"], ['anova', 'One-way ANOVA'], ['welchanova', "Welch's ANOVA"], ['mw', 'Mann-Whitney U'], ['kw', 'Kruskal-Wallis']] : [['chi', 'Chi-square'], ['fisher', "Fisher's exact (2×2)"], ['ffh', 'Fisher-Freeman-Halton']];
       out.push(`<div class="xp-lt"><h5>Test in the report</h5><select data-xptest="${esc(v.id)}"><option value="">Automatic (step 4)</option>${tests.map(([k, l]) => `<option value="${k}" ${v.test === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`);
     }
+    out.push(...labMore(it, v));
     // edits of this variable's data made in this step
     const hist = state.xpHist.filter(h => it.cols.some(c => c.col === h.col));
     out.push(`<div class="xp-lt"><h5>Edits of the data here (${hist.length})</h5>${hist.length ? `<ul class="xp-hist">${hist.slice(-12).reverse().map(h => `<li>${esc(h.time)} — row ${h.row + 1}, ${esc(h.col)}: ${esc(h.old ?? '(empty)')} → ${esc(h.val ?? '(empty)')}</li>`).join('')}</ul>` : '<span class="legend-note">none</span>'}</div>`);
     return `<div class="xp-labgrid">${out.join('')}</div>`;
+  }
+  // more of the 🔬 panel: why this test, normality, effect sizes, power, what-if, bootstrap distribution, the report figure and drill-down
+  function labMore(it, v) {
+    const cfg = state.cfg, rows = state.data.rows, gs = activeGroups(), gl = gs.map(g => cfg.groupLabels[g] || g), col = it.cols[0].col, alpha = cfg.options.alpha, out = [];
+    const F = (x, d = 3) => isFinite(x) ? (+x).toFixed(d) : '—', P = p => Analysis.fmtP(p, alpha), Phi = z => jStat.normal.cdf(z, 0, 1);
+    const tbl = (head, body) => `<table class="t xp"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${body.map(r => `<tr>${r.map((c, i) => `<td class="${i ? '' : 'b'}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if (it.kind === 'numeric' && gs.length >= 1) {
+      const gv = gs.map(g => rows.filter(r => Analysis.groupOf(cfg, r) === g).map(r => Analysis.toNum(r[col])).filter(isFinite)), sw = gv.map(a => a.length >= 3 ? Stats.shapiroWilk(a) : null);
+      const allNorm = sw.every(x => x && x.p >= 0.05), lev = gv.length >= 2 && gv.every(a => a.length > 1) ? Stats.levene(gv) : NaN;
+      // why this test: the checks behind the choice
+      out.push(`<div class="xp-lt"><h5>Why this test</h5><div>${esc(it.test || 'No test')}: ${gs.length} group${gs.length > 1 ? 's' : ''} (${gv.map((a, i) => `${esc(gl[i])} n=${a.length}`).join(', ')}). Shapiro-Wilk ${sw.map((x, i) => `${esc(gl[i])} P ${x ? esc(P(x.p)) : '—'}`).join(', ')} → ${allNorm ? 'every group looks normal, so a parametric test fits' : 'at least one group is not normal, so a non-parametric test (or a robust one) fits'}.${isFinite(lev) ? ` Levene's P ${esc(P(lev))} → ${lev < 0.05 ? 'unequal variances (Welch versions are safer)' : 'equal variances'}.` : ''}${gv.some(a => a.length < 15) ? ' Small groups (n < 15) make the normality tests weak; a non-parametric test is the cautious choice.' : ''}</div></div>`);
+      // normality panel
+      out.push(`<div class="xp-lt"><h5>Normality</h5>${tbl(['Group', 'n', 'Shapiro-Wilk W', 'P', 'Skewness', 'Kurtosis'], gv.map((a, i) => { const d = a.length > 3 ? Stats.describe(a) : {}; return [esc(gl[i]), a.length, sw[i] ? F(sw[i].W) : '—', sw[i] ? esc(P(sw[i].p)) : '—', F(d.skew ?? d.skewness, 2), F(d.kurt ?? d.kurtosis, 2)]; }))}</div>`);
+      if (gv.length === 2 && gv.every(a => a.length > 1)) {
+        const [a, b] = gv, n1 = a.length, n2 = b.length, diff = Stats.mean(a) - Stats.mean(b), sp = Math.sqrt(((n1 - 1) * Stats.variance(a) + (n2 - 1) * Stats.variance(b)) / (n1 + n2 - 2)), d = diff / sp, g = d * (1 - 3 / (4 * (n1 + n2) - 9));
+        const cl = Phi(Math.abs(d) / Math.SQRT2), nnt = 1 / (2 * cl - 1);
+        out.push(`<div class="xp-lt"><h5>Effect size converter</h5>${tbl(['Measure', 'Value'], [["Cohen's d", F(d, 3)], ["Hedges' g", F(g, 3)], ['r (point-biserial)', F(d / Math.sqrt(d * d + 4), 3)], ['Odds ratio (logistic approximation)', F(Math.exp(d * Math.PI / Math.sqrt(3)), 2)], ['Common-language effect size (probability of superiority)', `${F(100 * cl, 1)}%`], ['NNT (Kraemer)', isFinite(nnt) && nnt < 1e4 ? F(nnt, 1) : '—']])}</div>`);
+        const pw = Stats.powerTwoMeans(diff, sp, n1, n2, alpha), need = diff ? Stats.nTwoMeans(Math.abs(diff), sp, alpha, 0.8) : null;
+        out.push(`<div class="xp-lt"><h5>Power of the t-test</h5><div>With the observed difference (${F(diff, 2)}) and SD (${F(sp, 2)}), the power was ${F(100 * pw, 1)}%; about ${need ? need.n1 : '—'} patients per group would give 80% power.</div><div class="legend-note">Observed (post hoc) power only restates the P value; use it to plan the next study, not to explain this one.</div></div>`);
+        // what-if: the same means and SDs with more (or fewer) patients
+        const f = (state.xpWhat || {})[it.id] || 2, t = diff / (sp * Math.sqrt(1 / (n1 * f) + 1 / (n2 * f))), df = n1 * f + n2 * f - 2, pf = 2 * (1 - jStat.studentt.cdf(Math.abs(t), df));
+        out.push(`<div class="xp-lt"><h5>What if</h5><div class="row" style="gap:6px">Sample size × <input type="number" step="0.1" min="0.2" data-xpwhat="${esc(it.id)}" value="${f}" style="width:80px"> → n ${Math.round(n1 * f)} and ${Math.round(n2 * f)}: t-test P ${esc(P(pf))} ${pf <= alpha ? '(significant)' : '(not significant)'}</div><div class="legend-note">Keeps the observed means and SDs; for planning, not for changing the result.</div></div>`);
+        // bootstrap distribution of the difference in means
+        const rnd = Stats.seeded(21), bs = []; for (let k = 0; k < 2000; k++) { const x = a.map(() => a[Math.floor(rnd() * n1)]), y = b.map(() => b[Math.floor(rnd() * n2)]); bs.push(Stats.mean(x) - Stats.mean(y)); }
+        const lo = Stats.quantile(bs, 0.025), hi = Stats.quantile(bs, 0.975), mn = Math.min(...bs), mx = Math.max(...bs), nb = 30, w = (mx - mn) / nb || 1, cnt = new Array(nb + 1).fill(0); bs.forEach(x => { cnt[Math.min(nb, Math.floor((x - mn) / w))]++; });
+        let img = ''; try { img = Charts.draw({ type: 'xy', xLabel: `Difference in means (${gl[0]} − ${gl[1]})`, yLabel: 'Bootstrap samples', vline: 0, legend: false, series: [{ x: cnt.map((_, i) => mn + i * w), y: cnt, step: true }] }, chartPalette(cfg.options), { ...chartStyle(cfg.options), aspect: 'standard', res: 1 }).toDataURL('image/png'); } catch (e) { }
+        out.push(`<div class="xp-lt"><h5>Bootstrap distribution of the difference</h5><div>Mean difference ${F(diff, 2)}, 95% percentile CI ${F(lo, 2)} to ${F(hi, 2)} (2000 resamples)</div>${img ? `<img src="${img}" alt="" style="max-width:100%">` : ''}</div>`);
+      }
+    }
+    if (it.kind === 'categorical' && v) {
+      const lv = Analysis.levelsOf(cfg, rows, col), cnt = lv.map(l => gs.map(g => rows.filter(r => Analysis.groupOf(cfg, r) === g && Analysis.toCat(r[col]) === l).length)), N = cnt.flat().reduce((a, b) => a + b, 0);
+      if (N && gs.length >= 2) { const rt = cnt.map(r => r.reduce((a, b) => a + b, 0)), ct = gs.map((_, j) => cnt.reduce((a, r) => a + r[j], 0)), E = cnt.map((r, i) => r.map((_, j) => rt[i] * ct[j] / N)), low = E.flat().filter(e => e < 5).length;
+        out.push(`<div class="xp-lt"><h5>Why this test</h5><div>${esc(it.test || 'No test')}: a ${lv.length} × ${gs.length} table; ${low} of ${E.flat().length} cells (${F(100 * low / E.flat().length, 0)}%) have an expected count below 5 → ${low / E.flat().length > 0.2 ? "too many small cells for the chi-square test, so Fisher's exact test (or Fisher-Freeman-Halton) fits" : 'the chi-square test is valid'}.</div></div>`);
+        // drill-down: click a count to see those patients in the sheet
+        out.push(`<div class="xp-lt"><h5>Drill down</h5>${tbl(['', ...gl.map(esc)], lv.map((l, i) => [esc(l), ...gs.map((g, j) => { const idx = rows.map((r, k) => Analysis.groupOf(cfg, r) === g && Analysis.toCat(r[col]) === l ? k : -1).filter(k => k >= 0); return idx.length ? `<a href="#" data-xprows="${idx.join(',')}">${cnt[i][j]}</a>` : '0'; })]))}<div class="legend-note">Click a count to see those patients in the sheet.</div></div>`);
+        if (lv.length === 2 && gs.length === 2) { const a = cnt[1][0], b = cnt[0][0], c = cnt[1][1], d = cnt[0][1], p1 = a / (a + b), p2 = c / (c + d), rd = p1 - p2, or = (a + 0.5) * (d + 0.5) / ((b + 0.5) * (c + 0.5));
+          const pw = Stats.powerTwoProps(p1, p2, a + b, c + d, alpha), need = p1 !== p2 ? Stats.nTwoProps(p1, p2, alpha, 0.8) : null;
+          out.push(`<div class="xp-lt"><h5>Effect sizes (${esc(lv[1])})</h5>${tbl(['Measure', 'Value'], [['Risk difference', `${F(100 * rd, 1)} percentage points`], ['Risk ratio', F(p2 ? p1 / p2 : NaN, 2)], ['Odds ratio', F(or, 2)], ['NNT', rd ? F(1 / Math.abs(rd), 1) : '—'], ["Cohen's d (from the OR)", F(Math.log(or) * Math.sqrt(3) / Math.PI, 3)]])}</div>`);
+          out.push(`<div class="xp-lt"><h5>Power</h5><div>Power ${F(100 * pw, 1)}% for ${F(100 * p1, 1)}% vs ${F(100 * p2, 1)}%; about ${need ? need.n1 : '—'} patients per group give 80% power.</div></div>`); } }
+    }
+    // the report figure of this variable, edited here (step 7 settings)
+    if (v && v.kind !== 'repeated' && v.cols) {
+      const types = (CHART_TYPES[v.type === 'categorical' ? 'categorical' : 'numeric'] || []);
+      let fig = ''; try { const r = Analysis.run(state.data, { ...cfg, variables: [{ ...v, include: true }], advanced: [], consort: null, options: { ...effOptions(), correlation: false, summary: false, figures: 'all' } }), f = r.sections.flatMap(s2 => s2.figures)[0];
+        if (f) { figVarProps(f); fig = Charts.draw(f.spec, chartPalette(cfg.options), { ...chartStyle(cfg.options), res: 1 }).toDataURL('image/png'); } } catch (e) { }
+      out.push(`<div class="xp-lt"><h5>Figure in the report</h5><div class="grid g2"><div><label class="f">Chart type</label><select data-xpfe="${esc(v.id)}" data-k="chart">${types.map(([k, l]) => `<option value="${k}" ${(v.chart || 'auto') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+        <div><label class="f">Y-axis title</label><input type="text" data-xpfe="${esc(v.id)}" data-k="ylabel" value="${esc(v.ylabel || '')}" placeholder="automatic"></div></div><label class="f">Caption</label><input type="text" data-xpfe="${esc(v.id)}" data-k="caption" value="${esc(v.caption || '')}" placeholder="automatic" style="width:100%">${fig ? `<img src="${fig}" alt="" style="max-width:100%;margin-top:6px">` : '<div class="legend-note">No figure for this variable in the report (step 7).</div>'}</div>`);
+    }
+    return out;
+  }
+  // quality badges of a variable: missing values, outliers, small groups and a borderline P value
+  function badges(it) {
+    const cfg = state.cfg, rows = state.data.rows.filter(r => activeGroups().includes(Analysis.groupOf(cfg, r))), out = [];
+    const miss = it.cols.reduce((t, c) => t + rows.filter(r => r[c.col] === null || r[c.col] === undefined || String(r[c.col]).trim() === '').length, 0), pct = rows.length ? 100 * miss / (rows.length * it.cols.length) : 0;
+    if (pct >= 5) out.push(`<span class="chip ${pct >= 20 ? 'warn' : ''}" title="Missing values of this variable">${pct.toFixed(0)}% missing</span>`);
+    if (it.kind === 'numeric') { const col = it.cols[0].col, n = activeGroups().reduce((t, g) => { const a = rows.filter(r => Analysis.groupOf(cfg, r) === g).map(r => Analysis.toNum(r[col])).filter(isFinite), f = Analysis.outFence(a, xpo().out === 'none' ? '1.5' : xpo().out); return t + (f ? a.filter(x => x < f[0] || x > f[1]).length : 0); }, 0);
+      if (n) out.push(`<span class="chip" title="Outliers (${Analysis.OUT_RULE[xpo().out] || 'beyond 1.5 × IQR'})">${n} outlier${n > 1 ? 's' : ''}</span>`); }
+    const minN = Math.min(...activeGroups().map(g => rows.filter(r => Analysis.groupOf(cfg, r) === g && it.cols.some(c => !(r[c.col] === null || r[c.col] === undefined || String(r[c.col]).trim() === ''))).length));
+    if (isFinite(minN) && minN < 10) out.push(`<span class="chip warn" title="The smallest group has fewer than 10 patients">small group (n=${minN})</span>`);
+    const a = cfg.options.alpha; if (isFinite(it.p) && it.p > a * 0.8 && it.p < a * 1.2) out.push(`<span class="chip warn" title="P value close to the significance level: interpret with care">borderline P</span>`);
+    if ((cfg.xpFlags || []).includes(it.id)) out.push('<span class="chip warn" title="Flagged to check later">⚑ check later</span>');
+    return out.join('');
   }
   const sumHtml = it => { const t = summaryTable(it); return t ? tblHtml(t) + (t.note ? `<div class="xp-sum-note">${esc(t.note)}</div>` : '') : xpTables(it).map(tblHtml).join(''); };
   // a card's lines: each group's mean ± SD or median (IQR), its frequencies, or the values at the first and last timepoint
@@ -34390,11 +34465,11 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const u = figUrl(it), img = u ? `<img class="xp-fig" src="${u}" alt="">` : '';
       const memo = (state.cfg.variables.find(q => q.id === it.id || it.id.startsWith(q.id + '_')) || {}).memo;
       const pinned = (state.cfg.xpPins || []).includes(it.id), coll = state.xpCollapsed.has(it.id);
-      const tools = `<span class="xp-tools"><button class="btn ghost small" data-xt="pin" data-id="${esc(it.id)}" title="${pinned ? 'Unpin' : 'Pin to the top'}">${pinned ? '★' : '☆'}</button><button class="btn ghost small" data-xt="coll" data-id="${esc(it.id)}" title="${coll ? 'Expand' : 'Collapse'}">${coll ? '▸' : '▾'}</button><button class="btn ghost small" data-xt="lab" data-id="${esc(it.id)}" title="Sensitivity, subgroups, assumptions, bootstrap, test, outliers, edits">🔬</button><button class="btn ghost small" data-xt="note" data-id="${esc(it.id)}" title="Your note (in the Word file)">✎</button><button class="btn ghost small" data-xt="fig" data-id="${esc(it.id)}" title="Copy the figure">⧉</button><button class="btn ghost small" data-xt="print" data-id="${esc(it.id)}" title="Print this variable">🖨</button><button class="btn ghost small" data-xt="word" data-id="${esc(it.id)}" title="This variable alone in Word">W</button><button class="btn ghost small" data-xt="xlsx" data-id="${esc(it.id)}" title="This variable alone in Excel">X</button></span>`;
+      const tools = `<span class="xp-tools"><button class="btn ghost small" data-xt="pin" data-id="${esc(it.id)}" title="${pinned ? 'Unpin' : 'Pin to the top'}">${pinned ? '★' : '☆'}</button><button class="btn ghost small" data-xt="coll" data-id="${esc(it.id)}" title="${coll ? 'Expand' : 'Collapse'}">${coll ? '▸' : '▾'}</button><button class="btn ghost small" data-xt="lab" data-id="${esc(it.id)}" title="Sensitivity, subgroups, assumptions, bootstrap, test, outliers, edits">🔬</button><button class="btn ghost small" data-xt="note" data-id="${esc(it.id)}" title="Your note (in the Word file)">✎</button><button class="btn ghost small" data-xt="fig" data-id="${esc(it.id)}" title="Copy the figure">⧉</button><button class="btn ghost small" data-xt="flag" data-id="${esc(it.id)}" title="Flag to check later">⚑</button><button class="btn ghost small" data-xt="sent" data-id="${esc(it.id)}" title="Copy the report-ready sentence">📋</button><button class="btn ghost small" data-xt="pts" data-id="${esc(it.id)}" title="This variable's data of every patient, in Excel">⬇ pts</button><button class="btn ghost small" data-xt="print" data-id="${esc(it.id)}" title="Print this variable">🖨</button><button class="btn ghost small" data-xt="word" data-id="${esc(it.id)}" title="This variable alone in Word">W</button><button class="btn ghost small" data-xt="xlsx" data-id="${esc(it.id)}" title="This variable alone in Excel">X</button></span>`;
       const flag = it.disagree ? `<span class="chip warn" title="The parametric and non-parametric tests disagree on significance">⚠ tests disagree</span>` : '';
       const note = (state.cfg.xpNotes || {})[it.id], noteBox = state.xpNoteOpen.has(it.id) || note ? `<div class="xp-note"><label class="f">Your note (in the Word file)</label><textarea data-xpnote="${esc(it.id)}" placeholder="Your interpretation of this variable">${esc(note || '')}</textarea></div>` : '';
       const lab = state.xpLab.has(it.id) ? `<div class="xp-lab">${labHtml(it)}</div>` : '';
-      const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3>${memo ? `<span class="chip" title="${esc(memo)}" style="cursor:help">ℹ note</span>` : ''}<span class="chip info">${it.kind}</span>${flag}${tools}<span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>` + noteBox + lab;
+      const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3>${memo ? `<span class="chip" title="${esc(memo)}" style="cursor:help">ℹ note</span>` : ''}<span class="chip info">${it.kind}</span>${flag}${badges(it)}${tools}<span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>` + noteBox + lab;
       if (coll) return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-coll" data-xpitem="${esc(it.id)}">${headRow}</div>`;
       // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
       if (view === 'side') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
@@ -34417,12 +34492,36 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const nMiss = list.reduce((t, it) => t + it.cols.reduce((u, c) => u + state.data.rows.filter(r => Analysis.groupOf(state.cfg, r) !== null && (r[c.col] === null || r[c.col] === undefined || String(r[c.col]).trim() === '')).length, 0), 0);
     const dash = `<div class="xp-dash"><div><b>${list.length}</b><span>variables</span></div><div><b>${state.data.rows.length}</b><span>patients</span></div><div><b>${list.filter(it => it.sig).length}</b><span>significant</span></div><div><b>${nMiss}</b><span>missing values</span></div><div><b>${list.filter(it => it.disagree).length}</b><span>tests disagree</span></div></div>`;
     const cmp = $('#xpVar').value && xpo().cmp && list.length === 2;
-    $('#explore').innerHTML = dash + ov + (list.length ? (view === 'twocol' || cmp ? `<div class="xp-twocol">${html}</div>` : html) : empty);
+    $('#explore').classList.toggle('xp-dark', !!xpo().dark);
+    $('#explore').innerHTML = dash + topPanels(list) + ov + (list.length ? (view === 'twocol' || cmp ? `<div class="xp-twocol">${html}</div>` : html) : empty);
     // matches of the table search highlighted
     const tq = (xpo().tq || '').trim().toLowerCase(); if (tq) document.querySelectorAll('#explore td').forEach(td => { if (td.textContent.toLowerCase().includes(tq)) td.classList.add('xp-hit'); });
     $('#xpUndo').disabled = !state.undo || !state.undo.length; $('#xpRedo').disabled = !(state.redo && state.redo.length);
   }
+  // the panels above the variables: pinned summary sentences, the outlier queue and the history of the P values
+  function topPanels(list) {
+    const cfg = state.cfg, out = [], pins = (cfg.xpPins || []).map(id => state.explore.items.find(it => it.id === id)).filter(Boolean);
+    if (pins.length) { const was = xpo().comments; xpo().comments = true; const lines = pins.map(it => `<li><b>${esc(it.label)}</b>: ${esc(xpComment(it) || it.summary || '')}</li>`).join(''); xpo().comments = was;
+      out.push(`<div class="report-sec"><h3 style="margin:0 0 6px">★ Pinned summary</h3><ul style="margin:0;padding-left:20px">${lines}</ul></div>`); }
+    if (state.xpQueue) { const rows = state.data.rows, keep = new Set(cfg.outKeep || []), q = [];
+      list.filter(it => it.kind === 'numeric').forEach(it => { const col = it.cols[0].col; activeGroups().forEach(g => { const idx = rows.map((r, i) => i).filter(i => Analysis.groupOf(cfg, rows[i]) === g), a = idx.map(i => Analysis.toNum(rows[i][col])), f = Analysis.outFence(a.filter(isFinite), xpo().out === 'none' ? '1.5' : xpo().out);
+        if (f) idx.forEach((i, k) => { if (isFinite(a[k]) && (a[k] < f[0] || a[k] > f[1]) && !keep.has(i + '|' + col)) q.push({ it, i, col, v: a[k], g, f }); }); }); });
+      out.push(`<div class="report-sec"><h3 style="margin:0 0 6px">🧹 Outlier queue (${q.length})</h3>${q.length ? `<table class="t xp"><thead><tr><th>Variable</th><th>Row</th><th>Group</th><th>Value</th><th>Usual range</th><th></th></tr></thead><tbody>${q.slice(0, 50).map(o => `<tr><td class="b">${esc(o.it.label)}</td><td><a href="#" data-xprow="${o.i}">${o.i + 1}${cfg.idCols[0] ? ` (${esc(rows[o.i][cfg.idCols[0]] ?? '')})` : ''}</a></td><td>${esc(cfg.groupLabels[o.g] || o.g)}</td><td>${esc(o.v)}</td><td>${o.f[0].toFixed(2)} to ${o.f[1].toFixed(2)}</td>
+        <td><button class="btn ghost small" data-oq="keep" data-r="${o.i}" data-c="${esc(o.col)}" type="button">✓ Keep</button> <button class="btn ghost small" data-oq="miss" data-r="${o.i}" data-c="${esc(o.col)}" type="button">Set missing</button> <button class="btn ghost small" data-oq="cap" data-r="${o.i}" data-c="${esc(o.col)}" data-cap="${o.v < o.f[0] ? o.f[0] : o.f[1]}" type="button">Cap at the fence</button></td></tr>`).join('')}</tbody></table>${q.length > 50 ? `<div class="legend-note">First 50 of ${q.length}.</div>` : ''}` : '<p class="legend-note">No outliers left to review.</p>'}</div>`); }
+    if (state.xpShowHist) { const runs = state.xpRuns || [], a = cfg.options.alpha;
+      out.push(`<div class="report-sec"><h3 style="margin:0 0 6px">🕘 History of the results (this session)</h3>${runs.length > 1 ? `<div style="overflow-x:auto"><table class="t xp"><thead><tr><th>Variable</th>${runs.map(r => `<th>${esc(r.time)}</th>`).join('')}</tr></thead><tbody>${list.map(it => `<tr><td class="b">${esc(it.label)}</td>${runs.map((r, k) => { const p = r.p[it.id], prev = k ? runs[k - 1].p[it.id] : p, ch = k && isFinite(p) && isFinite(prev) && (p <= a) !== (prev <= a);
+        return `<td class="${p <= a ? 'sig' : ''}" ${ch ? 'style="outline:2px solid var(--bad)" title="Significance changed"' : ''}>${isFinite(p) ? esc(Analysis.fmtP(p, a)) : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="legend-note">The P values are recorded each time the results change (after editing the data, a test or the options).</p>'}</div>`); }
+    return out.join('');
+  }
+  $('#xpQueueBtn').onclick = () => { state.xpQueue = !state.xpQueue; drawExplore(); };
+  $('#xpHistBtn').onclick = () => { state.xpShowHist = !state.xpShowHist; drawExplore(); };
   $('#explore').addEventListener('click', e => {
+    const oq = e.target.closest('[data-oq]');
+    if (oq) { const i = +oq.dataset.r, col = oq.dataset.c, k = oq.dataset.oq;
+      if (k === 'keep') { const ks = state.cfg.outKeep = state.cfg.outKeep || []; ks.push(i + '|' + col); drawExplore(); return; }
+      const old = state.data.rows[i][col], val = k === 'miss' ? null : +(+oq.dataset.cap).toFixed(4);
+      editSheet(() => { state.data.rows[i][col] = val; }, `Outlier ${k === 'miss' ? 'set to missing' : 'capped'} in step 10`);
+      state.xpHist.push({ time: new Date().toLocaleTimeString(), row: i, col, old, val }); state.xpChanged.add(i + '|' + col); state.result = null; renderExplore(); return; }
     const b = e.target.closest('[data-xt]'), rw = e.target.closest('[data-xprow],[data-xprows]');
     if (rw) { e.preventDefault(); const rs = (rw.dataset.xprows || rw.dataset.xprow).split(',').map(Number); go(1); showRows(rs, 'Outliers from step 10'); return; }
     if (!b) return; const id = b.dataset.id, it = state.explore.items.find(q => q.id === id), t = b.dataset.xt, y = window.scrollY;
@@ -34431,6 +34530,11 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (t === 'coll') toggle(state.xpCollapsed, id);
     if (t === 'lab') toggle(state.xpLab, id);
     if (t === 'note') toggle(state.xpNoteOpen, id);
+    if (t === 'flag') { const f = state.cfg.xpFlags = state.cfg.xpFlags || []; const i = f.indexOf(id); i >= 0 ? f.splice(i, 1) : f.push(id); }
+    if (t === 'sent') { const was = xpo().comments; xpo().comments = true; const txt = xpComment(it); xpo().comments = was; if (!txt) { toast('No sentence for this variable'); return; } navigator.clipboard.writeText(txt).then(() => toast('Sentence copied'), () => toast('Copy failed')); return; }
+    if (t === 'pts') { const cfg = state.cfg, idc = cfg.idCols[0], aoa = [[...(idc ? [idc] : []), 'Row', 'Group', ...it.cols.map(c => c.label)]];
+      state.data.rows.forEach((r, i) => { const g = Analysis.groupOf(cfg, r); if (activeGroups().includes(g)) aoa.push([...(idc ? [r[idc] ?? ''] : []), i + 1, cfg.groupLabels[g] || g, ...it.cols.map(c => r[c.col] ?? '')]); });
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Patients'); XLSX.writeFile(wb, `${baseName()} - ${it.label.replace(/[\\/:*?"<>|]/g, '')} - patients.xlsx`); return; }
     if (t === 'fig') { if (!it || !it.spec) { toast('No figure'); return; } copyImage(Charts.draw(it.spec, chartPalette(state.cfg.options), { ...chartStyle(state.cfg.options), res: 2 }).toDataURL('image/png')); return; }
     if (t === 'print') { const node = document.querySelector(`[data-xpitem="${CSS.escape(id)}"]`); if (node) printPart(it.label, node); return; }
     if (t === 'word' || t === 'xlsx') { state.xpOnly = id; Promise.resolve($(t === 'word' ? '#xpWord' : '#xpXlsx').onclick()).finally(() => { state.xpOnly = null; }); return; }
@@ -34440,6 +34544,9 @@ if (typeof module !== 'undefined') module.exports = Sav;
   $('#explore').addEventListener('change', e => {
     const y = window.scrollY;
     if (e.target.dataset.xpsub) { xpo().subBy = e.target.value; drawExplore(); window.scrollTo(0, y); }
+    if (e.target.dataset.xpwhat !== undefined) { (state.xpWhat = state.xpWhat || {})[e.target.dataset.xpwhat] = Math.max(0.2, +e.target.value || 1); drawExplore(); window.scrollTo(0, y); }
+    if (e.target.dataset.xpfe !== undefined) { const v = state.cfg.variables.find(q => q.id === e.target.dataset.xpfe), k = e.target.dataset.k; if (v) { if (e.target.value && e.target.value !== 'auto') v[k] = e.target.value; else delete v[k]; state.result = null; } drawExplore(); window.scrollTo(0, y); toast('Figure of the report changed (step 7)'); }
+    if (e.target.dataset.oqact !== undefined) return;
     if (e.target.dataset.xptest !== undefined) { const v = state.cfg.variables.find(q => q.id === e.target.dataset.xptest); if (v) { if (e.target.value) v.test = e.target.value; else delete v.test; } renderExplore(); window.scrollTo(0, y); toast('Test changed — the results and the report follow it'); }
   });
   // J / K: next / previous variable
