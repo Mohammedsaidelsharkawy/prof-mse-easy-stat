@@ -10,53 +10,81 @@
   --purple:#7B2FBE; --purple-d:#5E1F96; --navy:#1C1648; --lav:#F4EEFA; --lav2:#E7DAF4;
   --ink:#1F1B2E; --muted:#6B6580; --line:#E2DAEC; --bg:#FBF9FD; --card:#FFFFFF;
   --ok:#1E8E5A; --warn:#B26A00; --bad:#C0392B;
+  --field:#FFFFFF; --hover:#FCFAFE; --soft:#FDFBFF; --drop-over:#EFE4FA; --title:var(--navy); --accent:var(--purple-d);
+  --ok-bg:#E3F5EC; --warn-bg:#FFF2DC;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --lav:#2A2440; --lav2:#3A3258; --ink:#ECE8F4; --muted:#A79FBD; --line:#3A3452; --bg:#141122; --card:#1D1930;
+  --field:#252038; --hover:#241F38; --soft:#221D36; --drop-over:#30285090; --title:#D9C4F2; --accent:#C9A2EC;
+  --ok:#5CCB94; --warn:#F0B35A; --bad:#F08273; --ok-bg:#1D3A2C; --warn-bg:#3D2E14;
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
-body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5}
+body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;background:radial-gradient(1200px 420px at 50% -120px,var(--lav),transparent 70%) no-repeat,var(--bg);color:var(--ink);font-size:15px;line-height:1.5;min-height:100vh}
 header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;box-shadow:0 2px 12px rgba(28,22,72,.25)}
-.top-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:10px 20px}
+.top-in{max-width:1920px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:10px clamp(12px,2vw,28px)}
 .logo{width:54px;height:54px;border-radius:12px;background:#fff;padding:3px;object-fit:contain}
 .brand h1{margin:0;font-size:22px;letter-spacing:.3px}
 .brand h1 span{color:#C9A2EC}
 .brand p{margin:0;font-size:12.5px;opacity:.75}
-.top-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.top-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:nowrap;align-items:center;justify-content:flex-end;min-width:0;flex:1 1 auto}
+.top-actions > .btn,.top-actions > label.btn{white-space:nowrap}
+.ux-more{position:relative}
+.ux-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:220px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(28,22,72,.28);padding:6px;display:none;flex-direction:column;gap:2px;z-index:75}
+.ux-menu.open{display:flex}
+.ux-menu .btn{background:transparent!important;color:var(--ink)!important;border:0!important;box-shadow:none!important;width:100%;justify-content:flex-start;text-align:left;padding:8px 10px;border-radius:8px}
+.ux-menu .btn:hover,.ux-menu .btn:focus-visible{background:var(--lav)!important}
+.top-actions .ux-saved{color:#fff}
+@media (max-width:1500px){.top-actions .ux-saved{display:none}}
+@media (max-width:1280px){.top-actions > .btn .tl,.top-actions > label.btn .tl{display:none}.top-actions{gap:6px}}
+@media (max-width:640px){.brand h1{font-size:17px}.logo{width:40px;height:40px}}
+.brand{flex-shrink:0}
 .pulse{height:4px;background:linear-gradient(90deg,var(--purple),#C9A2EC,var(--purple));background-size:200% 100%;animation:pulse 6s linear infinite}
 @keyframes pulse{to{background-position:-200% 0}}
 
-main{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
-.stepper{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
-.step{flex:1;min-width:150px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);cursor:pointer;user-select:none;transition:.15s}
-.step .num{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:var(--lav2);color:var(--purple-d);flex:none}
-.step .lbl{font-weight:600;font-size:14px}
-.step .sub{font-size:12px;color:var(--muted)}
-.step.active{border-color:var(--purple);box-shadow:0 0 0 3px rgba(123,47,190,.15)}
-.step.active .num{background:var(--purple);color:#fff}
+main{max-width:1920px;margin:0 auto;padding:16px clamp(12px,2vw,28px) 60px}
+/* step bar: one row of steps joined by a progress line, kept in view under the header */
+.stepper{display:flex;margin-bottom:18px;padding:10px 8px 8px;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 4px 18px rgba(28,22,72,.06);position:sticky;top:78px;z-index:15}
+.step{flex:1 1 0;min-width:0;position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:4px 4px 6px;border-radius:12px;cursor:pointer;user-select:none;text-align:center;transition:background .15s}
+.step:hover{background:var(--lav)}
+.step::before{content:'';position:absolute;top:19px;left:calc(-50% + 20px);right:calc(50% + 20px);height:3px;border-radius:2px;background:var(--line);transition:background .2s}
+.step:first-child::before{display:none}
+.step.done::before,.step.active::before{background:linear-gradient(90deg,var(--navy),var(--purple))}
+.step .num{position:relative;z-index:1;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13.5px;background:var(--lav2);color:var(--accent);box-shadow:0 0 0 4px var(--card);transition:.2s}
+.step .lbl{font-weight:600;font-size:13px;line-height:1.2;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step .sub{font-size:11px;line-height:1.2;color:var(--muted);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step.active .num{background:var(--purple);color:#fff;box-shadow:0 0 0 4px var(--card),0 0 0 7px rgba(123,47,190,.28)}
+.step.active .lbl{color:var(--accent)}
 .step.done .num{background:var(--navy);color:#fff}
+:root[data-theme="dark"] .step.done .num{background:#5E4A9A}
 .step.disabled{opacity:.45;pointer-events:none}
+@media (max-width:1150px){.step .sub{display:none}}
+@media (max-width:700px){.step .lbl{display:none}.step.active .lbl{display:block}.stepper{top:70px}}
 
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;margin-bottom:18px;box-shadow:0 1px 3px rgba(28,22,72,.04)}
-.card h2{margin:0 0 4px;font-size:19px;color:var(--navy)}
-.card h3{margin:18px 0 8px;font-size:15.5px;color:var(--navy)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:16px;box-shadow:0 1px 3px rgba(28,22,72,.04),0 8px 24px rgba(28,22,72,.04)}
+.card h2{margin:0 0 4px;font-size:19px;color:var(--title)}
+.card h3{margin:18px 0 8px;font-size:15.5px;color:var(--title)}
 .card .hint{color:var(--muted);font-size:13.5px;margin:0 0 14px}
 .panel{display:none}.panel.active{display:block}
 
 .btn{border:0;border-radius:10px;padding:10px 18px;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;transition:.15s;display:inline-flex;align-items:center;gap:8px}
 .btn.primary{background:var(--purple);color:#fff}.btn.primary:hover{background:var(--purple-d)}
 .btn.navy{background:var(--navy);color:#fff}
-.btn.ghost{background:var(--lav);color:var(--purple-d)}.btn.ghost:hover{background:var(--lav2)}
+.btn.ghost{background:var(--lav);color:var(--accent)}.btn.ghost:hover{background:var(--lav2)}
 .btn.light{background:rgba(255,255,255,.12);color:#fff}.btn.light:hover{background:rgba(255,255,255,.22)}
 .btn.small{padding:6px 12px;font-size:13px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .nav{display:flex;justify-content:space-between;margin-top:6px}
 
 .drop{border:2.5px dashed var(--lav2);border-radius:16px;padding:40px 20px;text-align:center;background:var(--lav);cursor:pointer;transition:.15s}
-.drop:hover,.drop.over{border-color:var(--purple);background:#EFE4FA}
-.drop .big{font-size:18px;font-weight:700;color:var(--navy)}
+.drop:hover,.drop.over{border-color:var(--purple);background:var(--drop-over)}
+.drop .big{font-size:18px;font-weight:700;color:var(--title)}
 .drop svg{width:52px;height:52px;color:var(--purple)}
 
 label.f{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:4px}
-input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fff;color:var(--ink);width:100%}
+input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--field);color:var(--ink);width:100%}
 input:focus,select:focus,textarea:focus{outline:2px solid rgba(123,47,190,.35);border-color:var(--purple)}
 textarea{min-height:90px;resize:vertical;line-height:1.5}
 .grid{display:grid;gap:14px}
@@ -67,35 +95,148 @@ textarea{min-height:90px;resize:vertical;line-height:1.5}
 
 .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:520px}
 table.t{border-collapse:collapse;width:100%;font-size:13.5px}
-table.t th{background:var(--lav);color:var(--navy);text-align:left;font-weight:700;padding:8px 10px;position:sticky;top:0;z-index:1;white-space:nowrap}
+table.t th{background:var(--lav);color:var(--title);text-align:left;font-weight:700;padding:8px 10px;position:sticky;top:0;z-index:1;white-space:nowrap}
 table.t td{padding:6px 10px;border-top:1px solid var(--line);vertical-align:middle}
-table.t tr:hover td{background:#FCFAFE}
+table.t tr:hover td{background:var(--hover)}
 table.t td input[type=text]{min-width:150px}
 table.t td select{min-width:120px}
+.tpchks{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px;font-family:inherit;font-size:12.5px;color:var(--ink)}
+.tpchks label{display:flex;align-items:center;gap:3px;white-space:nowrap}
+.tpchks input{accent-color:var(--purple)}
+.predlist{display:flex;flex-wrap:wrap;gap:4px 16px;max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--field)}
+.predlist label{display:flex;align-items:center;gap:5px;font-size:13.5px;white-space:nowrap}
+.predlist input{accent-color:var(--purple)}
+.off{opacity:.38}
+.preset-bar{gap:10px;margin:0 0 14px;padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;align-items:center}
+.pal-wrap{margin:12px 0 0;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.pal-wrap summary{cursor:pointer}
+.xp-item .row{gap:10px}.xp-body{display:flex;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap}.xp-fig{width:420px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+.xp-tables{flex:1;min-width:320px}.xp-tbl h4{margin:6px 0 4px;font-size:13.5px}table.xp{font-size:12.5px}table.xp td,table.xp th{padding:4px 8px;white-space:nowrap}table.xp td.b{font-weight:600}table.xp td.sig{color:var(--bad);font-weight:700}table.xp td.used{color:var(--ok,#2E9E8F);font-weight:700;text-align:center}
+.pal-gallery{display:flex;gap:16px;margin-top:10px;align-items:flex-start;flex-wrap:wrap}
+.pal-list{flex:0 1 380px;max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px;background:var(--card)}
+.pal-head{font-weight:700;font-size:13px;margin:8px 6px 4px}
+.pal-row{display:flex;align-items:center;gap:14px;width:100%;border:2px solid transparent;border-radius:8px;background:none;padding:5px 8px;cursor:pointer;font:inherit;color:inherit;text-align:left}
+.pal-row:hover{background:var(--hover)}.pal-row.on{border-color:var(--purple)}
+.pal-sw{display:inline-flex;flex-shrink:0}.pal-sw span{width:26px;height:20px;border:1px solid rgba(0,0,0,.12)}
+.pal-row .pal-sw span{width:30px;height:22px}
+.pal-prev{flex:1 1 360px;display:flex;flex-direction:column;gap:6px}.pal-prev img{width:100%;max-width:620px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.xp-data{margin-top:8px;border:1px solid var(--line);border-radius:10px;padding:6px 10px}.xp-data summary{cursor:pointer;font-weight:600;font-size:13px}
+.xp-groups{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}.xp-group{border:1px solid var(--line);border-radius:8px;max-height:340px;overflow:auto}
+.xp-group h5{margin:0;padding:6px 8px;background:var(--lav);font-size:12.5px;position:sticky;top:0;z-index:2}
+table.xd{font-size:12px}table.xd th{top:28px;padding:4px 8px}table.xd td{padding:2px 8px;text-align:right;font-variant-numeric:tabular-nums}table.xd td.rn{color:var(--muted);text-align:left}
+table.xd td[contenteditable]{cursor:text;outline:none}table.xd td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
+table.xd td.out{background:rgba(224,138,46,.22);font-weight:600}table.xd td.miss{background:rgba(192,57,43,.12)}table.xd td.chg{box-shadow:inset 3px 0 0 var(--purple)}
+.xp-legend{font-size:12px;color:var(--muted);margin-top:6px}
+.xp-side{display:grid;grid-template-columns:minmax(260px,38%) 1fr;gap:16px;margin-top:10px;align-items:start}
+.xp-side-data{border:1px solid var(--line);border-radius:10px;padding:8px;max-height:640px;overflow:auto}.xp-side-data h4{margin:0 0 6px;font-size:13.5px}
+.xp-side-data .xp-groups{margin-top:0}.xp-side-data .xp-group{max-height:none;overflow:visible}
+.xp-fig-below{margin-top:12px;text-align:center}.xp-fig-below img{width:640px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+@media (max-width:900px){.xp-side{grid-template-columns:1fr}}
+.gtool{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 10px;background:var(--card)}
+.chk-item{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)}.chk-item:first-of-type{border-top:0}
+.chk-item .ico{font-size:16px;line-height:1.3}.chk-item .txt{flex:1;font-size:13px}.chk-item .txt b{font-weight:600}
+.rt td.hl{background:#FFF2CC}
+table.xp-ov tbody tr{cursor:pointer}table.xp-ov tbody tr:hover td{background:var(--hover)}table.xp-ov td.sig{color:var(--bad);font-weight:700}
+input.mini{width:64px!important;min-width:0!important;padding:4px 6px}
+.fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
+.fmt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.fmt-card{text-align:left;border:1.5px solid var(--line);background:var(--soft);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:4px;transition:.15s}
+.fmt-card b{font-size:15px;color:var(--title)}
+.fmt-card span{font-size:12.5px;color:var(--muted)}
+.fmt-card:hover{border-color:var(--purple)}
+.fmt-card.on{border-color:var(--purple);background:var(--lav);box-shadow:0 0 0 3px rgba(123,47,190,.15)}
+.fmt-opts{margin-top:10px;gap:20px}
+@media (max-width:820px){.fmt-cards{grid-template-columns:1fr}}
+.grid-bar{margin:14px 0 8px;gap:12px}
+table.dgrid{width:auto;min-width:100%}
+table.dgrid td,table.dgrid th{white-space:nowrap}
+table.dgrid td{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+table.dgrid.wrap td{white-space:normal;overflow:visible;min-width:90px}
+table.dgrid.compact td{padding:2px 8px;font-size:12.5px}table.dgrid.compact th{padding:5px 8px;font-size:12.5px}
+table.dgrid.comfy td{padding:10px 12px}table.dgrid.comfy th{padding:11px 12px}
+table.dgrid td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.dgrid th.num{text-align:right}
+table.dgrid.stripes tbody tr:nth-child(even) td{background:var(--soft)}
+table.dgrid .ty{display:inline-block;margin-left:5px;font-size:10px;font-weight:600;padding:0 5px;border-radius:4px;background:var(--card);color:var(--muted);vertical-align:1px}
+table.dgrid.freeze td.c1,table.dgrid.freeze th.c1{position:sticky;left:var(--rnw,40px);background:var(--card);z-index:2}
+table.dgrid.freeze th.fz0,table.dgrid.freeze td.fz0{left:var(--fz0,40px)}table.dgrid.freeze th.fz1,table.dgrid.freeze td.fz1{left:var(--fz1)}table.dgrid.freeze th.fz2,table.dgrid.freeze td.fz2{left:var(--fz2)}
+table.dgrid.freeze .fzl{box-shadow:2px 0 0 var(--line)}
+table.dgrid.freeze th.c1{z-index:3;background:var(--lav)}
+.colpick{position:relative}.colpick summary{list-style:none}.colpick summary::-webkit-details-marker{display:none}
+.colpick-box{position:absolute;z-index:20;top:110%;left:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:340px;overflow:auto;min-width:240px}
+.colpick-box label{display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0;white-space:nowrap}
+table.dgrid td.miss{background:rgba(192,57,43,.09)}
+table.dgrid td.rbad{outline:2px solid #B3261E;outline-offset:-2px}
+table.dgrid td.gout,table.dgrid.stripes tbody tr:nth-child(even) td.gout{background:rgba(224,138,46,.25);font-weight:600}
+.restore-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;margin-bottom:12px;background:var(--soft)}
+table.dgrid td.rn,table.dgrid th.rn{color:var(--muted);font-size:12px;white-space:nowrap;position:sticky;left:0;background:var(--card);z-index:2}
+table.dgrid th.rn{z-index:3;background:var(--lav)}
+table.dgrid th.sortable{cursor:pointer}
+table.dgrid th.sortable:hover{color:var(--purple)}
+table.dgrid td[contenteditable]{outline:none;cursor:text}
+table.dgrid td[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--purple);background:var(--field)}
+table.dgrid tr.gsum td{background:var(--soft);font-size:11.5px;color:var(--muted);white-space:nowrap}
+table.dgrid .miss-n{color:var(--bad);font-weight:600}
+.gh{display:flex;flex-direction:column;gap:3px}
+.gh input{min-width:110px!important;padding:3px 6px;font-size:12.5px}
+.gh-btns,.gr-btns{display:inline-flex;gap:2px}
+.gr-btns{margin-left:6px}
+.gh-btns button,.gr-btns button{border:0;background:var(--lav);color:var(--accent);border-radius:5px;font-size:11px;padding:2px 6px;cursor:pointer}
+.gh-btns button:hover,.gr-btns button:hover{background:var(--lav2)}
+.adv-opts{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.fig-prev{margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;position:sticky;top:90px}
+.fig-prev canvas{width:100%;display:block}
+.fig-prev .legend-note{text-align:center;margin-top:4px}
+#figTbl td select{min-width:150px}
+#figTbl td input[type=text]{min-width:180px}
+input.fcap{border:0;border-bottom:1px dashed var(--line);border-radius:0;padding:1px 2px;font-weight:600;font-size:13px;color:var(--title);background:transparent;width:auto;min-width:60%;text-align:center}
+input.fcap:focus{border-bottom-color:var(--purple);outline:none}
+.check.exp{margin:0;font-size:13px;color:var(--muted);white-space:nowrap}
+.figs figure .check.exp{justify-content:center;margin-top:4px}
+.exp-bar{background:var(--lav);border-radius:10px;padding:8px 12px;margin-bottom:14px}
+input[type=color]{width:42px;height:34px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--field);cursor:pointer}
 .mono{font-family:Consolas,monospace;font-size:12.5px;color:var(--muted)}
 .chip{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
-.chip.ok{background:#E3F5EC;color:var(--ok)}.chip.warn{background:#FFF2DC;color:var(--warn)}.chip.info{background:var(--lav);color:var(--purple-d)}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}.chip.warn{background:var(--warn-bg);color:var(--warn)}.chip.info{background:var(--lav);color:var(--accent)}
 
 .report-sec{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}
 .report-sec:first-child{border-top:0;margin-top:0;padding-top:0}
-.cap{font-weight:700;text-align:center;margin:10px 0;color:var(--navy)}
-table.rt{border-collapse:collapse;width:100%;font-family:"Times New Roman",serif;font-size:14px;margin:6px 0}
+.cap{font-weight:700;text-align:center;margin:10px 0;color:var(--title)}
+table.rt{border-collapse:collapse;width:100%;font-family:"Times New Roman",serif;font-size:14px;margin:6px 0;background:#fff;color:#111}
 table.rt th,table.rt td{border:1px solid #9a9a9a;padding:5px 7px;text-align:center;vertical-align:middle}
 table.rt th{background:#EBDDF6}
 table.rt td.b{font-weight:700}
 table.rt td.s{font-size:12.5px}
-.foot{font-family:"Times New Roman",serif;font-size:12.5px;color:#333;margin:4px 0 10px}
+table.rt td.s{font-size:.9em}
+table.rt tr.band td{background:#F2F2F2}
+table.rt tr td.hl{background:#FFF2CC}
+table.rt td.left{text-align:left}
+.ar-row{margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:8px}.ar-row.flag{border-color:var(--warn)}.ar-en{font-size:12px;color:var(--muted);margin:4px 0}.ar-row textarea{width:100%;min-height:60px;font-size:15px;font-family:'Times New Roman',Arial,serif}
+.xp-dash{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.xp-dash div{background:var(--lav);border-radius:10px;padding:8px 14px;display:flex;flex-direction:column;min-width:96px}.xp-dash b{font-size:20px}.xp-dash span{font-size:12px;color:var(--muted)}
+.xp-tools{display:inline-flex;gap:2px;margin-left:6px}.xp-tools .btn{padding:2px 6px}.xp-lab{margin:8px 0;padding:8px;border:1px dashed var(--line);border-radius:10px}.xp-labgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}.xp-lt h5{margin:0 0 4px}
+td.xp-hit{background:#FFF2A8!important}.xp-note textarea{min-height:50px}.xp-hist{margin:0;padding-left:18px;font-size:12px}
+.fig-tip{display:none;position:absolute;pointer-events:none;background:#1C1648;color:#fff;font-size:12px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:5}
+label.cc{display:inline-flex;flex-direction:column;align-items:center;font-size:11px;gap:2px}
+.gloss{margin:6px 0;padding:8px 10px;background:var(--lav);border-radius:8px;font-size:13px}.gloss dt{font-weight:700;margin-top:4px}.gloss dd{margin:0 0 0 12px}
+table.rt.rt-compact th,table.rt.rt-compact td{padding:2px 5px}
+table.rt.rt-roomy th,table.rt.rt-roomy td{padding:9px 10px}
+table.rt.apa th,table.rt.apa td{border:0}
+table.rt.apa th{background:#fff;border-top:2px solid #000;border-bottom:1.5px solid #000}
+table.rt.apa tbody tr:last-child td,table.rt.apa td.last{border-bottom:2px solid #000}
+.foot{font-family:"Times New Roman",serif;font-size:12.5px;color:var(--muted);margin:4px 0 10px}
 .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:10px}
 .figs figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px}
 .figs img{width:100%;display:block}
-.figs figcaption{text-align:center;font-weight:600;font-size:13px;color:var(--navy);margin-top:4px}
+.figs figcaption{text-align:center;font-weight:600;font-size:13px;color:var(--title);margin-top:4px}
 .consort-prev{max-width:760px;margin:0 auto;display:block;width:100%;border:1px solid var(--line);border-radius:10px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .spacer{flex:1}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);z-index:50;font-weight:600;opacity:0;transition:.25s;pointer-events:none}
 .toast.show{opacity:1}
-.gcard{border:1px solid var(--line);border-radius:12px;padding:14px;background:#FDFBFF}
-.gcard h4{margin:0 0 8px;color:var(--purple-d)}
+.gcard{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--soft)}
+.excard{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--soft);display:flex;flex-direction:column;gap:6px}
+.excard h4{margin:0;color:var(--accent)}
+.excard p{margin:0;font-size:13.5px;color:var(--muted);flex:1}
+.gcard h4{margin:0 0 8px;color:var(--accent)}
 footer{text-align:center;color:var(--muted);font-size:12.5px;padding:20px}
 footer b{color:var(--purple)}
 .check{display:flex;gap:8px;align-items:flex-start;margin:6px 0}
@@ -103,7 +244,166 @@ footer b{color:var(--purple)}
 .legend-note{font-size:12.5px;color:var(--muted)}
 .busy{position:fixed;inset:0;background:rgba(28,22,72,.35);display:none;place-items:center;z-index:60}
 .busy.show{display:grid}
-.busy div{background:#fff;padding:22px 30px;border-radius:14px;font-weight:700;color:var(--navy)}
+.busy div{background:var(--card);padding:22px 30px;border-radius:14px;font-weight:700;color:var(--title)}
+/* design previews (steps 5 and 7) */
+.paper-prev{background:#fff;color:#111;border:1px solid var(--line);border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:28px 36px;margin-top:10px;max-width:900px}
+.paper-prev .pcap{font-weight:700;margin:0 0 8px;line-height:1.35}
+.paper-prev .pfoot{font-size:12px;margin-top:6px;line-height:1.4}
+.paper-prev .pcom{font-size:14px;margin-top:10px;line-height:1.5;text-align:justify}
+.design-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:10px}
+.design-grid figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px}
+.design-grid img{width:100%;display:block}
+.design-grid figcaption{font-size:12px;color:#555;text-align:center;margin-top:4px}
+
+/* ---------- interface layer (ux.js) ---------- */
+.ux-hbar{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ux-saved{font-size:12px;opacity:.8;white-space:nowrap}
+.ux-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.ux-pop{position:fixed;right:16px;top:90px;width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 120px);overflow:auto;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 16px 48px rgba(28,22,72,.28);z-index:60;display:none}
+.ux-pop.open{display:block}.ux-pop.ux-center{left:50%;right:auto;transform:translateX(-50%);top:110px;width:min(640px,calc(100vw - 32px))}
+.ux-pop-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card)}.ux-pop-b{padding:10px 14px}
+.ux-list{list-style:none;margin:0;padding:0}.ux-list li{padding:6px 4px;border-bottom:1px solid var(--line)}
+.ux-pl li{cursor:pointer;border-radius:8px}.ux-pl li.on,.ux-pl li:hover{background:var(--lav)}
+.ux-flash{outline:3px solid #E8590C!important;outline-offset:3px;transition:outline-color 1.4s}
+.ux-tour-hl{position:fixed;border:3px solid #E8590C;border-radius:12px;box-shadow:0 0 0 9999px rgba(20,17,34,.45);z-index:70;pointer-events:none}
+.ux-tour-card{position:fixed;width:340px;background:var(--card);color:var(--ink);border-radius:14px;padding:14px;z-index:71;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.ux-offer{position:fixed;left:16px;bottom:16px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:0 8px 28px rgba(28,22,72,.2);z-index:55}
+.ux-goals{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0 10px}.ux-goal{cursor:pointer;border:1px solid var(--line)}.ux-goal.on{background:var(--purple);color:#fff}
+.ux-timeleft{margin:-10px 0 12px 6px}
+#stepper .step.ux-ok .num{box-shadow:0 0 0 3px var(--ok)}#stepper .step.ux-warn .num{box-shadow:0 0 0 3px var(--warn)}
+.ux-back{position:fixed;left:16px;bottom:70px;z-index:50;display:none}
+.ux-sample{display:flex;gap:10px;align-items:center;background:#FFF4E0;color:#5a3b00;border:1px solid #F0C36D;border-radius:12px;padding:8px 14px;margin:0 0 12px}
+.ux-crumb{position:fixed;left:50%;transform:translateX(-50%);top:62px;z-index:25;background:var(--navy);color:#fff;font-size:12.5px;padding:4px 14px;border-radius:0 0 10px 10px;display:none;max-width:90vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ux-dock{position:fixed;right:0;top:78px;bottom:0;width:46vw;background:var(--card);border-left:2px solid var(--line);z-index:30;overflow:auto;padding:10px}
+html.ux-split main{margin-right:47vw}
+.ux-changed{position:relative}.ux-changed::before{content:'';position:absolute;left:-9px;top:6px;width:6px;height:6px;border-radius:50%;background:#E8590C}
+.ux-reset{margin-left:8px}
+.ux-smart{background:var(--lav);border-radius:10px;padding:8px 12px;margin:6px 0 10px;font-size:13.5px}
+.ux-tip{position:fixed;display:none;z-index:65;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-width:320px}.ux-tip img{max-width:300px;display:block}
+.ux-grip{cursor:grab;color:var(--muted);margin-right:6px}
+.ux-learn{background:#FFF9E6;color:#4a3a00;border:1px solid #F3DE9A;border-radius:10px;padding:8px 10px;margin:8px 0;font-size:13px}
+.ux-fav{color:#E8A300}
+input.ux-bad{border-color:var(--bad)!important;box-shadow:0 0 0 2px rgba(192,57,43,.2)}
+.ux-checks{margin:8px 0;border:1px solid var(--line);border-radius:10px;padding:6px 10px}.ux-issue{display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.ux-repbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;position:sticky;top:140px;z-index:12;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 10px;margin:8px 0}
+.ux-over{color:var(--bad);font-weight:700}
+.ux-runnote{background:var(--lav);border-radius:10px;padding:8px 12px;margin:6px 0;font-size:13.5px}
+.ux-gloss,.ux-diff{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:6px 0;font-size:13px}
+.ux-diff ins{background:#d3f9d8;text-decoration:none}.ux-diff del{background:#ffe3e3}
+html.ux-pcol td.ux-p1{background:#c3fae8!important}html.ux-pcol td.ux-p2{background:#d3f9d8!important}html.ux-pcol td.ux-p3{background:#fff3bf!important}html.ux-pcol td.ux-p4{background:#ffe8cc!important}
+html.ux-focus #report .report-sec:not(.ux-cur){display:none}
+.ux-focusnav{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:50;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 10px;display:none;gap:6px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+html.ux-focus .ux-focusnav{display:flex}
+.ux-mini{position:fixed;right:8px;top:200px;width:200px;max-height:60vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;font-size:12px;z-index:20;display:none}
+.ux-mini a{display:block;padding:3px 4px;color:var(--ink);text-decoration:none;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ux-mini a.on{background:var(--lav);font-weight:700}
+@media (max-width:1500px){.ux-mini{display:none!important}}
+.ux-exp{padding:4px 0;border-bottom:1px solid var(--line)}
+/* display settings */
+html.ux-compact .card{padding:12px}html.ux-compact .gcard{padding:8px}html.ux-roomy .card{padding:30px}html.ux-roomy .gcard{padding:18px}
+html.ux-contrast{--ink:#000;--muted:#222;--line:#000;--bg:#fff;--card:#fff;--lav:#fff;--title:#000;--purple:#4B0082;--field:#fff}
+html.ux-contrast[data-theme="dark"]{--ink:#fff;--muted:#eee;--line:#fff;--bg:#000;--card:#000;--lav:#000;--title:#fff;--field:#000}
+html.ux-contrast .btn,html.ux-contrast input,html.ux-contrast select,html.ux-contrast textarea{border:2px solid currentColor!important}
+html.ux-dyslexic body,html.ux-dyslexic input,html.ux-dyslexic select,html.ux-dyslexic textarea,html.ux-dyslexic button{font-family:Verdana,'Comic Sans MS',Tahoma,sans-serif!important;letter-spacing:.04em;word-spacing:.12em;line-height:1.7}
+html.ux-still *,html.ux-still *::before,html.ux-still *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+html.ux-rail .stepper{position:fixed;left:0;top:78px;bottom:0;width:178px;flex-direction:column;overflow:auto;border-radius:0 16px 16px 0;margin:0;z-index:16}
+html.ux-rail main{margin-left:190px}html.ux-rail .ux-timeleft{margin-left:190px}
+:focus-visible{outline:3px solid #E8590C!important;outline-offset:2px}
+/* step 10: dark tables */
+#explore.xp-dark table.t { background: #1f1b26; color: #ece8f2; }
+#explore.xp-dark table.t th { background: #2c2636; color: #fff; }
+#explore.xp-dark table.t td { border-color: #3a3346; }
+#explore.xp-dark table.t td.sig { color: #ffb4a8; }
+#explore.xp-dark table.t a { color: #cdb6ff; }
+/* step 10: more views */
+.xp-stacked .xp-fig{width:100%;max-width:820px;display:block;margin:10px auto}
+.xp-twocol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.xp-twocol .report-sec{margin:0}.xp-twocol .xp-fig{width:100%}
+.xp-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.xp-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--card);cursor:pointer;display:flex;flex-direction:column;gap:6px}
+.xp-card:hover{border-color:var(--accent)}
+.xp-card.sig{border-left:4px solid var(--ok)}
+.xp-card h4{margin:0;font-size:15px;color:var(--title)}
+.xp-card .kv{font-size:13px;line-height:1.45}.xp-card .kv b{font-weight:600}
+.xp-card img{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
+.xp-card .pbig{font-size:20px;font-weight:700}.xp-card .pbig.sig{color:var(--ok)}
+.xp-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.xp-gallery figure{margin:0;border:1px solid var(--line);border-radius:10px;padding:8px;background:#fff;cursor:pointer}
+.xp-gallery figure img{width:100%;display:block}
+.xp-gallery figcaption{font-size:13px;color:#333;margin-top:6px;text-align:center}
+@media (max-width:900px){.xp-twocol{grid-template-columns:1fr}}
+/* step 10: data half / summary half */
+.xp-half{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:10px;align-items:start}
+.xp-half .xp-side-data{max-height:720px}
+.xp-half-data{max-height:720px;overflow:auto}
+.xw-title{font-family:"Times New Roman",serif;font-weight:700;font-size:15px;margin:2px 0 4px;color:var(--ink)}
+table.rt.xw{font-size:13.5px;margin:0 0 6px}table.rt.xw th{background:#D9D9D9;font-weight:700}table.rt.xw td{background:#fff}
+table.rt.xw.small{font-size:12px}table.rt.xw.small th,table.rt.xw.small td{padding:3px 5px}
+table.rt.xw td.out{background:rgba(224,138,46,.28);font-weight:600}table.rt.xw td.miss{background:rgba(192,57,43,.14)}table.rt.xw td.chg{box-shadow:inset 3px 0 0 var(--purple)}
+
+table.rt.xw td[contenteditable]:focus{outline:2px solid var(--purple);outline-offset:-2px}
+.xp-half .xp-fig{width:100%;margin-top:10px}
+.xp-comment{font-family:"Times New Roman",serif;font-size:14.5px;line-height:1.55;text-align:justify;margin:8px 2px 4px;color:var(--ink)}
+.xp-figcol{display:flex;flex-direction:column;max-width:440px}
+.xp-sum-note{font-size:12.5px;color:var(--muted);margin-top:4px}
+@media (max-width:900px){.xp-half{grid-template-columns:1fr}}
+/* step 2: more */
+#varsTbl td.vdrag{white-space:nowrap}#varsTbl .grip{cursor:grab;color:var(--muted);margin-right:4px;user-select:none}
+#varsTbl tr.dragging{opacity:.4}#varsTbl tr.dropto td{border-top:2px solid var(--accent)}
+/* step 1: more tools */
+.fm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 12px;margin-top:10px;max-height:62vh;overflow:auto}
+.fm-grid label{font-size:12px;color:var(--muted);display:block}.fm-grid input{width:100%}
+.colmenu{position:absolute;z-index:40;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:10px;width:300px;font-size:13px}
+.colmenu img{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
+.colmenu .vals{max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin:6px 0}
+table.dgrid thead th{position:sticky;top:0;z-index:2}
+table.dgrid th .cm{cursor:pointer;opacity:.6;margin-left:4px}table.dgrid th .cm:hover{opacity:1}
+table.dgrid th .rsz{position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize}
+table.dgrid th{position:sticky}
+.flt-chip{display:inline-flex;gap:6px;align-items:center}
+/* step 1: data preparation */
+.messy-tasks{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;margin:12px 0;background:var(--soft)}
+.messy-tasks .mt{display:flex;gap:8px;align-items:flex-start;padding:3px 0;font-size:13.5px}
+.messy-tasks .mt .ok{color:var(--ok);font-weight:700;width:18px}.messy-tasks .mt .no{color:var(--muted);width:18px}
+.messy-tasks .mt.done span.t{text-decoration:line-through;color:var(--muted)}
+.messy-tasks .mt .h{color:var(--muted);font-size:12.5px}
+.messy-tasks progress{width:160px;vertical-align:middle}
+#rcTbl input[type=text]{width:180px}
+.ov-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
+.ov-chips .chip{font-size:12px}
+details.prep{margin:10px 0;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--soft)}
+details.prep summary{cursor:pointer}
+.prep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:10px}
+.prep-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card)}
+.prep-card.wide{grid-column:1/-1}
+.prep-card h4{margin:0 0 6px;color:var(--title)}
+.flt{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.flt select,.flt input[type=text]{width:auto}
+dialog.app-dlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(720px,calc(100vw - 32px));box-shadow:0 20px 60px rgba(28,22,72,.25)}
+dialog.app-dlg::backdrop{background:rgba(20,17,34,.45)}
+.keys-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13.5px;align-items:center}
+.keys-grid .k{display:flex;gap:4px;justify-content:flex-end}
+.keys-grid kbd{font-family:inherit;font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--soft);white-space:nowrap}
+.keys-grid .sec{grid-column:1/-1;font-weight:700;color:var(--title);margin-top:6px}
+dialog.app-dlg h3{margin:0 0 4px;color:var(--title)}
+.adv-out{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}.adv-out>summary{cursor:pointer;color:var(--title)}
+.adv-out-body{margin-top:8px}.adv-out .tcap{font-weight:700;margin:4px 0 6px}.adv-out .pfoot{font-size:12px;margin-top:6px;line-height:1.4;color:var(--muted,#666)}.adv-out .pcom{font-size:14px;margin-top:8px;line-height:1.5;text-align:justify;background:var(--soft,#F6F3FA);padding:8px 10px;border-radius:8px}.adv-out-sec{margin-bottom:14px}.adv-out-figs{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.adv-out-figs figure{margin:0;flex:1 1 320px;max-width:560px}.adv-out-figs img{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+.adv-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:8px}
+.adv-cat{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card)}.adv-cat h4{margin:0 0 2px;color:var(--title);font-size:14px}.adv-cat p{margin:0 0 8px}
+.adv-cat .btns{display:flex;flex-wrap:wrap;gap:4px}.adv-cat.hide,.adv-cat .btn.hide{display:none}.adv-sep{grid-column:1/-1;margin:10px 0 0;font-weight:700;color:var(--title);border-bottom:2px solid var(--line);padding-bottom:4px}
+.lv-list{list-style:none;margin:0;padding:0;max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.lv-list li{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--card)}
+.lv-list li:last-child{border-bottom:0}.lv-list li.drag{opacity:.4}.lv-list li.over{box-shadow:inset 0 2px 0 var(--accent,#7B2CBF)}
+.lv-list .h{cursor:grab;color:#999;user-select:none}.lv-list .n{margin-left:auto}.lv-list .k{min-width:18px;text-align:right;color:#888;font-size:12px}
+/* figure export dialog */
+dialog#figDlg{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);padding:20px 22px;width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 40px);box-shadow:0 20px 60px rgba(28,22,72,.25)}
+dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
+#figDlg h3{margin:0 0 4px;color:var(--title)}
+#fxList{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 10px;margin:8px 0;background:var(--soft)}
+#fxList .check{margin:4px 0}
+#figDlg .fx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
+#figDlg .fx-grid select,#figDlg .fx-grid input{width:100%}
+#fxInfo{min-height:1.4em}
 </style>
 </head>
 <body>
@@ -112,9 +412,13 @@ footer b{color:var(--purple)}
     <img class="logo" src="__LOGO__" alt="Prof MSE logo">
     <div class="brand">
       <h1>Prof MSE <span>Easy Stat</span></h1>
-      <p>Medical Research · Excel → publication-ready statistical report</p>
     </div>
     <div class="top-actions">
+      <button class="btn light small" id="btnNew" title="Start a new project (clears the current data and settings)">＋ New</button>
+      <label class="btn light small" title="Open a saved project: data, settings and edited text">📂 Open project<input type="file" id="projFile" accept=".json,.easystat" hidden></label>
+      <button class="btn light small" id="btnSaveProj" title="Save everything — the data, all settings and the text edited in step 11 — in one file">💾 Save project</button>
+      <button class="btn light small" id="btnTheme" title="Switch light / dark theme">◐ Theme</button>
+      <button class="btn light small" id="btnKeys" title="Keyboard shortcuts (?)">⌨ Shortcuts</button>
       <button class="btn light small" id="btnSaveCfg" title="Save your column setup to reuse later">Save setup</button>
       <label class="btn light small" title="Load a saved setup">Load setup<input type="file" id="cfgFile" accept=".json" hidden></label>
     </div>
@@ -124,6 +428,16 @@ footer b{color:var(--purple)}
 
 <main>
   <div class="stepper" id="stepper"></div>
+  <div class="preset-bar row" id="presetBar" style="display:none">
+    <b>⚡ Preset</b>
+    <select id="presetSel" style="width:auto;max-width:320px"></select>
+    <button class="btn primary small" id="presetApply" type="button">Apply</button>
+    <span class="legend-note" id="presetNote" style="flex:1;min-width:200px"></span>
+    <button class="btn ghost small" id="presetSave" type="button" title="Save the current settings of steps 4–11 as your own preset">＋ Save current as preset</button>
+    <button class="btn ghost small" id="presetDel" type="button" title="Delete the selected preset of your own">✕ Delete</button>
+    <button class="btn ghost small" id="presetExport" type="button" title="Download your presets to use on another computer">⬇ Export</button>
+    <label class="btn ghost small" style="margin:0" title="Load presets from a file">⬆ Import<input type="file" id="presetFile" accept=".json" hidden></label>
+  </div>
 
   <!-- STEP 1 -->
   <section class="panel active" id="p1">
@@ -133,8 +447,14 @@ footer b{color:var(--purple)}
       <div class="drop" id="drop">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13l2 2 4-4"/></svg>
         <div class="big">Drop your Excel file here or click to browse</div>
-        <div class="legend-note">.xlsx, .xls or .csv</div>
-        <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
+        <div class="legend-note">Excel (.xlsx, .xls — also password-protected), CSV / text, SPSS (.sav, .zsav) or Stata (.dta)</div>
+        <input type="file" id="file" accept=".xlsx,.xls,.csv,.txt,.tsv,.sav,.zsav,.dta" hidden>
+      </div>
+      <div class="row" style="margin-top:10px;gap:8px">
+        <button class="btn ghost small" id="btnPaste" type="button" title="Copy the cells in Excel (with the header row) and paste them here">📋 Paste from Excel</button>
+        <span class="row" style="gap:4px;display:inline-flex;align-items:center"><select id="demoDesign" style="width:auto" title="The design of the demo data"><option value="rct2">Two-group RCT</option><option value="rct3">Three-group trial</option><option value="cohort">Cohort with follow-up</option><option value="one">One group, before / after</option><option value="diag">Diagnostic study</option><option value="ni">Non-inferiority trial</option></select><input type="number" id="demoN" value="40" min="5" max="2000" style="width:70px" title="Patients per group"><button class="btn ghost small" id="demoGo" type="button" title="Made-up data in the chosen design, to learn the app or test a plan">🎲 Demo data</button></span>
+        <button class="btn ghost small" id="btnTemplate" type="button" title="An empty Excel sheet laid out the way the app reads it, with a guide">⬇ Blank template</button>
+        <span class="legend-note">Copy your cells in Excel, Google Sheets or SPSS and paste them, or start from a template.</span>
       </div>
       <div id="sheetBox" style="display:none;margin-top:16px">
         <div class="grid g3">
@@ -142,16 +462,262 @@ footer b{color:var(--purple)}
           <div><label class="f">Sheet</label><select id="sheetSel"></select></div>
           <div><label class="f">Rows / columns</label><div id="dims" class="mono"></div></div>
         </div>
-        <h3>Preview</h3>
-        <div class="tbl-wrap" style="max-height:300px"><table class="t" id="preview"></table></div>
+        <div id="messyTasks" class="messy-tasks" style="display:none"></div>
+        <div id="dataOverview" class="ov-chips"></div>
+        <details class="prep" id="prepBox">
+          <summary><b>Prepare the data</b> — header rows, missing-value codes, which patients to analyse, and data from another file</summary>
+          <div class="prep-grid">
+            <div class="prep-card wide">
+              <h4>Column names</h4>
+              <div class="row" style="gap:8px;align-items:center"><button class="btn ghost small" id="tidyNames" type="button">✨ Tidy column names</button><span class="legend-note" id="tidyInfo">Trims spaces, joins words with “_”, removes line breaks and odd symbols, and makes every name unique — so timepoints such as VAS 1 week are read as VAS_1_week. Undo restores them.</span></div>
+            </div>
+            <div class="prep-card">
+              <h4>Header</h4>
+              <div class="row" style="gap:10px;align-items:flex-end">
+                <div><label class="f">Column names are in row</label><select id="hdrRow" style="width:auto"></select></div>
+                <label class="check" style="margin:0 0 8px"><input type="checkbox" id="hdrTwo"><span>Two header rows (e.g. “VAS” above “Baseline”, “W1” …)</span></label>
+                <div><label class="f">Ignore the last rows</label><input type="number" id="ftRows" min="0" value="0" style="width:70px" title="Totals, notes or signatures under the data"></div>
+              </div>
+              <p class="legend-note">Use this when the sheet starts with a title or notes above the column names. Two header rows are joined as “VAS_Baseline”.</p>
+            </div>
+            <div class="prep-card">
+              <h4>Labels from a data dictionary</h4>
+              <div class="row" style="gap:8px;align-items:center"><button class="btn ghost small" id="ddBtn" type="button">📖 Read a data dictionary</button><input type="file" id="ddFile" accept=".csv,.txt,.xlsx,.xls" hidden><span class="legend-note" id="ddInfo">A REDCap data dictionary (CSV), or any sheet with the column name, its label and its codes (e.g. “1, Male | 2, Female” or “1=Male; 2=Female”) — the variables take those labels and value labels.</span></div>
+            </div>
+            <div class="prep-card">
+              <h4>Missing-value codes</h4>
+              <div class="row" style="gap:8px;align-items:flex-end">
+                <div style="flex:1"><label class="f">Codes that mean “missing”</label><input type="text" id="missCodes" placeholder="e.g. 999, -99, NA, N/A, ., -"></div>
+                <div><label class="f">In</label><select id="missCol" style="width:auto;max-width:160px"><option value="">All columns</option></select></div>
+                <button class="btn ghost small" id="missApply" type="button" style="margin-bottom:6px">Blank them</button>
+              </div>
+              <p class="legend-note" id="missInfo">Cells with exactly these values become empty (Undo in edit mode restores them).</p>
+            </div>
+            <div class="prep-card wide">
+              <h4>Analyse only some patients</h4>
+              <div id="filterList"></div>
+              <div class="row" style="gap:8px"><button class="btn ghost small" id="filterAdd" type="button">+ Condition</button><span class="legend-note" id="filterInfo"></span></div>
+              <div class="row" style="gap:8px;margin-top:6px;align-items:center"><label class="check" style="margin:0"><input type="checkbox" id="sampleOn"><span>Only a random sample of</span></label><input type="number" id="sampleN" min="2" value="30" style="width:80px"><span class="legend-note">patients · seed</span><input type="number" id="sampleSeed" value="1" style="width:70px" title="The same seed always gives the same sample"><span class="legend-note">(for a pilot report)</span></div>
+              <p class="legend-note">The sheet keeps every row; the tables, figures and comments use only the patients who meet all the conditions (e.g. Age ≥ 18 and Centre = A). The Statistical Analysis section says so.</p>
+            </div>
+            <div class="prep-card wide">
+              <h4>Rules for plausible values</h4>
+              <div id="ruleList"></div>
+              <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn ghost small" id="ruleAdd" type="button">+ Rule</button><button class="btn ghost small" data-rulepreset="bp" type="button" title="Diastolic below systolic">DBP &lt; SBP</button><button class="btn ghost small" data-rulepreset="dates" type="button" title="A later date on or after an earlier one">Discharge ≥ admission</button><button class="btn ghost small" data-rulepreset="age" type="button">Age 0–120</button><span class="legend-note" id="ruleInfo"></span></div>
+              <p class="legend-note">A rule compares a column with another column or with a number (between two numbers for a range). Rows that break a rule are listed in 🩺 Check data and can be shown in the grid.</p>
+            </div>
+            <div class="prep-card">
+              <h4>Duplicates</h4>
+              <div class="row" style="gap:8px;align-items:flex-end"><div style="flex:1"><label class="f">Same patient when these columns match</label><select id="dupCols" multiple size="4" style="width:100%"></select></div></div>
+              <div class="row" style="gap:8px;margin-top:6px"><label class="check" style="margin:0"><input type="checkbox" id="dupFuzzy" checked><span>Near matches (case, spaces, one typo)</span></label><span class="spacer"></span><button class="btn ghost small" id="dupGo" type="button">Find</button></div>
+              <p class="legend-note" id="dupInfo"></p>
+            </div>
+            <div class="prep-card">
+              <h4>Missing data</h4>
+              <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost small" id="missMap" type="button">▦ Missing-data map &amp; MCAR test</button></div>
+              <div class="row" style="gap:6px;margin-top:8px;align-items:center"><span class="legend-note">Delete rows missing more than</span><input type="number" id="missPct" min="1" max="100" value="50" style="width:70px"><span class="legend-note">% of their cells</span><button class="btn ghost small" id="missRows" type="button">Delete</button></div>
+              <p class="legend-note" id="missRowInfo"></p>
+            </div>
+            <div class="prep-card">
+              <h4>Dates</h4>
+              <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
+                <div><label class="f">Column</label><select id="dtCol" style="width:auto"></select></div>
+                <div><label class="f">Written as</label><select id="dtOrder" style="width:auto"><option value="dmy">day/month/year</option><option value="mdy">month/day/year</option><option value="ymd">year-month-day</option></select></div>
+                <button class="btn ghost small" id="dtConvert" type="button" style="margin-bottom:6px" title="Excel date numbers and typed dates become yyyy-mm-dd">To dates</button>
+              </div>
+              <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:6px">
+                <div><label class="f">From</label><select id="dtFrom" style="width:auto"></select></div><div><label class="f">To</label><select id="dtTo" style="width:auto"></select></div>
+                <div><label class="f">In</label><select id="dtUnit" style="width:auto"><option value="days">days</option><option value="weeks">weeks</option><option value="months">months</option><option value="years">years (e.g. age)</option></select></div>
+                <button class="btn ghost small" id="dtDiff" type="button" style="margin-bottom:6px">New column</button>
+              </div>
+              <p class="legend-note" id="dtInfo">E.g. age from the date of birth and the visit date, or length of stay from admission and discharge.</p>
+            </div>
+            <div class="prep-card">
+              <h4>Anonymise</h4>
+              <div class="row" style="gap:8px;align-items:flex-end"><div style="flex:1"><label class="f">Columns with names, phones or file numbers</label><select id="anonCols" multiple size="4" style="width:100%"></select></div></div>
+              <div class="row" style="gap:8px;margin-top:6px"><select id="anonHow" style="width:auto"><option value="code">Replace with codes (P001, P002 …)</option><option value="delete">Delete the columns</option></select><span class="spacer"></span><button class="btn ghost small" id="anonGo" type="button">Anonymise</button></div>
+              <p class="legend-note" id="anonInfo">For sharing the data or the project file safely.</p>
+            </div>
+            <div class="prep-card">
+              <h4>Snapshots &amp; cleaning log</h4>
+              <div class="row" style="gap:6px"><input type="text" id="snapName" placeholder="e.g. after cleaning" style="flex:1"><button class="btn ghost small" id="snapSave" type="button">Save snapshot</button></div>
+              <div id="snapList" style="margin-top:6px"></div>
+              <div class="row" style="gap:6px;margin-top:6px"><button class="btn ghost small" id="logXlsx" type="button" title="Every change made to the data, for the methods or an appendix">⬇ Cleaning log</button><span class="legend-note" id="logInfo"></span></div>
+            </div>
+            <div class="prep-card wide">
+              <h4>Data from another file</h4>
+              <div class="row" style="gap:8px;align-items:flex-end">
+                <div><label class="f">How to combine</label><select id="mergeMode" style="width:auto"><option value="rows">Add patients (rows) — columns matched by name</option><option value="cols">Add variables (columns) — patients matched by ID</option></select></div>
+                <div id="mergeKeyBox" style="display:none"><label class="f">ID column</label><select id="mergeKey" style="width:auto"></select></div>
+                <div id="mergeSheetBox" style="display:none"><label class="f">From a sheet of this file</label><select id="mergeSheet" style="width:auto"></select></div>
+                <button class="btn ghost small" id="mergeSheetGo" type="button" style="margin-bottom:6px;display:none">Add from sheet</button>
+                <button class="btn ghost small" id="stackSheets" type="button" style="margin-bottom:6px;display:none" title="Every sheet of this file one under another (e.g. one sheet per centre), with a column naming the sheet">Stack all sheets</button>
+                <button class="btn ghost small" id="mergeBtn" type="button" style="margin-bottom:6px">Choose file…</button>
+                <input type="file" id="mergeFile" accept=".xlsx,.xls,.csv" hidden>
+              </div>
+              <p class="legend-note">For data from several centres, or follow-up visits kept in a separate file. The first sheet of the other file is used.</p>
+            </div>
+          </div>
+        </details>
+        <div id="gridWrap">
+          <div class="row grid-bar">
+            <h3 style="margin:0">Data</h3>
+            <input type="search" id="gridSearch" placeholder="Search…" style="max-width:220px">
+            <label class="f" style="margin:0">Rows per page</label>
+            <select id="gridPer" style="width:auto"><option>10</option><option>25</option><option>50</option><option>100</option><option value="all">All</option></select>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridOnlyMissing"><span>Only rows with missing values</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridHl" checked><span>Highlight missing</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridSummary"><span>Column summary</span></label>
+            <span class="spacer"></span>
+            <button class="btn ghost small" id="gridEdit" type="button">✎ Edit sheet</button>
+          </div>
+          <div class="row grid-bar" id="gridViewBar">
+            <label class="f" style="margin:0">Density</label>
+            <select id="gridDensity" style="width:auto"><option value="compact">Compact</option><option value="normal" selected>Normal</option><option value="comfy">Comfortable</option></select>
+            <details class="colpick"><summary class="btn ghost small">Columns <span id="gridColCount"></span></summary><div class="colpick-box"><div class="row" style="gap:6px;margin-bottom:6px"><button class="btn ghost small" type="button" data-gcols="all">All</button><button class="btn ghost small" type="button" data-gcols="none">None</button><button class="btn ghost small" type="button" data-gcols="num">Numeric</button><button class="btn ghost small" type="button" data-gcols="text">Text</button></div><div id="gridCols"></div></div></details>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridTypes" checked><span>Column types</span></label>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridWrapText"><span>Wrap long text</span></label>
+            <label class="f" style="margin:0" title="These columns stay in view when you scroll sideways">Freeze</label><select id="gridFreeze" style="width:auto"><option value="0">No columns</option><option value="1">First column</option><option value="2">First 2 columns</option><option value="3">First 3 columns</option></select>
+            <label class="check" style="margin:0"><input type="checkbox" id="gridStripes" checked><span>Striped rows</span></label>
+            <label class="check" style="margin:0" title="Numeric values beyond 1.5 × IQR of their column"><input type="checkbox" id="gridOut"><span>Highlight outliers</span></label>
+            <span class="spacer"></span>
+ <button class="btn ghost small" id="gridForm" type="button" title="Type or check the data one patient at a time">📝 Form</button>
+            <button class="btn ghost small" id="gridCheck" type="button" title="Look for problems in the sheet">🩺 Check data</button>
+            <button class="btn ghost small" id="gridFind" type="button" title="Find and replace values">🔍 Find &amp; replace</button>
+        <button class="btn ghost small" id="gridRecode" type="button" title="Rename or merge the categories of a column (M and male → Male), or blank some of them">🏷 Recode values</button>
+        <button class="btn ghost small" id="gridReshape" type="button" title="One row per visit → one row per patient">⇄ Long to wide</button>
+ <button class="btn ghost small" id="gridFill" type="button" title="Fill empty cells with the value above them — for sheets where a merged cell or a group name is written only once">↓ Fill down</button>
+        <button class="btn ghost small" id="gridSplit" type="button" title="Split one column into several, e.g. blood pressure 120/80 → systolic and diastolic">✂ Split column</button>
+        <button class="btn ghost small" id="gridComb" type="button" title="Join several columns into one: text, sum, mean, lowest, highest or the first filled value">⊕ Combine columns</button>
+        <button class="btn ghost small" id="gridUnits" type="button" title="A new column in other units: glucose, cholesterol, creatinine, Hb, vitamin D, HbA1c, weight, height, temperature">⚖ Convert units</button>
+        <button class="btn ghost small" id="gridSortT" type="button" title="Sort the rows of the sheet, keep only the patients of the filters, or delete empty rows">⇅ Sort &amp; keep rows</button>
+        <button class="btn ghost small" id="gridLong" type="button" title="One row per patient → one row per visit">⇄ Wide to long</button>
+        <button class="btn ghost small" id="gridCmp" type="button" title="What changed between this sheet and another version of the file">⧉ Compare files</button>
+          </div>
+          <div class="gtool" id="findBox" style="display:none">
+            <div class="row" style="gap:10px;align-items:flex-end">
+              <div><label class="f">Find</label><input type="text" id="frFind" style="width:180px"></div>
+              <div><label class="f">Replace with</label><input type="text" id="frRepl" style="width:180px" placeholder="(empty = blank cell)"></div>
+              <div><label class="f">In column</label><select id="frCol" style="width:auto"></select></div>
+              <label class="check" style="margin:0 0 8px"><input type="checkbox" id="frWhole" checked><span>Whole cell only</span></label>
+              <label class="check" style="margin:0 0 8px"><input type="checkbox" id="frCase"><span>Match case</span></label>
+              <button class="btn primary small" id="frGo" type="button" style="margin-bottom:6px">Replace all</button>
+              <span class="legend-note" id="frInfo" style="margin-bottom:8px"></span>
+            </div>
+          </div>
+          <div class="gtool" id="checkBox" style="display:none"></div>
+      <div class="gtool" id="recodeBox" style="display:none">
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Column</label><select id="rcCol" style="width:auto"></select></div>
+          <button class="btn ghost small" id="rcTitle" type="button" style="margin-bottom:6px" title="male → Male, YES → Yes">Aa Capitalise all</button>
+          <span class="legend-note" style="margin-bottom:8px">Type a new value to rename; give several values the same new value to merge them; tick “blank” to make them missing.</span>
+        </div>
+        <div class="tbl-wrap" style="max-height:300px;margin-top:8px"><table class="t" id="rcTbl"></table></div>
+        <div class="row" style="margin-top:8px"><span class="legend-note" id="rcInfo"></span><span class="spacer"></span><button class="btn primary small" id="rcGo" type="button">Apply</button></div>
+      </div>
+      <div class="gtool" id="fillBox" style="display:none">
+        <p class="legend-note" style="margin:0 0 8px">Copies each value down into the empty cells below it, until the next value — for exports where merged cells or a group name appear only on the first row of a block.</p>
+        <div class="row" style="gap:10px;align-items:flex-end"><div><label class="f">Column</label><select id="fdCol" style="width:auto"></select></div><span class="legend-note" id="fdInfo" style="margin-bottom:8px"></span><span class="spacer"></span><button class="btn primary small" id="fdGo" type="button" style="margin-bottom:6px">Fill down</button></div>
+      </div>
+      <div class="gtool" id="combBox" style="display:none">
+        <p class="legend-note" style="margin:0 0 8px">Makes a new column from the ticked columns: their text joined, or the sum, mean, lowest or highest of their numbers, or the first filled value (e.g. a value recorded in either of two columns).</p>
+        <div id="cbCols" class="row" style="gap:4px 12px;margin-bottom:8px"></div>
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">How</label><select id="cbHow" style="width:auto"><option value="text">Join as text</option><option value="sum">Sum</option><option value="mean">Mean</option><option value="min">Lowest</option><option value="max">Highest</option><option value="first">First filled value</option></select></div>
+          <div><label class="f">Separator (text)</label><input type="text" id="cbSep" value=" " style="width:60px"></div>
+          <div><label class="f">New column name</label><input type="text" id="cbName" placeholder="e.g. Total_score"></div>
+        </div>
+        <div class="row" style="margin-top:8px"><span class="legend-note" id="cbInfo"></span><span class="spacer"></span><button class="btn primary small" id="cbGo" type="button">Combine</button></div>
+      </div>
+      <div class="gtool" id="unitBox" style="display:none">
+        <p class="legend-note" style="margin:0 0 8px">Adds a column with the values in other units, next to the original (e.g. glucose in mg/dL → mmol/L). The original stays as it is.</p>
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Column</label><select id="unCol" style="width:auto"></select></div>
+          <div><label class="f">Conversion</label><select id="unConv" style="width:auto"></select></div>
+          <div><label class="f">New column name</label><input type="text" id="unName"></div>
+          <div><label class="f">Decimals</label><select id="unDec" style="width:auto"><option>0</option><option>1</option><option selected>2</option><option>3</option></select></div>
+        </div>
+        <div class="row" style="margin-top:8px"><span class="legend-note" id="unInfo"></span><span class="spacer"></span><button class="btn primary small" id="unGo" type="button">Add column</button></div>
+      </div>
+      <div class="gtool" id="sortBox" style="display:none">
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Sort by</label><select id="soCol1" style="width:auto"></select></div><div><label class="f">Order</label><select id="soDir1" style="width:auto"><option value="1">A → Z, small → large</option><option value="-1">Z → A, large → small</option></select></div>
+          <div><label class="f">Then by</label><select id="soCol2" style="width:auto"></select></div><div><label class="f">Order</label><select id="soDir2" style="width:auto"><option value="1">A → Z, small → large</option><option value="-1">Z → A, large → small</option></select></div>
+          <button class="btn primary small" id="soGo" type="button" style="margin-bottom:6px">Sort the sheet</button>
+        </div>
+        <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn ghost small" id="soKeep" type="button">Keep only the patients of “Analyse only some patients”</button><button class="btn ghost small" id="soEmpty" type="button">Delete empty rows and columns</button><span class="legend-note" id="soInfo">The sort and deletions change the sheet itself (Undo restores it).</span></div>
+      </div>
+      <div class="gtool" id="longBox" style="display:none">
+        <p class="legend-note" style="margin:0 0 8px">Makes one row per visit from the repeated measures of step 2 (VAS_Baseline, VAS_M1 … → ID, Visit, VAS), for analyses that need long data such as the repeated-measures correlation. Other columns are copied to every visit.</p>
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Patient ID</label><select id="lgId" style="width:auto"></select></div>
+          <div style="flex:1"><label class="f">Repeated measures</label><div id="lgVars" class="row" style="gap:4px 12px"></div></div>
+        </div>
+        <div class="row" style="margin-top:8px"><span class="legend-note" id="lgInfo"></span><span class="spacer"></span><button class="btn ghost small" id="lgDl" type="button">⬇ Long sheet (Excel)</button> <button class="btn primary small" id="lgGo" type="button">Make the sheet long</button></div>
+      </div>
+      <div class="gtool" id="cmpBox" style="display:none">
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <button class="btn ghost small" id="cmpPick" type="button" style="margin-bottom:6px">📂 Choose the other file</button><input type="file" id="cmpFile" accept=".xlsx,.xls,.csv,.txt" hidden>
+          <div><label class="f">Match the rows by</label><select id="cmpKey" style="width:auto"></select></div>
+          <span class="legend-note" id="cmpName"></span>
+        </div>
+        <div id="cmpOut" style="margin-top:8px"></div>
+      </div>
+      <div class="gtool" id="splitBox" style="display:none">
+        <p class="legend-note" style="margin:0 0 8px">Splits each value at a separator into new columns placed after the original, e.g. blood pressure “120/80” → SBP and DBP, or “T2N1M0”-style codes split at a dash. Numbers become numbers.</p>
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Column</label><select id="spCol" style="width:auto"></select></div>
+          <div><label class="f">Separator</label><select id="spSep" style="width:auto"><option value="/">/ (slash)</option><option value="-">- (dash)</option><option value=",">, (comma)</option><option value=";">; (semicolon)</option><option value=" ">space</option><option value="x">x (e.g. 3x4 cm)</option></select></div>
+          <div style="flex:1;min-width:220px"><label class="f">Names of the new columns (comma-separated)</label><input type="text" id="spNames" placeholder="e.g. SBP, DBP"></div>
+          <label class="check" style="margin:0 0 8px"><input type="checkbox" id="spKeep"><span>Keep the original column</span></label>
+        </div>
+        <div class="row" style="margin-top:8px"><span class="legend-note" id="spInfo"></span><span class="spacer"></span><button class="btn primary small" id="spGo" type="button">Split</button></div>
+      </div>
+      <div class="gtool" id="reshapeBox" style="display:none">
+        <p class="legend-note" style="margin:0 0 8px">For sheets with one row per visit (ID, Visit, value …): makes one row per patient with a column per visit (HbA1c_Baseline, HbA1c_Month 3 …), which step 2 reads as repeated measures. Columns that do not change between visits (group, age) are kept once.</p>
+        <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Patient ID</label><select id="rsId" style="width:auto"></select></div>
+          <div><label class="f">Visit / time column</label><select id="rsTime" style="width:auto"></select></div>
+          <div style="flex:1"><label class="f">Values measured at each visit</label><div id="rsVals" class="row" style="gap:4px 12px"></div></div>
+          <div style="flex-basis:100%"><label class="f">Visit windows (when the visit column holds days; optional)</label><input type="text" id="rsWin" style="width:100%" placeholder="e.g. 0=Baseline; 25-35=Month 1; 80-100=Month 3 — values outside every window are left out"></div>
+        </div>
+        <div class="row" style="margin-top:8px"><span class="legend-note" id="rsInfo"></span><span class="spacer"></span><button class="btn primary small" id="rsGo" type="button">Reshape</button></div>
+      </div>
+          <div class="row grid-bar" id="gridEditBar" style="display:none">
+            <span class="legend-note">Click a cell to change it · rename a column in its heading · ◀ ▶ move · ⇅ sort · ✕ delete · ↑ ↓ move rows</span>
+            <span class="spacer"></span>
+            <button class="btn ghost small" id="gridAddRow" type="button">+ Row</button>
+            <button class="btn ghost small" id="gridAddCol" type="button">+ Column</button>
+            <button class="btn ghost small" id="gridUndo" type="button" title="Undo (Ctrl+Z)">↶ Undo</button>
+            <button class="btn ghost small" id="gridRedo" type="button" title="Redo (Ctrl+Y)">↷ Redo</button>
+            <button class="btn ghost small" id="gridRedetect" type="button" title="Detect variables again from the edited sheet">⟳ Re-detect variables</button>
+            <button class="btn ghost small" id="gridSave" type="button">⬇ Edited Excel</button>
+            <button class="btn ghost small" id="gridCsv" type="button">⬇ CSV</button>
+          </div>
+          <div class="tbl-wrap" style="max-height:480px"><table class="t dgrid" id="preview"></table></div>
+          <div class="row" style="margin-top:6px"><span id="gridNotes"></span><span id="gridInfo" class="legend-note"></span><span class="spacer"></span>
+            <button class="btn ghost small" id="gridPrev" type="button">‹ Previous</button><button class="btn ghost small" id="gridNext" type="button">Next ›</button></div>
+        </div>
       </div>
     </div>
     <div class="card">
       <h2>Report details</h2>
       <div class="grid g2">
         <div><label class="f">Study title (optional, printed at top of report)</label><input type="text" id="studyTitle" placeholder="e.g. PRF versus Ozone for chronic shoulder pain"></div>
-        <div><label class="f">Software statement (first sentence of Statistical Analysis)</label><input type="text" id="software" value="Statistical analysis was done by Prof MSE Easy Stat v1.0."></div>
+        <div><label class="f">Software statement (first sentence of Statistical Analysis)</label>
+          <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA)."></div>
+          <div class="legend-note">Pick a template, then check the version. Name the software actually used for the analysis you report.</div></div>
       </div>
+    </div>
+    <div class="card">
+      <h2>Or try an example dataset</h2>
+      <p class="hint">Simulated studies that show the expected sheet layout and the analyses. Open one to explore the app, or download it as Excel to see how to arrange your own data.</p>
+      <div id="examples" class="grid g2"></div>
+    </div>
+    <div class="card">
+      <h2>Practise data cleaning: messy datasets</h2>
+      <p class="hint">Mastersheets as they often arrive: title rows, merged headers, units inside numbers, codes for missing values, mixed spellings, duplicates, long format. Each opens with a checklist that ticks itself as you fix the problems with the tools in step 1 and step 2.</p>
+      <div id="messyList" class="grid g2"></div>
     </div>
     <div class="nav"><span></span><button class="btn primary" id="to2" disabled>Next: Variables →</button></div>
   </section>
@@ -160,85 +726,833 @@ footer b{color:var(--purple)}
   <section class="panel" id="p2">
     <div class="card">
       <h2>2 · Groups</h2>
-      <p class="hint">Choose the column that defines the study groups. Labels are used in tables, figures and comments.</p>
-      <div class="grid g3"><div><label class="f">Group column</label><select id="groupCol"></select></div></div>
+      <p class="hint">Choose the column that defines the study groups, or analyse all patients as one group. Labels are used in tables, figures and comments.</p>
+      <div class="grid g3"><div><label class="f">Study design</label><select id="groupMode"><option value="groups">Compare groups (a group column)</option><option value="one">One group — all patients together</option></select></div>
+        <div id="groupColBox"><label class="f">Group column</label><select id="groupCol"></select></div></div>
+      <p class="legend-note">One group: tables describe all patients; repeated measures are compared over time within the same patients (paired t-test / Wilcoxon, repeated-measures ANOVA / Friedman).</p>
       <div class="tbl-wrap" style="margin-top:12px"><table class="t" id="groupsTbl"></table></div>
       <p class="legend-note">Use ↑/↓ to set the column order of groups in tables.</p>
     </div>
     <div class="card">
       <h2>Variables</h2>
       <p class="hint">Detected automatically — check and adjust. Repeated measures (same name, different timepoints) are analysed as one outcome with one table. Single variables sharing the same <b>Table</b> name appear together in one table.</p>
+      <div class="row" id="varBulk" style="gap:8px;margin-bottom:8px"><span class="legend-note">All variables:</span>
+        <button class="btn ghost small" type="button" data-vbulk="inc">✓ Include all</button><button class="btn ghost small" type="button" data-vbulk="exc">Exclude all</button>
+        <button class="btn ghost small" type="button" data-vbulk="num">Only numeric</button><button class="btn ghost small" type="button" data-vbulk="cat">Only categorical</button>
+        <span class="legend-note" style="margin-left:10px">Distribution of all numeric:</span>
+        <button class="btn ghost small" type="button" data-vbulk="d:auto">Auto</button><button class="btn ghost small" type="button" data-vbulk="d:param">Parametric</button><button class="btn ghost small" type="button" data-vbulk="d:nonparam">Non-parametric</button>
+        <span class="legend-note" style="margin-left:10px">Labels:</span><button class="btn ghost small" type="button" data-vlabel="sentence" title="Age (years), Body mass index">Sentence case</button><button class="btn ghost small" type="button" data-vlabel="title" title="Age (Years), Body Mass Index">Title Case</button><button class="btn ghost small" type="button" data-vlabel="cols" title="Labels made again from the column names">From column names</button></div>
+      <div class="row" style="gap:8px;margin-bottom:8px"><input type="search" id="varSearch" placeholder="Find a variable…" style="max-width:260px"><label class="check" style="margin:0"><input type="checkbox" id="varOnlyInc"><span>Only included</span></label><span class="legend-note" id="varCount"></span><span class="spacer"></span><button class="btn ghost small" id="btnCodebook" type="button" title="Every column with its label, role, type, levels, value labels, missing values and range — for the thesis appendix">⬇ Codebook (Excel)</button></div>
+      <div class="row" id="varSelBar" style="gap:6px;margin-bottom:8px;flex-wrap:wrap;display:none"><b id="varSelN"></b>
+        <span class="legend-note">Table</span><input type="text" id="vsTable" placeholder="table name" style="width:200px"><button class="btn ghost small" id="vsTableGo" type="button">Set</button>
+        <span class="legend-note">Type</span><select id="vsType" style="width:auto"><option value="">—</option><option value="numeric">numeric</option><option value="categorical">categorical</option></select>
+        <span class="legend-note">Arrange categories</span><select id="vsLevels" style="width:auto"><option value="">—</option><option value="az">A → Z</option><option value="za">Z → A</option><option value="num">1 → 9</option><option value="freq">Most frequent first</option><option value="rare">Least frequent first</option><option value="smart">Severity / scale order</option><option value="sheet">As in the sheet</option><option value="rev">Reverse</option><option value="default">Default</option></select>
+        <span class="legend-note">Copy the settings of</span><select id="vsFrom" style="width:auto"></select><button class="btn ghost small" id="vsCopyGo" type="button" title="Distribution, table, decimals, unit, role, ordinal and transformation">Copy</button>
+        <button class="btn ghost small" id="vsClear" type="button">Clear selection</button></div>
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
-      <p class="legend-note"><b>Distribution</b>: Auto uses Shapiro-Wilk in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk).</p>
+      <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn ghost small" id="autoTables" type="button" title="Demographics, history, laboratory, vital signs and outcomes — by the variable names">⚡ Auto-assign tables</button>
+        <span class="legend-note">Categorise</span><select id="qVar" style="width:auto"></select><select id="qHow" style="width:auto"><option value="2">median split</option><option value="3">tertiles</option><option value="4">quartiles</option></select><button class="btn ghost small" id="qGo" type="button">New column</button>
+        <span class="spacer"></span><button class="btn ghost small" id="setupCsv" type="button" title="The variable setup as CSV, to edit in Excel">⬇ Setup CSV</button><label class="btn ghost small" title="Read the edited setup back (matched by column)">⬆ Import setup<input type="file" id="setupCsvIn" accept=".csv" hidden></label>
+      </div>
+      <p class="legend-note"><b>Distribution</b>: Auto uses the normality test chosen in step 3 (Shapiro-Wilk by default) in every group — a single variable is non-parametric if any group fails; a repeated outcome if more than 25% of group × timepoint cells fail. The chip shows the result. <b>Levels</b>: order of categories, comma-separated (the first is used for relative risk / odds ratio).</p>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="1">← Back</button><button class="btn primary" data-go="3">Next: Timepoints & options →</button></div>
+    <div class="card">
+      <h2>Subgroup analysis</h2>
+      <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <label class="check" style="margin:0 0 8px"><input type="checkbox" id="subOverall" checked><span>Also the tables of all patients</span></label>
+        <button class="btn ghost small" id="subAll" type="button">Tick all</button><button class="btn ghost small" id="subNone" type="button">Clear</button>
+      </div>
+      <label class="f" style="margin-top:8px">Repeat every table within each category of (tick one or more categorical variables)</label>
+      <div class="predlist" id="subCols"></div>
+      <p class="legend-note">E.g. the comparison of the groups separately in men and women. Each subgroup gets its own tables (titled “… — Sex: Male”), figures and comments in the report. Choosing the group variable gives the tables of each group on its own (a description of the patients of that group).</p>
+    </div>
+    <div class="card" id="calcCard">
+      <h2>Calculated variables</h2>
+      <p class="hint">Create a new column from existing ones, e.g. BMI from weight and height, a change score, a total score or BMI classes. The column is added to the sheet (undo with ↶ in step 1) and to the variables above.</p>
+      <div class="grid g4" id="calcForm"></div>
+      <div class="row" style="margin-top:10px"><button class="btn primary small" id="calcAdd" type="button">+ Add calculated variable</button><span class="legend-note" id="calcPreview"></span></div>
+      <div id="calcList" style="margin-top:10px"></div>
+    </div>
+    <div class="card" id="repCard">
+      <div class="row"><h2>Repeated measures</h2><span class="spacer"></span><button class="btn ghost small" id="repCreate" type="button">+ Create repeated measure</button></div>
+      <p class="hint">Detected from column names with timepoints (e.g. <span class="mono">VAS_baseline</span>, <span class="mono">VAS_W1</span>). Create your own from any numeric columns, edit which columns enter and their timepoint labels and order, or ungroup a measure back into single variables. In the table above you can also untick single timepoints or analyse a measure as separate variables.</p>
+      <div id="repList"></div>
+      <div id="repEditor"></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="1">← Back</button><button class="btn primary" data-go="3">Next: Timepoints →</button></div>
   </section>
 
   <!-- STEP 3 -->
   <section class="panel" id="p3">
     <div class="card">
       <h2>3 · Timepoints</h2>
-      <p class="hint">Rename how each timepoint appears in tables and charts.</p>
-      <div class="tbl-wrap" style="max-height:340px"><table class="t" id="tpTbl"></table></div>
+      <p class="hint">Each repeated outcome has its own timepoints: tick which enter, rename them and set their order for that outcome only. Labels you type here are used in its table, comments and figure.</p>
+      <div id="tpVars"></div>
     </div>
     <div class="card">
-      <h2>Analysis & report options</h2>
-      <div class="grid g4">
-        <div><label class="f">Decimal places</label><select id="optDec"><option>1</option><option selected>2</option><option>3</option></select></div>
-        <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
-        <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
-        <div><label class="f">Chart colours</label><select id="optPal"><option value="brand" selected>Prof MSE (purple / navy)</option><option value="classic">Classic Office</option><option value="gray">Grayscale (journal print)</option></select></div>
-      </div>
-      <div class="grid g2" style="margin-top:12px">
-        <div>
-          <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
-          <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — repeated-measures ANOVA (Greenhouse-Geisser) or Friedman test</span></label>
-        </div>
-        <div>
-          <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
-          <label class="check"><input type="checkbox" id="optBrand" checked><span><b>Prof MSE branding</b> in the Word header</span></label>
-        </div>
+      <h2>Analysis over time</h2>
+      <div class="grid g3">
+        <div><label class="check"><input type="checkbox" id="optRmLmm"><span><b>Linear mixed model</b> — group, time and group × time with a random intercept per patient; uses every available measurement</span></label></div>
+        <div><label class="check"><input type="checkbox" id="optRmTrend"><span><b>Linear trend over time</b> in each group (3+ timepoints)</span></label></div>
+        <div><label class="f">Missing follow-up values</label><select id="optRmImpute"><option value="none" selected>Leave missing (patients with every value in within-group tests)</option><option value="locf">Last observation carried forward</option></select></div>
       </div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="2">← Back</button><button class="btn primary" data-go="4">Next: CONSORT →</button></div>
+    <div class="card">
+      <h2>Tools</h2>
+      <div class="grid g2">
+        <div class="gcard"><h4 style="margin:0 0 6px">Derived outcomes (new columns)</h4>
+          <div class="row" style="gap:6px;flex-wrap:wrap;align-items:flex-end"><div><label class="f">Outcome</label><select id="drVar" style="width:auto"></select></div>
+          <div><label class="f">Make</label><select id="drKind" style="width:auto"><option value="auc">Area under the curve</option><option value="max">Peak (highest value)</option><option value="min">Lowest value</option><option value="tmax">Time of the peak</option><option value="mean">Mean of all timepoints</option><option value="change">Last − first</option><option value="slope">Slope over time (each patient's own regression line)</option><option value="above">Area above a threshold</option><option value="below">Area below a threshold</option><option value="ttt">Time to reach a value</option></select></div>
+          <div id="drThrBox" style="display:none"><label class="f">Reach</label><select id="drDir" style="width:auto"><option value="le">≤</option><option value="ge">≥</option></select><input type="number" id="drThr" style="width:80px" value="3"></div>
+          <button class="btn ghost small" id="drGo" type="button" style="margin-bottom:6px">New column</button></div><p class="legend-note" id="drInfo">Uses each timepoint's time value when every one has one (below), else 0, 1, 2 …</p></div>
+        <div class="gcard"><h4 style="margin:0 0 6px">Merge two timepoints</h4>
+          <div class="row" style="gap:6px;flex-wrap:wrap;align-items:flex-end"><div><label class="f">Take</label><select id="mgFrom" style="width:auto"></select></div><div><label class="f">into</label><select id="mgTo" style="width:auto"></select></div><button class="btn ghost small" id="mgGo" type="button" style="margin-bottom:6px">Merge</button></div>
+          <p class="legend-note">For the same visit written two ways (W4 and Week 4): values of the first fill the empty cells of the second.</p></div>
+        <div class="gcard"><h4 style="margin:0 0 6px">Outcomes × timepoints</h4><div class="tbl-wrap" style="max-height:220px"><table class="t" id="tpMatrix"></table></div><p class="legend-note" id="tpWarn"></p></div>
+        <div class="gcard"><h4 style="margin:0 0 6px">Missing values per timepoint and group</h4><div class="tbl-wrap" style="max-height:220px"><table class="t" id="tpMissing"></table></div></div>
+        <div class="gcard" style="grid-column:1/-1"><div class="row"><h4 style="margin:0">Missing-visit patterns</h4><select id="mpVar" style="width:auto;margin-left:8px"></select><span class="legend-note" style="margin-left:8px">● measured · ○ missing — how many patients follow each pattern, per group</span></div><div class="tbl-wrap" style="max-height:240px;margin-top:6px"><table class="t" id="tpPattern"></table></div></div>
+        <div class="gcard" style="grid-column:1/-1"><div class="row"><h4 style="margin:0">Every patient over time</h4><select id="spVar" style="width:auto;margin-left:8px"></select></div><img id="spImg" alt="" style="width:100%;max-width:820px;display:block;margin-top:6px;border:1px solid var(--line);border-radius:8px;background:#fff"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Shared timepoint names</h2><span class="spacer"></span><button class="btn ghost small" id="tpSort" type="button" title="Baseline / pre first, then by number and unit (hours, days, weeks, months, years), post / final last">⇅ Sort in time order</button> <button class="btn ghost small" id="tpFirstLast" type="button" title="Use only the first and the last timepoint (e.g. before and after)">First &amp; last only</button><button class="btn ghost small" id="tpAll" type="button" title="Use every timepoint">All</button>
+ <select id="tpTemplate" style="width:auto" title="Label the timepoints in order"><option value="">Label template…</option><option value="T">T0, T1, T2 …</option><option value="prepost">Before, After</option><option value="periop">Pre-op, Intra-op, Post-op, Day 1, Day 2 …</option><option value="visit">Baseline, Visit 1, Visit 2 …</option><option value="month">Baseline, Month 1, Month 3, Month 6, Month 12</option></select>
+        <button class="btn ghost small" id="tpReverse" type="button" title="Reverse the order">⇅ Reverse</button>
+        <button class="btn ghost small" id="tpRelabel" type="button" title="M3 → Month 3, W1 → Week 1, D7 → Day 7, 24h → 24 h">Aa Readable labels</button></div>
+      <p class="hint">Default names for the timepoint tokens found in column names. Outcomes use these unless you renamed a timepoint above. Unticking a token here leaves it out of every outcome.</p>
+      <div class="tbl-wrap" style="max-height:340px"><table class="t" id="tpTbl"></table></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="2">← Back</button><button class="btn primary" data-go="4">Next: Tests →</button></div>
   </section>
 
   <!-- STEP 4 -->
   <section class="panel" id="p4">
     <div class="card">
-      <div class="row"><h2>4 · CONSORT flowchart</h2><span class="spacer"></span><label class="check"><input type="checkbox" id="cEnabled" checked><span>Include in report</span></label></div>
-      <p class="hint">Numbers randomized and analysed are pre-filled from your data. The chart updates as you type.</p>
+      <h2>4 · Statistical tests</h2>
+      <div class="grid g4" style="margin-bottom:8px">
+        <div><label class="f">Significance level</label><select id="optAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
+        <div><label class="f">Normality test</label><select id="optNormality"><option value="sw" selected>Shapiro-Wilk</option><option value="ks">Kolmogorov-Smirnov (Lilliefors)</option><option value="skewkurt">Skewness &amp; kurtosis z-scores (|z| &gt; 1.96)</option></select></div>
+        <div><label class="f">Effect of binary variables</label><select id="optCatEffect"><option value="rr" selected>Relative risk (RR)</option><option value="or">Odds ratio (OR)</option><option value="rd">Risk difference (percentage points)</option></select></div>
+        <div><label class="f">Pairwise Mann-Whitney tests (3+ groups, without Dunn)</label><select id="optMwAdjust"><option value="none" selected>Unadjusted</option><option value="bonferroni">Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option><option value="hochberg">Hochberg-adjusted</option><option value="sidak">Šidák-adjusted</option></select></div>
+        <div><label class="f">Pairwise categorical comparisons</label><select id="optChiAdjust"><option value="bonferroni" selected>Bonferroni-adjusted</option><option value="holm">Holm-adjusted</option><option value="hochberg">Hochberg-adjusted</option><option value="sidak">Šidák-adjusted</option><option value="none">No correction</option></select></div>
+        <div><label class="f">Confidence level of intervals</label><select id="optConfLevel"><option value="90">90%</option><option value="95" selected>95%</option><option value="99">99%</option></select></div>
+        <div><label class="f">Hypothesis (two groups)</label><select id="optAlternative"><option value="two" selected>Two-sided</option><option value="greater">One-sided: first group greater</option><option value="less">One-sided: first group smaller</option></select></div>
+        <div><label class="f">Median difference CI</label><select id="optNpEffect"><option value="hl" selected>Hodges-Lehmann</option><option value="boot">Bootstrap (2000 resamples)</option></select></div>
+        <div><label class="f">Effect size in the comments (two groups)</label><select id="optEffSize"><option value="auto" selected>Cohen's d / r (by test)</option><option value="hedges">Hedges g</option><option value="glass">Glass Δ</option><option value="cliff">Cliff's δ</option></select></div>
+      </div>
       <div class="grid g2">
         <div>
-          <h3>Enrollment</h3>
-          <div class="grid g2"><div><label class="f">Assessed for eligibility</label><input type="number" id="cAssessed" min="0"></div></div>
-          <h3>Excluded (reasons)</h3>
-          <div id="cExcluded"></div>
-          <button class="btn ghost small" id="cAddEx">+ Add reason</button>
-          <h3>Per group</h3>
-          <div id="cGroups" class="grid"></div>
+          <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
+          <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — paired t / Wilcoxon for two timepoints; repeated-measures ANOVA (Greenhouse-Geisser) or Friedman for more, with Bonferroni post hoc versus the first timepoint</span></label>
+          <label class="check"><input type="checkbox" id="optWelch"><span><b>Welch's ANOVA + Games-Howell</b> post hoc when variances are unequal (Levene P &lt; 0.05), 3+ groups</span></label>
+          <label class="check"><input type="checkbox" id="optDunn" checked><span><b>Dunn's test</b> (Bonferroni) as the post hoc after Kruskal-Wallis, instead of pairwise Mann-Whitney</span></label>
         </div>
-        <div><canvas id="consortCanvas" class="consort-prev"></canvas></div>
+        <div>
+          <label class="check"><input type="checkbox" id="optFisher" checked><span><b>Fisher's exact test</b> for 2×2 tables with expected count &lt; 5</span></label>
+          <label class="check"><input type="checkbox" id="optCorr"><span><b>Correlation table</b> — Pearson or Spearman between numeric variables (repeated outcomes at their last timepoint), with scatter plots</span></label>
+          <div class="corr-fig" style="margin:2px 0 10px 28px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px">
+            <div><label class="f">Scatter plots of</label><select id="optCorrWhich" style="width:100%"><option value="sig" selected>Significant pairs only</option><option value="all">All pairs (also non-significant)</option></select></div>
+            <div><label class="f">Number of scatter plots (strongest first)</label><select id="optCorrN" style="width:100%"><option value="all" selected>All</option><option value="0">None</option><option value="1">Up to 1</option><option value="2">Up to 2</option><option value="4">Up to 4</option><option value="6">Up to 6</option><option value="10">Up to 10</option></select></div>
+            <div><label class="f">Line on the scatter plot</label><select id="optCorrFit" style="width:100%"><option value="linear" selected>Regression line</option><option value="band">Regression line with 95% CI band</option><option value="none">No line</option></select></div>
+            <div><label class="f">Text on the plot</label><select id="optCorrNote" style="width:100%"><option value="coef" selected>Coefficient and P value</option><option value="eq">Coefficient, P, equation and R²</option><option value="none">None</option></select></div>
+            <div><label class="f">Point size</label><select id="optCorrPt" style="width:100%"><option value="normal" selected>Normal</option><option value="small">Small</option><option value="large">Large</option></select></div>
+            <label class="check" style="margin:4px 0 0"><input type="checkbox" id="optCorrGroup"><span>Colour the points by study group</span></label>
+            <label class="check" style="margin:4px 0 0"><input type="checkbox" id="optCorrZero"><span>Axes start at zero</span></label>
+            <label class="check" style="margin:4px 0 0"><input type="checkbox" id="optCorrHeat"><span>Heat map of the coefficients</span></label>
+          </div>
+          <label class="check"><input type="checkbox" id="optChiPost" checked><span><b>Pairwise post hoc for categorical variables</b> — Chi-square / Fisher between each two groups (Bonferroni), 3+ groups</span></label>
+          <label class="check"><input type="checkbox" id="optMixed"><span><b>Group × time interaction</b> — mixed (split-plot) ANOVA with Greenhouse-Geisser, parametric repeated outcomes</span></label>
+        </div>
+      </div>
+      <details class="more" style="margin-top:8px"><summary><b>More test options</b></summary>
+      <div class="grid g2" style="margin-top:6px">
+        <div>
+          <label class="check"><input type="checkbox" id="optFdr"><span><b>False discovery rate</b> — Benjamini-Hochberg adjustment of all between-group P values of the report</span></label>
+          <label class="check"><input type="checkbox" id="optCltRule"><span><b>Large-sample rule</b> — parametric tests when every group has n ≥ 30, even if normality is rejected</span></label>
+          <label class="check"><input type="checkbox" id="optExactSmall"><span><b>Exact Mann-Whitney</b> P value for small samples (n ≤ 50; permutation when tied)</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optFfh"><span><b>Fisher-Freeman-Halton exact test</b> for larger tables with expected counts &lt; 5</span></label>
+          <label class="check"><input type="checkbox" id="optGroupTrend"><span><b>P for trend</b> column across ordered groups — Jonckheere-Terpstra / Cochran-Armitage</span></label>
+          <label class="check"><input type="checkbox" id="optCompleteCase"><span><b>Complete cases only</b> — analyse only patients with no missing value in the studied variables</span></label>
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:6px">
+        <div>
+          <label class="check"><input type="checkbox" id="optWelchUnequalN"><span><b>Welch's tests when group sizes differ</b> by 50% or more (whatever Levene's test says)</span></label>
+          <label class="check"><input type="checkbox" id="optPermAll"><span><b>Permutation tests</b> for every two-group numeric comparison (10,000 re-allocations)</span></label>
+          <label class="check"><input type="checkbox" id="optNnt"><span><b>Number needed to treat</b> (or harm) for significant yes/no outcomes, two groups</span></label>
+          <label class="check"><input type="checkbox" id="optEvalue"><span><b>E-values</b> for significant yes/no outcomes (robustness to unmeasured confounding)</span></label>
+          <label class="check"><input type="checkbox" id="optBayesEst"><span><b>Bayesian estimates</b> — posterior probability of a difference with 95% credible intervals, two groups</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optPowerCol"><span><b>Power column</b> — power at the observed difference and the n per group for 80%, two groups</span></label>
+          <label class="check"><input type="checkbox" id="optAssumptions"><span><b>Assumption table</b> — normality per group, Levene's test and the test used, for every numeric variable</span></label>
+          <div><label class="f">Confidence interval of each percentage</label><select id="optCatCI" style="width:auto"><option value="">None</option><option value="wilson">Wilson</option><option value="exact">Exact (Clopper-Pearson)</option></select></div>
+          <div class="row" style="gap:8px;margin-top:6px"><div><label class="f">P adjusted for clustering by</label><select id="optClusterCol" style="width:auto"></select></div><div><label class="f">P stratified by (two groups)</label><select id="optStrataCol" style="width:auto"></select></div></div>
+          <div class="row" style="gap:8px;margin-top:6px"><div><label class="f">Sensitivity analysis: per-protocol population column</label><select id="optPpCol" style="width:auto"></select></div><div><label class="f">Per-protocol when</label><select id="optPpVal" style="width:auto"></select></div></div>
+        </div>
+      </div>
+      </details>
+    </div>
+    <div class="card">
+      <h2>Repeated measures</h2>
+      <p class="hint">How outcomes measured several times in the same patients are tested. Change within each group needs <b>Change over time within each group</b> ticked above (one-group studies always test it).</p>
+      <div class="grid g4">
+        <div><label class="f">Post hoc comparisons over time</label><select id="optRmPost"><option value="first" selected>Each timepoint against the first</option><option value="consecutive">Consecutive timepoints</option><option value="all">All pairs of timepoints</option><option value="last">First versus last timepoint only</option></select></div>
+        <div><label class="f">Adjustment for multiple comparisons</label><select id="optRmAdjust"><option value="bonferroni" selected>Bonferroni</option><option value="holm">Holm (less conservative)</option><option value="hochberg">Hochberg (step-up)</option><option value="sidak">Šidák</option><option value="none">None</option></select></div>
+        <div><label class="f">Sphericity correction (repeated-measures ANOVA)</label><select id="optRmSph"><option value="gg" selected>Greenhouse-Geisser</option><option value="hf">Huynh-Feldt</option><option value="none">None (sphericity assumed)</option></select></div>
+        <div><label class="f">Compare the change between the groups</label><select id="optRmChange"><option value="none" selected>No</option><option value="abs">Change from the first timepoint</option><option value="pct">% change from the first timepoint</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:10px">
+        <div>
+          <label class="check"><input type="checkbox" id="optRmPostAlways"><span><b>Post hoc tests always</b> — also when the overall test over time is not significant</span></label>
+          <label class="check"><input type="checkbox" id="optRmAuc"><span><b>Area under the curve</b> — each patient's AUC over all timepoints (trapezoid rule), compared between the groups</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optRmAncova"><span><b>ANCOVA at each later timepoint</b> — the groups compared after adjusting for the baseline (reference) value</span></label>
+          <label class="check"><input type="checkbox" id="optRmSphReport"><span><b>Sphericity report</b> — Mauchly's test with the Greenhouse-Geisser and Huynh-Feldt ε in the footnote (3+ timepoints)</span></label>
+          <label class="check"><input type="checkbox" id="optRmProfile"><span><b>Profile analysis</b> — parallelism (MANOVA, Wilks' Λ), levels and flatness (Hotelling's T²)</span></label>
+          <label class="check"><input type="checkbox" id="optRmIndividual"><span><b>Individual patient lines</b> on line charts of repeated measures (spaghetti plot)</span></label>
+        </div>
       </div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="3">← Back</button><button class="btn primary" data-go="5">Run analysis →</button></div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Interim analyses</h2><span class="spacer"></span><span class="legend-note">Group-sequential stopping boundaries for a trial with equally spaced interim looks (two-sided).</span></div>
+      <div class="row" style="gap:10px;align-items:flex-end;margin-top:8px"><div><label class="f">Number of looks (incl. final)</label><select id="gsK" style="width:auto"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></div>
+        <div><label class="f">Overall α (two-sided)</label><select id="gsA" style="width:auto"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option><option value="0.1">0.10</option></select></div>
+        <div><label class="f">Boundary</label><select id="gsT" style="width:auto"><option value="obf">O'Brien-Fleming</option><option value="pocock">Pocock</option></select></div>
+        <button class="btn ghost small" id="gsGo" type="button" style="margin-bottom:6px">Compute</button><button class="btn ghost small" id="gsCopy" type="button" style="margin-bottom:6px">⧉ Copy</button></div>
+      <div id="gsOut" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Test plan</h2><span class="spacer"></span><span class="legend-note">Which test each variable gets with the settings above — updated as you change them.</span><button class="btn ghost small" id="planPre" type="button" title="Each variable’s distribution and test, to fix them before seeing the results (import it later)">⬇ Prespecified plan</button><button class="btn ghost small" id="planImp" type="button" title="Apply a prespecified plan saved earlier">⬆ Import plan</button><input type="file" id="planFile" accept=".xlsx,.xls,.csv" hidden><button class="btn ghost small" id="planXlsx" type="button">⬇ Excel</button></div>
+      <div class="tbl-wrap" style="margin-top:8px;max-height:420px"><table class="t" id="testPlan"></table></div>
+    </div>
+    <div class="card">
+      <details><summary><b>Sample size calculator</b> <span class="legend-note">— for planning a new study (not part of the report)</span></summary>
+      <div class="grid g4" style="margin-top:8px">
+        <div><label class="f">Outcome</label><select id="pwKind"><option value="means">Means (numeric outcome)</option><option value="props">Proportions (yes/no outcome)</option></select></div>
+        <div><label class="f" id="pwALab">Mean difference to detect</label><input type="number" step="any" id="pwA" value="5"></div>
+        <div><label class="f" id="pwBLab">Standard deviation</label><input type="number" step="any" id="pwB" value="10"></div>
+        <div><label class="f">α (two-sided)</label><select id="pwAlpha"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></div>
+        <div><label class="f">Power (%)</label><select id="pwPower"><option value="80" selected>80</option><option value="85">85</option><option value="90">90</option><option value="95">95</option></select></div>
+        <div><label class="f">Allocation ratio (group 2 : group 1)</label><input type="number" step="0.1" min="0.1" id="pwRatio" value="1"></div>
+        <div><label class="f">Expected drop-out (%)</label><input type="number" step="1" min="0" max="90" id="pwDrop" value="0"></div>
+      </div>
+      <div id="pwOut" style="margin-top:8px"></div>
+      </details>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="3">← Back</button><button class="btn ghost small" data-reset="4" type="button" title="Every option of this step back to its default">↺ Defaults for this step</button><button class="btn primary" data-go="5">Next: Tables →</button></div>
   </section>
 
   <!-- STEP 5 -->
   <section class="panel" id="p5">
     <div class="card">
+      <h2>5 · Tables</h2>
+      <h3>Numbers</h3>
+      <div class="grid g4">
+        <div><label class="f">Decimal places</label><select id="optDec"><option>1</option><option selected>2</option><option>3</option></select></div>
+        <div><label class="f">Percentage decimals</label><select id="optPctDec"><option value="0">0 — 33%</option><option value="1" selected>1 — 33.3%</option><option value="2">2 — 33.33%</option></select></div>
+        <div><label class="f">Mean and SD</label><select id="optMeanStyle"><option value="pm" selected>Mean ± SD</option><option value="paren">Mean (SD)</option></select></div>
+        <div><label class="f">Median and IQR</label><select id="optIqrStyle"><option value="dash" selected>25 - 30</option><option value="endash">25–30</option><option value="bracket">[25, 30]</option></select></div>
+        <div><label class="f">Second row of numeric variables</label><select id="optSecondRow"><option value="auto" selected>Range (mean) / IQR (median)</option><option value="ci">95% CI of the mean / IQR</option><option value="none">None — one row per variable</option><option value="both">Mean ± SD and median (IQR) together</option></select></div>
+        <div><label class="f">Leading zero of P values</label><select id="optPLead"><option value="1" selected>0.013</option><option value="0">.013 (APA / AMA)</option></select></div>
+        <div><label class="f">Tests in the footnote</label><select id="optTestNote"><option value="none" selected>Not named</option><option value="list">Listed — “Tests used: …”</option><option value="marks">Letters after each P value (0.013ᵃ)</option></select></div>
+        <div><label class="f">P values</label><select id="optPDigits"><option value="3" selected>3 decimals (&lt;0.001)</option><option value="4">4 decimals (&lt;0.0001)</option></select></div>
+        <div><label class="f">P value column heading</label><select id="optPHead"><option selected>P value</option><option>P</option><option>p-value</option></select></div>
+        <div><label class="f">Mark of significant P values</label><select id="optSigSym"><option value="*" selected>* (asterisk)</option><option value="†">† (dagger)</option><option value="">none</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:10px">
+        <div>
+          <label class="check"><input type="checkbox" id="optShowStat"><span><b>Test statistic column</b> — t, F, U, H or χ² value of the test behind each P value</span></label>
+          <label class="check"><input type="checkbox" id="optMissingNote"><span><b>Missing data</b> — number of missing values per variable in the table footnote</span></label>
+          <label class="check"><input type="checkbox" id="optTotalCol"><span><b>Total column</b> — all patients together, next to the groups (tables of single variables)</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optNHead" checked><span><b>Group sizes in the headings</b> — “A group (n=30)”</span></label>
+          <label class="check"><input type="checkbox" id="optBoldSig"><span><b>Bold significant P values</b> in the tables</span></label>
+          <label class="check"><input type="checkbox" id="optTableNewPage"><span><b>Each table starts on a new page</b> in the Word file</span></label>
+          <label class="check"><input type="checkbox" id="optShadeSig"><span><b>Shade the rows of significant results</b> (light yellow)</span></label>
+        </div>
+      </div>
+      <h3>Layout of the rows and columns</h3>
+      <div class="grid g4">
+        <div><label class="f">Categorical variables</label><select id="optCatLayout"><option value="merged" selected>Name in a merged cell beside its categories</option><option value="indent">Journal style — name on its own row, categories indented</option></select></div>
+        <div><label class="f">Effect column shows</label><select id="optEffectShow"><option value="all" selected>Mean / median differences and RR / OR</option><option value="num">Mean / median differences only</option><option value="cat">RR / OR only</option></select></div>
+        <div><label class="f">Colour of significant P values</label><select id="optPColor"><option value="none" selected>Black</option><option value="red">Red</option><option value="green">Green</option><option value="blue">Blue</option></select></div>
+        <div><label class="f">Font of the tables</label><select id="optTableFont"><option value="same" selected>Same as the text</option><option>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option><option>Arial Narrow</option></select></div>
+        <div><label class="f">Long tables (Word)</label><select id="optSplitRows"><option value="0" selected>One table, header repeated on each page</option><option value="25">Split every 25 rows — “Table 3 (continued)”</option><option value="40">Split every 40 rows — “Table 3 (continued)”</option></select></div>
+        <div style="grid-column:span 2"><label class="f">Order of the group columns in the tables (labels, comma-separated; empty = as elsewhere)</label><input type="text" id="optTableGroupOrder" placeholder="e.g. HA group, PRP group"></div>
+      </div>
+      <div class="grid g2" style="margin-top:8px">
+        <div>
+          <label class="check"><input type="checkbox" id="optBaselineNoP"><span><b>No P values in the baseline table</b> (CONSORT) — tables named “Baseline …” / “Demographic …”, or whose variables all have the baseline role</span></label>
+          <label class="check"><input type="checkbox" id="optPostLetters"><span><b>Post hoc letters</b> (a, b, c) after the group values instead of a post hoc column, 3+ groups</span></label>
+          <label class="check"><input type="checkbox" id="optCatTotal"><span><b>Total row</b> under each categorical variable (n = 100%)</span></label>
+          <label class="check"><input type="checkbox" id="optEsCol"><span><b>Effect size column</b> — Cohen's d, r, η², ε² or Cramér's V with its size</span></label>
+          <label class="check"><input type="checkbox" id="optRefCol"><span><b>Reference range column</b> — the normal range set in step 2 ⚙</span></label>
+          <label class="check"><input type="checkbox" id="optNoteCol"><span><b>Notes column</b> — the table note of each variable (step 2 ⚙)</span></label>
+          <label class="check"><input type="checkbox" id="optHideNs"><span><b>Only significant rows</b> — the other variables listed in the footnote</span></label>
+          <label class="check"><input type="checkbox" id="optBoldMax"><span><b>Highest value in bold</b> in each numeric row</span></label>
+          <label class="check"><input type="checkbox" id="optTranspose"><span><b>Groups as rows</b> — variables as columns (useful with many groups)</span></label>
+          <label class="check"><input type="checkbox" id="optMissTable"><span><b>Missing-data table</b> — missing values of every variable per group</span></label>
+          <label class="check"><input type="checkbox" id="optAutoFit"><span><b>Column widths fitted to the content</b> in Word</span></label>
+          <label class="check"><input type="checkbox" id="optAbbrEnd"><span><b>One abbreviation list</b> at the end of the results instead of under each table</span></label>
+          <div class="row" style="gap:8px;margin-top:6px"><div><label class="f">Order of the rows</label><select id="optTableSort" style="width:auto"><option value="">As in step 2</option><option value="p">By P value (smallest first)</option><option value="effect">By effect size (largest first)</option></select></div>
+            <div><label class="f">Baseline table split by</label><select id="optTwoFactor" style="width:auto"></select></div>
+            <div><label class="f">Journal table preset</label><select id="tblPreset" style="width:auto"><option value="">— apply a preset —</option><option value="nejm">NEJM</option><option value="lancet">The Lancet</option><option value="jama">JAMA</option><option value="bmj">BMJ</option><option value="apa">APA 7th</option><option value="thesis">Thesis (grid)</option></select></div></div>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optNCol"><span><b>“n” column</b> — patients analysed for each variable</span></label>
+          <label class="check"><input type="checkbox" id="optMissCol"><span><b>“Missing” column</b> — missing values of each variable</span></label>
+          <label class="check"><input type="checkbox" id="optDecAlign"><span><b>Align numbers on the decimal point</b> in the Word tables</span></label>
+        </div>
+      </div>
+      <h3>Headings of the group columns</h3>
+      <p class="hint" style="margin-top:0">Optional: a heading for each group in the tables only, e.g. “Group A (PRP)”. Empty keeps the group's label.</p>
+      <div class="grid g4" id="tableHeadsBox"></div>
+      <h3>Word document</h3>
+      <div class="grid g4">
+        <div><label class="f">Table style</label><select id="optTable"><option value="grid" selected>Grid (all borders, shaded header)</option><option value="apa">Three-line academic (APA)</option></select></div>
+        <div><label class="f">Body font</label><select id="optFont"><option selected>Times New Roman</option><option>Calibri</option><option>Arial</option><option>Cambria</option></select></div>
+        <div><label class="f">Page orientation</label><select id="optOrientation"><option value="portrait" selected>Portrait</option><option value="landscape">Landscape (wide tables)</option><option value="auto">Portrait, landscape pages for wide tables only</option></select></div>
+        <div><label class="f">Table caption style</label><select id="optTableCaption"><option value="colon" selected>Table 1: …</option><option value="period">Table 1. …</option></select></div>
+        <div><label class="f">Labels in the report</label><select id="optLabelLang"><option value="en" selected>English</option><option value="ar">Arabic (where given in step 2 ⚙)</option><option value="both">Both (English / Arabic)</option></select></div>
+        <div><label class="check" style="margin-top:22px"><input type="checkbox" id="optAutoAbbr"><span>Explain known abbreviations (BMI, CRP, ASA …) in the footnotes</span></label></div>
+        <div><label class="f">Table caption alignment</label><select id="optTableCapAlign"><option value="justify" selected>Justified</option><option value="center">Centred</option><option value="left">Left</option></select></div>
+        <div><label class="f">Table text size</label><select id="optTableFontSize"><option value="8">8 pt</option><option value="9">9 pt</option><option value="10" selected>10 pt</option><option value="11">11 pt</option><option value="12">12 pt</option></select></div>
+        <div><label class="f">Header colour (grid tables)</label><select id="optTableHead"><option value="auto" selected>Grey</option><option value="lavender">Lavender</option><option value="blue">Light blue</option><option value="green">Light green</option><option value="navy">Navy, white text</option><option value="none">No shading</option></select></div>
+        <div style="grid-column:span 2"><label class="f">Extra footnote line for every table (optional)</label><input type="text" id="optFootExtra" placeholder="e.g. Source: hospital records, 2024–2025"></div>
+        <div><label class="f">Table width</label><select id="optTableWidth"><option value="100" selected>Full page width</option><option value="90">90% of the page</option><option value="75">75% of the page</option></select></div>
+        <div><label class="f">Cell spacing</label><select id="optTablePad"><option value="compact">Compact</option><option value="normal" selected>Normal</option><option value="roomy">Roomy</option></select></div>
+        <div><label class="f">Counts in categorical rows</label><select id="optCatFormat"><option value="npct" selected>19 (63.3%)</option><option value="npctNoSign">19 (63.3)</option><option value="nN">19/30 (63.3%)</option><option value="pctN">63.3% (19)</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:8px">
+        <label class="check"><input type="checkbox" id="optTableBands"><span><b>Banded rows</b> — every other variable lightly shaded</span></label>
+        <label class="check"><input type="checkbox" id="optFirstColLeft"><span><b>Variable names left-aligned</b> (numbers stay centred)</span></label>
+      </div>
+      <h3>Word page</h3>
+      <div class="grid g4">
+        <div><label class="f">Paper size</label><select id="optPageSize"><option value="a4" selected>A4</option><option value="letter">US Letter</option><option value="b5">B5 (17.6 × 25 cm)</option><option value="a5">A5 (14.8 × 21 cm)</option><option value="legal">US Legal</option></select></div>
+        <div><label class="f">Margins</label><select id="optPageMargin"><option value="normal" selected>Normal (2.54 cm)</option><option value="narrow">Narrow (1.27 cm)</option><option value="wide">Wide (3.18 cm)</option></select></div>
+        <div><label class="f">Line spacing of the text</label><select id="optLineSpacing"><option value="1">Single</option><option value="1.15">1.15</option><option value="1.5" selected>1.5 lines</option><option value="2">Double</option></select></div>
+        <div><label class="f">Page numbers</label><select id="optPageNum"><option value="center" selected>Centred</option><option value="right">Right</option><option value="of">“Page 3 of 12”</option><option value="none">None</option></select></div>
+        <div><label class="f">Running header (optional)</label><input type="text" id="optHeaderText" placeholder="e.g. MD thesis — Results"></div>
+        <div><label class="check" style="margin-top:22px"><input type="checkbox" id="optListTF"><span><b>List of tables and figures</b> at the start</span></label></div>
+      </div>
+      <div style="margin-top:8px"><label class="check"><input type="checkbox" id="optBrand"><span><b>Prof MSE branding</b> in the Word header</span></label></div>
+      <p class="legend-note">Table titles can be edited in the report preview (step 11).</p>
+      <h3>Tools</h3>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <label class="f" style="margin:0">Merge table</label><select id="mtFrom"></select><label class="f" style="margin:0">into</label><select id="mtInto"></select><button class="btn ghost small" id="mtGo" type="button">⇉ Merge</button>
+        <span class="spacer"></span>
+        <label class="f" style="margin:0">Style templates</label><select id="tsList"><option value="">— saved table styles —</option></select>
+        <button class="btn ghost small" id="tsApply" type="button">Apply</button><button class="btn ghost small" id="tsSave" type="button">💾 Save current…</button><button class="btn ghost small" id="tsDel" type="button">✕</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Design preview</h2><span class="spacer"></span><span class="legend-note">A table from your own data, redrawn as you change any option above — as it will look in the Word file.</span></div>
+      <div class="paper-prev" id="tblPreview"></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="4">← Back</button><button class="btn ghost small" data-reset="5" type="button" title="Every option of this step back to its default">↺ Defaults for this step</button><button class="btn primary" data-go="6">Next: Comments →</button></div>
+  </section>
+
+  <!-- STEP 6 -->
+  <section class="panel" id="p6">
+    <div class="card">
+      <h2>6 · Comments</h2>
+      <div class="grid g4">
+        <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option><option value="descriptive">Descriptive — values, test, statistic, effect size and an overview</option></select></div>
+        <div><label class="f">P value wording</label><select id="optPWord"><option value="P value" selected>(P value = 0.013)</option><option value="P">(P = 0.013)</option><option value="p">(p = 0.013)</option></select></div>
+        <div><label class="f">Comment placement</label><select id="optCommentPlace"><option value="after" selected>After each table</option><option value="before">Before each table</option><option value="none">No comments</option></select></div>
+      </div>
+      <div class="grid g2" style="margin-top:10px">
+        <div>
+          <label class="check"><input type="checkbox" id="optNotSig"><span>Write “not significantly” instead of “insignificantly”</span></label>
+          <label class="check"><input type="checkbox" id="optUnitsInText" checked><span><b>Units after the values</b> — taken from the variable name or label, e.g. Age (years) → 58.7 ± 7.6 years, CRP_mg_L → 12.4 mg/L</span></label>
+          <label class="check"><input type="checkbox" id="optCommentEffect"><span><b>Effect sizes in comments</b> — the difference or RR/OR with 95% CI for significant two-group comparisons</span></label>
+          <label class="check"><input type="checkbox" id="optCommentMagnitude"><span><b>Size of each significant effect</b> — Cohen's d, r, η² or Cramér's V, labelled small, medium or large</span></label>
+          <label class="check"><input type="checkbox" id="optSummary"><span><b>Summary of key findings</b> — a closing paragraph listing every significant result</span></label>
+          <label class="check"><input type="checkbox" id="optKeyFindings"><span><b>Numbered key findings</b> under each table's comment (Word)</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optVaryWording"><span><b>Varied wording</b> — repeated phrases take alternatives (“did not differ significantly”, “showed no significant difference” …)</span></label>
+          <label class="check"><input type="checkbox" id="optTrendWord"><span><b>Trends</b> — P between the significance level and 0.10 written as “a non-significant trend”</span></label>
+          <label class="check"><input type="checkbox" id="optNsCI"><span><b>Non-significant results with their 95% CI</b> — the difference or RR/OR, two groups</span></label>
+          <label class="check"><input type="checkbox" id="optFigRef"><span><b>Figure references</b> — “(Figure 3)” at the end of each comment (Word)</span></label>
+          <label class="check"><input type="checkbox" id="optClinWord"><span><b>Clinical importance</b> — a significant but small effect said to be of limited clinical importance</span></label>
+          <label class="check"><input type="checkbox" id="optTestInText"><span><b>Test named</b> in the brackets of significant results (e.g. P value = 0.003; Mann-Whitney U test)</span></label>
+          <label class="check"><input type="checkbox" id="optTableIntro"><span><b>“Table 3 shows …”</b> opening each comment (Word)</span></label>
+          <label class="check"><input type="checkbox" id="optLimits"><span><b>Limitations paragraph</b> — small groups, missing data, many tests, non-normal data, from the data</span></label>
+          <label class="check"><input type="checkbox" id="optDiscuss"><span><b>Discussion points</b> — each significant result with its size, MCID and reference range</span></label>
+          <label class="check"><input type="checkbox" id="optConclusion"><span><b>Conclusion</b> — one sentence from the primary outcome(s)</span></label>
+          <label class="check"><input type="checkbox" id="optSubSummary"><span><b>Subgroup summary</b> — where each result was significant across the subgroups</span></label>
+          <label class="check"><input type="checkbox" id="optFormerLatter"><span><b>“The former / the latter”</b> instead of repeating two group names in a sentence</span></label>
+          <label class="check"><input type="checkbox" id="optNumWords"><span><b>Numbers below 10 in words</b> for counts of patients and groups (“three groups”, “seven patients”)</span></label>
+          <div class="row" style="gap:8px;margin:6px 0"><div><label class="f">Spelling</label><select id="optSpelling" style="width:auto"><option value="">As written (US)</option><option value="uk">British (analysed, randomised)</option></select></div>
+            <div><label class="f">Wording</label><select id="optHedge" style="width:auto"><option value="">Neutral</option><option value="cautious">Cautious (“suggested”, “appeared”)</option></select></div>
+            <div><label class="f">Methods voice</label><select id="optVoice" style="width:auto"><option value="">Passive (“… was used”)</option><option value="active">Active (“We used …”)</option></select></div>
+            <div><label class="f">Results tense</label><select id="optTense" style="width:auto"><option value="">Past (“was higher”)</option><option value="present">Present (“is higher”)</option></select></div></div>
+          <label class="check"><input type="checkbox" id="optBoldSigText"><span><b>Significant findings in bold</b> in the Word comments</span></label>
+        </div>
+      </div>
+      <h3>Style</h3>
+      <div class="grid g4">
+        <div><label class="f">Preset</label><select id="comPreset"><option value="">— apply a preset —</option><option value="thesis">Thesis — detailed, formal</option><option value="journal">Journal — concise, with effect sizes</option><option value="plain">Plain language — for patients and the public</option></select></div>
+        <div><label class="f">Tone</label><select id="optCommentTone"><option value="standard" selected>Statistical (“significantly”)</option><option value="plain">Plain language (“clearly”)</option></select></div>
+        <div><label class="f">Comments of the tables</label><select id="optCommentMerge"><option value="table" selected>One paragraph with each table</option><option value="combined">One combined results paragraph (Word)</option></select></div>
+        <div><label class="f">Effect size labels (Cohen's d)</label><select id="optEffConv"><option value="cohen" selected>Cohen — 0.2 / 0.5 / 0.8</option><option value="sawilowsky">Sawilowsky — very small … huge</option><option value="ferguson">Ferguson — 0.41 / 1.15 / 2.70</option></select></div>
+        <div><label class="f">Word limit per comment</label><input type="number" min="0" step="10" id="optComMaxWords" placeholder="none"></div>
+        <div><label class="f">Word limit of the abstract results</label><input type="number" min="0" step="10" id="optAbsMaxWords" placeholder="none"></div>
+      </div>
+      <h3>Your own wording</h3>
+      <label class="check"><input type="checkbox" id="optCommentTpl"><span><b>Sentence templates</b> for the tables of single variables — placeholders {variable}, {Variable}, {groups}, {P}, {test}, {values}, {highest}, {lowest}, {effect}, {result}</span></label>
+      <div class="grid g2" style="margin-top:6px">
+        <div><label class="f">Significant result</label><input type="text" id="optTplSig" style="width:100%" value="{Variable} differed significantly {groups} (P value {P}), being highest in {highest}."></div>
+        <div><label class="f">Non-significant result</label><input type="text" id="optTplNs" style="width:100%" value="{Variable} did not differ significantly {groups} (P value {P})."></div>
+      </div>
+      <label class="f" style="margin-top:8px">Phrase dictionary — applied to every comment, one per line: <span class="mono">old phrase =&gt; new phrase</span></label>
+      <textarea id="optPhraseDict" rows="3" style="width:100%" placeholder="insignificantly different =&gt; not significantly different&#10;studied groups =&gt; study groups"></textarea>
+      <p class="legend-note">Every comment can still be edited by hand in the report preview (step 11).</p>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Comment preview</h2><span class="spacer"></span><span class="legend-note">The comment written for a table of your own data, redrawn as you change the options above.</span></div>
+      <div class="paper-prev" id="comPreview"></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="5">← Back</button><button class="btn ghost small" data-reset="6" type="button" title="Every option of this step back to its default">↺ Defaults for this step</button><button class="btn primary" data-go="7">Next: Figures →</button></div>
+  </section>
+
+  <!-- STEP 7 -->
+  <section class="panel" id="p7">
+    <div class="card">
+      <h2>7 · Figures</h2>
+      <div class="grid g4">
+        <div><label class="f">Figures to include</label><select id="optFigures"><option value="all" selected>All results</option><option value="sig">Significant results only</option><option value="none">None (tables only)</option></select></div>
+        <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
+        <div><label class="f">Chart colours</label><select id="optPal"></select></div>
+        <div><label class="f">Error bars (mean charts)</label><select id="optErrorBar"><option value="sd" selected>Standard deviation (SD)</option><option value="sem">Standard error (SEM)</option><option value="ci">95% confidence interval</option></select></div>
+        <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option><option value="pct100">100% of the text width</option><option value="pct75">75% of the text width</option><option value="pct50">50% of the text width</option><option value="cm">Exact width (cm) →</option></select></div>
+        <div><label class="f">Figure width (cm, with “Exact width”)</label><input type="number" id="optFigWidthCm" min="3" max="30" step="0.5" value="15"></div>
+        <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
+        <div><label class="f">Figure placement (classify)</label><select id="optFigPlacement"><option value="after" selected>After each table</option><option value="end">All at the end (Figures section)</option><option value="endType">At the end, grouped by chart type</option></select></div>
+        <div><label class="f">Caption style</label><select id="optCaptionStyle"><option value="colon" selected>Figure 1: …</option><option value="period">Figure 1. …</option><option value="fig">Fig. 1. …</option></select></div>
+      </div>
+      <details class="pal-wrap" id="palWrap"><summary><b>Colour themes</b> — all colours, with a preview</summary><div class="pal-gallery" id="palGallery"></div></details>
+      <div id="customBox" style="display:none;margin-top:12px">
+        <label class="f">Custom colours (group 1, 2, 3 …)</label>
+        <div class="row"><span id="customColors" class="row" style="gap:6px"></span><button class="btn ghost small" id="customReset" type="button">Reset</button></div>
+      </div>
+      <h3>Chart appearance</h3>
+      <div class="grid g4">
+        <div><label class="f">Chart text size</label><select id="optChartText"><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
+        <div><label class="f">Chart shape</label><select id="optAspect"><option value="wide" selected>Wide</option><option value="standard">Standard (4:3)</option><option value="square">Square</option></select></div>
+        <div><label class="f">Bar fill</label><select id="optBarFill"><option value="gradient" selected>Gradient</option><option value="solid">Solid</option><option value="outline">Outline only</option><option value="hatched">Hatched (black &amp; white print)</option></select></div>
+        <div><label class="f">Chart font</label><select id="optChartFont"><option value="sans" selected>Segoe UI</option><option value="arial">Arial</option><option value="calibri">Calibri</option><option value="times">Times New Roman</option></select></div>
+        <div><label class="f">Bar width</label><select id="optBarWidth"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="wide">Wide</option></select></div>
+        <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
+        <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
+        <div><label class="f">Significance on figures</label><select id="optSigLabel"><option value="stars" selected>Stars (*, **, ***)</option><option value="p">Exact P values (P = 0.013)</option><option value="both">Stars and P values</option><option value="letters">Letters a, b, c (3+ groups)</option></select></div>
+        <div><label class="f">Panel style</label><select id="optPanelStyle"><option value="classic" selected>Classic (axes with arrows)</option><option value="minimal">Minimal (no axis lines)</option><option value="grey">Grey background, white grid</option></select></div>
+        <div><label class="f">Axis numbers</label><select id="optAxisSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
+        <div><label class="f">Axis titles</label><select id="optTitleSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
+        <div><label class="f">Value labels</label><select id="optValueSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option></select></div>
+        <div><label class="f">Groups told apart by</label><select id="optSeriesStyle"><option value="colour" selected>Colour</option><option value="shapes">Colour, marker shapes and line patterns (greyscale print)</option></select></div>
+        <div><label class="f">Line weight</label><select id="optLineWeight"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="thick">Thick</option></select></div>
+        <div><label class="f">Error bars</label><select id="optErrBars"><option value="both" selected>Both directions, with caps</option><option value="nocap">Both directions, no caps</option><option value="up">Upward only (from the mean)</option></select></div>
+        <div><label class="f">Error bar colour</label><select id="optErrColor"><option value="black" selected>Black</option><option value="group">Colour of the group</option></select></div>
+        <div><label class="f">Gridline style</label><select id="optGridStyle"><option value="solid" selected>Solid, light</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="dark">Solid, darker</option></select></div>
+        <div><label class="f">Axis ticks</label><select id="optYTicks"><option value="fewer">Fewer</option><option value="normal" selected>Normal</option><option value="more">More</option></select></div>
+      </div>
+      <h3>Legend</h3>
+      <div class="grid g4">
+        <div><label class="f">Legend position</label><select id="optLegend"><option value="bottom" selected>Bottom</option><option value="top">Top</option><option value="right">Right</option><option value="inside">Inside the plot</option><option value="none">Hidden</option></select></div>
+        <div><label class="f">Legend text size</label><select id="optLegendSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option></select></div>
+        <div><label class="f">Legend title (optional)</label><input type="text" id="optLegendTitle" placeholder="e.g. Groups"></div>
+      </div>
+      <div class="grid g2" style="margin-top:12px">
+        <div>
+          <label class="check"><input type="checkbox" id="optGrid" checked><span><b>Gridlines</b> behind the data</span></label>
+          <label class="check"><input type="checkbox" id="optArrows" checked><span><b>Axis arrows</b> at the ends of the axes</span></label>
+          <label class="check"><input type="checkbox" id="optLegendFrame"><span><b>Frame</b> around the legend</span></label>
+          <label class="check"><input type="checkbox" id="optNLabels"><span><b>Group sizes</b> on the charts — “A group (n=30)”</span></label>
+          <label class="check"><input type="checkbox" id="optValueLabels"><span><b>Value labels</b> on bar charts of means / medians</span></label>
+        </div>
+        <div>
+          <label class="check"><input type="checkbox" id="optSigMarks" checked><span><b>Significance marks on figures</b> — brackets with * / ** / *** between groups, stars above timepoints</span></label>
+          <label class="check"><input type="checkbox" id="optPoints"><span><b>Show every patient</b> as a dot on box plots</span></label>
+          <label class="check"><input type="checkbox" id="optBoxMean"><span><b>Mean marker</b> (◆) on box plots</span></label>
+          <label class="check"><input type="checkbox" id="optBoxMeanVal"><span><b>Mean value</b> written beside each box</span></label>
+          <label class="check"><input type="checkbox" id="optFigNormCurve"><span><b>Normal curve</b> of each group over histograms</span></label>
+          <label class="check"><input type="checkbox" id="optFigRefBand"><span><b>Reference range shaded</b> on the charts of variables with a range (step 2 ⚙)</span></label>
+          <label class="check"><input type="checkbox" id="optFigUnitLine"><span><b>Units on a second line</b> of the axis titles</span></label>
+          <label class="check"><input type="checkbox" id="optFigStackSort"><span><b>Stacked bars ordered</b> by their first category</span></label>
+          <div class="row" style="gap:8px;margin:4px 0 6px"><div><label class="f">Watermark on the figures</label><input type="text" id="optFigWatermark" placeholder="e.g. DRAFT" style="width:140px"></div><button class="btn ghost small" id="cbCheck" type="button" style="align-self:flex-end;margin-bottom:6px">👁 Colour-blind check</button></div>
+          <div id="cbOut"></div>
+          <label class="check"><input type="checkbox" id="optFigPanels"><span><b>Multi-panel figures</b> — the figures of a table joined as panels A, B, C (Word)</span></label>
+          <label class="check"><input type="checkbox" id="optFigForestAll"><span><b>Forest plot of every effect</b> — standardized differences of all variables, two groups</span></label>
+          <label class="check"><input type="checkbox" id="optFigHeat"><span><b>Correlation heat map</b> with the correlation table (step 4)</span></label>
+          <label class="check"><input type="checkbox" id="optCapAbove"><span><b>Captions above the figures</b> in Word</span></label>
+          <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
+          <label class="check"><input type="checkbox" id="optFigFrame"><span><b>Frame</b> around each figure</span></label>
+          <label class="check"><input type="checkbox" id="optFigNotes" checked><span><b>Explain the symbols in the caption</b> — what *, **, ***, the bars, error bars, boxes and markers show</span></label>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Figures by variable &amp; live preview</h2>
+      <p class="hint">Choose the chart type of each variable and, if you like, its own caption. The preview redraws as you change any figure option on this page.</p>
+      <div class="grid g2">
+        <div><div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap"><span class="legend-note">Chart for all:</span>
+          <select id="fbNum" style="width:auto" title="Every numeric variable"><option value="">numeric…</option></select><select id="fbCat" style="width:auto" title="Every categorical variable"><option value="">categorical…</option></select><select id="fbRep" style="width:auto" title="Every repeated measure"><option value="">repeated…</option></select></div>
+        <div class="tbl-wrap" style="max-height:560px"><table class="t" id="figTbl"></table></div></div>
+        <div>
+          <div class="row"><label class="f" style="margin:0">Preview</label><select id="figPrevVar" style="flex:1"></select></div>
+          <div class="fig-prev" style="position:relative"><canvas id="figPrevCanvas"></canvas><div id="figPrevTip" class="fig-tip"></div><div id="figPrevNote" class="legend-note"></div><div style="text-align:right;margin-top:6px"><button class="btn ghost small" id="figPrevCopy" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="figPrevPng" type="button">⬇ Export this figure…</button></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Design preview</h2><span class="spacer"></span><span class="legend-note">The current chart style on four kinds of figure — colours, fills, text, legend, error bars, significance marks, gridlines and frame.</span></div>
+      <div class="design-grid" id="figDesign"></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="6">← Back</button><button class="btn ghost small" data-reset="7" type="button" title="Every option of this step back to its default">↺ Defaults for this step</button><button class="btn primary" data-go="8">Next: Advanced analyses →</button></div>
+  </section>
+
+  <!-- STEP 8 -->
+  <section class="panel" id="p8">
+    <div class="card">
+      <h2>8 · Advanced analyses</h2>
+      <p class="hint">Optional. Each analysis adds its own table (and ROC figure) after the main results. Categorical predictors are compared with their first level (group order / levels order from step 2). Patients with missing values are left out of that analysis.</p>
+      <div class="row" id="advComBar" style="gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+        <b style="margin-bottom:8px">Comments of all analyses:</b>
+        <div><label class="f">Comment</label><select data-acall="commentDetail"><option value="">— keep —</option><option value="standard">Standard</option><option value="detailed">Detailed</option><option value="brief">Brief — one sentence</option><option value="none">No comment</option></select></div>
+        <div><label class="f">Content</label><select data-acall="commentFocus"><option value="">— keep —</option><option value="all">All findings</option><option value="sig">Only significant findings</option></select></div>
+        <div><label class="f">Numbers</label><select data-acall="commentNumbers"><option value="">— keep —</option><option value="all">With numbers</option><option value="none">Words only</option></select></div>
+        <div><label class="f">Placement</label><select data-acall="commentPlace"><option value="">— keep —</option><option value="default">As in step 6</option><option value="after">After the table</option><option value="before">Before the table</option></select></div>
+        <button class="btn ghost small" id="advComApply" type="button" style="margin-bottom:4px">Apply to all analyses</button>
+      </div>
+      <div id="advList" class="grid"></div>
+      <div class="row" style="margin-top:14px;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Add an analysis</h3><input type="search" id="advFind" placeholder="Find an analysis (e.g. kappa, survival, GEE)" style="width:280px"><span class="spacer"></span><button class="btn ghost small" id="advSortCat" type="button" title="Order the analyses above (and their tables in the report) by category">⇅ Group the analyses by category</button></div>
+      <div id="advAdd" class="adv-cats"></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="7">← Back</button><button class="btn primary" data-go="9">Next: Flowchart →</button></div>
+  </section>
+
+  <!-- STEP 9 -->
+  <section class="panel" id="p9">
+    <div class="card">
+      <div class="row"><h2>9 · Flowchart</h2><span class="spacer"></span><button class="btn ghost small" id="cRebuild" type="button" title="Take the group sizes from the data again, keeping the type, style and labels">↺ Numbers from the data</button><label class="check"><input type="checkbox" id="cEnabled" checked><span>Include in report</span></label></div>
+      <div class="grid g3" style="margin:6px 0 4px"><div><label class="f">Flowchart type</label><select id="cType">
+        <option value="consort">CONSORT 2010 — randomized trial</option><option value="strobe">STROBE — observational study</option>
+        <option value="stard">STARD 2015 — diagnostic accuracy</option><option value="simple">Simple flowchart — custom steps</option>
+        <option value="crossover">CONSORT — crossover trial (sequences, periods, washout)</option><option value="cluster">CONSORT — cluster-randomized trial</option><option value="prisma">PRISMA 2020 — systematic review</option><option value="factorial">CONSORT — 2 × 2 factorial trial</option></select></div>
+        <div class="row" style="gap:6px;align-items:flex-end"><button class="btn ghost small" id="cUndo" type="button" title="Undo the last change of the flowchart">↶ Undo</button><button class="btn ghost small" id="cRedo" type="button" title="Redo">↷ Redo</button></div>
+        <div class="row" style="gap:6px;align-items:flex-end;flex-wrap:wrap"><select id="cStyleList"><option value="">— saved flowchart styles —</option></select><button class="btn ghost small" id="cStyleApply" type="button">Apply</button><button class="btn ghost small" id="cStyleSave" type="button">💾 Save style…</button></div></div>
+      <details class="fl-style"><summary><b>Appearance</b> — colours, corners, lines, text</summary>
+        <div class="grid g4" style="margin-top:8px">
+          <div><label class="f">Colour theme</label><select data-fs="theme"><option value="classic">Classic — white boxes, coloured labels</option><option value="tinted">Tinted — lightly coloured boxes</option><option value="filled">Filled — main boxes in colour</option><option value="pastel">Pastel — a soft colour per box type</option><option value="grey">Grey — neutral fills for print</option><option value="bw">Black and white</option></select></div>
+          <div><label class="f">Colour</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select data-fs="colorMode" style="width:auto"><option value="palette">Chart palette</option><option value="custom">Custom</option></select><input type="color" data-fs="color" value="#7B2FBE" style="width:52px;padding:2px"></div></div>
+          <div><label class="f">Box corners</label><select data-fs="corners"><option value="square">Square</option><option value="rounded">Rounded</option><option value="pill">Pill</option></select></div>
+          <div><label class="f">Box border</label><select data-fs="boxStyle"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="double">Double</option><option value="bar">Accent bar on the left</option></select></div>
+          <div><label class="f">Moved-box arrows</label><select data-fs="arrowShape"><option value="elbow">Elbow (right angles)</option><option value="curved">Curved</option></select></div>
+          <div><label class="f">Lines</label><select data-fs="lines"><option value="thin">Thin</option><option value="normal">Normal</option><option value="bold">Bold</option></select></div>
+          <div><label class="f">Text size</label><select data-fs="textSize"><option value="small">Small</option><option value="normal">Normal</option><option value="large">Large</option></select></div>
+          <div><label class="f">Font</label><select data-fs="font"><option value="sans">Segoe UI</option><option value="arial">Arial</option><option value="calibri">Calibri</option><option value="times">Times New Roman</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="shadow"><span>Box shadows</span></label></div>
+          <div><label class="f">Numbers</label><select data-fs="nFmt"><option value="tight">(n=30)</option><option value="spaced">(n = 30)</option><option value="upper">(N=30)</option></select></div>
+          <div><label class="f">Spacing</label><select data-fs="spacing"><option value="compact">Compact</option><option value="normal">Normal</option><option value="roomy">Roomy</option></select></div>
+          <div><label class="f">Exclusion box</label><select data-fs="exSide"><option value="right">Right of the main path</option><option value="left">Left of the main path</option></select></div>
+          <div><label class="f">Image resolution</label><select data-fs="res"><option value="1">Standard</option><option value="2">High (2×)</option><option value="3">Very high (3×)</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="pct"><span>Percentages beside the numbers</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="emph"><span>Highlight the final (analysed) boxes</span></label></div>
+          <div><label class="f">Direction</label><select data-fs="direction"><option value="tb">Top to bottom</option><option value="lr">Left to right</option></select></div>
+          <div><label class="f">Box width</label><select data-fs="boxWidth"><option value="narrow">Narrow</option><option value="normal">Normal</option><option value="wide">Wide</option></select></div>
+          <div><label class="f">Arrow heads</label><select data-fs="arrowHead"><option value="filled">Filled</option><option value="open">Open</option><option value="none">None (lines)</option></select></div>
+          <div><label class="f">Arrow colour</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select data-fs="arrowMode" style="width:auto"><option value="theme">As the theme</option><option value="custom">Custom</option></select><input type="color" data-fs="arrowColor" value="#222222" style="width:52px;padding:2px"></div></div>
+          <div><label class="f">Text of the exclusion boxes</label><select data-fs="sideText"><option value="small">Smaller</option><option value="normal">Same</option><option value="large">Larger</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="legend"><span>Legend of the box colours (tinted / filled themes)</span></label></div>
+        </div>
+        <div id="flLabels">
+          <h3 style="margin:12px 0 4px">Section labels</h3>
+          <div class="grid g4">
+            <div><label class="check" style="margin-top:22px"><input type="checkbox" data-fs="pills"><span>Show the section labels</span></label></div>
+            <div><label class="f">Label colour</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select data-fs="pillMode" style="width:auto"><option value="theme">Same as the boxes</option><option value="custom">Custom</option></select><input type="color" data-fs="pillColor" value="#7B2FBE" style="width:52px;padding:2px"></div></div>
+            <div><label class="f">Label text colour</label><input type="color" data-fs="pillTextColor" value="#ffffff" style="width:52px;padding:2px"></div>
+            <div></div>
+            <div><label class="f">Label 1</label><input type="text" data-fsl="0"></div>
+            <div><label class="f">Label 2</label><input type="text" data-fsl="1"></div>
+            <div><label class="f">Label 3</label><input type="text" data-fsl="2"></div>
+            <div><label class="f">Label 4</label><input type="text" data-fsl="3"></div>
+          </div>
+          <p class="legend-note">Leave a label empty to use the standard text shown in it. <button class="btn ghost small" id="cArabic" type="button">Arabic labels</button> <button class="btn ghost small" id="cEnglish" type="button">Standard labels</button></p>
+        </div>
+      </details>
+      <p class="hint" id="cHint"></p>
+      <div id="cWarn"></div>
+      <div class="grid g2">
+        <div id="cForm"></div>
+        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><span class="legend-note" style="float:left">Drag any box to move it; it snaps to the other boxes (hold Alt to move freely).</span><button class="btn ghost small" id="flowResetPos" type="button" title="Every box back to its automatic position">↺ Box positions</button> <button class="btn ghost small" id="flowCopy" type="button" title="Copy the flowchart, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button> <button class="btn ghost small" id="flowPptx" type="button" title="The flowchart as a PowerPoint slide">⬇ PowerPoint</button> <button class="btn ghost small" id="flowSave" type="button" title="Numbers, texts, style and box positions as a file">💾 Save layout</button> <button class="btn ghost small" id="flowLoad" type="button">📂 Load layout</button><input type="file" id="flowLoadFile" accept=".json" hidden></div></div>
+      </div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Next: Results by variable →</button></div>
+  </section>
+
+  <!-- STEP 10 -->
+  <!-- STEP 10 -->
+  <section class="panel" id="p10">
+    <div class="card">
+      <div class="row"><h2>10 · Results by variable</h2><span class="spacer"></span>
+        <select id="xpVar" style="width:auto;max-width:360px"></select>
+        <label class="f" style="margin:0">View</label><select id="xpView" style="width:auto" title="How each variable is laid out (the Word file follows it)"><option value="standard">Standard — figure beside the tables</option><option value="side">Data beside results — figure below</option><option value="half">Data (left half) · summary table (right half)</option><option value="compact">Compact — tables, data on demand</option><option value="stacked">Figure on top — tables below</option><option value="twocol">Two variables per row</option><option value="tables">Tables only — no figures</option><option value="cards">Key results — a card per variable</option><option value="gallery">Figure gallery — figures with test and P</option></select>
+        <label class="check" style="margin:0"><input type="checkbox" id="xpFigs" checked><span>Figures</span></label>
+        <label class="check" style="margin:0" title="The overview table of all variables at the top"><input type="checkbox" id="xpOv" data-xo="overview"><span>Overview</span></label>
+        <label class="check" style="margin:0" title="The comment the report writes for each variable, below its figure"><input type="checkbox" id="xpCom" data-xo="comments"><span>Comments</span></label>
+        <button class="btn ghost small" id="xpCopy" type="button">⧉ Copy tables</button>
+        <button class="btn ghost small" id="xpUndo" type="button" title="Undo the last change to the data (Ctrl+Z)">↶ Undo</button>
+        <button class="btn ghost small" id="xpRedo" type="button" title="Redo (Ctrl+Y)" disabled>↷ Redo</button>
+ <button class="btn ghost small" id="xpPrint" type="button" title="Print the results shown, or save them as PDF">🖨 Print / PDF</button>
+        <button class="btn ghost small" id="xpXlsx" type="button" title="Every table shown here in Excel, one sheet per variable">⬇ Excel</button>
+        <button class="btn primary small" id="xpWord" type="button">⬇ Word</button></div>
+      <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap"><label class="f" style="margin:0">Compare with</label><select data-xo="cmp" id="xpCmp" style="width:auto;max-width:260px"></select>
+        <label class="f" style="margin:0">Search in the tables</label><input type="search" data-xo="tq" placeholder="e.g. Welch, 0.03" style="width:180px">
+        <label class="check" style="margin:0" title="The report's comment right after the table of the test it came from"><input type="checkbox" data-xo="comBeside"><span>Comment beside its test</span></label>
+        <button class="btn ghost small" id="xpCollAll" type="button" title="Collapse or expand every variable">▾ Collapse / expand all</button>
+        <button class="btn ghost small" id="xpQueueBtn" type="button" title="Every outlier, one by one: keep it, set it missing or cap it">🧹 Outlier queue</button><button class="btn ghost small" id="xpHistBtn" type="button" title="The P values of each run of this step">🕘 History</button>
+        <label class="check" style="margin:0"><input type="checkbox" data-xo="flagged"><span>Only ⚑ flagged</span></label><label class="check" style="margin:0"><input type="checkbox" data-xo="dark"><span>Dark tables</span></label>
+        <select id="xpViewList" style="width:auto"></select><button class="btn ghost small" id="xpViewSave" type="button">💾 Save view…</button>
+        <span class="legend-note">J / K: next / previous variable · ★ pin (pinned summary on top) · ⚑ check later · 📋 report sentence · 🔬 why this test, normality, effect sizes, power, what-if, bootstrap, figure, sensitivity, subgroups</span></div>
+      <p class="hint">Every result for each variable and repeated measure: descriptive statistics with normality per group, every candidate test with its statistic, P value and effect size (✓ marks the test used in the report), pairwise comparisons, change over time and mixed ANOVA. For checking your data — the report uses only the tests chosen in step 4. Open <b>Data of each group</b> under a variable to see every patient's value (outliers in orange, missing in red); click a value to change it and the results update at once. Changes go into the sheet and the report too (↶ Undo to go back).</p>
+      <details class="fl-style" id="xpOpts"><summary><b>⚙ Options</b> — filter, tables, statistics, figure, outliers</summary>
+        <div class="grid g4" style="margin-top:8px">
+          <div><label class="f">Variables</label><select data-xo="type"><option value="all">All types</option><option value="numeric">Numeric</option><option value="categorical">Categorical</option><option value="repeated">Repeated measures</option></select></div>
+          <div><label class="f">Search</label><input type="search" data-xo="q" placeholder="Name of a variable"></div>
+          <div><label class="f">Figure</label><select data-xo="fig"><option value="auto">Automatic (box plot / means over time)</option><option value="box">Box plot with every patient</option><option value="violin">Violin plot</option><option value="hist">Histogram</option><option value="qq">Normal Q-Q plot (check normality)</option><option value="meanci">Means with 95% CI</option><option value="spaghetti">Means + every patient's line (repeated)</option><option value="none">No figures</option></select></div>
+          <div><label class="f">Outliers</label><select data-xo="out"><option value="1.5">Beyond 1.5 × IQR</option><option value="3">Beyond 3 × IQR (extreme)</option><option value="z3">|z| > 3</option><option value="none">Do not mark</option></select></div>
+          <div><label class="f">Order</label><select data-xo="sort"><option value="sheet">As in the sheet</option><option value="sig">Significant first</option><option value="p">Smallest P value first</option><option value="az">A – Z</option><option value="kind">By type (numeric, categorical, repeated)</option></select></div>
+          <div><label class="f">Decimals</label><select data-xo="dec"><option value="">As in step 5</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="sig"><span>Only variables with a significant result</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="openData"><span>Open the data of each group</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="wordData"><span>Patients' data in the Word file</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-xo="overview"><span>Overview table of all variables at the top</span></label></div>
+        </div>
+        <label class="f" style="margin-top:8px">Tables</label>
+        <div class="row" style="gap:14px">
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="desc"><span>Descriptive statistics / frequencies</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="extra"><span>More statistics (skewness, kurtosis, CV, geometric mean, percentiles, both normality tests, outliers)</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="tests"><span>Tests between the groups</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="pairs"><span>Pairwise comparisons</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-xo="time"><span>Change over time</span></label>
+        </div>
+      </details>
+      <div id="explore"></div>
+    </div>
+    <div class="nav"><button class="btn ghost" data-go="9">← Back</button><button class="btn primary" data-go="11">Run report →</button></div>
+  </section>
+
+  <!-- STEP 11 -->
+  <section class="panel" id="p11">
+    <div class="card">
       <div class="row">
-        <h2>5 · Report</h2><span class="spacer"></span>
+        <h2>11 · Report</h2><span class="spacer"></span>
         <button class="btn ghost" id="btnRerun">↻ Re-run</button>
+ <button class="btn ghost" id="btnCopyText" title="Copy every text of the report (methods, results, comments, captions) to paste elsewhere">⧉ Copy text</button>
+        <button class="btn ghost" id="btnPrint" title="Print the report preview, or save it as PDF">🖨 Print / PDF</button>
+        <button class="btn ghost" id="btnXlsx" title="Every exported table in an Excel file, one sheet per table">⬇ Tables (Excel)</button><button class="btn ghost" id="btnXlsxF" title="The data and a summary sheet whose numbers are Excel formulas (n, mean, SD, median, counts and %) — they update when the data change">⬇ Excel with formulas</button>
+        <button class="btn ghost" id="btnPngs" title="Export one, several or all figures as PNG, JPEG or TIFF, up to 1200 dpi, in colour or greyscale">⬇ Figures (PNG · JPG · TIFF)</button>
+        <button class="btn ghost" id="btnPptx" title="Every exported figure on its own PowerPoint slide, with its caption">⬇ PowerPoint</button><button class="btn ghost" id="btnFigPdf" title="Every exported figure on its own A4 page, with its caption">⬇ Figures (PDF)</button><button class="btn ghost" id="btnCombo" title="Join chosen figures into one figure with panels A, B, C …">🧩 Combine figures</button><button class="btn ghost" id="btnPdf" title="The report as a PDF file, laid out on A4 pages (pages are images: the text is not selectable)">⬇ PDF</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
-      <p class="hint">Review everything below. You can edit the text boxes — your edits go into the Word file.</p>
+      <div id="fmtBar">
+        <label class="f">Report format</label>
+        <div class="fmt-cards">
+          <button type="button" class="fmt-card" data-format="thesis"><b>🎓 Thesis</b><span>Full results chapter: every table with its comment, figures after each table, optional chapter numbering (Table 4.1) and subheadings.</span></button>
+          <button type="button" class="fmt-card" data-format="paper"><b>📄 Journal paper</b><span>Concise: short statistical analysis, one Results text citing tables and figures, compact three-line tables, a few figures, word counts.</span></button>
+          <button type="button" class="fmt-card" data-format="custom"><b>⚙ As configured</b><span>Exactly the settings chosen in steps 4–9.</span></button>
+        </div>
+        <div class="row fmt-opts" id="fmtThesis" style="display:none">
+          <div><label class="f">Chapter number (optional)</label><input type="text" id="fmtChapter" placeholder="e.g. 4 → Table 4.1" style="width:180px"></div>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtHeads"><span>A subheading before each table</span></label>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtNewPage"><span>Each table starts on a new page</span></label>
+          <div><label class="f">Page size</label><select id="fmtPage" style="width:auto"><option value="">As in step 5</option><option value="a4">A4 (21 × 29.7 cm)</option><option value="b5">B5 (17.6 × 25 cm)</option></select></div>
+        </div>
+        <div class="row fmt-opts" id="fmtPaper" style="display:none">
+          <div><label class="f">Figures in the paper</label><select id="fmtMaxFigs" style="width:auto"><option value="0">None</option><option>1</option><option>2</option><option value="3">3</option><option>4</option><option>5</option><option>6</option><option>8</option><option>10</option><option value="99">All</option></select></div>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtNonSig"><span>Include figures of non-significant results</span></label>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtAbstract"><span>Results paragraph for the abstract</span></label>
+        </div>
+        <div class="row fmt-opts">
+          <div><label class="f">First table number</label><input type="number" id="fmtTabStart" min="1" value="1" style="width:90px"></div>
+          <div><label class="f">First figure number</label><input type="number" id="fmtFigStart" min="1" value="1" style="width:90px"></div>
+          <div><label class="f">Journal style</label><select id="fmtStyle" style="width:auto"></select></div>
+          <span class="legend-note" id="fmtStyleNote" style="margin-top:20px;flex:1"></span>
+        </div>
+      </div>
+      <details class="fl-style" id="rxBox" style="margin-top:10px"><summary><b>Word document extras</b> — cover page, contents, styles, layout, appendix, references, other exports</summary>
+        <div class="grid g4" style="margin-top:8px">
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="cover"><span><b>Cover page</b></span></label></div>
+          <div><label class="f">Candidate / author</label><input type="text" data-rx="coverCandidate" placeholder="e.g. Dr. A. B."></div>
+          <div><label class="f">Supervisor(s)</label><input type="text" data-rx="coverSupervisor"></div>
+          <div><label class="f">Department, university</label><input type="text" data-rx="coverDept"></div>
+          <div><label class="f">Date</label><input type="text" data-rx="coverDate" placeholder="e.g. October 2026"></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="toc"><span><b>Table of contents</b> (Word fills it in)</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="wordStyles"><span><b>Word heading styles only</b> — a thesis template restyles them</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="headNum"><span><b>Numbered subheadings</b> (4.1, 4.2 …, thesis)</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="lineNumbers"><span><b>Line numbers</b> (journal submission)</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="twoCol"><span><b>Two columns</b></span></label></div>
+          <div><label class="f">Watermark in the header</label><input type="text" data-rx="watermark" placeholder="e.g. DRAFT"></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="abbrFoot"><span><b>Abbreviations as footnotes</b> in the statistical analysis</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="refs"><span><b>References</b> of the statistical methods used</span></label></div>
+          <div><label class="f">Reporting checklist (appendix)</label><select data-rx="checklist"><option value="">None</option><option value="consort">CONSORT 2010</option><option value="strobe">STROBE</option></select></div>
+          <div><label class="f">Word limit of Results (warning)</label><input type="number" min="0" step="50" data-rx="wordLimit" placeholder="none"></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="altText"><span><b>Alternative text</b> of the figures (screen readers)</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="appData"><span><b>Data analysed</b> as an appendix table</span></label></div>
+          <div><label class="f">Declaration (thesis front matter)</label><textarea data-rx="frontDecl" style="min-height:40px" placeholder="e.g. I declare that this thesis is my own work…"></textarea></div>
+          <div><label class="f">Dedication</label><textarea data-rx="frontDed" style="min-height:40px"></textarea></div>
+          <div><label class="f">Acknowledgements</label><textarea data-rx="frontAck" style="min-height:40px"></textarea></div>
+        </div>
+        <div class="row" style="gap:8px;margin-top:8px;align-items:center"><label class="f" style="margin:0">Your Word template (.dotx / .docx)</label><input type="file" id="tplFile" accept=".dotx,.docx,.dotm,.docm" style="width:auto">
+          <button class="btn ghost small" id="tplClear" type="button">✕</button><span class="legend-note" id="tplName">No template — the report's own styles</span></div>
+        <p class="legend-note" style="margin:2px 0 0">The Word file takes the template's styles (Normal, Heading 1 / 2 …), theme fonts and colours, and page size and margins. Kept for this session only.</p>
+        <div class="row" style="gap:10px;margin-top:8px;align-items:center"><label class="check" style="margin:0"><input type="checkbox" data-rx="bilingual"><span><b>Bilingual report (English + Arabic)</b> — an Arabic paragraph after each English one, Arabic table headings, captions and footnotes</span></label>
+          <button class="btn ghost small" id="arPrev" type="button">🌐 Arabic text — check and edit…</button></div>
+        <div id="arOut"></div>
+        <label class="f" style="margin-top:6px">Appendix</label>
+        <div class="row" style="gap:14px"><label class="check" style="margin:0"><input type="checkbox" data-rx="appCodebook"><span>Codebook of the variables</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appPlan"><span>Test plan (test of each variable)</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appFull"><span>Every test of each variable (step 10)</span></label></div>
+        <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn ghost small" id="btnMd" type="button">⬇ Markdown</button><button class="btn ghost small" id="btnTex" type="button">⬇ LaTeX</button><button class="btn ghost small" id="btnHtml" type="button">⬇ HTML page (to share)</button>
+          <button class="btn ghost small" id="btnReview" type="button" title="The report text with your edits as tracked changes and the 💬 comments as Word comments">⬇ Review copy (tracked changes)</button>
+          <button class="btn ghost small" id="btnSupp" type="button" title="Every statistic and test of each variable, as a separate Word file">⬇ Supplementary file</button>
+          <button class="btn ghost small" id="btnOnePage" type="button" title="Key findings, the key figure and a plain-language summary on one page">⬇ One-page summary</button>
+          <button class="btn ghost small" id="btnGA" type="button" title="Design, key finding and key figure in one landscape picture">⬇ Graphical abstract</button>
+          <button class="btn ghost small" id="btnRis" type="button" title="The references of the methods, for EndNote, Zotero or Mendeley">⬇ References (RIS)</button>
+          <button class="btn ghost small" id="btnGdocs" type="button" title="Copy the report with its tables, to paste into Google Docs">⧉ Copy for Google Docs</button>
+          <button class="btn ghost small" id="btnAbs" type="button" title="Background, methods, results and conclusion with word counts">Structured abstract</button>
+          <button class="btn ghost small" id="btnLay" type="button" title="The results in plain words, for patients and the public">Plain-language summary</button>
+          <button class="btn ghost small" id="btnAccess" type="button" title="Alternative text, captions, text size, colours, headings, sentence length">♿ Accessibility check</button>
+          <span class="row" style="gap:4px"><input type="text" id="clJournal" placeholder="Journal name" style="width:150px"><button class="btn ghost small" id="btnLetter" type="button" title="A cover letter to the editor from the title and the key finding">⬇ Cover letter</button></span>
+          <span class="spacer"></span><button class="btn ghost small" id="repSnapSave" type="button">📸 Save a snapshot of the text</button><select id="repSnapList" style="width:auto"></select><button class="btn ghost small" id="repSnapCmp" type="button">Compare with the report now</button>
+        </div>
+        <div id="repSnapOut"></div>
+        <div id="saOut"></div><div id="accOut"></div>
+      </details>
+      <p class="hint" style="margin-top:12px">Review everything below. You can edit the text boxes — your edits go into the Word file. The format changes only this report; your settings in steps 4–9 stay as they are.</p>
       <div id="report"></div>
     </div>
-    <div class="nav"><button class="btn ghost" data-go="4">← Back</button><span></span></div>
+    <div class="nav"><button class="btn ghost" data-go="10">← Back</button><span></span></div>
   </section>
 </main>
 <footer>© <b>Prof MSE</b> – Medical Research · Easy Stat v1.0 · runs fully offline in your browser</footer>
+<dialog id="figDlg">
+  <form method="dialog" id="fxForm">
+    <h3>Export figures</h3>
+    <p class="legend-note" style="margin:0">Each figure is redrawn at the chosen size, so text and lines stay sharp at any resolution.</p>
+    <div class="row" style="margin-top:10px"><b id="fxCount"></b><span class="spacer"></span><button type="button" class="btn ghost small" id="fxAll">Select all</button> <button type="button" class="btn ghost small" id="fxNone">Clear</button></div>
+    <div id="fxList"></div>
+    <div class="fx-grid">
+      <div><label class="f">Format</label><select id="fxFormat"><option value="png">PNG (lossless)</option><option value="jpg">JPEG</option><option value="tiff">TIFF (journal submission)</option><option value="svg">SVG (vector, scalable)</option></select></div>
+      <div><label class="f">Text size (journal)</label><select id="fxText"><option value="0" selected>As on screen</option><option value="8">8 pt at this width</option><option value="10">10 pt at this width</option></select></div>
+      <div><label class="f">Resolution</label><select id="fxDpi"><option value="96">96 dpi (screen)</option><option value="150">150 dpi</option><option value="300" selected>300 dpi (print)</option><option value="600">600 dpi</option><option value="900">900 dpi</option><option value="1200">1200 dpi (line art)</option></select></div>
+      <div><label class="f">Width</label><select id="fxWidth"><option value="report">As in the Word report</option><option value="8.5">8.5 cm (single column)</option><option value="12">12 cm (1.5 column)</option><option value="17.4">17.4 cm (double column)</option></select></div>
+      <div><label class="f">Colour</label><select id="fxColor"><option value="color">Colour</option><option value="grey">Greyscale</option></select></div>
+      <div id="fxZipBox"><label class="f">Several figures</label><select id="fxZip"><option value="zip">One ZIP file</option><option value="files">Separate files</option></select></div>
+    </div>
+    <p class="legend-note" id="fxInfo"></p>
+    <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="fxCancel">Cancel</button> <button type="button" class="btn primary" id="fxGo">⬇ Export</button></div>
+  </form>
+</dialog>
+<dialog id="keysDlg" class="app-dlg">
+  <form method="dialog">
+    <h3>Keyboard shortcuts</h3>
+    <p class="legend-note" style="margin:0 0 8px">Single keys work when you are not typing in a box.</p>
+    <div class="keys-grid" id="keysList"></div>
+    <div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn primary" value="close">Close</button></div>
+  </form>
+</dialog>
+<dialog id="lvDlg" class="app-dlg" style="width:min(560px,calc(100vw - 32px))">
+  <form method="dialog">
+    <h3 id="lvTitle">Arrange categories</h3>
+    <p class="legend-note" style="margin:0 0 8px">The order of the rows in tables, of the bars and legends in figures, and of the comparisons. The <b>first</b> category is the reference for relative risk / odds ratios and in regression. Drag ⋮⋮ or use ↑ ↓.</p>
+    <div class="row" style="gap:4px;flex-wrap:wrap;margin-bottom:8px" id="lvSorts">
+      <button type="button" class="btn ghost small" data-lvsort="az">A → Z</button><button type="button" class="btn ghost small" data-lvsort="za">Z → A</button>
+      <button type="button" class="btn ghost small" data-lvsort="num">1 → 9</button><button type="button" class="btn ghost small" data-lvsort="freq">Most frequent first</button>
+      <button type="button" class="btn ghost small" data-lvsort="rare">Least frequent first</button><button type="button" class="btn ghost small" data-lvsort="smart" title="none → mild → moderate → severe, low → high, never → always, Yes before No">Severity / scale order</button>
+      <button type="button" class="btn ghost small" data-lvsort="sheet">As in the sheet</button><button type="button" class="btn ghost small" data-lvsort="rev">⇅ Reverse</button><button type="button" class="btn ghost small" data-lvsort="default">Default</button>
+    </div>
+    <ol id="lvList" class="lv-list"></ol>
+    <div class="row" style="margin-top:12px"><span class="spacer"></span><button type="button" class="btn ghost" id="lvCancel">Cancel</button> <button type="button" class="btn primary" id="lvSave">Save order</button></div>
+  </form>
+</dialog>
+<dialog id="varDlg" class="app-dlg" style="width:min(760px,calc(100vw - 32px))">
+  <form method="dialog">
+    <h3 id="vdTitle">Variable</h3>
+    <div class="fx-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:10px 0">
+      <div><label class="f">Unit (added to the label)</label><input type="text" id="vdUnit" placeholder="e.g. mg/dL"></div>
+      <div><label class="f">Decimal places</label><select id="vdDec"><option value="">As in step 5</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+      <div><label class="f">Role</label><select id="vdRole"><option value="">—</option><option value="baseline">Baseline characteristic (“comparable”)</option><option value="outcome">Outcome</option><option value="primary">Primary outcome (first in its table)</option><option value="secondary">Secondary outcome</option><option value="safety">Safety outcome</option></select></div>
+      <div><label class="f">Transformation (numeric)</label><select id="vdTf"><option value="">None</option><option value="log">Natural log</option><option value="log10">Log₁₀</option><option value="sqrt">Square root</option><option value="boxcox">Box-Cox (best λ)</option><option value="winsor">Winsorise (cap extremes)</option></select></div>
+      <div id="vdWinBox"><label class="f">Winsorise at</label><select id="vdWinP"><option value="1">1st / 99th percentile</option><option value="5">5th / 95th percentile</option><option value="2.5">2.5th / 97.5th percentile</option></select></div>
+      <div><label class="check" style="margin-top:22px"><input type="checkbox" id="vdOrd"><span><b>Ordinal</b> (ordered categories)</span></label></div>
+      <div><label class="f">Test for ordinal</label><select id="vdOrdTest"><option value="rank">Mann-Whitney / Kruskal-Wallis</option><option value="trend">Chi-square for trend</option></select></div>
+      <div><label class="f">Test between the groups</label><select id="vdTest"></select></div>
+      <div><label class="f">Arabic label (optional)</label><input type="text" id="vdAr" dir="rtl"></div>
+      <div id="vdShowBox"><label class="f">Row shows (two categories)</label><select id="vdShow"></select></div>
+      <div><label class="f">Minimal clinically important difference (two groups)</label><input type="number" step="any" id="vdMcid" placeholder="e.g. 10"></div>
+      <div><label class="f">Outliers (numeric)</label><select id="vdOut"><option value="">Keep them</option><option value="iqr15">Exclude beyond 1.5 × IQR</option><option value="iqr3">Exclude beyond 3 × IQR</option><option value="z3">Exclude beyond 3 SD</option><option value="limits">Exclude outside my limits</option></select></div>
+      <div id="vdOutLim"><label class="f">Limits (low – high)</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="number" step="any" id="vdOutLo" placeholder="low"><input type="number" step="any" id="vdOutHi" placeholder="high"></div></div>
+      <div><label class="f">Missing values</label><select id="vdImp"><option value="">Leave them missing</option><option value="mean">Replace by the mean</option><option value="median">Replace by the median</option><option value="mode">Replace by the most frequent category</option></select></div>
+      <div><label class="f">Reference (normal) range</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="number" step="any" id="vdRefLo" placeholder="low"><input type="number" step="any" id="vdRefHi" placeholder="high"></div></div>
+      <div><label class="check" style="margin-top:22px"><input type="checkbox" id="vdLock"><span>🔒 Lock — bulk actions skip this variable</span></label></div>
+      <div id="vdNoSecondBox"><label class="check" style="margin-top:22px"><input type="checkbox" id="vdNoSecond"><span>One row in the table (no Range / IQR row)</span></label></div>
+    </div>
+    <label class="f">Table note (shown in the Notes column of step 5, if ticked)</label><input type="text" id="vdRowNote" style="width:100%;margin-bottom:6px" placeholder="e.g. measured fasting">
+    <label class="f">Private note (shown as ℹ in later steps, not in the report)</label><input type="text" id="vdMemo" style="width:100%">
+    <p class="legend-note" id="vdRefCat" style="margin:8px 0 0"></p>
+    <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap" id="vdTools"><span id="vdRareBox" class="row" style="gap:4px;align-items:center"><button type="button" class="btn ghost small" id="vdRare">Merge rare categories into “Other”</button><span class="legend-note">fewer than</span><input type="number" id="vdRareN" value="5" min="1" style="width:56px"><span class="legend-note">patients</span></span><button type="button" class="btn ghost small" id="vdDup" title="A second copy of this variable, e.g. to analyse it with another transformation">⧉ Duplicate this variable</button></div>
+    <div id="vdMerge" style="margin-top:10px"></div>
+    <div class="row" style="gap:8px;margin-top:10px;align-items:flex-end;flex-wrap:wrap" id="vdAdjBox"><div><label class="f">Adjusted comparison (ANCOVA) for</label><select id="vdCov" multiple size="3" style="min-width:220px"></select></div><button type="button" class="btn ghost small" id="vdAdj" style="margin-bottom:6px">Add to step 8</button></div>
+    <div class="row" style="margin-top:12px"><span class="spacer"></span><button type="button" class="btn ghost" id="vdCancel">Cancel</button> <button type="button" class="btn primary" id="vdSave">Save</button></div>
+  </form>
+</dialog>
+<dialog id="formDlg" class="app-dlg">
+  <form method="dialog">
+    <div class="row"><h3 style="margin:0">Patient <span id="fmPos"></span></h3><span class="spacer"></span><button type="button" class="btn ghost small" id="fmPrev">‹ Previous</button><button type="button" class="btn ghost small" id="fmNext">Next ›</button><button type="button" class="btn ghost small" id="fmNew">+ New patient</button></div>
+    <div class="fm-grid" id="fmFields"></div>
+    <div class="row" style="margin-top:10px"><span class="legend-note">Changes are saved when you move to another patient or close (Undo restores them).</span><span class="spacer"></span><button type="button" class="btn primary" id="fmClose">Save &amp; close</button></div>
+  </form>
+</dialog>
+<dialog id="mapDlg" class="app-dlg" style="width:min(980px,calc(100vw - 32px))">
+  <form method="dialog">
+    <h3>Missing-data map</h3>
+    <p class="legend-note" style="margin:0 0 6px">Each column of the sheet left to right, each patient top to bottom; red = missing. The bars below give the % missing per column.</p>
+    <div style="overflow:auto;max-height:60vh"><canvas id="mapCanvas"></canvas></div>
+    <p id="mcarInfo" style="margin:8px 0"></p>
+    <div class="row"><span class="spacer"></span><button class="btn primary" value="close">Close</button></div>
+  </form>
+</dialog>
+<dialog id="csvDlg" class="app-dlg">
+  <form method="dialog">
+    <h3>Open a CSV / text file</h3>
+    <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div><label class="f">Text encoding</label><select id="csvEnc" style="width:auto"><option value="utf-8">UTF-8 (most files)</option><option value="windows-1256">Arabic (Windows-1256)</option><option value="windows-1252">Western (Windows-1252)</option><option value="utf-16le">UTF-16</option><option value="iso-8859-1">ISO-8859-1</option></select></div>
+      <div><label class="f">Separator</label><select id="csvSep" style="width:auto"><option value="auto">Automatic</option><option value=",">Comma ,</option><option value=";">Semicolon ;</option><option value="	">Tab</option><option value="|">Bar |</option></select></div>
+      <div><label class="f">Decimal mark</label><select id="csvDec" style="width:auto"><option value="auto">Automatic</option><option value=".">Point (1,234.5)</option><option value=",">Comma (1.234,5)</option></select></div>
+    </div>
+    <div class="tbl-wrap" style="max-height:260px;margin-top:10px"><table class="t" id="csvPrev"></table></div>
+    <p class="legend-note" id="csvInfo"></p>
+    <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="csvCancel">Cancel</button> <button type="button" class="btn primary" id="csvGo">Load</button></div>
+  </form>
+</dialog>
+<dialog id="pasteDlg" class="app-dlg">
+  <form method="dialog">
+    <h3>Paste from Excel</h3>
+    <p class="legend-note" style="margin:0 0 8px">Select the cells in Excel (including the header row), copy them (Ctrl+C) and paste here (Ctrl+V). Tab- or comma-separated text also works.</p>
+    <textarea id="pasteText" rows="12" style="width:100%;font-family:monospace" placeholder="ID&#9;Group&#9;Age&#9;Sex&#10;1&#9;A&#9;54&#9;Male"></textarea>
+    <p class="legend-note" id="pasteInfo"></p>
+    <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="pasteCancel">Cancel</button> <button type="button" class="btn primary" id="pasteGo">Load</button></div>
+  </form>
+</dialog>
 <div class="toast" id="toast"></div>
 <div class="busy" id="busy"><div>Working…</div></div>
 
