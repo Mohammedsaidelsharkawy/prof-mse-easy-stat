@@ -5471,4 +5471,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
 
   renderStepper();
   window.EasyStat = state; // for debugging
+  // what the interface layer (ux.js) may use
+  window.EasyUI = { state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
+    renderAdvanced, renderVariables, renderOptions, effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange };
 })();
