@@ -1979,6 +1979,30 @@ const Analysis = (() => {
       figures: [{ sig: true, caption: 'LASSO coefficient paths (standardised predictors)', spec: { type: 'xy', vline: Math.log10(m.lambdas[k]), hline: 0, xLabel: 'log10(λ)', yLabel: 'Standardised coefficient', series: D.labels.map((l, j) => ({ name: plain(l), x: m.lambdas.map(v => Math.log10(v)), y: m.path.map(b => b[j + 1]) })) } },
         { sig: true, caption: 'Cross-validation of the LASSO penalty', spec: { type: 'xy', vline: Math.log10(m.lambdas[k]), xLabel: 'log10(λ)', yLabel: bin ? 'Deviance' : 'Mean squared error', legend: false, series: [{ x: m.lambdas.map(v => Math.log10(v)), y: m.cv, points: true, line: true, size: 6 }] } }], meta: { kept } };
   }
+  // confirmatory factor analysis: the model as lines "Factor =~ item1 + item2 + item3" (column names), or one factor of the ticked items
+  function cfaSection(a, cfg, rows, alpha, d, used) {
+    const cols = (a.predictors || []).filter(c => columnKind(cfg, rows, c) === 'numeric'); let fac = [];
+    String(a.model || '').split(/\n|;/).forEach(line => { const m = /^\s*([^=]+?)\s*=~\s*(.+)$/.exec(line); if (!m) return; const items = m[2].split('+').map(x => x.trim()).filter(Boolean).map(x => cols.find(c => c === x || plain(columnLabel(cfg, c)) === x) || x); fac.push({ name: m[1].trim(), items }); });
+    if (!fac.length) fac = [{ name: 'Factor 1', items: cols }];
+    const all = [...new Set(fac.flatMap(f => f.items))].filter(c => rows.some(r => isFinite(toNum(r[c])))); if (all.length < 3) return null;
+    fac = fac.map(f => ({ ...f, items: f.items.filter(c => all.includes(c)) })).filter(f => f.items.length); if (fac.some(f => f.items.length < 2) && fac.length > 1) return null;
+    const rs = rows.filter(r => all.every(c => isFinite(toNum(r[c])))); if (rs.length < Math.max(30, 2 * all.length)) return null;
+    const m = S.cfa(rs.map(r => all.map(c => toNum(r[c]))), fac.map(f => f.items.map(c => all.indexOf(c)))); if (!m || m.df < 0) return null; used.add('cfa');
+    const L = c => plain(columnLabel(cfg, c)), good = [m.cfi >= 0.95, m.tli >= 0.95, m.rmsea <= 0.06, m.srmr <= 0.08], acc = [m.cfi >= 0.90, m.tli >= 0.90, m.rmsea <= 0.08, m.srmr <= 0.10];
+    const verdict = good.every(Boolean) ? 'good' : acc.every(Boolean) ? 'acceptable' : 'poor';
+    const fit = { kind: 'cfa', title: `Confirmatory factor analysis: fit of the ${fac.length}-factor model (${all.length} items)`, head: ['Index', 'Value', 'Good fit'],
+      rows: [[{ t: ['χ² (df), P value'], b: true }, { t: [`${fmt(m.chi, 2)} (${m.df}), P ${pTxt(m.pChi)}`] }, { t: ['P > 0.05 (sensitive to n)'] }], [{ t: ['CFI'], b: true }, { t: [fmt(m.cfi, 3)] }, { t: ['≥ 0.95'] }], [{ t: ['TLI'], b: true }, { t: [fmt(m.tli, 3)] }, { t: ['≥ 0.95'] }],
+        [{ t: ['RMSEA (90% CI)'], b: true }, { t: [`${fmt(m.rmsea, 3)} (${fmt(m.rmseaLo, 3)} to ${fmt(m.rmseaHi, 3)})`] }, { t: ['≤ 0.06'] }], [{ t: ['SRMR'], b: true }, { t: [fmt(m.srmr, 3)] }, { t: ['≤ 0.08'] }], [{ t: ['AIC / BIC'], b: true }, { t: [`${fmt(m.aic, 1)} / ${fmt(m.bic, 1)}`] }, { t: ['lower is better'] }]],
+      footnote: `Maximum likelihood, factor variances fixed at 1 (correlated factors), n=${m.N} patients with every item; cut-offs of Hu and Bentler (1999); CFI: Comparative fit index, TLI: Tucker-Lewis index, RMSEA: Root mean square error of approximation, SRMR: Standardised root mean square residual${m.heywood ? '; ⚠ a negative residual variance (Heywood case): the model is misspecified or the sample too small' : ''}.`,
+      comment: `The ${fac.length}-factor model had ${verdict} fit (χ²(${m.df}) = ${fmt(m.chi, 2)}, P value ${pTxt(m.pChi)}, CFI = ${fmt(m.cfi, 3)}, TLI = ${fmt(m.tli, 3)}, RMSEA = ${fmt(m.rmsea, 3)} [90% CI ${fmt(m.rmseaLo, 3)} to ${fmt(m.rmseaHi, 3)}], SRMR = ${fmt(m.srmr, 3)}).${m.resid[0] && Math.abs(m.resid[0].r) >= 0.1 ? ` The largest misfit was between ${L(all[m.resid[0].a])} and ${L(all[m.resid[0].b])} (residual correlation ${fmt(m.resid[0].r, 2)}).` : ''}`, figures: [], meta: { m } };
+    const weak = m.load.filter(x => x.std < 0.5);
+    const load = { kind: 'cfa2', title: 'Confirmatory factor analysis: factor loadings and reliability', head: ['Factor', 'Item', 'Loading (SE)', 'Standardised loading', 'P value'],
+      rows: fac.flatMap((f, j) => { const ls = m.load.filter(x => x.factor === j); return ls.map((x, k) => [...(k ? [] : [{ t: [`${f.name} (CR ${fmt(m.rel[j].cr, 2)}, AVE ${fmt(m.rel[j].ave, 2)})`], b: true, rs: ls.length }]), { t: [L(all[x.item])] }, { t: [`${fmt(x.est, 3)} (${fmt(x.se, 3)})`] }, { t: [fmt(x.std, 3)], b: x.std >= 0.7 }, { t: [fmtP(x.p, alpha)] }]); })
+        .concat(m.corr.map(c => [{ t: [`${fac[c.a].name} ↔ ${fac[c.b].name}`], b: true }, { t: ['correlation'] }, { t: [`${fmt(c.est, 3)} (${fmt(c.se, 3)})`] }, { t: [Math.abs(c.est) >= 0.85 ? 'high (≥ 0.85)' : ''] }, { t: [fmtP(c.p, alpha)] }])),
+      footnote: 'Standardised loadings ≥ 0.70 in bold; CR: Composite reliability (≥ 0.70 good); AVE: Average variance extracted (≥ 0.50 convergent validity); discriminant validity when √AVE of each factor exceeds its correlations with the other factors (Fornell-Larcker).',
+      comment: `${weak.length ? `${listJoin(weak.map(x => L(all[x.item])))} loaded weakly (standardised loading < 0.50). ` : 'Every item loaded at least moderately on its factor (standardised loadings ≥ 0.50). '}Composite reliability was ${listJoin(fac.map((f, j) => `${fmt(m.rel[j].cr, 2)} for ${f.name}`))}.${m.corr.some(c => Math.abs(c.est) > Math.sqrt(Math.min(m.rel[c.a].ave, m.rel[c.b].ave))) ? ' Some factor correlations exceeded the square root of the AVE, questioning discriminant validity.' : ''}`, figures: [], meta: {} };
+    return [fit, load];
+  }
   /* ---------- AB/BA crossover trial (Hills-Armitage): treatment, period and carry-over effects ---------- */
   function crossoverSection(a, cfg, rows, alpha, d, used) {
     if (!a.second || !a.seqCol || !a.seqA) return null;
@@ -3357,7 +3381,7 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw', 'upset', 'alluvial', 'kalpha', 'lca', 'kmeans', 'efa', 'rasch', 'ssize'].includes(a.type))) continue;
+      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw', 'upset', 'alluvial', 'kalpha', 'lca', 'kmeans', 'efa', 'rasch', 'ssize', 'cfa'].includes(a.type))) continue;
       const needs = {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
@@ -3369,7 +3393,7 @@ const Analysis = (() => {
         finegray: () => a.event && a.positive && a.competing && (a.predictors || []).length, rmst: () => a.event && a.positive, phcheck: () => a.event && a.positive && (a.predictors || []).length, subgroups: () => (a.predictors || []).length,
         kalpha: () => (a.predictors || []).length >= 2, calib: () => a.positive && (a.probCol || (a.predictors || []).length), multilevel: () => a.idcol, its: () => a.second && a.cut !== undefined && a.cut !== '', did: () => a.second && a.preVal,
         ipwsurv: () => a.event && a.positive && (a.predictors || []).length, iv: () => a.xvar && a.second, lca: () => (a.predictors || []).length >= 3, kmeans: () => (a.predictors || []).length >= 2, efa: () => (a.predictors || []).length >= 4,
-        rasch: () => (a.predictors || []).length >= 3, ssize: () => true, icer: () => a.second, bayeslogit: () => a.positive && (a.predictors || []).length, lasso: () => (a.predictors || []).length >= 2
+        rasch: () => (a.predictors || []).length >= 3, ssize: () => true, icer: () => a.second, bayeslogit: () => a.positive && (a.predictors || []).length, lasso: () => (a.predictors || []).length >= 2, cfa: () => (a.predictors || []).length >= 3
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
@@ -3377,7 +3401,7 @@ const Analysis = (() => {
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
         agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, count: countSection, ordinal: ordinalSection, multinom: ordinalSection, methodcomp: methodSection, pca: pcaSection, partial: partialSection, anova2: anova2Section, mediation: mediationSection, psm: psmSection, lmm: lmmSection, tost: tostSection, mh: mhSection, clogit: clogitSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection,
         cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, upset: upsetSection, alluvial: alluvialSection, weighted: weightedSection, kendallw: kendallWSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection,
-        finegray: finegraySection, rmst: rmstSection, phcheck: phcheckSection, subgroups: subgroupsSection, kalpha: kalphaSection, calib: calibSection, multilevel: multilevelSection, its: itsSection, did: didSection, ipwsurv: ipwsurvSection, iv: ivSection, lca: lcaSection, kmeans: kmeansSection, efa: efaSection, rasch: raschSection, ssize: ssizeSection, icer: icerSection, bayeslogit: bayeslogitSection, lasso: lassoSection }[a.type];
+        finegray: finegraySection, rmst: rmstSection, phcheck: phcheckSection, subgroups: subgroupsSection, kalpha: kalphaSection, calib: calibSection, multilevel: multilevelSection, its: itsSection, did: didSection, ipwsurv: ipwsurvSection, iv: ivSection, lca: lcaSection, kmeans: kmeansSection, efa: efaSection, rasch: raschSection, ssize: ssizeSection, icer: icerSection, bayeslogit: bayeslogitSection, lasso: lassoSection, cfa: cfaSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
       const compares = ['subgroups', 'rmst', 'did', 'ipwsurv', 'icer', 'ssize', 'ancova', 'survival', 'cif', 'noninf', 'gee', 'weighted', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
@@ -3756,6 +3780,7 @@ const Analysis = (() => {
       iv: 'An instrumental variable analysis used two-stage least squares, with the first-stage F statistic for instrument strength and the Durbin-Wu-Hausman test for endogeneity.', lca: 'Latent class analysis of the binary items compared models with one to four classes by the Bayesian information criterion.',
       kmeans: 'Cluster analysis used k-means on standardised variables, with the number of clusters chosen by the silhouette width.', efa: 'Exploratory factor analysis used principal axis factoring, with the number of factors from parallel analysis, after checking the KMO measure and Bartlett\'s test.',
       rasch: 'Item difficulty and fit were assessed with the dichotomous Rasch model (conditional maximum likelihood; infit and outfit mean-squares).', ssize: 'The sample size was calculated a priori as stated.', icer: 'Cost-effectiveness was summarised by the incremental cost-effectiveness ratio, with bootstrap confidence intervals, a cost-effectiveness plane and an acceptability curve.',
+      cfa: 'Confirmatory factor analysis used maximum likelihood estimation, with fit judged by χ², CFI, TLI, RMSEA and SRMR (Hu and Bentler cut-offs), and reliability by composite reliability and the average variance extracted.',
       bayeslogit: 'Bayesian logistic regression with normal priors on the log odds ratios was used, reporting posterior odds ratios with 95% credible intervals.', lasso: 'Predictors were selected by LASSO regression with the penalty chosen by 10-fold cross-validation.',
       moodMed: "Mood's median test was used where stated.", weighted: 'Weighted comparisons used weighted linear or logistic regression with robust standard errors.', kendallW: "Agreement between several raters' rankings was assessed with Kendall's coefficient of concordance (W).", perm: 'Permutation tests (10,000 random re-allocations, difference in means) were used where stated.', huber: 'Huber robust regression (M-estimation) was used where stated, to limit the influence of outliers.',
       welchN: "Welch's tests were used when the group sizes differed by 50% or more.", cluster: 'P values adjusted for clustering used cluster-robust standard errors.', strata: 'Stratified comparisons used the van Elteren test (numeric) and the Cochran-Mantel-Haenszel test (yes/no).',

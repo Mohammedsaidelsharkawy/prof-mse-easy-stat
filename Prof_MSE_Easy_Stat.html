@@ -23673,8 +23673,58 @@ const Stats = (() => {
     return { lambdas: lams, path, cv, cvSe: cse, kMin, k1se, coefMin: orig(path[kMin]), coef1se: orig(path[k1se]), std: path, n, p };
   }
 
+  /* ---------- confirmatory factor analysis (maximum likelihood, factor variances fixed at 1, correlated factors) ---------- */
+  // noncentral chi-square distribution function (Poisson mixture of central chi-squares)
+  function ncChi2Cdf(x, df, lam) { if (lam <= 0) return jStat.chisquare.cdf(x, df); const h = lam / 2, k0 = Math.floor(h); let tot = 0;
+    for (let k = Math.max(0, k0 - 400); k <= k0 + 400; k++) { const w = Math.exp(-h + k * Math.log(h) - jStat.gammaln(k + 1)); if (w < 1e-300) continue; tot += w * jStat.chisquare.cdf(x, df + 2 * k); } return tot; }
+  const detLog = A => { const n = A.length, M = A.map(r => r.slice()); let ld = 0; for (let c = 0; c < n; c++) { let pv = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[pv][c])) pv = r; if (Math.abs(M[pv][c]) < 1e-300) return NaN; [M[c], M[pv]] = [M[pv], M[c]]; ld += Math.log(Math.abs(M[c][c])); for (let r = c + 1; r < n; r++) { const f = M[r][c] / M[c][c]; for (let j = c; j < n; j++) M[r][j] -= f * M[c][j]; } } return ld; };
+  const isPD = A => { const n = A.length, L = A.map(() => new Array(n).fill(0)); for (let i = 0; i < n; i++) for (let j = 0; j <= i; j++) { let t = A[i][j]; for (let k = 0; k < j; k++) t -= L[i][k] * L[j][k]; if (i === j) { if (t <= 1e-12) return false; L[i][i] = Math.sqrt(t); } else L[i][j] = t / L[j][j]; } return true; };
+  const mm = (A, B) => A.map(r => B[0].map((_, j) => r.reduce((t, v, k) => t + v * B[k][j], 0))), tr = A => A[0].map((_, j) => A.map(r => r[j]));
+  // X rows = patients, columns = items; factors = arrays of item indices (an item may load on one factor)
+  function cfa(X, factors) {
+    const N = X.length, p = X[0].length, m = factors.length, mu = Array.from({ length: p }, (_, j) => mean(X.map(r => r[j])));
+    const S = Array.from({ length: p }, (_, a) => Array.from({ length: p }, (_, b) => sum(X.map(r => (r[a] - mu[a]) * (r[b] - mu[b]))) / N));
+    const ldS = detLog(S); if (!isFinite(ldS)) return null;
+    const lam = []; factors.forEach((f, j) => f.forEach(i => lam.push([i, j]))); const phi = []; for (let a = 0; a < m; a++) for (let b = a + 1; b < m; b++) phi.push([a, b]);
+    const nL = lam.length, nP = phi.length, q = nL + nP + p;
+    const unpack = th => { const L = Array.from({ length: p }, () => new Array(m).fill(0)), F = Array.from({ length: m }, (_, a) => Array.from({ length: m }, (_, b) => +(a === b)));
+      lam.forEach(([i, j], k) => { L[i][j] = th[k]; }); phi.forEach(([a, b], k) => { F[a][b] = F[b][a] = th[nL + k]; }); const T = th.slice(nL + nP); return { L, F, T }; };
+    const sigma = th => { const { L, F, T } = unpack(th), Sg = mm(mm(L, F), tr(L)); T.forEach((v, i) => { Sg[i][i] += v; }); return Sg; };
+    const fobj = th => { const Sg = sigma(th); if (!isPD(Sg)) return Infinity; const Si = invert(Sg); if (!Si) return Infinity; let t = 0; for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) t += S[a][b] * Si[b][a]; return detLog(Sg) + t - ldS - p; };
+    const grad = th => { const { L, F } = unpack(th), Sg = sigma(th), Si = invert(Sg), D = Sg.map((r, a) => r.map((v, b) => v - S[a][b])), G = mm(mm(Si, D), Si), GLF = mm(mm(G, L), F), LGL = mm(mm(tr(L), G), L);
+      return [...lam.map(([i, j]) => 2 * GLF[i][j]), ...phi.map(([a, b]) => 2 * LGL[a][b]), ...G.map((r, i) => r[i])]; };
+    // start: loadings √(0.6 s_ii), unique variances 0.4 s_ii, factors uncorrelated
+    let th = [...lam.map(([i]) => Math.sqrt(0.6 * S[i][i])), ...phi.map(() => 0), ...S.map((r, i) => 0.4 * r[i])], f = fobj(th), g = grad(th), H = Array.from({ length: q }, (_, a) => Array.from({ length: q }, (_, b) => +(a === b))), it = 0;
+    for (; it < 2000; it++) { const d = mv(H, g).map(v => -v); let st = 1, nt, fn, slope = g.reduce((t, v, k) => t + v * d[k], 0); if (slope >= 0) { H = H.map((r, a) => r.map((_, b) => +(a === b))); continue; }
+      for (let k = 0; k < 60; k++) { nt = th.map((v, k2) => v + st * d[k2]); fn = fobj(nt); if (fn <= f + 1e-4 * st * slope) break; st /= 2; }
+      if (!(fn < Infinity)) break; const gn = grad(nt), sv = nt.map((v, k) => v - th[k]), yv = gn.map((v, k) => v - g[k]), sy = sv.reduce((t, v, k) => t + v * yv[k], 0);
+      if (sy > 1e-14) { const Hy = mv(H, yv), yHy = yv.reduce((t, v, k) => t + v * Hy[k], 0); H = H.map((r, a) => r.map((v, b) => v + (sy + yHy) * sv[a] * sv[b] / (sy * sy) - (Hy[a] * sv[b] + sv[a] * Hy[b]) / sy)); }
+      const conv = Math.abs(f - fn) < 1e-13 && Math.max(...gn.map(Math.abs)) < 1e-8; th = nt; f = fn; g = gn; if (conv) break; }
+    // expected information: (N/2) tr(Σ⁻¹ ∂Σ/∂a Σ⁻¹ ∂Σ/∂b)
+    const { L, F, T } = unpack(th), Sg = sigma(th), Si = invert(Sg), LF = mm(L, F), dS = [];
+    lam.forEach(([i, j]) => { const M = Array.from({ length: p }, () => new Array(p).fill(0)); for (let r = 0; r < p; r++) { M[i][r] += LF[r][j]; M[r][i] += LF[r][j]; } dS.push(M); });
+    phi.forEach(([a, b]) => dS.push(Array.from({ length: p }, (_, r) => Array.from({ length: p }, (_, c) => L[r][a] * L[c][b] + L[r][b] * L[c][a]))));
+    for (let i = 0; i < p; i++) dS.push(Array.from({ length: p }, (_, r) => Array.from({ length: p }, (_, c) => +(r === i && c === i))));
+    const W = dS.map(M => mm(Si, M)), I = W.map(A => W.map(B => { let t = 0; for (let r = 0; r < p; r++) for (let c = 0; c < p; c++) t += A[r][c] * B[c][r]; return N / 2 * t; })), cov = invert(I);
+    const se = cov ? cov.map((r, k) => Math.sqrt(r[k])) : th.map(() => NaN);
+    const chi = N * f, df = p * (p + 1) / 2 - q, chi0 = N * (sum(S.map((r, i) => Math.log(r[i]))) - ldS), df0 = p * (p - 1) / 2;
+    const cfi = 1 - Math.max(chi - df, 0) / Math.max(chi0 - df0, chi - df, 0), tli = df > 0 ? (chi0 / df0 - chi / df) / (chi0 / df0 - 1) : NaN, rmsea = df > 0 ? Math.sqrt(Math.max(chi - df, 0) / (df * N)) : NaN;
+    const solve = target => { if (ncChi2Cdf(chi, df, 0) < target) return 0; let lo = 0, hi = Math.max(10, chi * 3); while (ncChi2Cdf(chi, df, hi) > target) hi *= 2; for (let k = 0; k < 100; k++) { const md = (lo + hi) / 2; if (ncChi2Cdf(chi, df, md) > target) lo = md; else hi = md; } return (lo + hi) / 2; };
+    const rLo = df > 0 ? Math.sqrt(solve(0.95) / (df * N)) : NaN, rHi = df > 0 ? Math.sqrt(solve(0.05) / (df * N)) : NaN;
+    let sr = 0, nr = 0; for (let a = 0; a < p; a++) for (let b = 0; b <= a; b++) { sr += ((S[a][b] - Sg[a][b]) / Math.sqrt(S[a][a] * S[b][b])) ** 2; nr++; }
+    const loglik = -N / 2 * (p * Math.log(2 * Math.PI) + f + ldS + p);
+    const load = lam.map(([i, j], k) => ({ item: i, factor: j, est: th[k], se: se[k], z: th[k] / se[k], p: zP(th[k] / se[k]), std: th[k] / Math.sqrt(Sg[i][i]) }));
+    const corr = phi.map(([a, b], k) => ({ a, b, est: th[nL + k], se: se[nL + k], p: zP(th[nL + k] / se[nL + k]) }));
+    const rel = factors.map((fi, j) => { const l = load.filter(x => x.factor === j).map(x => x.std), sl = sum(l); return { cr: sl * sl / (sl * sl + sum(l.map(v => 1 - v * v))), ave: mean(l.map(v => v * v)) }; });
+    // largest residual correlations (where the model fits worst)
+    const resid = []; for (let a = 0; a < p; a++) for (let b = 0; b < a; b++) resid.push({ a, b, r: S[a][b] / Math.sqrt(S[a][a] * S[b][b]) - Sg[a][b] / Math.sqrt(Sg[a][a] * Sg[b][b]) });
+    resid.sort((x, y) => Math.abs(y.r) - Math.abs(x.r));
+    return { N, p, q, chi, df, pChi: df > 0 ? 1 - jStat.chisquare.cdf(chi, df) : NaN, chi0, df0, cfi, tli, rmsea, rmseaLo: rLo, rmseaHi: rHi, pClose: df > 0 ? 1 - ncChi2Cdf(chi, df, 0.0025 * N * df) : NaN, srmr: Math.sqrt(sr / nr),
+      loglik, aic: -2 * loglik + 2 * q, bic: -2 * loglik + q * Math.log(N), load, corr, theta: T.map((v, i) => ({ est: v, se: se[nL + nP + i] })), rel, resid: resid.slice(0, 5), heywood: T.some(v => v < 0), converged: it < 2000 };
+  }
+
   return {
-    coxFit, fineGray, rmst, rmstCompare, phTest, cIndex, metaHet, krippAlpha, gwetAC1, bootUnits, lowess, calibration, neweyWest, iv2sls, lca, kmeans, silhouette, efa, rasch, nSurvival, nCorrelation, nPairedMean, nOneProp, icer, bayesLogistic, lasso, lassoFit,
+    cfa, ncChi2Cdf, coxFit, fineGray, rmst, rmstCompare, phTest, cIndex, metaHet, krippAlpha, gwetAC1, bootUnits, lowess, calibration, neweyWest, iv2sls, lca, kmeans, silhouette, efa, rasch, nSurvival, nCorrelation, nPairedMean, nOneProp, icer, bayesLogistic, lasso, lassoFit,
     cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, seeded, moodMedian, permutationTest, huberRegression, olsCluster, vanElteren, kendallW, powerTwoMeans, powerTwoProps, wlsRobust, weightedLogistic, bayesMeans, bayesProps, groupSequential, padjust, nMargin, gee, glmmLogit, gaussHermite,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
@@ -25669,6 +25719,30 @@ const Analysis = (() => {
       figures: [{ sig: true, caption: 'LASSO coefficient paths (standardised predictors)', spec: { type: 'xy', vline: Math.log10(m.lambdas[k]), hline: 0, xLabel: 'log10(λ)', yLabel: 'Standardised coefficient', series: D.labels.map((l, j) => ({ name: plain(l), x: m.lambdas.map(v => Math.log10(v)), y: m.path.map(b => b[j + 1]) })) } },
         { sig: true, caption: 'Cross-validation of the LASSO penalty', spec: { type: 'xy', vline: Math.log10(m.lambdas[k]), xLabel: 'log10(λ)', yLabel: bin ? 'Deviance' : 'Mean squared error', legend: false, series: [{ x: m.lambdas.map(v => Math.log10(v)), y: m.cv, points: true, line: true, size: 6 }] } }], meta: { kept } };
   }
+  // confirmatory factor analysis: the model as lines "Factor =~ item1 + item2 + item3" (column names), or one factor of the ticked items
+  function cfaSection(a, cfg, rows, alpha, d, used) {
+    const cols = (a.predictors || []).filter(c => columnKind(cfg, rows, c) === 'numeric'); let fac = [];
+    String(a.model || '').split(/\n|;/).forEach(line => { const m = /^\s*([^=]+?)\s*=~\s*(.+)$/.exec(line); if (!m) return; const items = m[2].split('+').map(x => x.trim()).filter(Boolean).map(x => cols.find(c => c === x || plain(columnLabel(cfg, c)) === x) || x); fac.push({ name: m[1].trim(), items }); });
+    if (!fac.length) fac = [{ name: 'Factor 1', items: cols }];
+    const all = [...new Set(fac.flatMap(f => f.items))].filter(c => rows.some(r => isFinite(toNum(r[c])))); if (all.length < 3) return null;
+    fac = fac.map(f => ({ ...f, items: f.items.filter(c => all.includes(c)) })).filter(f => f.items.length); if (fac.some(f => f.items.length < 2) && fac.length > 1) return null;
+    const rs = rows.filter(r => all.every(c => isFinite(toNum(r[c])))); if (rs.length < Math.max(30, 2 * all.length)) return null;
+    const m = S.cfa(rs.map(r => all.map(c => toNum(r[c]))), fac.map(f => f.items.map(c => all.indexOf(c)))); if (!m || m.df < 0) return null; used.add('cfa');
+    const L = c => plain(columnLabel(cfg, c)), good = [m.cfi >= 0.95, m.tli >= 0.95, m.rmsea <= 0.06, m.srmr <= 0.08], acc = [m.cfi >= 0.90, m.tli >= 0.90, m.rmsea <= 0.08, m.srmr <= 0.10];
+    const verdict = good.every(Boolean) ? 'good' : acc.every(Boolean) ? 'acceptable' : 'poor';
+    const fit = { kind: 'cfa', title: `Confirmatory factor analysis: fit of the ${fac.length}-factor model (${all.length} items)`, head: ['Index', 'Value', 'Good fit'],
+      rows: [[{ t: ['χ² (df), P value'], b: true }, { t: [`${fmt(m.chi, 2)} (${m.df}), P ${pTxt(m.pChi)}`] }, { t: ['P > 0.05 (sensitive to n)'] }], [{ t: ['CFI'], b: true }, { t: [fmt(m.cfi, 3)] }, { t: ['≥ 0.95'] }], [{ t: ['TLI'], b: true }, { t: [fmt(m.tli, 3)] }, { t: ['≥ 0.95'] }],
+        [{ t: ['RMSEA (90% CI)'], b: true }, { t: [`${fmt(m.rmsea, 3)} (${fmt(m.rmseaLo, 3)} to ${fmt(m.rmseaHi, 3)})`] }, { t: ['≤ 0.06'] }], [{ t: ['SRMR'], b: true }, { t: [fmt(m.srmr, 3)] }, { t: ['≤ 0.08'] }], [{ t: ['AIC / BIC'], b: true }, { t: [`${fmt(m.aic, 1)} / ${fmt(m.bic, 1)}`] }, { t: ['lower is better'] }]],
+      footnote: `Maximum likelihood, factor variances fixed at 1 (correlated factors), n=${m.N} patients with every item; cut-offs of Hu and Bentler (1999); CFI: Comparative fit index, TLI: Tucker-Lewis index, RMSEA: Root mean square error of approximation, SRMR: Standardised root mean square residual${m.heywood ? '; ⚠ a negative residual variance (Heywood case): the model is misspecified or the sample too small' : ''}.`,
+      comment: `The ${fac.length}-factor model had ${verdict} fit (χ²(${m.df}) = ${fmt(m.chi, 2)}, P value ${pTxt(m.pChi)}, CFI = ${fmt(m.cfi, 3)}, TLI = ${fmt(m.tli, 3)}, RMSEA = ${fmt(m.rmsea, 3)} [90% CI ${fmt(m.rmseaLo, 3)} to ${fmt(m.rmseaHi, 3)}], SRMR = ${fmt(m.srmr, 3)}).${m.resid[0] && Math.abs(m.resid[0].r) >= 0.1 ? ` The largest misfit was between ${L(all[m.resid[0].a])} and ${L(all[m.resid[0].b])} (residual correlation ${fmt(m.resid[0].r, 2)}).` : ''}`, figures: [], meta: { m } };
+    const weak = m.load.filter(x => x.std < 0.5);
+    const load = { kind: 'cfa2', title: 'Confirmatory factor analysis: factor loadings and reliability', head: ['Factor', 'Item', 'Loading (SE)', 'Standardised loading', 'P value'],
+      rows: fac.flatMap((f, j) => { const ls = m.load.filter(x => x.factor === j); return ls.map((x, k) => [...(k ? [] : [{ t: [`${f.name} (CR ${fmt(m.rel[j].cr, 2)}, AVE ${fmt(m.rel[j].ave, 2)})`], b: true, rs: ls.length }]), { t: [L(all[x.item])] }, { t: [`${fmt(x.est, 3)} (${fmt(x.se, 3)})`] }, { t: [fmt(x.std, 3)], b: x.std >= 0.7 }, { t: [fmtP(x.p, alpha)] }]); })
+        .concat(m.corr.map(c => [{ t: [`${fac[c.a].name} ↔ ${fac[c.b].name}`], b: true }, { t: ['correlation'] }, { t: [`${fmt(c.est, 3)} (${fmt(c.se, 3)})`] }, { t: [Math.abs(c.est) >= 0.85 ? 'high (≥ 0.85)' : ''] }, { t: [fmtP(c.p, alpha)] }])),
+      footnote: 'Standardised loadings ≥ 0.70 in bold; CR: Composite reliability (≥ 0.70 good); AVE: Average variance extracted (≥ 0.50 convergent validity); discriminant validity when √AVE of each factor exceeds its correlations with the other factors (Fornell-Larcker).',
+      comment: `${weak.length ? `${listJoin(weak.map(x => L(all[x.item])))} loaded weakly (standardised loading < 0.50). ` : 'Every item loaded at least moderately on its factor (standardised loadings ≥ 0.50). '}Composite reliability was ${listJoin(fac.map((f, j) => `${fmt(m.rel[j].cr, 2)} for ${f.name}`))}.${m.corr.some(c => Math.abs(c.est) > Math.sqrt(Math.min(m.rel[c.a].ave, m.rel[c.b].ave))) ? ' Some factor correlations exceeded the square root of the AVE, questioning discriminant validity.' : ''}`, figures: [], meta: {} };
+    return [fit, load];
+  }
   /* ---------- AB/BA crossover trial (Hills-Armitage): treatment, period and carry-over effects ---------- */
   function crossoverSection(a, cfg, rows, alpha, d, used) {
     if (!a.second || !a.seqCol || !a.seqA) return null;
@@ -27047,7 +27121,7 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw', 'upset', 'alluvial', 'kalpha', 'lca', 'kmeans', 'efa', 'rasch', 'ssize'].includes(a.type))) continue;
+      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw', 'upset', 'alluvial', 'kalpha', 'lca', 'kmeans', 'efa', 'rasch', 'ssize', 'cfa'].includes(a.type))) continue;
       const needs = {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
@@ -27059,7 +27133,7 @@ const Analysis = (() => {
         finegray: () => a.event && a.positive && a.competing && (a.predictors || []).length, rmst: () => a.event && a.positive, phcheck: () => a.event && a.positive && (a.predictors || []).length, subgroups: () => (a.predictors || []).length,
         kalpha: () => (a.predictors || []).length >= 2, calib: () => a.positive && (a.probCol || (a.predictors || []).length), multilevel: () => a.idcol, its: () => a.second && a.cut !== undefined && a.cut !== '', did: () => a.second && a.preVal,
         ipwsurv: () => a.event && a.positive && (a.predictors || []).length, iv: () => a.xvar && a.second, lca: () => (a.predictors || []).length >= 3, kmeans: () => (a.predictors || []).length >= 2, efa: () => (a.predictors || []).length >= 4,
-        rasch: () => (a.predictors || []).length >= 3, ssize: () => true, icer: () => a.second, bayeslogit: () => a.positive && (a.predictors || []).length, lasso: () => (a.predictors || []).length >= 2
+        rasch: () => (a.predictors || []).length >= 3, ssize: () => true, icer: () => a.second, bayeslogit: () => a.positive && (a.predictors || []).length, lasso: () => (a.predictors || []).length >= 2, cfa: () => (a.predictors || []).length >= 3
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
@@ -27067,7 +27141,7 @@ const Analysis = (() => {
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
         agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, count: countSection, ordinal: ordinalSection, multinom: ordinalSection, methodcomp: methodSection, pca: pcaSection, partial: partialSection, anova2: anova2Section, mediation: mediationSection, psm: psmSection, lmm: lmmSection, tost: tostSection, mh: mhSection, clogit: clogitSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection,
         cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, upset: upsetSection, alluvial: alluvialSection, weighted: weightedSection, kendallw: kendallWSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection,
-        finegray: finegraySection, rmst: rmstSection, phcheck: phcheckSection, subgroups: subgroupsSection, kalpha: kalphaSection, calib: calibSection, multilevel: multilevelSection, its: itsSection, did: didSection, ipwsurv: ipwsurvSection, iv: ivSection, lca: lcaSection, kmeans: kmeansSection, efa: efaSection, rasch: raschSection, ssize: ssizeSection, icer: icerSection, bayeslogit: bayeslogitSection, lasso: lassoSection }[a.type];
+        finegray: finegraySection, rmst: rmstSection, phcheck: phcheckSection, subgroups: subgroupsSection, kalpha: kalphaSection, calib: calibSection, multilevel: multilevelSection, its: itsSection, did: didSection, ipwsurv: ipwsurvSection, iv: ivSection, lca: lcaSection, kmeans: kmeansSection, efa: efaSection, rasch: raschSection, ssize: ssizeSection, icer: icerSection, bayeslogit: bayeslogitSection, lasso: lassoSection, cfa: cfaSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
       const compares = ['subgroups', 'rmst', 'did', 'ipwsurv', 'icer', 'ssize', 'ancova', 'survival', 'cif', 'noninf', 'gee', 'weighted', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
@@ -27446,6 +27520,7 @@ const Analysis = (() => {
       iv: 'An instrumental variable analysis used two-stage least squares, with the first-stage F statistic for instrument strength and the Durbin-Wu-Hausman test for endogeneity.', lca: 'Latent class analysis of the binary items compared models with one to four classes by the Bayesian information criterion.',
       kmeans: 'Cluster analysis used k-means on standardised variables, with the number of clusters chosen by the silhouette width.', efa: 'Exploratory factor analysis used principal axis factoring, with the number of factors from parallel analysis, after checking the KMO measure and Bartlett\'s test.',
       rasch: 'Item difficulty and fit were assessed with the dichotomous Rasch model (conditional maximum likelihood; infit and outfit mean-squares).', ssize: 'The sample size was calculated a priori as stated.', icer: 'Cost-effectiveness was summarised by the incremental cost-effectiveness ratio, with bootstrap confidence intervals, a cost-effectiveness plane and an acceptability curve.',
+      cfa: 'Confirmatory factor analysis used maximum likelihood estimation, with fit judged by χ², CFI, TLI, RMSEA and SRMR (Hu and Bentler cut-offs), and reliability by composite reliability and the average variance extracted.',
       bayeslogit: 'Bayesian logistic regression with normal priors on the log odds ratios was used, reporting posterior odds ratios with 95% credible intervals.', lasso: 'Predictors were selected by LASSO regression with the penalty chosen by 10-fold cross-validation.',
       moodMed: "Mood's median test was used where stated.", weighted: 'Weighted comparisons used weighted linear or logistic regression with robust standard errors.', kendallW: "Agreement between several raters' rankings was assessed with Kendall's coefficient of concordance (W).", perm: 'Permutation tests (10,000 random re-allocations, difference in means) were used where stated.', huber: 'Huber robust regression (M-estimation) was used where stated, to limit the influence of outliers.',
       welchN: "Welch's tests were used when the group sizes differed by 50% or more.", cluster: 'P values adjusted for clustering used cluster-robust standard errors.', strata: 'Stratified comparisons used the van Elteren test (numeric) and the Cochran-Mantel-Haenszel test (yes/no).',
@@ -33436,7 +33511,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     finegray: 'Fine-Gray competing-risks regression', rmst: 'Restricted mean survival time (RMST) and landmark analysis', phcheck: 'Proportional hazards check (Schoenfeld, log-log, C-index)', subgroups: 'Subgroup analysis (forest plot, interaction, I²)',
     kalpha: "Krippendorff's alpha and Gwet's AC1", calib: 'Calibration and discrimination (Brier, slope, calibration plot)', multilevel: 'Multilevel model (patients within centres / wards)', its: 'Interrupted time series (segmented regression)',
     did: 'Difference-in-differences', ipwsurv: 'Inverse-probability-weighted survival (IPW Kaplan-Meier and Cox)', iv: 'Instrumental variable (two-stage least squares)', lca: 'Latent class analysis (yes/no items)', kmeans: 'Cluster analysis (k-means)',
-    efa: 'Exploratory factor analysis', rasch: 'Rasch analysis (yes/no items)', ssize: 'Sample size calculator', icer: 'Cost-effectiveness (ICER)', bayeslogit: 'Bayesian logistic regression', lasso: 'LASSO variable selection' };
+    efa: 'Exploratory factor analysis', cfa: 'Confirmatory factor analysis (CFA)', rasch: 'Rasch analysis (yes/no items)', ssize: 'Sample size calculator', icer: 'Cost-effectiveness (ICER)', bayeslogit: 'Bayesian logistic regression', lasso: 'LASSO variable selection' };
   // the analyses by category: the add buttons, the headings of the list and the order of "group by category"
   const ADV_GROUPS = [
     ['Compare groups', 'Adjusted, stratified and matched comparisons of the study groups', [['ancova', 'ANCOVA'], ['anova2', 'Two-way ANOVA'], ['mh', 'Mantel-Haenszel'], ['psm', 'Propensity score'], ['weighted', 'Weighted (survey weights)'], ['subgroups', 'Subgroup analysis'], ['multilevel', 'Multilevel (clusters)']]],
@@ -33446,7 +33521,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     ['Regression models', 'Predictors of an outcome', [['linear', 'Linear'], ['logistic', 'Logistic'], ['firth', 'Firth logistic'], ['mi', 'With multiple imputation'], ['quantreg', 'Quantile (median)'], ['count', 'Poisson / negative binomial'], ['ordinal', 'Ordinal logistic'], ['multinom', 'Multinomial logistic'], ['clogit', 'Conditional logistic'], ['bayeslogit', 'Bayesian logistic'], ['lasso', 'LASSO selection']]],
     ['Survival & time to event', 'Follow-up time with an event', [['survival', 'Kaplan-Meier'], ['cox', 'Cox regression'], ['cif', 'Competing risks'], ['finegray', 'Fine-Gray regression'], ['rmst', 'RMST / landmark'], ['phcheck', 'PH assumption check'], ['ipwsurv', 'IPW survival'], ['tdroc', 'Time-dependent ROC']]],
     ['Diagnostic accuracy & prediction', 'Tests against a reference standard', [['roc', 'ROC curve'], ['diagnostic', 'Diagnostic accuracy (2×2)'], ['calib', 'Calibration & Brier']]],
-    ['Agreement, reliability & questionnaires', 'Raters, methods and scales', [['kappa', "Cohen's kappa"], ['fleiss', "Fleiss' kappa"], ['kendallw', "Kendall's W"], ['agreement', 'ICC / Bland-Altman'], ['methodcomp', 'Passing-Bablok / Deming'], ['cronbach', "Cronbach's alpha"], ['pca', 'PCA (items)'], ['kalpha', "Krippendorff's α / AC1"], ['efa', 'Factor analysis (EFA)'], ['rasch', 'Rasch']]],
+    ['Agreement, reliability & questionnaires', 'Raters, methods and scales', [['kappa', "Cohen's kappa"], ['fleiss', "Fleiss' kappa"], ['kendallw', "Kendall's W"], ['agreement', 'ICC / Bland-Altman'], ['methodcomp', 'Passing-Bablok / Deming'], ['cronbach', "Cronbach's alpha"], ['pca', 'PCA (items)'], ['kalpha', "Krippendorff's α / AC1"], ['efa', 'Factor analysis (EFA)'], ['cfa', 'Confirmatory (CFA)'], ['rasch', 'Rasch']]],
     ['Causal inference & health economics', 'Quasi-experimental designs, instruments and costs', [['its', 'Interrupted time series'], ['did', 'Difference-in-differences'], ['iv', 'Instrumental variable'], ['icer', 'Cost-effectiveness']]]];
   const ADV_CAT = {}; ADV_GROUPS.forEach(([g, , list], gi) => list.forEach(([t]) => { ADV_CAT[t] = gi; }));
   $('#advAdd').innerHTML = ADV_GROUPS.map(([g, note, list]) => `<div class="adv-cat"><h4>${esc(g)}</h4><p class="legend-note">${esc(note)}</p><div class="btns">${list.map(([t, l]) => `<button class="btn ghost small" data-advadd="${t}" type="button" title="${esc(ADV_TYPES[t] || l)}" data-find="${esc((l + ' ' + (ADV_TYPES[t] || '') + ' ' + g).toLowerCase())}">+ ${esc(l)}</button>`).join('')}</div></div>`).join('');
@@ -33579,6 +33654,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       if (t === 'lca') { fields = yesVal() + inp('k', 'Number of classes', 'automatic (lowest BIC, 1 to 4)', a.k, 'number'); predLabel = 'Yes/no items (3 or more)'; preds = cat; }
       if (t === 'kmeans') { fields = inp('k', 'Number of clusters', 'automatic (silhouette, 2 to 6)', a.k, 'number') + '<div></div>'; predLabel = 'Numeric variables (standardised)'; preds = num; }
       if (t === 'efa') { fields = inp('nf', 'Number of factors', 'automatic (parallel analysis)', a.nf, 'number') + opt('rotation', 'Rotation', [['varimax', 'Varimax (orthogonal)'], ['promax', 'Promax (oblique)']], a.rotation); predLabel = 'Items (numeric scores, 4 or more)'; preds = num; }
+      if (t === 'cfa') { fields = `<div style="grid-column:span 2"><label class="f">Model — one line per factor: <code>Factor name =~ item1 + item2 + item3</code> (column names). Empty: one factor of the ticked items.</label><textarea data-af="model" style="min-height:70px;font-family:monospace" placeholder="Physical =~ Q1 + Q2 + Q3&#10;Mental =~ Q4 + Q5 + Q6">${esc(a.model || '')}</textarea></div><div><button class="btn ghost small" type="button" data-cfafill="${ai}" style="margin-top:22px" title="Factors from an exploratory factor analysis of the ticked items (loadings ≥ 0.40)">Fill from EFA</button></div>`; predLabel = 'Items (numeric scores)'; preds = num; }
       if (t === 'rasch') { fields = yesVal() + '<div></div>'; predLabel = 'Yes/no items (3 or more)'; preds = cols; }
       if (t === 'ssize') { const ds = a.design || 'means', P = (k2, l, ph) => inp(k2, l, ph, a[k2], 'number');
         fields = opt('design', 'Design', [['means', 'Two means'], ['props', 'Two proportions'], ['paired', 'Paired mean difference'], ['survival', 'Survival (hazard ratio)'], ['corr', 'Correlation'], ['oneprop', 'One proportion (precision)']], ds)
@@ -33592,7 +33668,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       if (t === 'bayeslogit') { fields = select('outcome', 'Yes/no outcome', cat, a.outcome) + levelSelect('Event value', a.outcome, a.positive) + inp('priorSd', 'Prior SD of each log OR', '2.5 (weakly informative)', a.priorSd, 'number') + inp('priorOr', 'Prior OR (centre)', '1', a.priorOr, 'number'); predLabel = 'Predictors'; preds = cols.filter(c => c.col !== a.outcome); }
       if (t === 'lasso') { const oc = cols.find(c => c.col === a.outcome), isC = oc && oc.kind !== 'numeric';
         fields = select('outcome', 'Outcome (numeric → linear, yes/no → logistic)', cols.filter(c => c.kind === 'numeric' || isCat(c)), a.outcome) + (isC ? levelSelect('Event value', a.outcome, a.positive) : '<div></div>') + opt('rule', 'Penalty', [['1se', 'Largest λ within 1 SE (sparser)'], ['min', 'Minimum CV error']], a.rule); predLabel = 'Candidate predictors'; preds = cols.filter(c => c.col !== a.outcome); }
-      const withPreds = ['finegray', 'phcheck', 'subgroups', 'kalpha', 'calib', 'multilevel', 'ipwsurv', 'iv', 'lca', 'kmeans', 'efa', 'rasch', 'bayeslogit', 'lasso', 'upset', 'weighted', 'kendallw', 'noninf', 'gee', 'tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
+      const withPreds = ['finegray', 'phcheck', 'subgroups', 'kalpha', 'calib', 'multilevel', 'ipwsurv', 'iv', 'lca', 'kmeans', 'efa', 'rasch', 'cfa', 'bayeslogit', 'lasso', 'upset', 'weighted', 'kendallw', 'noninf', 'gee', 'tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
       const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
       const ci = ADV_CAT[t] ?? 99, prevC = ai ? ADV_CAT[cfg.advanced[ai - 1].type] ?? 99 : -1, sep = ci !== prevC && ADV_GROUPS[ci] ? `<div class="adv-sep">${esc(ADV_GROUPS[ci][0])}</div>` : '';
       return `${sep}<div class="gcard" data-adv="${ai}">
@@ -33738,6 +33814,12 @@ if (typeof module !== 'undefined') module.exports = Sav;
     renderAdvanced();
   });
   $('#advList').addEventListener('click', e => {
+    const cf = e.target.closest('[data-cfafill]');
+    if (cf) { readAdvanced(); const a = state.cfg.advanced[+cf.dataset.cfafill], cols = a.predictors || [], rows = analysedRows().filter(r => cols.every(c => isFinite(Analysis.toNum(r[c]))));
+      if (cols.length < 4 || rows.length < 10) { toast('Tick at least 4 numeric items first'); return; }
+      const m = Stats.efa(rows.map(r => cols.map(c => Analysis.toNum(r[c]))), 0, 'promax'), fac = Array.from({ length: m.nf }, () => []);
+      cols.forEach((c, i) => { const l = m.loadings[i].map(Math.abs), j = l.indexOf(Math.max(...l)); if (l[j] >= 0.4) fac[j].push(c); });
+      a.model = fac.filter(f => f.length >= 2).map((f, j) => `Factor ${j + 1} =~ ${f.join(' + ')}`).join('\n'); renderAdvanced(); toast(`Model filled from EFA: ${m.nf} factor${m.nf > 1 ? 's' : ''}`); return; }
     const mv = e.target.closest('[data-advmove]');
     if (mv) { readUiIntoCfg(); const [i, dd] = mv.dataset.advmove.split(',').map(Number), A = state.cfg.advanced, j = i + dd; if (j >= 0 && j < A.length) { [A[i], A[j]] = [A[j], A[i]]; renderAdvanced(); } return; }
     const d = e.target.closest('[data-advdup]');

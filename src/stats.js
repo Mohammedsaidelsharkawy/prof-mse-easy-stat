@@ -2041,8 +2041,58 @@ const Stats = (() => {
     return { lambdas: lams, path, cv, cvSe: cse, kMin, k1se, coefMin: orig(path[kMin]), coef1se: orig(path[k1se]), std: path, n, p };
   }
 
+  /* ---------- confirmatory factor analysis (maximum likelihood, factor variances fixed at 1, correlated factors) ---------- */
+  // noncentral chi-square distribution function (Poisson mixture of central chi-squares)
+  function ncChi2Cdf(x, df, lam) { if (lam <= 0) return jStat.chisquare.cdf(x, df); const h = lam / 2, k0 = Math.floor(h); let tot = 0;
+    for (let k = Math.max(0, k0 - 400); k <= k0 + 400; k++) { const w = Math.exp(-h + k * Math.log(h) - jStat.gammaln(k + 1)); if (w < 1e-300) continue; tot += w * jStat.chisquare.cdf(x, df + 2 * k); } return tot; }
+  const detLog = A => { const n = A.length, M = A.map(r => r.slice()); let ld = 0; for (let c = 0; c < n; c++) { let pv = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[pv][c])) pv = r; if (Math.abs(M[pv][c]) < 1e-300) return NaN; [M[c], M[pv]] = [M[pv], M[c]]; ld += Math.log(Math.abs(M[c][c])); for (let r = c + 1; r < n; r++) { const f = M[r][c] / M[c][c]; for (let j = c; j < n; j++) M[r][j] -= f * M[c][j]; } } return ld; };
+  const isPD = A => { const n = A.length, L = A.map(() => new Array(n).fill(0)); for (let i = 0; i < n; i++) for (let j = 0; j <= i; j++) { let t = A[i][j]; for (let k = 0; k < j; k++) t -= L[i][k] * L[j][k]; if (i === j) { if (t <= 1e-12) return false; L[i][i] = Math.sqrt(t); } else L[i][j] = t / L[j][j]; } return true; };
+  const mm = (A, B) => A.map(r => B[0].map((_, j) => r.reduce((t, v, k) => t + v * B[k][j], 0))), tr = A => A[0].map((_, j) => A.map(r => r[j]));
+  // X rows = patients, columns = items; factors = arrays of item indices (an item may load on one factor)
+  function cfa(X, factors) {
+    const N = X.length, p = X[0].length, m = factors.length, mu = Array.from({ length: p }, (_, j) => mean(X.map(r => r[j])));
+    const S = Array.from({ length: p }, (_, a) => Array.from({ length: p }, (_, b) => sum(X.map(r => (r[a] - mu[a]) * (r[b] - mu[b]))) / N));
+    const ldS = detLog(S); if (!isFinite(ldS)) return null;
+    const lam = []; factors.forEach((f, j) => f.forEach(i => lam.push([i, j]))); const phi = []; for (let a = 0; a < m; a++) for (let b = a + 1; b < m; b++) phi.push([a, b]);
+    const nL = lam.length, nP = phi.length, q = nL + nP + p;
+    const unpack = th => { const L = Array.from({ length: p }, () => new Array(m).fill(0)), F = Array.from({ length: m }, (_, a) => Array.from({ length: m }, (_, b) => +(a === b)));
+      lam.forEach(([i, j], k) => { L[i][j] = th[k]; }); phi.forEach(([a, b], k) => { F[a][b] = F[b][a] = th[nL + k]; }); const T = th.slice(nL + nP); return { L, F, T }; };
+    const sigma = th => { const { L, F, T } = unpack(th), Sg = mm(mm(L, F), tr(L)); T.forEach((v, i) => { Sg[i][i] += v; }); return Sg; };
+    const fobj = th => { const Sg = sigma(th); if (!isPD(Sg)) return Infinity; const Si = invert(Sg); if (!Si) return Infinity; let t = 0; for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) t += S[a][b] * Si[b][a]; return detLog(Sg) + t - ldS - p; };
+    const grad = th => { const { L, F } = unpack(th), Sg = sigma(th), Si = invert(Sg), D = Sg.map((r, a) => r.map((v, b) => v - S[a][b])), G = mm(mm(Si, D), Si), GLF = mm(mm(G, L), F), LGL = mm(mm(tr(L), G), L);
+      return [...lam.map(([i, j]) => 2 * GLF[i][j]), ...phi.map(([a, b]) => 2 * LGL[a][b]), ...G.map((r, i) => r[i])]; };
+    // start: loadings √(0.6 s_ii), unique variances 0.4 s_ii, factors uncorrelated
+    let th = [...lam.map(([i]) => Math.sqrt(0.6 * S[i][i])), ...phi.map(() => 0), ...S.map((r, i) => 0.4 * r[i])], f = fobj(th), g = grad(th), H = Array.from({ length: q }, (_, a) => Array.from({ length: q }, (_, b) => +(a === b))), it = 0;
+    for (; it < 2000; it++) { const d = mv(H, g).map(v => -v); let st = 1, nt, fn, slope = g.reduce((t, v, k) => t + v * d[k], 0); if (slope >= 0) { H = H.map((r, a) => r.map((_, b) => +(a === b))); continue; }
+      for (let k = 0; k < 60; k++) { nt = th.map((v, k2) => v + st * d[k2]); fn = fobj(nt); if (fn <= f + 1e-4 * st * slope) break; st /= 2; }
+      if (!(fn < Infinity)) break; const gn = grad(nt), sv = nt.map((v, k) => v - th[k]), yv = gn.map((v, k) => v - g[k]), sy = sv.reduce((t, v, k) => t + v * yv[k], 0);
+      if (sy > 1e-14) { const Hy = mv(H, yv), yHy = yv.reduce((t, v, k) => t + v * Hy[k], 0); H = H.map((r, a) => r.map((v, b) => v + (sy + yHy) * sv[a] * sv[b] / (sy * sy) - (Hy[a] * sv[b] + sv[a] * Hy[b]) / sy)); }
+      const conv = Math.abs(f - fn) < 1e-13 && Math.max(...gn.map(Math.abs)) < 1e-8; th = nt; f = fn; g = gn; if (conv) break; }
+    // expected information: (N/2) tr(Σ⁻¹ ∂Σ/∂a Σ⁻¹ ∂Σ/∂b)
+    const { L, F, T } = unpack(th), Sg = sigma(th), Si = invert(Sg), LF = mm(L, F), dS = [];
+    lam.forEach(([i, j]) => { const M = Array.from({ length: p }, () => new Array(p).fill(0)); for (let r = 0; r < p; r++) { M[i][r] += LF[r][j]; M[r][i] += LF[r][j]; } dS.push(M); });
+    phi.forEach(([a, b]) => dS.push(Array.from({ length: p }, (_, r) => Array.from({ length: p }, (_, c) => L[r][a] * L[c][b] + L[r][b] * L[c][a]))));
+    for (let i = 0; i < p; i++) dS.push(Array.from({ length: p }, (_, r) => Array.from({ length: p }, (_, c) => +(r === i && c === i))));
+    const W = dS.map(M => mm(Si, M)), I = W.map(A => W.map(B => { let t = 0; for (let r = 0; r < p; r++) for (let c = 0; c < p; c++) t += A[r][c] * B[c][r]; return N / 2 * t; })), cov = invert(I);
+    const se = cov ? cov.map((r, k) => Math.sqrt(r[k])) : th.map(() => NaN);
+    const chi = N * f, df = p * (p + 1) / 2 - q, chi0 = N * (sum(S.map((r, i) => Math.log(r[i]))) - ldS), df0 = p * (p - 1) / 2;
+    const cfi = 1 - Math.max(chi - df, 0) / Math.max(chi0 - df0, chi - df, 0), tli = df > 0 ? (chi0 / df0 - chi / df) / (chi0 / df0 - 1) : NaN, rmsea = df > 0 ? Math.sqrt(Math.max(chi - df, 0) / (df * N)) : NaN;
+    const solve = target => { if (ncChi2Cdf(chi, df, 0) < target) return 0; let lo = 0, hi = Math.max(10, chi * 3); while (ncChi2Cdf(chi, df, hi) > target) hi *= 2; for (let k = 0; k < 100; k++) { const md = (lo + hi) / 2; if (ncChi2Cdf(chi, df, md) > target) lo = md; else hi = md; } return (lo + hi) / 2; };
+    const rLo = df > 0 ? Math.sqrt(solve(0.95) / (df * N)) : NaN, rHi = df > 0 ? Math.sqrt(solve(0.05) / (df * N)) : NaN;
+    let sr = 0, nr = 0; for (let a = 0; a < p; a++) for (let b = 0; b <= a; b++) { sr += ((S[a][b] - Sg[a][b]) / Math.sqrt(S[a][a] * S[b][b])) ** 2; nr++; }
+    const loglik = -N / 2 * (p * Math.log(2 * Math.PI) + f + ldS + p);
+    const load = lam.map(([i, j], k) => ({ item: i, factor: j, est: th[k], se: se[k], z: th[k] / se[k], p: zP(th[k] / se[k]), std: th[k] / Math.sqrt(Sg[i][i]) }));
+    const corr = phi.map(([a, b], k) => ({ a, b, est: th[nL + k], se: se[nL + k], p: zP(th[nL + k] / se[nL + k]) }));
+    const rel = factors.map((fi, j) => { const l = load.filter(x => x.factor === j).map(x => x.std), sl = sum(l); return { cr: sl * sl / (sl * sl + sum(l.map(v => 1 - v * v))), ave: mean(l.map(v => v * v)) }; });
+    // largest residual correlations (where the model fits worst)
+    const resid = []; for (let a = 0; a < p; a++) for (let b = 0; b < a; b++) resid.push({ a, b, r: S[a][b] / Math.sqrt(S[a][a] * S[b][b]) - Sg[a][b] / Math.sqrt(Sg[a][a] * Sg[b][b]) });
+    resid.sort((x, y) => Math.abs(y.r) - Math.abs(x.r));
+    return { N, p, q, chi, df, pChi: df > 0 ? 1 - jStat.chisquare.cdf(chi, df) : NaN, chi0, df0, cfi, tli, rmsea, rmseaLo: rLo, rmseaHi: rHi, pClose: df > 0 ? 1 - ncChi2Cdf(chi, df, 0.0025 * N * df) : NaN, srmr: Math.sqrt(sr / nr),
+      loglik, aic: -2 * loglik + 2 * q, bic: -2 * loglik + q * Math.log(N), load, corr, theta: T.map((v, i) => ({ est: v, se: se[nL + nP + i] })), rel, resid: resid.slice(0, 5), heywood: T.some(v => v < 0), converged: it < 2000 };
+  }
+
   return {
-    coxFit, fineGray, rmst, rmstCompare, phTest, cIndex, metaHet, krippAlpha, gwetAC1, bootUnits, lowess, calibration, neweyWest, iv2sls, lca, kmeans, silhouette, efa, rasch, nSurvival, nCorrelation, nPairedMean, nOneProp, icer, bayesLogistic, lasso, lassoFit,
+    cfa, ncChi2Cdf, coxFit, fineGray, rmst, rmstCompare, phTest, cIndex, metaHet, krippAlpha, gwetAC1, bootUnits, lowess, calibration, neweyWest, iv2sls, lca, kmeans, silhouette, efa, rasch, nSurvival, nCorrelation, nPairedMean, nOneProp, icer, bayesLogistic, lasso, lassoFit,
     cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, seeded, moodMedian, permutationTest, huberRegression, olsCluster, vanElteren, kendallW, powerTwoMeans, powerTwoProps, wlsRobust, weightedLogistic, bayesMeans, bayesProps, groupSequential, padjust, nMargin, gee, glmmLogit, gaussHermite,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
