@@ -3960,7 +3960,7 @@
   };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: false, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, appFull: false, format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
+  const DEFAULT_REPORT = { bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: false, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, appFull: false, altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
   // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
   const JOURNAL_STYLES = {
     none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
@@ -4055,6 +4055,11 @@
           ['16', 'Unadjusted and adjusted estimates with their precision (95% CI)', where([...rest, ...adv])], ['17', 'Other analyses (subgroups, interactions, sensitivity)', where(adv)]];
       out.push({ title: `${rp.checklist === 'consort' ? 'CONSORT 2010' : 'STROBE'} checklist (results items)`, head: ['Item', 'Recommendation', 'Reported in'], rows: items, note: 'Page numbers can be added after the final layout in Word.' });
     }
+    // the analysed data: the columns of the variables in the report, every patient of the active groups (first 1000)
+    if (rp.appData) { const cols = [...new Set([...(cfg.idCols[0] ? [cfg.idCols[0]] : []), ...cfg.variables.filter(v => v.include).flatMap(v => v.cols.map(c => c.col))])], gs = activeGroups(),
+        rs = state.data.rows.filter(rr => gs.includes(Analysis.groupOf(cfg, rr)));
+      out.push({ title: 'Data analysed', head: ['Group', ...cols.map(c => Analysis.columnLabel(cfg, c))], rows: rs.slice(0, 1000).map(rr => [cfg.groupLabels[Analysis.groupOf(cfg, rr)] || Analysis.groupOf(cfg, rr), ...cols.map(c => rr[c] ?? '')]),
+        note: rs.length > 1000 ? `First 1000 of ${rs.length} patients; the full data are in the Excel file.` : `${rs.length} patients.` }); }
     return out;
   }
   // the report text as Markdown, LaTeX, or a stand-alone HTML page
@@ -4090,9 +4095,167 @@
     clone.querySelectorAll('input[type=text],input:not([type])').forEach(i => { const s = document.createElement('span'); s.textContent = i.value; i.replaceWith(s); });
     clone.querySelectorAll('button,input[type=checkbox],.exp-bar,.fr-rep,label.check.exp,select,#comCheckOut').forEach(el => el.remove());
     const styles = [...document.querySelectorAll('style')].map(s => s.outerHTML).join('');
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(state.cfg.study.title || 'Statistical report')}</title>${styles}<style>body{background:#fff;color:#111;max-width:1000px;margin:24px auto;padding:0 16px}.print-text{white-space:pre-wrap;line-height:1.6}</style></head><body><h1>${esc(state.cfg.study.title || 'Statistical report')}</h1>${clone.innerHTML}</body></html>`;
-    saveUrl(URL.createObjectURL(new Blob([html], { type: 'text/html' })), `${baseName()} - Report.html`);
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(state.cfg.study.title || 'Statistical report')}</title>${styles}<style>body{background:#fff;color:#111;max-width:1000px;margin:24px auto;padding:0 16px}.print-text{white-space:pre-wrap;line-height:1.6}#hq{width:100%;padding:8px;margin:8px 0 16px;font-size:16px}</style></head><body><input id="hq" type="search" placeholder="Search the report…"><h1>${esc(state.cfg.study.title || 'Statistical report')}</h1>${clone.innerHTML}</body></html>`;
+    saveUrl(URL.createObjectURL(new Blob([html.replace('</body>', HTML_JS + '</body>')], { type: 'text/html' })), `${baseName()} - Report.html`);
   };
+  /* ---------- step 11 extras: review copy, references, abstract, supplementary file, graphical abstract, letters, summaries, accessibility ---------- */
+  const DX = () => window.docx, docSave = async (doc, name) => { const blob = await DX().Packer.toBlob(doc); saveUrl(URL.createObjectURL(blob), name); };
+  const PX = (text, o = {}) => new (DX().Paragraph)({ spacing: { after: o.after ?? 160, line: o.line ?? 300 }, alignment: o.align, heading: o.heading, children: [new (DX().TextRun)({ text: String(text ?? ''), bold: o.bold, italics: o.italic, size: o.size || 24, font: o.font || state.cfg.options.font || 'Times New Roman', color: o.color })] });
+  const studyDesign = () => { const t = (state.cfg.consort || {}).type || 'consort'; return { consort: 'randomised controlled trial', crossover: 'randomised crossover trial', cluster: 'cluster-randomised trial', factorial: 'factorial randomised trial', strobe: 'observational study', stard: 'diagnostic accuracy study', prisma: 'systematic review', simple: 'study' }[t] || 'study'; };
+  const groupsTxt = () => { const r = state.result, gs = activeGroups(); return listAnd(gs.map(g => `${state.cfg.groupLabels[g] || g} (n=${groupN(g)})`)) || `${r ? r.n || '' : ''} patients`; };
+  const listAnd = a => a.length < 2 ? (a[0] || '') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`;
+  const sentences = t => String(t || '').match(/[^.!?]+(?:\.(?=\d)[^.!?]*)*[.!?]+/g) || [];
+  // the significant sentences first (a key finding leads with what differed)
+  const keySents = t => { const ss = sentences(t).map(x => x.trim()), sg = x => /\bsignificant/.test(x) && !/\b(in|not |non-)significant|no significant/.test(x); return [...ss.filter(sg), ...ss.filter(x => !sg(x))]; };
+  // word-level differences of two texts (LCS), for tracked changes
+  function wordDiff(a, b) {
+    const A = String(a || '').split(/(\s+)/).filter(x => x !== ''), B = String(b || '').split(/(\s+)/).filter(x => x !== '');
+    if (A.length * B.length > 4e6) return [['-', A.join('')], ['+', B.join('')]];
+    const n = A.length, m = B.length, L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    const out = [], push = (k, t) => { const l = out[out.length - 1]; if (l && l[0] === k) l[1] += t; else out.push([k, t]); };
+    let i = 0, j = 0; while (i < n && j < m) { if (A[i] === B[j]) { push('=', A[i]); i++; j++; } else if (L[i + 1][j] >= L[i][j + 1]) push('-', A[i++]); else push('+', B[j++]); }
+    while (i < n) push('-', A[i++]); while (j < m) push('+', B[j++]); return out;
+  }
+  // review copy: the report text with the edits made in step 11 as tracked changes, and the reviewers' comments as Word comments
+  async function reviewCopy() {
+    if (!state.result) return; syncEdits(); const r = state.result, auto = r.auto || { methods: r.methods, sections: r.sections.map(s => ({ comment: s.comment })) };
+    const { Document, Paragraph, TextRun, InsertedTextRun, DeletedTextRun, CommentRangeStart, CommentRangeEnd, CommentReference, HeadingLevel } = DX();
+    const author = report().coverCandidate || 'Author', date = new Date().toISOString(), font = state.cfg.options.font || 'Times New Roman', notes = state.cfg.revNotes || {}, comments = [];
+    let rid = 1, nEdits = 0;
+    const tracked = (orig, now, note) => { const kids = [], d = wordDiff(orig, now); let cid = null;
+      if (note) { cid = comments.length; comments.push({ id: cid, author: state.cfg.revName || 'Reviewer', date: new Date(), children: [new Paragraph({ children: [new TextRun(note)] })] }); kids.push(new CommentRangeStart(cid)); }
+      d.forEach(([k, t]) => { if (k === '=') kids.push(new TextRun({ text: t, size: 24, font })); else { nEdits++; kids.push(new (k === '+' ? InsertedTextRun : DeletedTextRun)({ text: t, id: rid++, author, date, size: 24, font })); } });
+      if (note) kids.push(new CommentRangeEnd(cid), new TextRun({ children: [new CommentReference(cid)] }));
+      return new Paragraph({ spacing: { after: 160, line: 300 }, children: kids }); };
+    const kids = [PX(state.cfg.study.title || 'Statistical report', { bold: true, size: 32 }), PX(`Review copy — ${new Date().toLocaleDateString()}. Edits made after the automatic analysis are shown as tracked changes; accept or reject them in Word (Review ▸ Changes).`, { italic: true, size: 20 }),
+      new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: 'Statistical analysis', bold: true, size: 28, font })] }), tracked(auto.methods, r.methods, notes.methods)];
+    r.sections.forEach((s, i) => { kids.push(new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 120 }, children: [new TextRun({ text: s.title, bold: true, size: 26, font })] }));
+      kids.push(tracked((auto.sections[i] || {}).comment ?? s.comment, s.comment, notes[s.key || s.title])); });
+    await docSave(new Document({ comments: { children: comments }, sections: [{ children: kids }] }), `${baseName()} - Review copy.docx`);
+    toast(`Review copy saved: ${nEdits} tracked change${nEdits === 1 ? '' : 's'}, ${comments.length} comment${comments.length === 1 ? '' : 's'}`);
+  }
+  // references of the methods as RIS (EndNote, Zotero, Mendeley)
+  function risExport() {
+    if (!state.result) return; syncEdits(); const refs = METHOD_REFS.filter(([re]) => re.test(state.result.methods || '')).map(x => x[1]); if (!refs.length) { toast('No method references for this report'); return; }
+    const ris = refs.map(ref => { const parts = ref.split(/\.\s+/), au = (parts[0] || '').split(/,\s*/).filter(Boolean), m = /(\d{4})[^;]*;\s*([^:(]+)(?:\([^)]*\))?:\s*([\w]+)[–-]?([\w]*)/.exec(ref) || [];
+      return ['TY  - JOUR', ...au.map(a => `AU  - ${a.trim()}`), `TI  - ${parts[1] || ''}`, `JO  - ${parts[2] || ''}`, m[1] ? `PY  - ${m[1]}` : '', m[2] ? `VL  - ${m[2].trim()}` : '', m[3] ? `SP  - ${m[3]}` : '', m[4] ? `EP  - ${m[4]}` : '', 'ER  - '].filter(Boolean).join('\r\n'); }).join('\r\n\r\n');
+    saveUrl(URL.createObjectURL(new Blob([ris + '\r\n'], { type: 'application/x-research-info-systems' })), `${baseName()} - Method references.ris`); toast(`${refs.length} references saved as RIS`);
+  }
+  // structured abstract: background, methods, results and conclusion, with a word count of each part
+  function structuredAbstract() {
+    const r = state.result, o = state.cfg.options, title = String(state.cfg.study.title || 'the studied outcomes').replace(/[:.,;]?\s*(an?|the)\s+[^:]*(trial|study|analysis|review)\.?\s*$/i, '').trim();
+    const tests = [...new Set((r.methods || '').match(/\b(t-test|Mann-Whitney U test|chi-square test|Fisher's exact test|ANOVA|Kruskal-Wallis test|Wilcoxon signed-rank test|logistic regression|Cox regression|Kaplan-Meier|linear regression)\b/gi) || [])].slice(0, 4);
+    const res = r.abstract || abstractResults(r) || sentences(r.summary).slice(0, 3).join(' ');
+    return [['Background', `This ${studyDesign()} assessed ${lowerFirst(title)}.`], ['Methods', `${groupsTxt()} were studied. ${tests.length ? `Data were analysed with the ${listAnd(tests)}` : 'Data were analysed with the tests described in the statistical analysis'}; P ≤ ${o.alpha} was considered significant.`],
+      ['Results', res], ['Conclusion', r.conclusion || sentences(r.summary)[0] || '']];
+  }
+  const lowerFirst = t => t && /^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t || '';
+  function showAbstract() {
+    if (!state.result) return; syncEdits(); const parts = structuredAbstract(), wc = t => (String(t).trim().match(/\S+/g) || []).length;
+    $('#saOut').innerHTML = `<div class="report-sec"><h3 style="margin:0 0 6px">Structured abstract</h3>${parts.map(([h, t], i) => `<label class="f">${h} <span class="legend-note" data-sawc="${i}">${wc(t)} words</span></label><textarea data-sa="${i}" data-sah="${esc(h)}" style="min-height:60px">${esc(t)}</textarea>`).join('')}
+      <div class="row" style="gap:8px;margin-top:6px"><b id="saTotal">${parts.reduce((t, p) => t + wc(p[1]), 0)} words in total</b><span class="legend-note">(most journals allow 250–300)</span><span class="spacer"></span><button class="btn ghost small" id="saCopy" type="button">⧉ Copy abstract</button></div></div>`;
+    const upd = () => { let tot = 0; document.querySelectorAll('[data-sa]').forEach(t => { const n = wc(t.value); tot += n; $(`[data-sawc="${t.dataset.sa}"]`).textContent = `${n} words`; }); $('#saTotal').textContent = `${tot} words in total`; $('#saTotal').style.color = tot > 300 ? 'var(--bad)' : ''; };
+    $('#saOut').oninput = upd; upd();
+    $('#saCopy').onclick = () => navigator.clipboard.writeText([...document.querySelectorAll('[data-sa]')].map(t => `${t.dataset.sah}: ${t.value}`).join('\n\n')).then(() => toast('Abstract copied'));
+  }
+  // supplementary file: every result of each variable (the step 10 tables) as its own Word file
+  async function supplementaryFile() {
+    if (!state.result) return; busy(true);
+    try { const x = Analysis.explore(state.data, { ...state.cfg, options: effOptions() }, {}), o = state.cfg.options;
+      const items = x.items.map(it => { let u = null, w = 0, h = 0; if (it.spec) { try { const c = Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 2 }); u = c.toDataURL('image/png'); w = c.width; h = c.height; } catch (e) { } }
+        return { ...it, url: u, w, h, tables: it.tables, p: isFinite(it.p) ? Analysis.fmtP(it.p, o.alpha) : '' }; });
+      const blob = await Report.buildResults({ items }, { layout: 'standard', title: 'Supplementary material', subtitle: [state.cfg.study.title || '', 'Every descriptive statistic and candidate test of each variable'].filter(Boolean), font: o.font, tableStyle: o.tableStyle });
+      saveUrl(URL.createObjectURL(blob), `${baseName()} - Supplementary material.docx`); toast('Supplementary file saved');
+    } catch (e) { console.error(e); toast('The supplementary file could not be made'); } finally { busy(false); }
+  }
+  // the most important result: the primary outcome's section, else the first significant one, else the first
+  const keySection = r => { const prim = state.cfg.variables.filter(v => v.role === 'primary').map(v => v.label); return r.sections.find(s => prim.some(l => s.title.includes(l)) && s.figures.length) || r.sections.find(s => s.figures.some(f => f.sig) && s.kind !== 'single') || r.sections.find(s => s.figures.length) || r.sections[0]; };
+  // graphical abstract: one landscape picture with the question, the patients, the key figure and the key finding
+  function graphicalAbstract() {
+    if (!state.result) return; syncEdits(); const r = state.result, W = 2400, H = 1350, c = Charts.makeCanvas(W, H), x = c.getContext('2d'), acc = ((pn => Array.isArray(pn) ? pn : Charts.PALETTES[pn] || [])(chartPalette(state.cfg.options))[0]) || '#7B2FBE', font = '"Segoe UI", Arial, sans-serif';
+    const wrap = (t, X, Y, w, lh, maxLines = 99) => { const ws = String(t).split(/\s+/); let line = '', n = 0; for (const wd of ws) { const tt = line ? line + ' ' + wd : wd; if (x.measureText(tt).width > w && line) { if (n < maxLines) x.fillText(line, X, Y + n * lh); n++; line = wd; } else line = tt; } if (line && n < maxLines) { x.fillText(line, X, Y + n * lh); n++; } return n * lh; };
+    x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.fillStyle = acc; x.fillRect(0, 0, W, 170);
+    x.fillStyle = '#fff'; x.font = `700 58px ${font}`; x.textBaseline = 'top'; wrap(state.cfg.study.title || 'Study results', 60, 30, W - 120, 66, 2);
+    const box = (X, Y, w, h, head, body) => { x.fillStyle = '#F6F2FB'; x.beginPath(); x.roundRect(X, Y, w, h, 24); x.fill(); x.fillStyle = acc; x.font = `700 40px ${font}`; x.fillText(head, X + 30, Y + 26); x.fillStyle = '#222'; x.font = `400 34px ${font}`; wrap(body, X + 30, Y + 90, w - 60, 44, Math.floor((h - 110) / 44)); };
+    box(60, 220, 700, 330, 'Design', `${cap1(studyDesign())}; ${groupsTxt()}.`);
+    const ks = keySection(r), f = ks && ks.figures[0]; box(60, 590, 700, 700, 'Key finding', keySents(ks ? ks.comment : r.summary).slice(0, 2).join(' ') || '—');
+    if (f && f.url) { const im = new Image(); im.onload = () => { const w = W - 920, h = Math.min(H - 300, w * f.h / f.w); x.drawImage(im, 860, 220 + (H - 260 - h) / 2, w, h); x.fillStyle = '#555'; x.font = `italic 400 28px ${font}`; x.fillText(f.caption.slice(0, 120), 860, H - 60); done(); }; im.src = f.url; } else done();
+    function done() { x.fillStyle = '#888'; x.font = `400 24px ${font}`; x.fillText('Made with Prof MSE Easy Stat', W - 420, H - 40); saveUrl(c.toDataURL('image/png'), `${baseName()} - Graphical abstract.png`); toast('Graphical abstract saved'); }
+  }
+  const cap1 = t => t ? t[0].toUpperCase() + t.slice(1) : t;
+  // cover letter to a journal editor
+  async function coverLetter() {
+    if (!state.result) return; syncEdits(); const r = state.result, rp = report(), ks = keySection(r), j = $('#clJournal').value.trim() || '[Journal]';
+    const body = [`Dear Editor,`, `Please find enclosed our manuscript entitled “${state.cfg.study.title || '[title]'}”, which we submit for consideration as an original article in ${j}.`,
+      `In this ${studyDesign()} of ${groupsTxt()}, ${lowerFirst(keySents(ks ? ks.comment : r.summary)[0] || 'the main results are reported in the manuscript.')}`,
+      r.conclusion ? `${r.conclusion}` : 'We believe these findings will interest your readers.',
+      'The manuscript is original, has not been published and is not under consideration elsewhere. All authors approved the final version and declare no conflict of interest. The study was approved by the relevant ethics committee.',
+      'Thank you for considering our work.', 'Yours sincerely,', rp.coverCandidate || '[Corresponding author]', rp.coverDept || ''].filter(Boolean);
+    await docSave(new (DX().Document)({ sections: [{ children: [PX(new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }), { after: 400 }), ...body.map(t => PX(t))] }] }), `${baseName()} - Cover letter.docx`); toast('Cover letter saved — check the text in brackets');
+  }
+  // plain-language (patient) summary from the results
+  function laySummary() {
+    const r = state.result, isSig = t => /\b(significantly|clearly) (higher|lower|greater|smaller|increased|reduced|different|more|less|associated)/.test(t) && !/\b(not|in)significantly|not clearly|no significant/.test(t);
+    const sig = r.sections.map(s => sentences(s.comment).find(isSig)).filter(Boolean).slice(0, 4);
+    const plain = t => String(t || '').replace(/\s*\([^()]*(P value|P =|P <|95% CI|OR =|HR =|RR =|MD =|r =)[^()]*\)/g, '').replace(/\bstatistically significantly\b|\bsignificantly\b/g, 'clearly').replace(/\binsignificantly\b|\bnot significantly\b/g, 'not clearly').replace(/\s+([.,])/g, '$1');
+    return [`We studied ${groupsTxt()}.`, sig.length ? `The main differences we found: ${sig.map(t => plain(t).trim()).join(' ')}` : 'We found no clear differences between the groups in the outcomes we measured.',
+      'These results come from one study and should be confirmed by others before they change care.'].join(' ');
+  }
+  // one-page summary: key facts, key findings, the key figure and the plain-language summary
+  async function onePageSummary() {
+    if (!state.result) return; syncEdits(); const r = state.result, { Document, Paragraph, ImageRun, AlignmentType } = DX(), ks = keySection(r), f = ks && ks.figures.find(q => q.url);
+    const findings = r.sections.flatMap(s => (s.findings && s.findings.length ? s.findings : sentences(s.comment).slice(0, 1))).filter(t => /significant|clear/.test(t)).slice(0, 5);
+    const kids = [PX(state.cfg.study.title || 'Study summary', { bold: true, size: 30 }), PX(`${cap1(studyDesign())} · ${groupsTxt()} · significance level ${state.cfg.options.alpha}`, { italic: true, size: 20 }),
+      PX('Key findings', { bold: true, size: 24, after: 80 }), ...(findings.length ? findings : ['No significant difference was found in the studied outcomes.']).map(t => PX(`• ${t}`, { size: 21, after: 60, line: 260 }))];
+    if (f) kids.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 60 }, children: [new ImageRun({ type: 'png', data: Uint8Array.from(atob(f.url.split(',')[1]), ch => ch.charCodeAt(0)), transformation: { width: 420, height: Math.round(420 * f.h / f.w) } })] }), PX(f.caption, { italic: true, size: 18, align: AlignmentType.CENTER }));
+    kids.push(PX('In plain words', { bold: true, size: 24, after: 80 }), PX(laySummary(), { size: 21, line: 260 }));
+    await docSave(new Document({ sections: [{ properties: { page: { margin: { top: 720, bottom: 720, left: 900, right: 900 } } }, children: kids }] }), `${baseName()} - One-page summary.docx`); toast('One-page summary saved');
+  }
+  // the report as rich text on the clipboard: pasted into Google Docs (or Word online) it keeps the tables and headings
+  async function copyForDocs() {
+    if (!state.result) return; syncEdits(); const clone = $('#report').cloneNode(true);
+    clone.querySelectorAll('textarea').forEach(t => { const d = document.createElement('p'); d.textContent = t.value; t.replaceWith(d); });
+    clone.querySelectorAll('input[type=text],input:not([type])').forEach(i => { const s2 = document.createElement('span'); s2.textContent = i.value; i.replaceWith(s2); });
+    clone.querySelectorAll('button,input,select,.exp-bar,.legend-note,.explain,label.f,label.check').forEach(el => el.remove());
+    clone.querySelectorAll('table').forEach(t => { t.setAttribute('border', '1'); t.style.borderCollapse = 'collapse'; });
+    const html = `<h1>${esc(state.cfg.study.title || 'Statistical report')}</h1>${clone.innerHTML}`;
+    try { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([clone.textContent], { type: 'text/plain' }) })]); toast('Copied — paste into a Google Docs document (Ctrl+V)'); }
+    catch (e) { toast('The browser did not allow copying; download the Word file and open it in Google Drive'); }
+  }
+  // accessibility check of the report
+  function accessCheck() {
+    if (!state.result) return; syncEdits(); const r = state.result, o = state.cfg.options, rp = report(), out = [], ok = [], figs = r.sections.flatMap(s => s.figures);
+    (rp.altText ? ok : out).push(rp.altText ? 'Figures carry alternative text (their captions).' : 'Figures have no alternative text — tick “Alternative text of the figures” so screen readers can describe them.');
+    const short = figs.filter(f => String(f.caption || '').trim().split(/\s+/).length < 4); (short.length ? out : ok).push(short.length ? `${short.length} figure caption${short.length > 1 ? 's are' : ' is'} very short; describe what the figure shows.` : 'Every figure has a descriptive caption.');
+    const fs = +o.tableFontSize || 10; (fs < 9 ? out : ok).push(fs < 9 ? `Table text is ${fs} pt; 9 pt or more is easier to read.` : `Table text is ${fs} pt.`);
+    const pn = chartPalette(o), pal = Array.isArray(pn) ? pn : (Charts.PALETTES[pn] || []), lum = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+    const low = pal.slice(0, Math.max(2, activeGroups().length)).filter(h => /^#[0-9a-f]{6}$/i.test(h) && (1.05) / (lum(h) + 0.05) < 3); (low.length ? out : ok).push(low.length ? `${low.length} figure colour${low.length > 1 ? 's have' : ' has'} low contrast against white (below 3:1).` : 'Figure colours contrast well with the white background.');
+    (o.series === 'shapes' ? ok : out).push(o.series === 'shapes' ? 'Groups are told apart by markers and line patterns too, not by colour alone.' : 'Groups are told apart by colour only — choose “colour plus marker shapes” in step 7 for colour-blind readers and greyscale print.');
+    (rp.wordStyles || rp.toc ? ok : out).push(rp.wordStyles || rp.toc ? 'Headings use Word heading styles (navigation pane and screen readers).' : 'Tick “Word heading styles” or “Table of contents” so readers can navigate by headings.');
+    const longS = r.sections.filter(s => (s.comment || '').split(/[.!?]/).some(x => x.split(/\s+/).length > 40)).length; (longS ? out : ok).push(longS ? `${longS} comment${longS > 1 ? 's have' : ' has'} sentences over 40 words; shorter sentences read more easily.` : 'Sentences are of a readable length.');
+    $('#accOut').innerHTML = `<div class="report-sec"><h3 style="margin:0 0 6px">Accessibility check</h3>${out.map(t => `<div>⚠ ${esc(t)}</div>`).join('')}${ok.map(t => `<div style="color:var(--good, #2b8a3e)">✓ ${esc(t)}</div>`).join('')}</div>`;
+  }
+  // a reviewer's or supervisor's comment on a section
+  function revNote(i) {
+    const r = state.result, s = r && r.sections[i]; if (!s) return; const k = s.key || s.title, m = state.cfg.revNotes = state.cfg.revNotes || {};
+    const t = prompt(`Comment on “${s.title}” (shown as a Word comment in the review copy; empty to remove):`, m[k] || ''); if (t === null) return;
+    if (t.trim()) m[k] = t.trim(); else delete m[k]; renderReport();
+  }
+  // another wording of a comment: each phrase is swapped for one of its alternatives, a different set each time
+  const REPHRASE = [['was significantly higher in', 'was significantly greater in', 'was significantly increased in'], ['was significantly lower in', 'was significantly reduced in', 'was significantly smaller in'],
+    ['was insignificantly different', 'was not significantly different', 'did not differ significantly'], ['There was no significant difference', 'No significant difference was found', 'No significant difference was observed'],
+    ['between the two groups', 'between both groups', 'between the groups'], ['compared with', 'compared to', 'relative to'], ['showed', 'demonstrated', 'revealed'], ['was found', 'was observed', 'was seen'],
+    ['statistically significant', 'significant'], ['However,', 'In contrast,', 'On the other hand,'], ['In addition,', 'Moreover,', 'Furthermore,'], ['regarding', 'with respect to', 'as for']];
+  function rephrase(text, k) { let t = String(text); REPHRASE.forEach((alts, ri) => { const to = alts[(k + ri) % alts.length]; alts.forEach(a => { if (a !== to) t = t.split(a).join(to); }); }); return t; }
+  // the stand-alone HTML page with a search box, collapsible sections, sortable tables and zoomable figures
+  const HTML_JS = `<script>(function(){var q=document.getElementById('hq');if(q)q.oninput=function(){var v=q.value.toLowerCase();document.querySelectorAll('.report-sec').forEach(function(s){s.style.display=!v||s.textContent.toLowerCase().indexOf(v)>=0?'':'none';});};
+document.querySelectorAll('.report-sec').forEach(function(s){var h=s.querySelector('h3,.cap');if(!h)return;h.style.cursor='pointer';h.title='Click to fold';h.onclick=function(){[].slice.call(s.children).forEach(function(c){if(c!==h&&!c.contains(h))c.style.display=c.style.display==='none'?'':'none';});};});
+document.querySelectorAll('table').forEach(function(t){var hs=t.querySelectorAll('thead th');hs.forEach(function(th,ci){th.style.cursor='pointer';th.title='Sort';th.onclick=function(){var tb=t.tBodies[0];if(!tb)return;var rs=[].slice.call(tb.rows),d=th.dataset.d==='1'?-1:1;th.dataset.d=d===1?'1':'0';rs.sort(function(a,b){var x=(a.cells[ci]||{}).textContent||'',y=(b.cells[ci]||{}).textContent||'',nx=parseFloat(x),ny=parseFloat(y);return(isNaN(nx)||isNaN(ny)?x.localeCompare(y):nx-ny)*d;});rs.forEach(function(r){tb.appendChild(r);});};});});
+document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';im.onclick=function(){var o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:9;cursor:zoom-out';var b=im.cloneNode();b.style.cssText='max-width:95vw;max-height:95vh;background:#fff';o.appendChild(b);o.onclick=function(){o.remove();};document.body.appendChild(o);};});})();<\/script>`;
+  $('#btnReview').onclick = reviewCopy; $('#btnRis').onclick = risExport; $('#btnAbs').onclick = showAbstract; $('#btnSupp').onclick = supplementaryFile; $('#btnGA').onclick = graphicalAbstract;
+  $('#btnLetter').onclick = coverLetter; $('#btnOnePage').onclick = onePageSummary; $('#btnGdocs').onclick = copyForDocs; $('#btnAccess').onclick = accessCheck;
+  $('#btnLay').onclick = () => { if (!state.result) return; syncEdits(); const t = laySummary(); $('#accOut').innerHTML = `<div class="report-sec"><h3 style="margin:0 0 6px">Plain-language summary</h3><textarea id="layText" style="min-height:80px">${esc(t)}</textarea><button class="btn ghost small" id="layCopy" type="button">⧉ Copy</button></div>`; $('#layCopy').onclick = () => navigator.clipboard.writeText($('#layText').value).then(() => toast('Copied')); };
   // snapshots of the report text, and what changed since one
   const repSnapText = r => ({ methods: r.methods || '', intro: r.intro || '', narrative: r.narrative || '', summary: r.summary || '', sections: r.sections.map(s => ({ title: s.title, comment: s.comment || '', footnote: s.footnote || '' })) });
   const renderRepSnaps = () => { const ss = (state.cfg && state.cfg.reportSnaps) || []; $('#repSnapList').innerHTML = ss.length ? ss.map((s, i) => `<option value="${i}">${esc(s.name)}</option>`).join('') : '<option value="">— no snapshot —</option>'; };
@@ -4173,6 +4336,8 @@
         writeExtras(res, cfg);
         styleTexts(res, cfg.options);
         if (cfg.options.midDot) midDots(res);
+        // the automatic texts, before any edit in step 11 (the review copy shows the edits as tracked changes)
+        res.auto = { methods: res.methods || '', sections: res.sections.map(s => ({ title: s.title, comment: s.comment || '' })) }; state.rephraseBase = {}; state.rephraseK = {};
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
           f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options);
           f.note = cfg.options.figNotes ? figNote(f.spec, cfg.options) : '';
@@ -4360,7 +4525,7 @@
     r.sections.forEach((s, i) => {
       const tk = exKey.table(s), tOut = isOut(tk), place = s.place && o.commentPlace !== 'none' ? s.place : o.commentPlace || 'after';
       const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}" spellcheck="true" lang="en">${esc(s.comment)}</textarea>
-        <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><button class="btn ghost small" data-sents="${i}" type="button" title="Keep or drop single sentences">✂ Sentences</button><button class="btn ghost small" data-srcs="${i}" type="button" title="Point at a number to see its cell in the table">🔗 Sources</button><span class="legend-note">${words(s.comment)} words · readability ${flesch(s.comment)}</span></div><div class="explain" data-explainbox="${i}"></div><div data-sentbox="${i}"></div>
+        <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><button class="btn ghost small" data-sents="${i}" type="button" title="Keep or drop single sentences">✂ Sentences</button><button class="btn ghost small" data-srcs="${i}" type="button" title="Point at a number to see its cell in the table">🔗 Sources</button><button class="btn ghost small" data-rephrase="${i}" type="button" title="Another wording of the same comment (click again for more)">↻ Rephrase</button><button class="btn ghost small" data-revnote="${i}" type="button" title="A reviewer's or supervisor's comment on this section (a Word comment in the review copy)">💬 ${(state.cfg.revNotes || {})[s.key || s.title] ? 'Comment ✓' : 'Comment'}</button><span class="legend-note">${words(s.comment)} words · readability ${flesch(s.comment)}</span></div><div class="explain" data-explainbox="${i}"></div><div data-sentbox="${i}"></div>
         ${o.keyFindings && s.findings && s.findings.length ? `<div class="legend-note"><b>Key findings:</b><ol style="margin:4px 0 0 18px;padding:0">${s.findings.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
         ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button> <button class="btn ghost small" data-pdftbl="${i}" type="button" title="This table on an A4 page (PDF)">⬇ PDF</button>${s.meta && s.meta.calc ? ` <button class="btn ghost small" data-riskcalc="${i}" type="button" title="A small web page that computes the prediction of this model">⬇ Risk calculator</button>` : ''}</div>
@@ -4740,6 +4905,10 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   $('#flowCopy').onclick = () => copyImage($('#consortCanvas').toDataURL('image/png'));
   $('#report').addEventListener('click', e => {
     const cc = e.target.closest('[data-copycom]'), ex = e.target.closest('[data-explain]'), ca = e.target.closest('[data-riskcalc]');
+    const rph = e.target.closest('[data-rephrase]'), rvn = e.target.closest('[data-revnote]');
+    if (rph) { const i = +rph.dataset.rephrase, ta = document.querySelector(`[data-comment="${i}"]`); if (!ta) return; const k = state.rephraseK = state.rephraseK || {}; k[i] = (k[i] || 0) + 1;
+      const base = (state.rephraseBase = state.rephraseBase || {})[i] ?? (state.rephraseBase[i] = ta.value); const t = rephrase(base, k[i]); if (t === ta.value) { toast('No other wording found for this comment'); return; } ta.value = t; syncEdits(); toast('Reworded — click again for another wording'); return; }
+    if (rvn) { syncEdits(); revNote(+rvn.dataset.revnote); return; }
     if (ca) { const c = state.result.sections[+ca.dataset.riskcalc].meta.calc; saveUrl(URL.createObjectURL(new Blob([calcPage(c)], { type: 'text/html' })), `${baseName()} - Risk calculator.html`); }
     if (cc) { syncEdits(); const t = state.result.sections[+cc.dataset.copycom].comment || ''; navigator.clipboard.writeText(t).then(() => toast('Comment copied'), () => toast('Copying was blocked by the browser')); }
     if (ex) { syncEdits(); const box = document.querySelector(`[data-explainbox="${ex.dataset.explain}"]`); box.innerHTML = box.innerHTML ? '' : explainHtml(state.result.sections[+ex.dataset.explain].comment); }
@@ -4811,7 +4980,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       headNum: !!rp.headNum, lineNumbers: !!rp.lineNumbers, twoCol: !!rp.twoCol, watermark: String(rp.watermark || '').trim(), abbrFoot: !!rp.abbrFoot,
       ar: rp.bilingual ? arApi() : null,
       template: !!state.wordTemplate, tplPage: state.wordTemplate && state.wordTemplate.page,
-      refs: rp.refs && r0 ? METHOD_REFS.filter(([re]) => re.test(r0.methods || '')).map(x => x[1]) : null, appendix: r0 ? appendixTables(r0, plan0) : [] };
+      refs: rp.refs && r0 ? METHOD_REFS.filter(([re]) => re.test(r0.methods || '')).map(x => x[1]) : null, appendix: r0 ? appendixTables(r0, plan0) : [],
+      altText: !!rp.altText, front: [['Declaration', rp.frontDecl], ['Dedication', rp.frontDed], ['Acknowledgements', rp.frontAck]].filter(x => String(x[1] || '').trim()) };
     return { ...extras, numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
         tableNewPage: rp.format === 'thesis' ? !!rp.newPage : rp.format === 'paper' ? false : !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { autoFit: !!o.autoFit, width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, capAbove: !!o.capAbove, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings, tableIntro: !!o.tableIntro };

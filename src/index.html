@@ -1337,6 +1337,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="refs"><span><b>References</b> of the statistical methods used</span></label></div>
           <div><label class="f">Reporting checklist (appendix)</label><select data-rx="checklist"><option value="">None</option><option value="consort">CONSORT 2010</option><option value="strobe">STROBE</option></select></div>
           <div><label class="f">Word limit of Results (warning)</label><input type="number" min="0" step="50" data-rx="wordLimit" placeholder="none"></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="altText"><span><b>Alternative text</b> of the figures (screen readers)</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="appData"><span><b>Data analysed</b> as an appendix table</span></label></div>
+          <div><label class="f">Declaration (thesis front matter)</label><textarea data-rx="frontDecl" style="min-height:40px" placeholder="e.g. I declare that this thesis is my own work…"></textarea></div>
+          <div><label class="f">Dedication</label><textarea data-rx="frontDed" style="min-height:40px"></textarea></div>
+          <div><label class="f">Acknowledgements</label><textarea data-rx="frontAck" style="min-height:40px"></textarea></div>
         </div>
         <div class="row" style="gap:8px;margin-top:8px;align-items:center"><label class="f" style="margin:0">Your Word template (.dotx / .docx)</label><input type="file" id="tplFile" accept=".dotx,.docx,.dotm,.docm" style="width:auto">
           <button class="btn ghost small" id="tplClear" type="button">✕</button><span class="legend-note" id="tplName">No template — the report's own styles</span></div>
@@ -1348,9 +1353,20 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div class="row" style="gap:14px"><label class="check" style="margin:0"><input type="checkbox" data-rx="appCodebook"><span>Codebook of the variables</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appPlan"><span>Test plan (test of each variable)</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appFull"><span>Every test of each variable (step 10)</span></label></div>
         <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
           <button class="btn ghost small" id="btnMd" type="button">⬇ Markdown</button><button class="btn ghost small" id="btnTex" type="button">⬇ LaTeX</button><button class="btn ghost small" id="btnHtml" type="button">⬇ HTML page (to share)</button>
+          <button class="btn ghost small" id="btnReview" type="button" title="The report text with your edits as tracked changes and the 💬 comments as Word comments">⬇ Review copy (tracked changes)</button>
+          <button class="btn ghost small" id="btnSupp" type="button" title="Every statistic and test of each variable, as a separate Word file">⬇ Supplementary file</button>
+          <button class="btn ghost small" id="btnOnePage" type="button" title="Key findings, the key figure and a plain-language summary on one page">⬇ One-page summary</button>
+          <button class="btn ghost small" id="btnGA" type="button" title="Design, key finding and key figure in one landscape picture">⬇ Graphical abstract</button>
+          <button class="btn ghost small" id="btnRis" type="button" title="The references of the methods, for EndNote, Zotero or Mendeley">⬇ References (RIS)</button>
+          <button class="btn ghost small" id="btnGdocs" type="button" title="Copy the report with its tables, to paste into Google Docs">⧉ Copy for Google Docs</button>
+          <button class="btn ghost small" id="btnAbs" type="button" title="Background, methods, results and conclusion with word counts">Structured abstract</button>
+          <button class="btn ghost small" id="btnLay" type="button" title="The results in plain words, for patients and the public">Plain-language summary</button>
+          <button class="btn ghost small" id="btnAccess" type="button" title="Alternative text, captions, text size, colours, headings, sentence length">♿ Accessibility check</button>
+          <span class="row" style="gap:4px"><input type="text" id="clJournal" placeholder="Journal name" style="width:150px"><button class="btn ghost small" id="btnLetter" type="button" title="A cover letter to the editor from the title and the key finding">⬇ Cover letter</button></span>
           <span class="spacer"></span><button class="btn ghost small" id="repSnapSave" type="button">📸 Save a snapshot of the text</button><select id="repSnapList" style="width:auto"></select><button class="btn ghost small" id="repSnapCmp" type="button">Compare with the report now</button>
         </div>
         <div id="repSnapOut"></div>
+        <div id="saOut"></div><div id="accOut"></div>
       </details>
       <p class="hint" style="margin-top:12px">Review everything below. You can edit the text boxes — your edits go into the Word file. The format changes only this report; your settings in steps 4–9 stay as they are.</p>
       <div id="report"></div>

@@ -93,11 +93,13 @@ const Report = (() => {
     return [para(label, { bold: true, align: AlignmentType.LEFT, after: 0, line: 276, keepNext: true, pageBreakBefore: o.pageBreakBefore }),
       para(title, { italic: true, align: AlignmentType.LEFT, after: 120, line: 276, keepNext: true })];
   }
-  function image(dataUrl, srcW, srcH, widthPx = 600, keepNext = true) {
+  // alternative text of the figures (screen readers), when chosen in step 11: the caption of the figure
+  let ALT = false;
+  function image(dataUrl, srcW, srcH, widthPx = 600, keepNext = true, alt = '') {
     const { Paragraph, ImageRun, AlignmentType } = D();
     return new Paragraph({
       alignment: AlignmentType.CENTER, spacing: { after: 80 }, keepNext,
-      children: [new ImageRun({ type: 'png', data: dataUrlToBytes(dataUrl), transformation: { width: widthPx, height: Math.round(widthPx * srcH / srcW) } })]
+      children: [new ImageRun({ type: 'png', data: dataUrlToBytes(dataUrl), transformation: { width: widthPx, height: Math.round(widthPx * srcH / srcW) }, ...(ALT && alt ? { altText: { title: String(alt).slice(0, 120), description: String(alt), name: 'Figure' } } : {}) })]
     });
   }
 
@@ -201,8 +203,8 @@ const Report = (() => {
         width: { size: half, type: WidthType.DXA }, borders,
         children: f ? (f.apa
           ? [para(f.num, { bold: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 0 }), para(f.caption, { italic: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 60 }),
-            image(f.url, f.w, f.h, w), ...(f.note ? [para('Note. ' + f.note, { align: D().AlignmentType.LEFT, size: 18, line: 240, after: 160 })] : [])]
-          : [image(f.url, f.w, f.h, w), para(f.label, { bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160, note: f.note, noteSize: 18 })]) : [new Paragraph('')]
+            image(f.url, f.w, f.h, w, true, f.label), ...(f.note ? [para('Note. ' + f.note, { align: D().AlignmentType.LEFT, size: 18, line: 240, after: 160 })] : [])]
+          : [image(f.url, f.w, f.h, w, true, f.label), para(f.label, { bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160, note: f.note, noteSize: 18 })]) : [new Paragraph('')]
       })) }));
     }
     return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: [half, PAGE_W - half], rows,
@@ -227,7 +229,7 @@ const Report = (() => {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
     BODY_FONT = opts.font || DEFAULT_FONT;
-    ITALIC_P = !!opts.italicP;
+    ITALIC_P = !!opts.italicP; ALT = !!opts.altText;
     const landscape = opts.orientation === 'landscape';
     // page: A4 or US Letter, normal / narrow / wide margins (the text width follows), body line spacing
     const pg = opts.page || {}, tp = opts.tplPage, [pw0, ph0] = tp ? [tp.w, tp.h] : { letter: [12240, 15840], b5: [9979, 14173], a5: [8391, 11906], legal: [12240, 20160] }[pg.size] || [11906, 16838], mg = tp ? Math.round((tp.l + tp.r) / 2) : { narrow: 720, wide: 1800 }[pg.margin] || 1440;
@@ -247,6 +249,8 @@ const Report = (() => {
       [[cv.candidate, 28, true], [cv.supervisor ? `Supervised by: ${cv.supervisor}` : '', 24], [cv.dept, 24], [cv.date, 24]].forEach(([t, sz, b]) => { if (t) children.push(para(t, { size: sz, bold: b, align: AlignmentType.CENTER, after: 240 })); });
       children.push(new Paragraph({ children: [new (D().PageBreak)()] })); }
     else if (opts.title) children.push(para(opts.title, { bold: true, size: 32, align: AlignmentType.CENTER, after: 240, color: brand ? '7B2FBE' : undefined }));
+    // thesis front matter: declaration, dedication and acknowledgements, each on its own page
+    (opts.front || []).forEach(([t, txt]) => { if (!String(txt || '').trim()) return; children.push(heading(t, brand)); String(txt).split(/\n+/).forEach(x => children.push(para(x))); children.push(new Paragraph({ children: [new (D().PageBreak)()] })); });
     // a table of contents, filled in by Word when the file is opened (it asks to update the fields)
     if (opts.toc) children.push(heading('Contents', brand), new (D().TableOfContents)('Contents', { hyperlink: true, headingStyleRange: '1-2' }), new Paragraph({ children: [new (D().PageBreak)()] }));
     // the list of tables and figures goes here once every number is known
@@ -265,8 +269,8 @@ const Report = (() => {
       if (model.intro) { children.push(para(model.intro)); arAfter(model.intro); }
       const fl = figLabel(pre + fig++, opts.captionStyle), ft = model.flowCaption || 'CONSORT flowchart of the enrolled patients';
       listFigs.push(`${fl} ${ft}`);
-      if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600));
-      else children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600), caption(`${fl} ${ft}`));
+      if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600, true, ft));
+      else children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600, true, ft), caption(`${fl} ${ft}`));
       if (AR) children.push(arPara(`الشكل ${pre + (fig - 1)}: ${AR.caption(ft)}`, { bold: true, center: true, line: 276, after: 160 }));
     } else if (opts.paper && model.intro) children.push(para(model.intro));
     if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => { if (t.trim()) { children.push(para(t.trim())); arAfter(t.trim()); } });
@@ -281,13 +285,13 @@ const Report = (() => {
       else for (const f of figs) {
         // APA places the number and title above the figure and the explanation below it as a note
         if (apa) {
-          children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, w1));
+          children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, w1, true, f.caption));
           if (f.note) children.push(para('Note. ' + f.note, { size: 20, line: 240, after: 200, align: AlignmentType.LEFT }));
         } else if (opts.capAbove) {
-          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}), image(f.url, f.w, f.h, w1, false));
+          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}), image(f.url, f.w, f.h, w1, false, f.caption));
           children.push(para('', { after: 120, line: 240 }));
         } else {
-          children.push(image(f.url, f.w, f.h, w1));
+          children.push(image(f.url, f.w, f.h, w1, true, f.caption));
           children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}));
         }
         if (AR) children.push(arPara(`الشكل ${String(f.num).replace(/^\D+/, '').replace(/[:.]$/, '')}: ${AR.caption(f.caption)}${f.note ? ' ' + AR.caption(f.note) : ''}`, { bold: true, center: true, size: 22, line: 276, after: 200 }));
@@ -414,7 +418,7 @@ const Report = (() => {
   // results by variable: every table of each variable, with its figure, in a landscape document
   async function buildResults(model, opts) {
     const { Document, Packer, Paragraph, TextRun, Footer, AlignmentType, PageNumber, PageOrientation } = D();
-    BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false;
+    BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false; ALT = false;
     PAGE_W = LANDSCAPE_W; LINE = 360;
     const children = [para(opts.title || 'Results by variable', { bold: true, size: 32, align: AlignmentType.CENTER, after: 120 })];
     if (opts.subtitle) children.push(para(opts.subtitle, { align: AlignmentType.CENTER, size: 20, after: 240 }));
