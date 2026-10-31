@@ -1654,6 +1654,331 @@ const Analysis = (() => {
       footnote: "Kendall's coefficient of concordance W (0 = no agreement, 1 = complete agreement), tie-corrected; χ² = m(n − 1)W.",
       comment: `The concordance between the ${m.m} raters was ${grade} (Kendall's W = ${fmt(m.W, 3)}, P value ${pTxt(m.p)}).`, figures: [], meta: { m } };
   }
+  /* ---------- Step 8 analyses ---------- */
+  const isPos = (v, pos) => v !== null && (pos ? v === pos : POSITIVE.test(v));
+  const ci2 = (e, lo, hi, dd) => `${fmt(e, dd)} (${fmt(lo, dd)} to ${fmt(hi, dd)})`;
+  const sigTxt = (p, alpha) => p <= alpha ? 'significantly' : 'not significantly';
+  // survival data of the rows: time ≥ 0, event value known
+  const evName = (cfg, a) => isPos(a.positive, null) ? lowerFirst(plain(columnLabel(cfg, a.event))) : lowerFirst(a.positive);
+  const survRows = (a, rows) => rows.filter(r => isFinite(toNum(r[a.outcome])) && toNum(r[a.outcome]) >= 0 && toCat(r[a.event]) !== null);
+  // Fine-Gray competing-risks regression: subdistribution hazard ratios
+  function finegraySection(a, cfg, rows, alpha, d, used) {
+    if (!a.competing || a.competing === a.positive) return null;
+    const D = design(a, cfg, survRows(a, rows), () => true); if (!D.preds.length || D.rs.length < D.labels.length + 10) return null;
+    const st = D.rs.map(r => toCat(r[a.event]) === a.positive ? 1 : toCat(r[a.event]) === a.competing ? 2 : 0);
+    if (!st.includes(1)) return null;
+    const m = S.fineGray(D.X, D.rs.map(r => toNum(r[a.outcome])), st); if (!m) return null; used.add('finegray');
+    const ev = evName(cfg, a), sig = D.labels.map((l, i) => [l, m.terms[i]]).filter(([, t]) => t.p <= alpha);
+    return { kind: 'finegray', title: `Fine-Gray competing-risks regression for ${ev} (${lowerFirst(a.competing)} as a competing event)`, head: ['', 'SHR (95% CI)', 'P value'],
+      rows: D.labels.map((l, i) => [{ t: [l], b: true }, { t: [`${fmt(m.terms[i].hr, 2)} (${fmt(m.terms[i].lo, 2)}-${fmt(m.terms[i].hi, 2)})`] }, { t: [fmtP(m.terms[i].p, alpha)] }]),
+      footnote: [sig.length ? `*: Significant as P value ≤ ${alpha}` : '', 'SHR: Subdistribution hazard ratio', 'CI: Confidence interval (model-based standard errors)', `n=${m.n}, ${st.filter(v => v === 1).length} events of interest, ${st.filter(v => v === 2).length} competing events`, ...D.refs].filter(Boolean).join(', ') + '.',
+      comment: sig.length ? `Accounting for ${lowerFirst(a.competing)} as a competing event, ${listJoin(sig.map(([l, t]) => `${lowerFirst(plain(l))} (SHR = ${fmt(t.hr, 2)}, 95% CI ${fmt(t.lo, 2)}-${fmt(t.hi, 2)}, P value ${pTxt(t.p)})`))} ${sig.length > 1 ? 'were' : 'was'} significantly associated with the cumulative incidence of ${ev}.`
+        : `None of the studied variables was significantly associated with the cumulative incidence of ${ev} when ${lowerFirst(a.competing)} was treated as a competing event.`,
+      figures: [forestFigure(D.labels.map((l, i) => ({ label: l, m: { ...m.terms[i] } })), 'cox', ev, alpha, d)].filter(Boolean).map(f => ({ ...f, caption: `Forest plot of the subdistribution hazard ratios for ${ev}`, spec: { ...f.spec, xLabel: 'SHR (95% CI), log scale', valHead: 'SHR (95% CI)' } })), meta: { m } };
+  }
+  // restricted mean survival time up to τ in each group, their difference and ratio; optional landmark analysis
+  function rmstSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G, k = gl.length, rs = survRows(a, rows), timeLabel = columnLabel(cfg, a.outcome), unit = unitOf(timeLabel), u = unit ? ' ' + unit : '';
+    const T = groups.map(g => rs.filter(r => groupOf(cfg, r) === g)); if (T.some(x => x.length < 3)) return null;
+    const tm = T.map(x => x.map(r => toNum(r[a.outcome]))), ev = T.map(x => x.map(r => toCat(r[a.event]) === a.positive));
+    const tau = parseFloat(a.tau) > 0 ? parseFloat(a.tau) : Math.min(...tm.map(t => Math.max(...t))); if (!(tau > 0)) return null;
+    const R = tm.map((t, g) => S.rmst(t, ev[g], tau)); used.add('rmst');
+    const head = ['', 'n', 'Events', `RMST up to ${fmt(tau, d)}${u} (95% CI)`];
+    const out = [{ kind: 'rmst', title: `Restricted mean survival time up to ${fmt(tau, d)}${u}${k > 1 ? ' in the studied groups' : ''}`, head,
+      rows: R.map((r, g) => [{ t: [k > 1 ? gl[g] : 'All patients'], b: true }, { t: [String(r.n)] }, { t: [String(ev[g].filter(Boolean).length)] }, { t: [ci2(r.rmst, r.lo, r.hi, d)] }]), footnote: '', comment: '', figures: [], meta: { R, tau } }];
+    const s = out[0], sent = [`Up to ${fmt(tau, d)}${u}, the restricted mean survival time was ${listJoin(R.map((r, g) => `${fmt(r.rmst, d)}${u} in ${k > 1 ? gl[g] : 'the studied patients'}`))}.`], f = ['RMST: Restricted mean survival time (area under the Kaplan-Meier curve up to τ)', `Event: ${columnLabel(cfg, a.event)} = ${a.positive}`];
+    if (k === 2) { const c = S.rmstCompare(R[0], R[1]);
+      s.rows.push([{ t: [`Difference (${gl[1]} − ${gl[0]})`], b: true }, { t: [`${ci2(c.diff, c.lo, c.hi, d)}${u}`], span: 3 }], [{ t: ['Ratio'], b: true }, { t: [ci2(c.ratio, c.rlo, c.rhi, 2)], span: 3 }], [{ t: ['P value'], b: true }, { t: [fmtP(c.p, alpha)], span: 3 }]);
+      sent.push(`${cap(gl[1])} patients lived on average ${fmt(Math.abs(c.diff), d)}${u} ${c.diff >= 0 ? 'longer' : 'shorter'} event-free over this period (difference ${fmt(c.diff, d)}${u}, 95% CI ${fmt(c.lo, d)} to ${fmt(c.hi, d)}${u}, P value ${pTxt(c.p)}), ${sigTxt(c.p, alpha)} different between the groups.`);
+      if (c.p <= alpha) f.unshift(`*: Significant as P value ≤ ${alpha}`); s.meta.c = c; }
+    s.footnote = f.join(', ') + '.'; s.comment = sent.join(' ');
+    // landmark: patients still event-free at the landmark time, followed from it
+    const L = parseFloat(a.landmark);
+    if (L > 0 && k >= 2) { const lt = tm.map((t, g) => t.map((x, i) => [x - L, ev[g][i]]).filter(([x]) => x > 0)); if (lt.every(x => x.length >= 3)) {
+      const lr = S.logRank(lt.map(x => x.map(q => q[0])), lt.map(x => x.map(q => q[1]))), km = lt.map(x => S.kaplanMeier(x.map(q => q[0]), x.map(q => q[1])));
+      out.push({ kind: 'landmark', title: `Landmark analysis from ${fmt(L, d)}${u}: patients still event-free at the landmark`, head: ['', 'At risk at the landmark', 'Events after it', 'Log-rank P'],
+        rows: lt.map((x, g) => [{ t: [gl[g]], b: true }, { t: [String(x.length)] }, { t: [String(x.filter(q => q[1]).length)] }, ...(g ? [] : [{ t: [fmtP(lr.p, alpha)], rs: k }])]),
+        footnote: `Follow-up restarts at the landmark time (${fmt(L, d)}${u}); patients with the event or censored before it are left out, log-rank χ²(${lr.df}) = ${fmt(lr.chi, 2)}.`,
+        comment: `Among the patients still event-free at ${fmt(L, d)}${u}, the later course was ${sigTxt(lr.p, alpha)} different ${amongTxt(k)} (log-rank P value ${pTxt(lr.p)}).`,
+        figures: [{ sig: lr.p <= alpha, caption: `Kaplan-Meier curves from the landmark at ${fmt(L, d)}${u}`, spec: { type: 'km', xLabel: `Time since the landmark${u ? ` (${unit})` : ''}`, series: km.map((m, g) => ({ name: gl[g], steps: m.steps, censored: m.censored })), note: `Log-rank P ${pTxt(lr.p)}` } }], meta: { lr } }); } }
+    return out;
+  }
+  // proportional hazards: Grambsch-Therneau tests of the scaled Schoenfeld residuals, Harrell's C, log(−log) curves
+  function phcheckSection(a, cfg, rows, alpha, d, used, G) {
+    const D = design(a, cfg, survRows(a, rows), () => true); if (!D.preds.length || D.rs.length < D.labels.length + 10) return null;
+    const t = D.rs.map(r => toNum(r[a.outcome])), e = D.rs.map(r => toCat(r[a.event]) === a.positive), m = S.coxFit(D.X, t, e); if (!m) return null;
+    const ph = S.phTest(D.X, t, e, m.beta, m.cov, a.transform || 'km'); if (!ph) return null; used.add('phcheck');
+    const C = S.cIndex(t, e, D.X.map(x => x.reduce((s2, v, j) => s2 + v * m.beta[j], 0))), bad = D.labels.filter((_, i) => ph[i].p <= alpha);
+    const { gl, groups } = G, figs = [];
+    if (gl.length >= 2) { const ser = groups.map((g, gi) => { const I = D.rs.map((r, i) => groupOf(cfg, r) === g ? i : -1).filter(i => i >= 0), km = S.kaplanMeier(I.map(i => t[i]), I.map(i => e[i]));
+        const pts = km.steps.filter(q => q.t > 0 && q.s > 0 && q.s < 1); return { name: gl[gi], x: pts.map(q => Math.log(q.t)), y: pts.map(q => Math.log(-Math.log(q.s))), step: true }; }).filter(s2 => s2.x.length > 1);
+      if (ser.length >= 2) figs.push({ sig: true, caption: 'Log(−log) survival curves of the studied groups (parallel curves support proportional hazards)', spec: { type: 'xy', xLabel: `log(${plain(columnLabel(cfg, a.outcome))})`, yLabel: 'log(−log survival)', series: ser } }); }
+    return { kind: 'phcheck', title: 'Check of the proportional hazards assumption (Cox regression)', head: ['', 'HR (95% CI)', 'P value', 'Schoenfeld χ²', 'PH test P'],
+      rows: D.labels.map((l, i) => [{ t: [l], b: true }, { t: [`${fmt(m.terms[i].hr, 2)} (${fmt(m.terms[i].lo, 2)}-${fmt(m.terms[i].hi, 2)})`] }, { t: [fmtP(m.terms[i].p, alpha)] }, { t: [fmt(ph[i].chi, 2)] }, { t: [fmtP(ph[i].p, alpha)] }]),
+      footnote: ["HR: Hazard ratio (Breslow ties)", `PH test: Grambsch-Therneau test of the scaled Schoenfeld residuals against ${a.transform === 'rank' ? 'the rank of time' : '1 − Kaplan-Meier'} (df = 1); P ≤ ${alpha} suggests a hazard ratio that changes over time`, `Harrell's C-index = ${fmt(C, 3)}`, ...D.refs].join(', ') + '.',
+      comment: `${bad.length ? `The proportional hazards assumption was questionable for ${listJoin(bad.map(l => lowerFirst(plain(l))))} (Schoenfeld residual test P ${bad.length === 1 ? 'value ' + pTxt(ph[D.labels.indexOf(bad[0])].p) : '≤ ' + alpha}); a time-varying effect or stratification may be needed.` : 'The proportional hazards assumption held for every variable (all Schoenfeld residual tests P > ' + alpha + ').'} The model's discrimination was ${C >= 0.8 ? 'excellent' : C >= 0.7 ? 'good' : C >= 0.6 ? 'fair' : 'poor'} (Harrell's C-index = ${fmt(C, 3)}).`,
+      figures: figs, meta: { m, ph, C } };
+  }
+  // the treatment effect in subgroups: forest plot, test of interaction (heterogeneity between subgroups) and I²
+  function subgroupsSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G; if (gl.length !== 2) return null;
+    const bin = columnKind(cfg, rows, a.outcome) !== 'numeric', pos = a.positive, lab = plain(columnLabel(cfg, a.outcome));
+    const eff = R => { const A = R.filter(r => groupOf(cfg, r) === groups[1]), B = R.filter(r => groupOf(cfg, r) === groups[0]);
+      if (bin) { const ok = r => toCat(r[a.outcome]) !== null, a1 = A.filter(ok), b1 = B.filter(ok), x1 = a1.filter(r => isPos(toCat(r[a.outcome]), pos)).length, x0 = b1.filter(r => isPos(toCat(r[a.outcome]), pos)).length;
+        if (a1.length < 2 || b1.length < 2) return null; const aa = x1 + 0.5, bb = a1.length - x1 + 0.5, cc = x0 + 0.5, dd = b1.length - x0 + 0.5, l = Math.log(aa * dd / (bb * cc)), se = Math.sqrt(1 / aa + 1 / bb + 1 / cc + 1 / dd);
+        return { est: l, se, n: a1.length + b1.length, show: [Math.exp(l), Math.exp(l - S.ZC() * se), Math.exp(l + S.ZC() * se)], desc: `${x1}/${a1.length} vs ${x0}/${b1.length}` }; }
+      const x = A.map(r => toNum(r[a.outcome])).filter(isFinite), y = B.map(r => toNum(r[a.outcome])).filter(isFinite); if (x.length < 2 || y.length < 2) return null;
+      const df = S.mean(x) - S.mean(y), se = Math.sqrt(S.variance(x) / x.length + S.variance(y) / y.length); return { est: df, se, n: x.length + y.length, show: [df, df - S.ZC() * se, df + S.ZC() * se], desc: `${fmt(S.mean(x), d)} vs ${fmt(S.mean(y), d)}` }; };
+    const all = eff(rows); if (!all) return null;
+    const blocks = (a.predictors || []).filter(c => c !== a.outcome && !isGroupCol(cfg, c)).map(c => ({ c, lv: levelsOf(cfg, rows, c).map(l => ({ l, e: eff(rows.filter(r => toCat(r[c]) === l)) })).filter(x => x.e) })).filter(b => b.lv.length >= 2);
+    if (!blocks.length) return null; used.add('subgroups');
+    const dd = bin ? 2 : d, name = bin ? 'OR' : 'MD', trows = [[{ t: ['All patients'], b: true }, { t: [all.desc] }, { t: [ci2(...all.show, dd)] }, { t: [''] }, { t: [''] }]], frows = [{ label: 'All patients', est: all.show[0], lo: all.show[1], hi: all.show[2], text: ci2(...all.show, dd) }];
+    const het = [];
+    blocks.forEach(b => { const h = S.metaHet(b.lv.map(x => x.e.est), b.lv.map(x => x.e.se)); het.push([b.c, h]);
+      b.lv.forEach((x, i) => { trows.push([{ t: [`${columnLabel(cfg, b.c)}: ${x.l}`], b: false }, { t: [x.e.desc] }, { t: [ci2(...x.e.show, dd)] }, ...(i ? [] : [{ t: [fmtP(h.p, alpha)], rs: b.lv.length }, { t: [`${fmt(100 * h.I2, 0)}%`], rs: b.lv.length }])]);
+        frows.push({ label: `${plain(columnLabel(cfg, b.c))}: ${x.l}`, est: x.e.show[0], lo: x.e.show[1], hi: x.e.show[2], text: ci2(...x.e.show, dd) }); }); });
+    const sigH = het.filter(([, h]) => h.p <= alpha);
+    return { kind: 'subgroups', title: `${cap(lowerFirst(lab))} in ${gl[1]} vs ${gl[0]}: subgroup analysis`, head: ['', bin ? `Events (${gl[1]} vs ${gl[0]})` : `Mean (${gl[1]} vs ${gl[0]})`, `${name} (95% CI)`, 'Interaction P', 'I²'], rows: trows,
+      footnote: [`${name}: ${bin ? `Odds ratio of ${lowerFirst(lab)} (${pos || 'yes'}), with 0.5 added to every cell` : 'Mean difference'} (${gl[1]} − ${gl[0]})`, 'Interaction P: Cochran Q test of heterogeneity between the subgroup estimates', 'I²: Share of the variation between subgroups beyond chance'].join(', ') + '.',
+      comment: `${sigH.length ? `The effect differed significantly across ${listJoin(sigH.map(([c]) => lowerFirst(plain(columnLabel(cfg, c)))))} (interaction P value ${pTxt(sigH[0][1].p)}, I² = ${fmt(100 * sigH[0][1].I2, 0)}%).` : `The effect was consistent across the studied subgroups (all interaction P values > ${alpha}).`} Subgroup results should be read as exploratory.`,
+      figures: [{ sig: true, caption: `Forest plot of ${lowerFirst(lab)} in the subgroups`, spec: { type: 'forest', log: bin, ref: bin ? 1 : 0, alpha, xLabel: `${name} (95% CI)${bin ? ', log scale' : ''}`, valHead: `${name} (95% CI)`, rows: frows } }], meta: { het } };
+  }
+  // Krippendorff's alpha (any level, missing ratings allowed) and Gwet's AC1
+  function kalphaSection(a, cfg, rows, alpha, d, used) {
+    const rc = a.predictors || []; if (rc.length < 2) return null;
+    const lvl = a.level || 'nominal', numeric = lvl === 'interval' || lvl === 'ratio';
+    const codes = new Map(); rc.forEach(c => { if (!numeric) levelsOf(cfg, rows, c).forEach(l => { if (!codes.has(l)) codes.set(l, codes.size + 1); }); });
+    const val = (r, c) => { if (numeric) { const v = toNum(r[c]); return isFinite(v) ? v : NaN; } const v = toCat(r[c]); return v === null ? NaN : codes.has(v) ? codes.get(v) : (isFinite(toNum(v)) ? toNum(v) : NaN); };
+    const M = rows.map(r => rc.map(c => val(r, c))).filter(u => u.filter(isFinite).length >= 2); if (M.length < 3) return null;
+    const ka = S.krippAlpha(M, lvl); if (!ka) return null; used.add('kalpha');
+    const ci = S.bootUnits(M, s => (S.krippAlpha(s, lvl) || {}).alpha), ac = numeric ? null : S.gwetAC1(M), aci = ac ? S.bootUnits(M, s => (S.gwetAC1(s) || {}).ac1) : null;
+    const agree = S.mean(M.map(u => { const x = u.filter(isFinite); let s2 = 0, n2 = 0; for (let i = 0; i < x.length; i++) for (let j = i + 1; j < x.length; j++) { n2++; s2 += +(x[i] === x[j]); } return s2 / n2; }));
+    const grade = v => v >= 0.8 ? 'acceptable' : v >= 0.667 ? 'tentatively acceptable' : 'low';
+    return { kind: 'kalpha', title: `Agreement of ${rc.length} raters (${listJoin(rc.map(c => plain(columnLabel(cfg, c))))})`, head: ['', 'Value (95% CI)'],
+      rows: [[{ t: ['Units / raters'], b: true }, { t: [`${M.length} / ${rc.length}`] }], [{ t: [`Krippendorff's α (${lvl})`], b: true }, { t: [ci2(ka.alpha, ci.lo, ci.hi, 3)] }], ...(ac ? [[{ t: ["Gwet's AC1"], b: true }, { t: [ci2(ac.ac1, aci.lo, aci.hi, 3)] }], [{ t: ['Observed agreement'], b: true }, { t: [`${fmt(100 * agree, 1)}%`] }]] : [])],
+      footnote: `Krippendorff's α with ${lvl} distances (≥ 0.80 acceptable, 0.667 to 0.80 tentative); Gwet's AC1 for categories (stable when one category is very common); 95% CI: bootstrap of the units (1,000 resamples); units with at least two ratings are used.`,
+      comment: `The reliability of the ratings was ${grade(ka.alpha)} (Krippendorff's α = ${fmt(ka.alpha, 3)}, 95% CI ${fmt(ci.lo, 3)} to ${fmt(ci.hi, 3)})${ac ? `, with Gwet's AC1 = ${fmt(ac.ac1, 3)}` : ''}.`, figures: [], meta: { ka, ac } };
+  }
+  // calibration and discrimination of a logistic model (or of a column of predicted risks): Brier score, calibration intercept and slope, plot with LOWESS
+  function calibSection(a, cfg, rows, alpha, d, used) {
+    let prob, y, what = eventName(cfg, a);
+    if (a.probCol) { const rs = rows.filter(r => toCat(r[a.outcome]) !== null && isFinite(toNum(r[a.probCol]))); prob = rs.map(r => { const v = toNum(r[a.probCol]); return v > 1 ? v / 100 : v; }); y = rs.map(r => +(toCat(r[a.outcome]) === a.positive)); }
+    else { const D = design(a, cfg, rows, r => toCat(r[a.outcome]) !== null); if (!D.preds.length) return null; y = D.rs.map(r => +(toCat(r[a.outcome]) === a.positive)); const m = S.logisticRegression(D.X, y); if (!m) return null; prob = m.fitted; }
+    if (y.length < 20 || !y.some(Boolean) || y.every(Boolean)) return null;
+    const c = S.calibration(prob, y), hl = S.hosmerLemeshow(y, prob), lo = S.lowess(prob, y, 2 / 3, 0); used.add('calib');
+    const g = 10, idx = prob.map((_, i) => i).sort((p, q) => prob[p] - prob[q]), dec = Array.from({ length: g }, (_, q) => idx.slice(Math.round(q * y.length / g), Math.round((q + 1) * y.length / g))).filter(x => x.length);
+    const px = dec.map(I => S.mean(I.map(i => prob[i]))), py = dec.map(I => S.mean(I.map(i => y[i])));
+    const slopeOk = c.slopeLo <= 1 && c.slopeHi >= 1, citlOk = c.citlLo <= 0 && c.citlHi >= 0;
+    return { kind: 'calib', title: `Calibration and discrimination of the predicted risk of ${what}`, head: ['', 'Value (95% CI)', 'Ideal'],
+      rows: [[{ t: ['C-statistic (AUC)'], b: true }, { t: [fmt(c.auc, 3)] }, { t: ['1'] }], [{ t: ['Brier score (scaled)'], b: true }, { t: [`${fmt(c.brier, 3)} (${fmt(100 * c.scaledBrier, 1)}%)`] }, { t: ['0 (100%)'] }],
+        [{ t: ['Calibration-in-the-large'], b: true }, { t: [ci2(c.citl, c.citlLo, c.citlHi, 3)] }, { t: ['0'] }], [{ t: ['Calibration slope'], b: true }, { t: [ci2(c.slope, c.slopeLo, c.slopeHi, 3)] }, { t: ['1'] }],
+        [{ t: ['Expected / observed events'], b: true }, { t: [fmt(c.eo, 3)] }, { t: ['1'] }], [{ t: ['Hosmer-Lemeshow test'], b: true }, { t: [hl ? `χ²(${hl.df}) = ${fmt(hl.chi, 2)}, P ${pTxt(hl.p)}` : '—'] }, { t: ['P > 0.05'] }]],
+      footnote: `${a.probCol ? `Predicted risks from ${columnLabel(cfg, a.probCol)}` : 'Predicted risks from the logistic model of the ticked predictors (apparent performance, in the same patients)'}, n=${c.n}, ${y.filter(Boolean).length} events; scaled Brier = 1 − Brier / (p̄(1 − p̄)); calibration-in-the-large: intercept with the logit of the risk as offset; slope: logistic regression on the logit of the risk.`,
+      comment: `The discrimination was ${c.auc >= 0.8 ? 'excellent' : c.auc >= 0.7 ? 'good' : c.auc >= 0.6 ? 'fair' : 'poor'} (C-statistic = ${fmt(c.auc, 3)}), the Brier score was ${fmt(c.brier, 3)} and ${citlOk && slopeOk ? 'the calibration was good' : `the risks were ${!citlOk ? (c.citl > 0 ? 'systematically under-estimated' : 'systematically over-estimated') : ''}${!citlOk && !slopeOk ? ' and ' : ''}${!slopeOk ? (c.slope < 1 ? 'too extreme' : 'too moderate') : ''}`} (calibration intercept ${fmt(c.citl, 3)}, slope ${fmt(c.slope, 3)}).`,
+      figures: [{ sig: true, caption: `Calibration plot of the predicted risk of ${what}`, spec: { type: 'xy', diag: true, xmin: 0, xmax: 1, ymin: 0, ymax: 1, xLabel: 'Predicted risk', yLabel: 'Observed proportion', series: [{ name: 'Deciles of risk', x: px, y: py, points: true, size: 10 }, { name: 'LOWESS smoother', x: lo.x, y: lo.y.map(v => Math.min(1, Math.max(0, v))) }] } }], meta: { c } };
+  }
+  // multilevel (random-intercept) model: patients within clusters such as centres or wards
+  function multilevelSection(a, cfg, rows, alpha, d, used) {
+    if (!a.idcol) return null; const bin = columnKind(cfg, rows, a.outcome) !== 'numeric';
+    const D = design(a, cfg, rows.filter(r => toCat(r[a.idcol]) !== null), r => bin ? toCat(r[a.outcome]) !== null : isFinite(toNum(r[a.outcome]))); if (D.rs.length < 10) return null;
+    const cl = D.rs.map(r => toCat(r[a.idcol])), nCl = new Set(cl).size; if (nCl < 3) return null;
+    const X = D.rs.map((r, i) => [1, ...D.X[i]]), lab = plain(columnLabel(cfg, a.outcome)), clLab = lowerFirst(plain(columnLabel(cfg, a.idcol)));
+    let terms, icc, varTxt, name;
+    if (bin) { const y = D.rs.map(r => +(toCat(r[a.outcome]) === a.positive)), m = S.glmmLogit(y, X, cl); if (!m) return null; name = 'OR';
+      terms = m.beta.map((B, j) => ({ e: Math.exp(B), lo: Math.exp(B - S.ZC() * m.se[j]), hi: Math.exp(B + S.ZC() * m.se[j]), p: zP2(B / m.se[j]) })); const s2 = m.sigma ** 2; icc = s2 / (s2 + Math.PI ** 2 / 3); varTxt = `random-intercept variance ${fmt(s2, 3)}`; }
+    else { const y = D.rs.map(r => toNum(r[a.outcome])), m = S.lmmRandomIntercept(y, X, cl); if (!m) return null; name = 'B';
+      terms = m.beta.map((B, j) => ({ e: B, lo: B - S.ZC() * m.se[j], hi: B + S.ZC() * m.se[j], p: zP2(B / m.se[j]) })); icc = m.icc; varTxt = `between-${clLab} variance ${fmt(m.s2u, 3)}, residual variance ${fmt(m.s2e, 3)}`; }
+    used.add('multilevel'); const dd = bin ? 2 : d, sig = D.labels.map((l, i) => [l, terms[i + 1]]).filter(([, t]) => t.p <= alpha), mSize = D.rs.length / nCl, deff = 1 + (mSize - 1) * icc;
+    return { kind: 'multilevel', title: `Multilevel ${bin ? 'logistic' : 'linear'} regression of ${lowerFirst(lab)} (patients within ${clLab})`, head: ['', `${name} (95% CI)`, 'P value'],
+      rows: [...D.labels.map((l, i) => [{ t: [l], b: true }, { t: [ci2(terms[i + 1].e, terms[i + 1].lo, terms[i + 1].hi, dd)] }, { t: [fmtP(terms[i + 1].p, alpha)] }]), [{ t: [`ICC (${clLab})`], b: true }, { t: [fmt(icc, 3)] }, { t: [''] }]],
+      footnote: [sig.length ? `*: Significant as P value ≤ ${alpha}` : '', `${name}: ${bin ? 'Odds ratio' : 'Regression coefficient'}`, `Random intercept for each ${clLab} (${nCl} clusters, ${D.rs.length} patients; ${varTxt})`, `ICC: Intraclass correlation${bin ? ' on the latent scale' : ''}`, `design effect ${fmt(deff, 2)}`, ...D.refs].filter(Boolean).join(', ') + '.',
+      comment: `Allowing for clustering of patients within ${clLab} (ICC = ${fmt(icc, 3)}), ${sig.length ? `${listJoin(sig.map(([l, t]) => `${lowerFirst(plain(l))} (${name} = ${fmt(t.e, dd)}, 95% CI ${fmt(t.lo, dd)} to ${fmt(t.hi, dd)}, P value ${pTxt(t.p)})`))} ${sig.length > 1 ? 'were' : 'was'} significantly associated with ${lowerFirst(lab)}.` : `none of the studied variables was significantly associated with ${lowerFirst(lab)}.`}`, figures: [], meta: { icc } };
+  }
+  const zP2 = z => 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1));
+  // interrupted time series: segmented regression with Newey-West standard errors
+  function itsSection(a, cfg, rows, alpha, d, used) {
+    const tc = a.second, cut = parseFloat(a.cut); if (!tc || !isFinite(cut)) return null;
+    const bin = columnKind(cfg, rows, a.outcome) !== 'numeric', by = new Map();
+    rows.forEach(r => { const t = toNum(r[tc]), v = bin ? (toCat(r[a.outcome]) === null ? NaN : 100 * +(toCat(r[a.outcome]) === a.positive)) : toNum(r[a.outcome]); if (isFinite(t) && isFinite(v)) { if (!by.has(t)) by.set(t, []); by.get(t).push(v); } });
+    const ts = [...by.keys()].sort((p, q) => p - q), y = ts.map(t => S.mean(by.get(t))), pre = ts.filter(t => t < cut).length; if (pre < 3 || ts.length - pre < 3) return null;
+    const lag = a.lag !== undefined && a.lag !== '' ? Math.max(0, parseInt(a.lag)) : Math.floor(4 * (ts.length / 100) ** (2 / 9));
+    const X = ts.map(t => [1, t, +(t >= cut), t >= cut ? t - cut : 0]), m = S.neweyWest(y, X, lag); if (!m) return null; used.add('its');
+    const tl = plain(columnLabel(cfg, tc)), lab = plain(columnLabel(cfg, a.outcome)) + (bin ? ` (% ${a.positive})` : ''), [b0, b1, b2, b3] = m.terms;
+    const post = { B: b1.B + b3.B, se: Math.sqrt(m.cov[1][1] + m.cov[3][3] + 2 * m.cov[1][3]) }; const tq = jStat.studentt.inv(S.QU(), m.df); post.lo = post.B - tq * post.se; post.hi = post.B + tq * post.se; post.p = 2 * (1 - jStat.studentt.cdf(Math.abs(post.B / post.se), m.df));
+    const R = (l, t) => [{ t: [l], b: true }, { t: [ci2(t.B, t.lo, t.hi, d)] }, { t: [fmtP(t.p, alpha)] }];
+    const fitPre = ts.filter(t => t < cut), fitPost = ts.filter(t => t >= cut), f = t => X[ts.indexOf(t)].reduce((s2, v, j) => s2 + v * m.beta[j], 0);
+    return { kind: 'its', title: `Interrupted time series of ${lowerFirst(lab)} (intervention at ${tl} = ${fmt(cut, d)})`, head: ['', 'Estimate (95% CI)', 'P value'],
+      rows: [R('Level at the start', b0), R(`Trend before (per unit of ${lowerFirst(tl)})`, b1), R('Level change at the intervention', b2), R('Change in trend', b3), R('Trend after', post)],
+      footnote: `Segmented regression of ${ts.length} time points (${pre} before, ${ts.length - pre} after)${by.size && rows.length > ts.length ? ', values averaged per time point' : ''}; Newey-West standard errors (lag ${lag}); Durbin-Watson = ${fmt(m.dw, 2)}.`,
+      comment: `At the intervention, ${lowerFirst(lab)} ${b2.B >= 0 ? 'rose' : 'fell'} by ${fmt(Math.abs(b2.B), d)} (95% CI ${fmt(b2.lo, d)} to ${fmt(b2.hi, d)}, P value ${pTxt(b2.p)}), and the trend changed by ${fmt(b3.B, d)} per unit of time (P value ${pTxt(b3.p)}); ${b2.p <= alpha || b3.p <= alpha ? 'the intervention was followed by a significant change' : 'neither change was significant'}.`,
+      figures: [{ sig: b2.p <= alpha || b3.p <= alpha, caption: `Interrupted time series of ${lowerFirst(lab)}`, spec: { type: 'xy', vline: cut, xLabel: tl, yLabel: lab, series: [{ name: 'Observed', x: ts, y, points: true, size: 8 }, { name: 'Fitted', x: [...fitPre, NaN, ...fitPost], y: [...fitPre.map(f), NaN, ...fitPost.map(f)] }, { name: 'Without the intervention', x: fitPost, y: fitPost.map(t => b0.B + b1.B * t), dash: true }] } }], meta: { m } };
+  }
+  // difference-in-differences: two study groups before and after, regression with the group × period interaction
+  function didSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G; if (gl.length !== 2 || !a.second || !a.preVal) return null;
+    const rs = rows.filter(r => isFinite(toNum(r[a.outcome])) && toCat(r[a.second]) !== null && groups.includes(groupOf(cfg, r))); if (rs.length < 8) return null;
+    const tr = r => +(groupOf(cfg, r) === groups[1]), po = r => +(toCat(r[a.second]) !== a.preVal), y = rs.map(r => toNum(r[a.outcome])), X = rs.map(r => [1, tr(r), po(r), tr(r) * po(r)]);
+    let B, se, df; if (a.idcol) { const m = S.olsCluster(y, X, rs.map(r => String(r[a.idcol]))); if (!m) return null; B = m.beta; se = m.se; df = m.df; }
+    else { const m = S.linearRegression(X.map(x => x.slice(1)), y); if (!m) return null; B = m.coef; se = m.terms.map(t => t.se); df = m.df; }
+    used.add('did'); const tq = jStat.studentt.inv(S.QU(), df), est = B[3], lo = est - tq * se[3], hi = est + tq * se[3], p = 2 * (1 - jStat.studentt.cdf(Math.abs(est / se[3]), df));
+    const cell = (g, pp) => { const v = rs.filter(r => tr(r) === g && po(r) === pp).map(r => toNum(r[a.outcome])); return v.length ? `${fmt(S.mean(v), d)} ± ${fmt(S.sd(v), d)} (n=${v.length})` : '—'; };
+    const lab = plain(columnLabel(cfg, a.outcome));
+    return { kind: 'did', title: `Difference-in-differences analysis of ${lowerFirst(lab)}`, head: ['', `Before (${a.preVal})`, 'After', 'Change'],
+      rows: [0, 1].map(g => [{ t: [gl[g]], b: true }, { t: [cell(g, 0)] }, { t: [cell(g, 1)] }, { t: [fmt(B[2] + (g ? B[3] : 0), d)] }]).concat([[{ t: ['Difference-in-differences (95% CI)'], b: true }, { t: [ci2(est, lo, hi, d)], span: 2 }, { t: [fmtP(p, alpha)] }]]),
+      footnote: `Linear regression with group, period and their interaction; ${a.idcol ? `cluster-robust standard errors by ${columnLabel(cfg, a.idcol)}` : 'ordinary standard errors'}; the estimate assumes parallel trends without the intervention.`,
+      comment: `The change in ${lowerFirst(lab)} from before to after was ${fmt(Math.abs(est), d)} ${est >= 0 ? 'greater' : 'smaller'} in ${gl[1]} than in ${gl[0]} (difference-in-differences ${fmt(est, d)}, 95% CI ${fmt(lo, d)} to ${fmt(hi, d)}, P value ${pTxt(p)}), ${p <= alpha ? 'a significant' : 'not a significant'} difference.`, figures: [], meta: { est, p } };
+  }
+  // inverse-probability-weighted survival: propensity score of the second study group, stabilised weights, weighted Kaplan-Meier and Cox
+  function ipwsurvSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G; if (gl.length !== 2) return null;
+    const D = design(a, cfg, survRows(a, rows).filter(r => groups.includes(groupOf(cfg, r))), () => true); if (!D.preds.length || D.rs.length < 20) return null;
+    const tr = D.rs.map(r => +(groupOf(cfg, r) === groups[1])), ps = S.logisticRegression(D.X, tr); if (!ps) return null;
+    const pT = S.mean(tr); let w = ps.fitted.map((p, i) => tr[i] ? pT / p : (1 - pT) / (1 - p));
+    if (a.trim !== false) { const lo = S.quantile(w, 0.01), hi = S.quantile(w, 0.99); w = w.map(v => Math.min(hi, Math.max(lo, v))); }
+    const t = D.rs.map(r => toNum(r[a.outcome])), e = D.rs.map(r => toCat(r[a.event]) === a.positive);
+    const cw = S.coxFit(tr.map(v => [v]), t, e, { w, robust: true }), cu = S.coxFit(tr.map(v => [v]), t, e); if (!cw || !cu) return null; used.add('ipwsurv');
+    const wkm = g => { const I = tr.map((v, i) => v === g ? i : -1).filter(i => i >= 0).sort((p, q) => t[p] - t[q]); let atR = S.sum(I.map(i => w[i])), s2 = 1; const steps = [{ t: 0, s: 1 }];
+      for (let j = 0; j < I.length;) { const tt = t[I[j]]; let dw = 0, all = 0; while (j < I.length && t[I[j]] === tt) { all += w[I[j]]; if (e[I[j]]) dw += w[I[j]]; j++; } if (dw) { s2 *= 1 - dw / atR; steps.push({ t: tt, s: s2 }); } atR -= all; } return { steps, censored: [] }; };
+    const smd = D.labels.map((l, j) => { const x1 = D.X.filter((_, i) => tr[i]).map(r => r[j]), x0 = D.X.filter((_, i) => !tr[i]).map(r => r[j]), w1 = w.filter((_, i) => tr[i]), w0 = w.filter((_, i) => !tr[i]);
+      const wm = (x, ww) => S.sum(x.map((v, i) => v * ww[i])) / S.sum(ww), wv = (x, ww) => { const m = wm(x, ww); return S.sum(x.map((v, i) => ww[i] * (v - m) ** 2)) / S.sum(ww); };
+      const pool = Math.sqrt((S.variance(x1) + S.variance(x0)) / 2) || 1; return [l, (S.mean(x1) - S.mean(x0)) / pool, (wm(x1, w1) - wm(x0, w0)) / (Math.sqrt((wv(x1, w1) + wv(x0, w0)) / 2) || 1)]; });
+    const T = cw.terms[0], U = cu.terms[0];
+    return { kind: 'ipwsurv', title: `Inverse-probability-weighted survival of ${gl[1]} vs ${gl[0]}`, head: ['', 'HR (95% CI)', 'P value'],
+      rows: [[{ t: ['Unadjusted Cox model'], b: true }, { t: [`${fmt(U.hr, 2)} (${fmt(U.lo, 2)}-${fmt(U.hi, 2)})`] }, { t: [fmtP(U.p, alpha)] }], [{ t: ['IPW Cox model (robust SE)'], b: true }, { t: [`${fmt(T.hr, 2)} (${fmt(T.lo, 2)}-${fmt(T.hi, 2)})`] }, { t: [fmtP(T.p, alpha)] }],
+        ...smd.map(([l, b, aW]) => [{ t: [`SMD of ${l}`], b: false }, { t: [`${fmt(b, 3)} → ${fmt(aW, 3)}`] }, { t: [Math.abs(aW) < 0.1 ? 'balanced' : 'imbalanced'] }])],
+      footnote: `Propensity score from logistic regression of ${listJoin(D.preds.map(p => plain(p.label)))}; stabilised weights${a.trim !== false ? ' truncated at the 1st and 99th percentiles' : ''} (mean ${fmt(S.mean(w), 2)}, range ${fmt(Math.min(...w), 2)} to ${fmt(Math.max(...w), 2)}); HR: Hazard ratio; SMD: Standardised mean difference before → after weighting (|SMD| < 0.1 = balanced); robust (sandwich) standard errors.`,
+      comment: `After inverse-probability weighting for the baseline differences, the hazard of ${evName(cfg, a)} was ${sigTxt(T.p, alpha)} different in ${gl[1]} than in ${gl[0]} (HR = ${fmt(T.hr, 2)}, 95% CI ${fmt(T.lo, 2)}-${fmt(T.hi, 2)}, P value ${pTxt(T.p)}; unadjusted HR = ${fmt(U.hr, 2)}).`,
+      figures: [{ sig: T.p <= alpha, caption: 'Inverse-probability-weighted Kaplan-Meier curves', spec: { type: 'km', xLabel: columnLabel(cfg, a.outcome), series: [0, 1].map(g => ({ name: gl[g], ...wkm(g) })), note: `IPW HR = ${fmt(T.hr, 2)} (95% CI ${fmt(T.lo, 2)}-${fmt(T.hi, 2)})` } }], meta: { cw } };
+  }
+  // instrumental variable (2SLS): the effect of an exposure on the outcome using an instrument
+  function ivSection(a, cfg, rows, alpha, d, used) {
+    if (!a.xvar || !a.second) return null; const cov = (a.predictors || []).filter(c => ![a.outcome, a.xvar, a.second].includes(c)).map(c => encode(cfg, rows, c)).filter(e => e.terms.length);
+    const rs = rows.filter(r => [a.outcome, a.xvar, a.second].every(c => isFinite(toNum(r[c]))) && cov.every(e => e.ok(r))); if (rs.length < 20) return null;
+    const W = cov.length ? rs.map(r => cov.flatMap(e => e.terms.map(t => t.get(r)))) : null, m = S.iv2sls(rs.map(r => toNum(r[a.outcome])), rs.map(r => toNum(r[a.xvar])), rs.map(r => [toNum(r[a.second])]), W); if (!m) return null; used.add('iv');
+    const t = m.terms[1], lab = plain(columnLabel(cfg, a.outcome)), xl = plain(columnLabel(cfg, a.xvar)), zl = plain(columnLabel(cfg, a.second)), weak = m.F < 10;
+    return { kind: 'iv', title: `Instrumental variable analysis: effect of ${lowerFirst(xl)} on ${lowerFirst(lab)} (instrument: ${lowerFirst(zl)})`, head: ['', 'B (95% CI)', 'P value'],
+      rows: [[{ t: ['Ordinary least squares'], b: true }, { t: [m.ols ? ci2(m.ols.B, m.ols.lo, m.ols.hi, d) : '—'] }, { t: [m.ols ? fmtP(m.ols.p, alpha) : ''] }], [{ t: ['Two-stage least squares (IV)'], b: true }, { t: [ci2(t.B, t.lo, t.hi, d)] }, { t: [fmtP(t.p, alpha)] }],
+        [{ t: ['First-stage F (instrument strength)'], b: true }, { t: [`${fmt(m.F, 1)}${weak ? ' (weak, F < 10)' : ''}`] }, { t: [fmtP(m.pF, alpha)] }], [{ t: ['Durbin-Wu-Hausman test (endogeneity)'], b: true }, { t: [m.hausman ? `t = ${fmt(m.hausman.t, 2)}` : '—'] }, { t: [m.hausman ? fmtP(m.hausman.p, alpha) : ''] }]],
+      footnote: `B: Change in ${lowerFirst(lab)} per unit of ${lowerFirst(xl)}; n=${m.n}${cov.length ? `; adjusted for ${listJoin(cov.map(e => plain(e.label)))}` : ''}; IV assumptions: the instrument is related to the exposure, affects the outcome only through it and shares no confounders with it.`,
+      comment: `Using ${lowerFirst(zl)} as an instrument, each unit of ${lowerFirst(xl)} changed ${lowerFirst(lab)} by ${fmt(t.B, d)} (95% CI ${fmt(t.lo, d)} to ${fmt(t.hi, d)}, P value ${pTxt(t.p)})${m.ols ? `, against ${fmt(m.ols.B, d)} in ordinary regression` : ''}.${weak ? ' The instrument was weak (first-stage F < 10), so the estimate is unreliable.' : ''}`, figures: [], meta: { m } };
+  }
+  // binary items of the rows (1 = the positive value or a yes-like value)
+  const binItems = (a, rows) => { const rc = a.predictors || []; return rows.map(r => rc.map(c => { const v = toCat(r[c]); if (v === null) return NaN; const n = toNum(v); return isPos(v, a.positive) || (!a.positive && n === 1) ? 1 : (n === 0 || !isPos(v, a.positive)) ? 0 : NaN; })); };
+  // latent class analysis: 1 to 4 classes compared by BIC; item probabilities of the chosen model
+  function lcaSection(a, cfg, rows, alpha, d, used) {
+    const rc = a.predictors || []; if (rc.length < 3) return null; const M = binItems(a, rows).filter(r => r.some(isFinite)); if (M.length < 20) return null;
+    const fits = [1, 2, 3, 4].filter(K => (K - 1 + K * rc.length) < M.length / 3).map(K => S.lca(M, K)); if (fits.length < 2) return null; used.add('lca');
+    const best = a.k ? fits.find(f => f.K === +a.k) || fits[0] : fits.reduce((p, q) => q.bic < p.bic ? q : p);
+    return [{ kind: 'lca', title: `Latent class analysis of ${rc.length} yes/no items: model fit`, head: ['Classes', 'Log-likelihood', 'AIC', 'BIC', 'Entropy', 'Smallest class'],
+      rows: fits.map(f => [{ t: [String(f.K)], b: f === best }, { t: [fmt(f.ll, 1)] }, { t: [fmt(f.aic, 1)] }, { t: [fmt(f.bic, 1)] }, { t: [f.K > 1 ? fmt(f.entropy, 2) : '—'] }, { t: [`${fmt(100 * Math.min(...f.pi), 1)}%`] }]),
+      footnote: `Expectation-maximisation with 20 random starts; ${a.k ? 'the chosen' : 'the lowest-BIC'} model in bold; entropy near 1 = clear class separation; AIC: Akaike and BIC: Bayesian information criteria.`,
+      comment: `${best.K === 1 ? 'A single class fitted best: the patients did not separate into distinct profiles.' : `A ${best.K}-class model fitted best (BIC = ${fmt(best.bic, 1)}, entropy ${fmt(best.entropy, 2)}), with classes of ${listJoin(best.pi.map(p => fmt(100 * p, 1) + '%'))} of the patients.`}`, figures: [], meta: { fits } },
+      ...(best.K > 1 ? [{ kind: 'lca2', title: `Item probabilities of the ${best.K} latent classes`, head: ['', ...best.pi.map((p, k) => `Class ${k + 1} (${fmt(100 * p, 1)}%)`)],
+        rows: rc.map((c, j) => [{ t: [columnLabel(cfg, c)], b: true }, ...best.theta.map(th => ({ t: [`${fmt(100 * th[j], 1)}%`] }))]), footnote: 'Values: probability of a positive answer in each class.',
+        comment: `Class 1 was marked by ${listJoin(rc.filter((_, j) => best.theta[0][j] >= 0.5).map(c => lowerFirst(plain(columnLabel(cfg, c)))).slice(0, 4)) || 'low probabilities on every item'}.`, figures: [], meta: {} }] : [])];
+  }
+  // k-means cluster analysis of standardised numeric variables; the number of clusters by the silhouette width
+  function kmeansSection(a, cfg, rows, alpha, d, used) {
+    const rc = (a.predictors || []).filter(c => columnKind(cfg, rows, c) === 'numeric'); if (rc.length < 2) return null;
+    const rs = rows.filter(r => rc.every(c => isFinite(toNum(r[c])))); if (rs.length < 10) return null;
+    const raw = rs.map(r => rc.map(c => toNum(r[c]))), mu = rc.map((_, j) => S.mean(raw.map(x => x[j]))), sg = rc.map((_, j) => S.sd(raw.map(x => x[j])) || 1), Z = raw.map(x => x.map((v, j) => (v - mu[j]) / sg[j]));
+    const ks = a.k ? [+a.k] : [2, 3, 4, 5, 6].filter(k => k < rs.length / 3), fits = ks.map(k => S.kmeans(Z, k)); if (!fits.length) return null;
+    const best = fits.reduce((p, q) => q.silhouette > p.silhouette ? q : p); used.add('kmeans');
+    const rowsT = rc.map((c, j) => { const by = Array.from({ length: best.k }, (_, q) => raw.filter((_, i) => best.labels[i] === q).map(x => x[j])), an = S.anova(by);
+      return [{ t: [columnLabel(cfg, c)], b: true }, ...by.map(v => ({ t: [`${fmt(S.mean(v), d)} ± ${fmt(S.sd(v), d)}`] })), { t: [an ? fmtP(an.p, alpha) : ''] }]; });
+    return { kind: 'kmeans', title: `K-means cluster analysis of ${rc.length} variables: ${best.k} clusters`, head: ['', ...best.sizes.map((s2, q) => `Cluster ${q + 1} (n=${s2})`), 'P value'], rows: rowsT,
+      footnote: `Variables standardised (z scores); k-means with 20 k-means++ starts; ${a.k ? 'k chosen by the user' : `k from 2 to ${Math.max(...ks)} chosen by the mean silhouette width (${fits.map(f => `k=${f.k}: ${fmt(f.silhouette, 2)}`).join(', ')})`}; values: mean ± SD; P value: one-way ANOVA (descriptive, since the clusters were formed from these variables).`,
+      comment: `The patients formed ${best.k} clusters (mean silhouette width ${fmt(best.silhouette, 2)}, ${best.silhouette >= 0.5 ? 'a clear' : best.silhouette >= 0.25 ? 'a moderate' : 'a weak'} structure) of ${listJoin(best.sizes.map(String))} patients.`,
+      figures: rc.length >= 2 ? [{ sig: true, caption: `Clusters of the patients by ${lowerFirst(plain(columnLabel(cfg, rc[0])))} and ${lowerFirst(plain(columnLabel(cfg, rc[1])))}`, spec: { type: 'xy', xLabel: columnLabel(cfg, rc[0]), yLabel: columnLabel(cfg, rc[1]), series: Array.from({ length: best.k }, (_, q) => ({ name: `Cluster ${q + 1}`, x: raw.filter((_, i) => best.labels[i] === q).map(x => x[0]), y: raw.filter((_, i) => best.labels[i] === q).map(x => x[1]), points: true, alpha: 0.7 })) } }] : [], meta: { best } };
+  }
+  // exploratory factor analysis of questionnaire items
+  function efaSection(a, cfg, rows, alpha, d, used) {
+    const rc = (a.predictors || []).filter(c => columnKind(cfg, rows, c) === 'numeric'); if (rc.length < 4) return null;
+    const rs = rows.filter(r => rc.every(c => isFinite(toNum(r[c])))); if (rs.length < 2 * rc.length) return null;
+    const m = S.efa(rs.map(r => rc.map(c => toNum(r[c]))), a.nf ? +a.nf : 0, a.rotation || 'varimax'); if (!m) return null; used.add('efa');
+    const nf = m.nf, cut = 0.4;
+    return { kind: 'efa', title: `Exploratory factor analysis of ${rc.length} items: ${nf} factor${nf > 1 ? 's' : ''}`, head: ['', ...Array.from({ length: nf }, (_, f) => `Factor ${f + 1}`), 'Communality'],
+      rows: rc.map((c, i) => [{ t: [columnLabel(cfg, c)], b: true }, ...m.loadings[i].map(v => ({ t: [fmt(v, 2)], b: Math.abs(v) >= cut })), { t: [fmt(m.communality[i], 2)] }])
+        .concat([[{ t: ['Variance explained'], b: true }, ...m.ss.map(v => ({ t: [`${fmt(100 * v / rc.length, 1)}%`] })), { t: [`${fmt(100 * S.sum(m.ss) / rc.length, 1)}%`] }]]),
+      footnote: `Principal axis factoring (iterated to the minimum residual solution) with ${nf > 1 ? (a.rotation === 'promax' ? 'promax (oblique, κ = 4)' : 'varimax (orthogonal, Kaiser normalisation)') + ' rotation' : 'no rotation'}; ${a.nf ? 'number of factors set by the user' : 'number of factors by parallel analysis (95th percentile of 100 random data sets)'}; loadings ≥ ${cut} in bold; KMO = ${fmt(m.kmo, 3)}; Bartlett's test χ²(${m.bartlett.df}) = ${fmt(m.bartlett.chi, 1)}, P ${pTxt(m.bartlett.p)}.`,
+      comment: `The items were suitable for factor analysis (KMO = ${fmt(m.kmo, 2)}${m.kmo < 0.6 ? ', mediocre' : ''}; Bartlett's test P value ${pTxt(m.bartlett.p)}). ${nf} factor${nf > 1 ? 's' : ''} explained ${fmt(100 * S.sum(m.ss) / rc.length, 1)}% of the item variance${nf > 1 ? `: ${Array.from({ length: nf }, (_, f) => `factor ${f + 1} was loaded by ${listJoin(rc.filter((_, i) => Math.abs(m.loadings[i][f]) >= cut).map(c => lowerFirst(plain(columnLabel(cfg, c))))) || 'no item above ' + cut}`).join('; ')}` : ''}.`,
+      figures: [{ sig: true, caption: 'Scree plot with parallel analysis', spec: { type: 'xy', xLabel: 'Factor number', yLabel: 'Eigenvalue', hline: 1, series: [{ name: 'Observed', x: m.eigen.map((_, i) => i + 1), y: m.eigen, points: true, line: true, size: 9 }, ...(m.parallel ? [{ name: 'Random data (95th percentile)', x: m.parallel.map((_, i) => i + 1), y: m.parallel, dash: true }] : [])] } }], meta: { m } };
+  }
+  // dichotomous Rasch model
+  function raschSection(a, cfg, rows, alpha, d, used) {
+    const rc = a.predictors || []; if (rc.length < 3) return null; const m = S.rasch(binItems(a, rows)); if (!m) return null; used.add('rasch');
+    const misfit = rc.filter((_, j) => m.fit[j].infit > 1.3 || m.fit[j].infit < 0.7 || m.fit[j].outfit > 1.3 || m.fit[j].outfit < 0.7), ord = rc.map((_, j) => j).sort((p, q) => m.b[q] - m.b[p]);
+    return { kind: 'rasch', title: `Rasch analysis of ${rc.length} yes/no items`, head: ['Item', 'Difficulty (logits) ± SE', 'Infit MNSQ', 'Outfit MNSQ'],
+      rows: ord.map(j => [{ t: [columnLabel(cfg, rc[j])], b: true }, { t: [`${fmt(m.b[j], 2)} ± ${fmt(m.se[j], 2)}`] }, { t: [fmt(m.fit[j].infit, 2)], b: m.fit[j].infit > 1.3 || m.fit[j].infit < 0.7 }, { t: [fmt(m.fit[j].outfit, 2)], b: m.fit[j].outfit > 1.3 || m.fit[j].outfit < 0.7 }]),
+      footnote: `Conditional maximum likelihood (difficulties sum to zero; higher = fewer positive answers); n=${m.n} patients with non-extreme scores (${m.nExtreme} with all or none positive left out); MNSQ: mean-square fit, 0.7 to 1.3 acceptable (outside in bold).`,
+      comment: `The hardest item was ${lowerFirst(plain(columnLabel(cfg, rc[ord[0]])))} (${fmt(m.b[ord[0]], 2)} logits) and the easiest ${lowerFirst(plain(columnLabel(cfg, rc[ord[ord.length - 1]])))} (${fmt(m.b[ord[ord.length - 1]], 2)} logits). ${misfit.length ? `${listJoin(misfit.map(c => lowerFirst(plain(columnLabel(cfg, c)))))} did not fit the Rasch model well.` : 'Every item fitted the Rasch model (mean-squares 0.7 to 1.3).'}`, figures: [], meta: { m } };
+  }
+  // sample size calculator (needs no data)
+  function ssizeSection(a, cfg, rows, alpha0, d, used) {
+    const al = parseFloat(a.alpha) > 0 ? parseFloat(a.alpha) : 0.05, pw = (parseFloat(a.power) > 0 ? parseFloat(a.power) : 80) / 100, drop = (parseFloat(a.dropout) || 0) / 100, P = k => parseFloat(a[k]);
+    let n, what, per = true, extra = '';
+    switch (a.design || 'means') {
+      case 'means': n = S.nTwoMeans(P('diff'), P('sd'), al, pw); what = `a difference of ${a.diff} in means (SD ${a.sd}) between two groups`; break;
+      case 'props': n = S.nTwoProps(P('p1') / 100, P('p2') / 100, al, pw); what = `${a.p1}% vs ${a.p2}% between two groups`; break;
+      case 'paired': n = S.nPairedMean(P('diff'), P('sd'), al, pw); per = false; what = `a mean paired difference of ${a.diff} (SD of the differences ${a.sd})`; break;
+      case 'survival': { const r = S.nSurvival(P('hr'), P('pevent') / 100, al, pw); n = r.n; per = false; extra = `${r.events} events needed; `; what = `a hazard ratio of ${a.hr} with ${a.pevent}% of patients having the event`; break; }
+      case 'corr': n = S.nCorrelation(P('r'), al, pw); per = false; what = `a correlation coefficient of ${a.r}`; break;
+      case 'oneprop': n = S.nOneProp(P('p1') / 100, P('margin') / 100, al); per = false; what = `a proportion of about ${a.p1}% estimated within ±${a.margin} percentage points`; break;
+      default: return null;
+    }
+    if (typeof n === 'object' && n) n = n.n1 || n.n || n.perGroup; if (!(n > 0) || !isFinite(n)) return null; used.add('ssize');
+    const tot = per ? 2 * n : n, adj = drop > 0 ? Math.ceil(tot / (1 - drop)) : tot;
+    return { kind: 'ssize', title: 'Sample size calculation', head: ['', 'Value'],
+      rows: [[{ t: ['Design'], b: true }, { t: [what] }], [{ t: ['Significance level (two-sided) / power'], b: true }, { t: [`${al} / ${fmt(100 * pw, 0)}%`] }], [{ t: [per ? 'Patients per group' : 'Patients'], b: true }, { t: [`${extra}${n}`] }], [{ t: ['Total, allowing for drop-out'], b: true }, { t: [`${adj}${drop > 0 ? ` (${fmt(100 * drop, 0)}% drop-out)` : ''}`] }]],
+      footnote: { means: 'Two-sample t-test (noncentral t)', props: 'Two-proportion z-test', paired: 'Paired t-test (noncentral t)', survival: "Log-rank test (Schoenfeld's formula, equal allocation)", corr: "Fisher's z transformation", oneprop: 'Normal approximation of a 95% confidence interval' }[a.design || 'means'] + '.',
+      comment: `To detect ${what} with ${fmt(100 * pw, 0)}% power at a two-sided significance level of ${al}, ${per ? `${n} patients per group (${tot} in total)` : `${n} patients`} ${per || n > 1 ? 'were' : 'was'} required${drop > 0 ? `, ${adj} after allowing for ${fmt(100 * drop, 0)}% drop-out` : ''}.`, figures: [], meta: { n, adj } };
+  }
+  // cost-effectiveness of the second study group against the first: ICER, bootstrap CE plane and acceptability curve
+  function icerSection(a, cfg, rows, alpha, d, used, G) {
+    const { gl, groups } = G; if (gl.length !== 2 || !a.second) return null; const bin = columnKind(cfg, rows, a.second) !== 'numeric';
+    const eOf = r => bin ? (toCat(r[a.second]) === null ? NaN : +isPos(toCat(r[a.second]), a.positive)) : toNum(r[a.second]);
+    const pick = g => rows.filter(r => groupOf(cfg, r) === g && isFinite(toNum(r[a.outcome])) && isFinite(eOf(r)));
+    const R0 = pick(groups[0]), R1 = pick(groups[1]); if (R0.length < 5 || R1.length < 5) return null;
+    const wtpMax = parseFloat(a.wtp) > 0 ? parseFloat(a.wtp) * 3 : NaN;
+    const base = S.icer(R0.map(r => toNum(r[a.outcome])), R0.map(eOf), R1.map(r => toNum(r[a.outcome])), R1.map(eOf));
+    const top = isFinite(wtpMax) ? wtpMax : Math.max(1, Math.abs(base.icer) * 3 || 1), grid = Array.from({ length: 41 }, (_, i) => top * i / 40);
+    const m = S.icer(R0.map(r => toNum(r[a.outcome])), R0.map(eOf), R1.map(r => toNum(r[a.outcome])), R1.map(eOf), grid); used.add('icer');
+    const el = bin ? `${lowerFirst(a.positive || 'event')} (proportion)` : lowerFirst(plain(columnLabel(cfg, a.second))), at = parseFloat(a.wtp) > 0 ? m.ceac.reduce((p, q) => Math.abs(q.wtp - parseFloat(a.wtp)) < Math.abs(p.wtp - parseFloat(a.wtp)) ? q : p) : null;
+    const dom = m.dE > 0 && m.dC < 0 ? 'dominant (more effective and cheaper)' : m.dE < 0 && m.dC > 0 ? 'dominated (less effective and more costly)' : null;
+    return { kind: 'icer', title: `Cost-effectiveness of ${gl[1]} vs ${gl[0]}`, head: ['', 'Value (95% CI)'],
+      rows: [[{ t: ['Incremental cost'], b: true }, { t: [ci2(m.dC, m.ciC.lo, m.ciC.hi, d)] }], [{ t: [`Incremental effect (${el})`], b: true }, { t: [ci2(m.dE, m.ciE.lo, m.ciE.hi, 3)] }],
+        [{ t: ['ICER (cost per unit of effect)'], b: true }, { t: [dom ? dom : fmt(m.icer, d)] }], ...(at ? [[{ t: [`Probability cost-effective at ${a.wtp} per unit`], b: true }, { t: [`${fmt(100 * at.p, 1)}% (net monetary benefit ${fmt(at.nmb, d)})`] }]] : []),
+        [{ t: ['Bootstrap replicates: more effective and cheaper / more costly'], b: true }, { t: [`${fmt(100 * m.quadrant.se, 1)}% / ${fmt(100 * m.quadrant.ne, 1)}%`] }]],
+      footnote: `ICER: Incremental cost-effectiveness ratio = Δcost / Δeffect; 95% CI from 2,000 bootstrap resamples within each group; costs from ${columnLabel(cfg, a.outcome)}.`,
+      comment: `${cap(gl[1])} cost ${fmt(Math.abs(m.dC), d)} ${m.dC >= 0 ? 'more' : 'less'} per patient and gave ${fmt(Math.abs(m.dE), 3)} ${m.dE >= 0 ? 'more' : 'less'} ${el}, ${dom ? `so it was ${dom}` : `an ICER of ${fmt(m.icer, d)} per unit of effect`}${at ? `; at a willingness to pay of ${a.wtp}, the probability that it is cost-effective was ${fmt(100 * at.p, 1)}%` : ''}.`,
+      figures: [{ sig: true, caption: 'Cost-effectiveness plane (bootstrap replicates)', spec: { type: 'xy', hline: 0, vline: 0, xLabel: `Incremental effect (${el})`, yLabel: 'Incremental cost', legend: false, series: [{ x: m.boot.map(b => b[1]), y: m.boot.map(b => b[0]), points: true, size: 4, alpha: 0.35 }] } },
+        { sig: true, caption: 'Cost-effectiveness acceptability curve', spec: { type: 'xy', ymin: 0, ymax: 1, xLabel: 'Willingness to pay per unit of effect', yLabel: 'Probability cost-effective', legend: false, series: [{ x: m.ceac.map(q => q.wtp), y: m.ceac.map(q => q.p) }] } }], meta: { m: { ...m, boot: undefined } } };
+  }
+  // Bayesian logistic regression with normal priors on the log odds ratios (Laplace approximation)
+  function bayeslogitSection(a, cfg, rows, alpha, d, used) {
+    const D = design(a, cfg, rows, r => toCat(r[a.outcome]) !== null); if (!D.preds.length || D.rs.length < 10) return null;
+    const y = D.rs.map(r => +(toCat(r[a.outcome]) === a.positive)); if (!y.some(Boolean) || y.every(Boolean)) return null;
+    const sdv = parseFloat(a.priorSd) > 0 ? parseFloat(a.priorSd) : 2.5, pm = parseFloat(a.priorOr) > 0 ? Math.log(parseFloat(a.priorOr)) : 0;
+    const m = S.bayesLogistic(D.X, y, sdv, pm); if (!m) return null; used.add('bayeslogit'); const what = eventName(cfg, a);
+    const strong = D.labels.map((l, i) => [l, m.terms[i + 1]]).filter(([, t]) => t.pPos >= 0.975 || t.pPos <= 0.025);
+    return { kind: 'bayeslogit', title: `Bayesian logistic regression for ${what}`, head: ['', 'Posterior OR (95% CrI)', 'P(OR > 1)'],
+      rows: D.labels.map((l, i) => [{ t: [l], b: true }, { t: [`${fmt(m.terms[i + 1].or, 2)} (${fmt(m.terms[i + 1].lo, 2)}-${fmt(m.terms[i + 1].hi, 2)})`] }, { t: [`${fmt(100 * m.terms[i + 1].pPos, 1)}%`], b: m.terms[i + 1].pPos >= 0.975 || m.terms[i + 1].pPos <= 0.025 }]),
+      footnote: `Prior: log OR ~ Normal(${fmt(pm, 2)}, ${sdv}²) for each predictor (OR ${fmt(Math.exp(pm), 2)}, 95% prior range ${fmt(Math.exp(pm - 1.96 * sdv), 2)} to ${fmt(Math.exp(pm + 1.96 * sdv), 2)}), flat prior on the intercept; posterior mode with a normal (Laplace) approximation; CrI: Credible interval; n=${m.n}, ${y.filter(Boolean).length} events.`,
+      comment: strong.length ? `${listJoin(strong.map(([l, t]) => `${lowerFirst(plain(l))} (posterior OR = ${fmt(t.or, 2)}, 95% CrI ${fmt(t.lo, 2)}-${fmt(t.hi, 2)}, probability of OR > 1 ${fmt(100 * t.pPos, 1)}%)`))} ${strong.length > 1 ? 'were' : 'was'} credibly associated with ${what}.` : `No predictor had a 95% credible interval excluding OR = 1 for ${what}.`, figures: [], meta: { m } };
+  }
+  // LASSO: variable selection with a cross-validated penalty
+  function lassoSection(a, cfg, rows, alpha, d, used) {
+    const bin = columnKind(cfg, rows, a.outcome) !== 'numeric', D = design(a, cfg, rows, r => bin ? toCat(r[a.outcome]) !== null : isFinite(toNum(r[a.outcome]))); if (D.labels.length < 2 || D.rs.length < 20) return null;
+    const y = D.rs.map(r => bin ? +(toCat(r[a.outcome]) === a.positive) : toNum(r[a.outcome])); if (bin && (!y.some(Boolean) || y.every(Boolean))) return null;
+    const m = S.lasso(D.X, y, bin ? 'binomial' : 'gaussian'); used.add('lasso'); const use1se = a.rule !== 'min', k = use1se ? m.k1se : m.kMin, coef = use1se ? m.coef1se : m.coefMin;
+    const kept = D.labels.filter((_, j) => Math.abs(m.path[k][j + 1]) > 1e-10), lab = bin ? eventName(cfg, a) : lowerFirst(plain(columnLabel(cfg, a.outcome)));
+    return { kind: 'lasso', title: `LASSO ${bin ? 'logistic' : 'linear'} regression for ${lab}: selected predictors`, head: ['', bin ? 'OR (shrunken)' : 'B (shrunken)', 'Selected'],
+      rows: D.labels.map((l, j) => [{ t: [l], b: Math.abs(m.path[k][j + 1]) > 1e-10 }, { t: [Math.abs(m.path[k][j + 1]) > 1e-10 ? fmt(bin ? Math.exp(coef[j + 1]) : coef[j + 1], bin ? 2 : d) : '—'] }, { t: [Math.abs(m.path[k][j + 1]) > 1e-10 ? 'Yes' : 'No'] }]),
+      footnote: `Predictors standardised; penalty λ = ${fmt(m.lambdas[k], 4)} chosen by 10-fold cross-validation (${use1se ? 'largest λ within one standard error of the minimum' : 'minimum'} ${bin ? 'deviance' : 'mean squared error'}); coefficients are shrunk towards zero and have no P values; n=${m.n}.`,
+      comment: `LASSO kept ${kept.length} of ${D.labels.length} candidate predictors of ${lab}${kept.length ? `: ${listJoin(kept.map(l => lowerFirst(plain(l))))}` : ''}.`,
+      figures: [{ sig: true, caption: 'LASSO coefficient paths (standardised predictors)', spec: { type: 'xy', vline: Math.log10(m.lambdas[k]), hline: 0, xLabel: 'log10(λ)', yLabel: 'Standardised coefficient', series: D.labels.map((l, j) => ({ name: plain(l), x: m.lambdas.map(v => Math.log10(v)), y: m.path.map(b => b[j + 1]) })) } },
+        { sig: true, caption: 'Cross-validation of the LASSO penalty', spec: { type: 'xy', vline: Math.log10(m.lambdas[k]), xLabel: 'log10(λ)', yLabel: bin ? 'Deviance' : 'Mean squared error', legend: false, series: [{ x: m.lambdas.map(v => Math.log10(v)), y: m.cv, points: true, line: true, size: 6 }] } }], meta: { kept } };
+  }
   /* ---------- AB/BA crossover trial (Hills-Armitage): treatment, period and carry-over effects ---------- */
   function crossoverSection(a, cfg, rows, alpha, d, used) {
     if (!a.second || !a.seqCol || !a.seqA) return null;
@@ -3032,7 +3357,7 @@ const Analysis = (() => {
     }
 
     for (const a of cfg.advanced || []) {
-      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw', 'upset', 'alluvial'].includes(a.type))) continue;
+      if (a.include === false || (!a.outcome && !['cronbach', 'correlation', 'cochran', 'pca', 'psm', 'lmm', 'fleiss', 'gee', 'weighted', 'kendallw', 'upset', 'alluvial', 'kalpha', 'lca', 'kmeans', 'efa', 'rasch', 'ssize'].includes(a.type))) continue;
       const needs = {
         linear: () => (a.predictors || []).length, logistic: () => a.positive && (a.predictors || []).length, roc: () => a.positive && (a.predictors || []).length,
         ancova: () => true, survival: () => a.event && a.positive, cox: () => a.event && a.positive && (a.predictors || []).length,
@@ -3040,16 +3365,21 @@ const Analysis = (() => {
         methodcomp: () => a.second, pca: () => (a.predictors || []).length >= 3, partial: () => a.second && (a.predictors || []).length, anova2: () => a.second, mediation: () => a.second && a.xvar, psm: () => (a.predictors || []).length, lmm: () => a.rvar, tost: () => a.margin !== undefined && a.margin !== '', mh: () => a.positive && a.second, clogit: () => a.positive && a.second && (a.predictors || []).length,
         correlation: () => [a.outcome, ...(a.predictors || [])].filter(Boolean).length >= 2, paired: () => a.second,
         cif: () => a.event && a.positive && a.competing, tdroc: () => a.event && a.positive && (a.predictors || []).length, quantreg: () => (a.predictors || []).length, fleiss: () => (a.predictors || []).length >= 2,
-        rmcorr: () => a.second && a.idcol, crossover: () => a.second && a.seqCol, upset: () => (a.predictors || []).length >= 2, alluvial: () => a.rvar, weighted: () => a.wcol && (a.predictors || []).length, kendallw: () => (a.predictors || []).length >= 2, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length
+        rmcorr: () => a.second && a.idcol, crossover: () => a.second && a.seqCol, upset: () => (a.predictors || []).length >= 2, alluvial: () => a.rvar, weighted: () => a.wcol && (a.predictors || []).length, kendallw: () => (a.predictors || []).length >= 2, noninf: () => a.margin !== undefined && a.margin !== '', gee: () => a.rvar, firth: () => a.positive && (a.predictors || []).length, mi: () => (a.predictors || []).length,
+        finegray: () => a.event && a.positive && a.competing && (a.predictors || []).length, rmst: () => a.event && a.positive, phcheck: () => a.event && a.positive && (a.predictors || []).length, subgroups: () => (a.predictors || []).length,
+        kalpha: () => (a.predictors || []).length >= 2, calib: () => a.positive && (a.probCol || (a.predictors || []).length), multilevel: () => a.idcol, its: () => a.second && a.cut !== undefined && a.cut !== '', did: () => a.second && a.preVal,
+        ipwsurv: () => a.event && a.positive && (a.predictors || []).length, iv: () => a.xvar && a.second, lca: () => (a.predictors || []).length >= 3, kmeans: () => (a.predictors || []).length >= 2, efa: () => (a.predictors || []).length >= 4,
+        rasch: () => (a.predictors || []).length >= 3, ssize: () => true, icer: () => a.second, bayeslogit: () => a.positive && (a.predictors || []).length, lasso: () => (a.predictors || []).length >= 2
       };
       if (!needs[a.type] || !needs[a.type]()) continue;
       if (k < 2 && a.type === 'ancova') continue; // ANCOVA compares the study groups
       const G = { gl, groups };
       const make = { roc: rocSection, ancova: ancovaSection, survival: survivalSection, cox: coxSection, mcnemar: mcnemarSection, kappa: kappaSection,
         agreement: agreementSection, diagnostic: diagnosticSection, cronbach: cronbachSection, cochran: cochranSection, count: countSection, ordinal: ordinalSection, multinom: ordinalSection, methodcomp: methodSection, pca: pcaSection, partial: partialSection, anova2: anova2Section, mediation: mediationSection, psm: psmSection, lmm: lmmSection, tost: tostSection, mh: mhSection, clogit: clogitSection, linear: regressionSection, logistic: regressionSection, correlation: advCorrelationSection, paired: pairedSection,
-        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, upset: upsetSection, alluvial: alluvialSection, weighted: weightedSection, kendallw: kendallWSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection }[a.type];
+        cif: cifSection, tdroc: tdrocSection, quantreg: quantregSection, fleiss: fleissSection, rmcorr: rmcorrSection, crossover: crossoverSection, upset: upsetSection, alluvial: alluvialSection, weighted: weightedSection, kendallw: kendallWSection, noninf: noninfSection, gee: geeSection, firth: firthSection, mi: miSection,
+        finegray: finegraySection, rmst: rmstSection, phcheck: phcheckSection, subgroups: subgroupsSection, kalpha: kalphaSection, calib: calibSection, multilevel: multilevelSection, its: itsSection, did: didSection, ipwsurv: ipwsurvSection, iv: ivSection, lca: lcaSection, kmeans: kmeansSection, efa: efaSection, rasch: raschSection, ssize: ssizeSection, icer: icerSection, bayeslogit: bayeslogitSection, lasso: lassoSection }[a.type];
       // patients: all, each study group separately, or one group (not for analyses that compare the groups)
-      const compares = ['ancova', 'survival', 'cif', 'noninf', 'gee', 'weighted', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
+      const compares = ['subgroups', 'rmst', 'did', 'ipwsurv', 'icer', 'ssize', 'ancova', 'survival', 'cif', 'noninf', 'gee', 'weighted', 'mcnemar', 'cochran', 'tost', 'mh', 'anova2', 'psm', 'lmm'].includes(a.type);
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
         : a.subset === 'each' ? groups.map(g => ({ g, rows: rows.filter(r => groupOf(cfg, r) === g) }))
         : groups.includes(a.subset) ? [{ g: a.subset, rows: rows.filter(r => groupOf(cfg, r) === a.subset) }] : [{ g: null, rows }];
@@ -3418,6 +3748,15 @@ const Analysis = (() => {
       lmmAdv: 'Repeated outcomes were analysed with linear mixed models with a random intercept per patient, adjusted for covariates.', interaction: 'Interaction terms were added to the regression models where stated.',
       optimism: 'Models were internally validated by bootstrapping (200 resamples) with optimism-corrected AUC.', nri: 'The added value of a predictor was assessed with the continuous net reclassification improvement (NRI) and the integrated discrimination improvement (IDI).',
       dca: 'Clinical usefulness was assessed with decision curve analysis (net benefit).',
+      finegray: 'Competing-risks regression used the Fine-Gray subdistribution hazards model.', rmst: 'Restricted mean survival times (the area under the Kaplan-Meier curve up to a fixed time) were compared between the groups; landmark analyses followed the patients still event-free at the landmark time.',
+      phcheck: 'The proportional hazards assumption was checked with the Grambsch-Therneau test of scaled Schoenfeld residuals and log(−log) survival plots; discrimination with Harrell\'s C-index.', subgroups: 'Treatment effects in subgroups were compared with a test of interaction (Cochran Q) and I².',
+      kalpha: "Inter-rater reliability was assessed with Krippendorff's alpha and Gwet's AC1, with bootstrap confidence intervals.", calib: 'Model performance was assessed by discrimination (C-statistic), the Brier score, calibration-in-the-large, the calibration slope and a calibration plot with a LOWESS smoother.',
+      multilevel: 'Clustering of patients was handled with multilevel (random-intercept) regression models.', its: 'Interrupted time series were analysed by segmented regression with Newey-West standard errors.', did: 'Differences-in-differences were estimated by regression with a group × period interaction.',
+      ipwsurv: 'Baseline differences in survival analyses were balanced by inverse probability of treatment weighting (stabilised weights from a propensity score), with weighted Kaplan-Meier curves and a weighted Cox model with robust standard errors.',
+      iv: 'An instrumental variable analysis used two-stage least squares, with the first-stage F statistic for instrument strength and the Durbin-Wu-Hausman test for endogeneity.', lca: 'Latent class analysis of the binary items compared models with one to four classes by the Bayesian information criterion.',
+      kmeans: 'Cluster analysis used k-means on standardised variables, with the number of clusters chosen by the silhouette width.', efa: 'Exploratory factor analysis used principal axis factoring, with the number of factors from parallel analysis, after checking the KMO measure and Bartlett\'s test.',
+      rasch: 'Item difficulty and fit were assessed with the dichotomous Rasch model (conditional maximum likelihood; infit and outfit mean-squares).', ssize: 'The sample size was calculated a priori as stated.', icer: 'Cost-effectiveness was summarised by the incremental cost-effectiveness ratio, with bootstrap confidence intervals, a cost-effectiveness plane and an acceptability curve.',
+      bayeslogit: 'Bayesian logistic regression with normal priors on the log odds ratios was used, reporting posterior odds ratios with 95% credible intervals.', lasso: 'Predictors were selected by LASSO regression with the penalty chosen by 10-fold cross-validation.',
       moodMed: "Mood's median test was used where stated.", weighted: 'Weighted comparisons used weighted linear or logistic regression with robust standard errors.', kendallW: "Agreement between several raters' rankings was assessed with Kendall's coefficient of concordance (W).", perm: 'Permutation tests (10,000 random re-allocations, difference in means) were used where stated.', huber: 'Huber robust regression (M-estimation) was used where stated, to limit the influence of outliers.',
       welchN: "Welch's tests were used when the group sizes differed by 50% or more.", cluster: 'P values adjusted for clustering used cluster-robust standard errors.', strata: 'Stratified comparisons used the van Elteren test (numeric) and the Cochran-Mantel-Haenszel test (yes/no).',
       power: 'The power of each two-group comparison at the observed difference was reported descriptively, with the sample size needed for 80% power.', nnt: 'For significant yes/no outcomes, the number needed to treat (or harm) was derived from the risk difference (Newcombe CI).',

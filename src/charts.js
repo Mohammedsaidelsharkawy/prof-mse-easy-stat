@@ -374,6 +374,7 @@ const Charts = (() => {
     if (spec.type === 'upset') return upsetChart(spec, paletteName, st);
     if (spec.type === 'alluvial') return alluvialChart(spec, paletteName, st);
     if (spec.type === 'km') return kmChart(spec, paletteName, st);
+    if (spec.type === 'xy') return xyChart(spec, paletteName, st);
     if (spec.type === 'curve') return curveChart(spec, paletteName, st);
     if (spec.type === 'margin') return marginChart(spec, paletteName, st);
     if (spec.type === 'nomogram') return nomogramChart(spec, paletteName, st);
@@ -923,6 +924,41 @@ const Charts = (() => {
   }
 
   /* ---------- Kaplan–Meier curves ---------- */
+  // general x-y chart (step 8): lines, step lines, dashed reference lines and point clouds; optional diagonal, horizontal and vertical lines
+  function xyChart(spec, paletteName, st) {
+    const pal = palette(paletteName);
+    const { c, ctx, W, H, ts, F } = setup(st);
+    const ser = spec.series.filter(s => s.x && s.x.length), items = ser.filter(s => s.name).map((s, i) => ({ name: s.name, color: s.color || pal[ser.indexOf(s) % pal.length], dash: !!s.dash }));
+    const lm = legendMetrics(ctx, spec.legend === false ? [] : items, st, ts);
+    const L = 120 + 40 * ts, R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0), pw = W - L - R, ph = H - T - B;
+    const fx = v => isFinite(v), xs = ser.flatMap(s => s.x).filter(fx), ys = ser.flatMap(s => s.y).filter(fx).concat(spec.hline != null ? [spec.hline] : []);
+    const sx = niceScale(spec.xmin ?? Math.min(...xs), spec.xmax ?? Math.max(...xs)), sy = niceScale(spec.ymin ?? Math.min(...ys), spec.ymax ?? Math.max(...ys));
+    const X = v => L + (v - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - sy.min) / (sy.max - sy.min) * ph;
+    ctx.font = F(600, 26); ctx.lineWidth = 1.5;
+    for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) { if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]); }
+      ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(fmtTick(v, sy.step), L - 14, Y(v)); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let v = sx.min; v <= sx.max + 1e-9; v += sx.step) { if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); }
+      ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sx.step), X(v), T + ph + 12); }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+    ctx.font = F(700, 28); ctx.fillStyle = '#333'; ctx.fillText(spec.xLabel || '', L + pw / 2, T + ph + 60 * ts);
+    ctx.save(); ctx.translate(36, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText(spec.yLabel || '', 0, 0); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+    const ref = (x1, y1, x2, y2) => { ctx.strokeStyle = '#888'; ctx.lineWidth = 2.5; ctx.setLineDash([12, 10]); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); };
+    if (spec.diag) { const a = Math.max(sx.min, sy.min), b = Math.min(sx.max, sy.max); ref(X(a), Y(a), X(b), Y(b)); }
+    if (spec.hline != null) ref(L, Y(spec.hline), L + pw, Y(spec.hline));
+    if (spec.vline != null) ref(X(spec.vline), T, X(spec.vline), T + ph);
+    ser.forEach((s, i) => { const col = s.color || pal[i % pal.length], P0 = s.x.map((x, k) => [x, s.y[k]]), P = P0.filter(([x, y]) => fx(x) && fx(y));
+      if (s.points) { ctx.fillStyle = col; ctx.globalAlpha = s.alpha ?? 0.8; P.forEach(([x, y]) => { ctx.beginPath(); ctx.arc(X(x), Y(y), (s.size || 7) * ts, 0, Math.PI * 2); ctx.fill(); }); ctx.globalAlpha = 1; }
+      if (s.points && !s.line) return;
+      ctx.strokeStyle = col; ctx.lineWidth = (s.width || 5) * lw(st); ctx.setLineDash(s.dash ? [16, 10] : []); ctx.beginPath();
+      // a missing point breaks the line (e.g. before and after an intervention)
+      let prev = null; P0.forEach(([x, y]) => { if (!fx(x) || !fx(y)) { prev = null; return; } if (!prev) ctx.moveTo(X(x), Y(y)); else { if (s.step) ctx.lineTo(X(x), Y(prev[1])); ctx.lineTo(X(x), Y(y)); } prev = [x, y]; }); ctx.stroke(); ctx.setLineDash([]); });
+    ctx.restore();
+    if (spec.note) { ctx.font = F(700, 26); ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = '#222'; ctx.fillText(spec.note, L + 16, T + 10); }
+    drawLegend(ctx, items, 'line', st, lm, lm.pos === 'inside' ? { W, H, L, T: T + ph - lm.h - 24, pw, ph, ts } : { W, H, L, T, pw, ph, ts });
+    return c;
+  }
   function kmChart(spec, paletteName, st) {
     const pal = palette(paletteName);
     const { c, ctx, W, H, ts, F } = setup(st);

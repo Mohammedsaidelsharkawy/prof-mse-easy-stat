@@ -1720,7 +1720,329 @@ const Stats = (() => {
     const pL = 1 - jStat.studentt.cdf((md - lo) / se, df), pU = jStat.studentt.cdf((md - hi) / se, df), t90 = jStat.studentt.inv(0.95, df);
     return { md, se, df, pL, pU, p: Math.max(pL, pU), lo90: md - t90 * se, hi90: md + t90 * se };
   }
+  /* ---------- Step 8: competing risks regression, RMST, PH checks, agreement, calibration, causal and latent-variable methods ---------- */
+  const mv = (A, x) => A.map(r => r.reduce((t, v, j) => t + v * x[j], 0));
+  const zP = z => 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1));
+  // Cox partial likelihood with case weights (Breslow ties); wt(i, t) gives a time-varying weight and inRisk(i, t) extra risk-set members
+  // (the Fine-Gray model keeps competing-event patients in the risk set with IPCW weights). Robust: Lin-Wei sandwich.
+  function coxFit(X, time, event, o = {}) {
+    const n = time.length, p = X[0].length, w = o.w || new Array(n).fill(1), wt = o.wt || ((i) => w[i]), inR = o.inRisk || ((i, t) => time[i] >= t);
+    const evT = [...new Set(time.filter((_, i) => event[i]))].sort((a, b) => a - b);
+    const D = evT.map(t => time.map((x, i) => x === t && event[i] ? i : -1).filter(i => i >= 0));
+    const R = evT.map(t => { const r = []; for (let i = 0; i < n; i++) if (inR(i, t)) r.push([i, wt(i, t)]); return r; });
+    const fit = beta => { let ll = 0; const g = new Array(p).fill(0), H = Array.from({ length: p }, () => new Array(p).fill(0)), xb = X.map(x => x.reduce((t, v, j) => t + v * beta[j], 0));
+      evT.forEach((t, k) => { let S0 = 0; const S1 = new Array(p).fill(0), S2 = Array.from({ length: p }, () => new Array(p).fill(0));
+        R[k].forEach(([i, wi]) => { const e = wi * Math.exp(xb[i]); S0 += e; for (let a = 0; a < p; a++) { S1[a] += e * X[i][a]; for (let b = 0; b < p; b++) S2[a][b] += e * X[i][a] * X[i][b]; } });
+        const dw = D[k].reduce((s, i) => s + w[i], 0);
+        D[k].forEach(i => { ll += w[i] * xb[i]; for (let a = 0; a < p; a++) g[a] += w[i] * X[i][a]; });
+        ll -= dw * Math.log(S0);
+        for (let a = 0; a < p; a++) { g[a] -= dw * S1[a] / S0; for (let b = 0; b < p; b++) H[a][b] -= dw * (S2[a][b] / S0 - S1[a] * S1[b] / (S0 * S0)); } });
+      return { ll, g, H };
+    };
+    let beta = new Array(p).fill(0), cur = fit(beta); const ll0 = cur.ll;
+    for (let it = 0; it < 60; it++) { const inv = invert(cur.H.map(r => r.map(v => -v))); if (!inv) return null;
+      let step = mv(inv, cur.g), nb, nx, tries = 0;
+      do { nb = beta.map((b, j) => b + step[j]); nx = fit(nb); step = step.map(s => s / 2); } while (nx.ll < cur.ll - 1e-10 && ++tries < 20);
+      const dlt = Math.max(...nb.map((b, j) => Math.abs(b - beta[j]))); beta = nb; cur = nx; if (dlt < 1e-10) break; }
+    const V = invert(cur.H.map(r => r.map(v => -v))); if (!V) return null;
+    let cov = V;
+    if (o.robust) { // score residuals of every patient
+      const xb = X.map(x => x.reduce((t, v, j) => t + v * beta[j], 0)), U = X.map(() => new Array(p).fill(0));
+      evT.forEach((t, k) => { let S0 = 0; const S1 = new Array(p).fill(0); R[k].forEach(([i, wi]) => { const e = wi * Math.exp(xb[i]); S0 += e; for (let a = 0; a < p; a++) S1[a] += e * X[i][a]; });
+        const xbar = S1.map(v => v / S0), dw = D[k].reduce((s, i) => s + w[i], 0);
+        D[k].forEach(i => { for (let a = 0; a < p; a++) U[i][a] += X[i][a] - xbar[a]; });
+        R[k].forEach(([i, wi]) => { const f = dw * wi / w[i] * Math.exp(xb[i]) / S0; for (let a = 0; a < p; a++) U[i][a] -= f * (X[i][a] - xbar[a]); }); });
+      const M = Array.from({ length: p }, () => new Array(p).fill(0)); U.forEach((u, i) => { for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) M[a][b] += w[i] * w[i] * u[a] * u[b]; });
+      cov = V.map((r, a) => V.map((_, b) => r.reduce((t, v, k) => t + v * M[k].reduce((s, m, l) => s + m * V[l][b], 0), 0)));
+    }
+    const terms = beta.map((B, j) => { const se = Math.sqrt(cov[j][j]); return { B, se, hr: Math.exp(B), lo: Math.exp(B - ZC() * se), hi: Math.exp(B + ZC() * se), p: zP(B / se) }; });
+    return { beta, cov, terms, ll: cur.ll, ll0, n, events: D.reduce((s, d) => s + d.length, 0) };
+  }
+  // Fine-Gray subdistribution hazards: status 1 = event of interest, 2 = competing event, 0 = censored
+  function fineGray(X, time, status) {
+    const G = kaplanMeier(time, status.map(s => s === 0 ? 1 : 0)).steps, Gm = t => { let s = 1; for (const q of G) { if (q.t < t) s = q.s; else break; } return s; };
+    const Gt = time.map(t => Gm(t + 1e-12 * Math.max(1, Math.abs(t))));
+    return coxFit(X, time, status.map(s => s === 1), { wt: (i, t) => time[i] >= t ? 1 : Gm(t) / Gt[i], inRisk: (i, t) => time[i] >= t || status[i] === 2 });
+  }
+  // restricted mean survival time up to tau with its variance (as in survRM2)
+  function rmst(times, events, tau) {
+    const km = kaplanMeier(times, events), st = km.steps.filter(q => q.t <= tau);
+    let area = 0; st.forEach((q, j) => { const nx = j + 1 < st.length ? st[j + 1].t : tau; area += q.s * (nx - q.t); });
+    let v = 0; st.forEach((q, j) => { if (!q.d) return; let A = 0; for (let k = j; k < st.length; k++) { const nx = k + 1 < st.length ? st[k + 1].t : tau; A += st[k].s * (nx - st[k].t); }
+      v += q.atRisk > q.d ? A * A * q.d / (q.atRisk * (q.atRisk - q.d)) : 0; });
+    return { rmst: area, se: Math.sqrt(v), lo: area - ZC() * Math.sqrt(v), hi: area + ZC() * Math.sqrt(v), n: times.length };
+  }
+  function rmstCompare(a, b) { // a, b from rmst(); difference b − a and ratio b / a
+    const d = b.rmst - a.rmst, se = Math.sqrt(a.se ** 2 + b.se ** 2), lr = Math.log(b.rmst / a.rmst), sl = Math.sqrt((a.se / a.rmst) ** 2 + (b.se / b.rmst) ** 2);
+    return { diff: d, lo: d - ZC() * se, hi: d + ZC() * se, p: zP(d / se), ratio: Math.exp(lr), rlo: Math.exp(lr - ZC() * sl), rhi: Math.exp(lr + ZC() * sl), rp: zP(lr / sl) };
+  }
+  // Grambsch-Therneau test of proportional hazards from scaled Schoenfeld residuals (time transform: km or rank, as in lifelines)
+  function phTest(X, time, event, beta, cov, transform = 'km') {
+    const p = X[0].length, ev = time.map((_, i) => i).filter(i => event[i]).sort((a, b) => time[a] - time[b]), D = ev.length; if (D < 3) return null;
+    const xb = X.map(x => x.reduce((t, v, j) => t + v * beta[j], 0));
+    const r = ev.map(i => { let S0 = 0; const S1 = new Array(p).fill(0); for (let j = 0; j < X.length; j++) if (time[j] >= time[i]) { const e = Math.exp(xb[j]); S0 += e; for (let a = 0; a < p; a++) S1[a] += e * X[j][a]; } return X[i].map((v, a) => v - S1[a] / S0); });
+    const sc = r.map(ri => mv(cov, ri).map(v => v * D));
+    let g;
+    if (transform === 'rank') { g = rank(ev.map(i => time[i])).ranks; }
+    else if (transform === 'log') g = ev.map(i => Math.log(time[i]));
+    else if (transform === 'identity') g = ev.map(i => time[i]);
+    else { const km = kaplanMeier(time, event).steps; g = ev.map(i => { let s = 1; for (const q of km) { if (q.t <= time[i]) s = q.s; else break; } return 1 - s; }); }
+    const mg = mean(g), dg = g.map(v => v - mg), sgg = sum(dg.map(v => v * v));
+    return beta.map((_, j) => { const num = sum(dg.map((v, k) => v * sc[k][j])), chi = num * num / (D * cov[j][j] * sgg); return { chi, p: 1 - jStat.chisquare.cdf(chi, 1) }; });
+  }
+  // Harrell's C-index (higher risk → shorter survival); ties in risk count one half
+  function cIndex(time, event, risk) {
+    let c = 0, tot = 0; for (let i = 0; i < time.length; i++) { if (!event[i]) continue;
+      for (let j = 0; j < time.length; j++) { if (time[j] > time[i] || (time[j] === time[i] && !event[j] && j !== i)) { tot++; c += risk[i] > risk[j] ? 1 : risk[i] === risk[j] ? 0.5 : 0; } } }
+    return tot ? c / tot : NaN;
+  }
+  // heterogeneity between subgroup estimates (inverse-variance): Cochran's Q, I², DerSimonian-Laird τ² and the pooled effects
+  function metaHet(est, se) {
+    const w = se.map(s => 1 / (s * s)), W = sum(w), fe = sum(est.map((e, i) => w[i] * e)) / W, Q = sum(est.map((e, i) => w[i] * (e - fe) ** 2)), df = est.length - 1;
+    const C = W - sum(w.map(v => v * v)) / W, tau2 = Math.max(0, (Q - df) / C), wr = se.map(s => 1 / (s * s + tau2)), Wr = sum(wr), re = sum(est.map((e, i) => wr[i] * e)) / Wr;
+    return { fe, feSe: Math.sqrt(1 / W), re, reSe: Math.sqrt(1 / Wr), Q, df, p: df > 0 ? 1 - jStat.chisquare.cdf(Q, df) : NaN, I2: Q > 0 ? Math.max(0, (Q - df) / Q) : 0, tau2 };
+  }
+  // Krippendorff's alpha (nominal, ordinal, interval, ratio); M = units × raters, NaN = missing
+  function krippAlpha(M, level = 'nominal') {
+    const vals = [...new Set(M.flat().filter(v => isFinite(v)))].sort((a, b) => a - b), K = vals.length, ix = new Map(vals.map((v, i) => [v, i]));
+    if (K < 2) return null;
+    const O = Array.from({ length: K }, () => new Array(K).fill(0));
+    M.forEach(u => { const x = u.filter(v => isFinite(v)), m = x.length; if (m < 2) return;
+      for (let a = 0; a < m; a++) for (let b = 0; b < m; b++) if (a !== b) O[ix.get(x[a])][ix.get(x[b])] += 1 / (m - 1); });
+    const nc = O.map(r => sum(r)), n = sum(nc); if (n < 2) return null;
+    const d2 = (c, k) => { if (c === k) return 0; const a = vals[c], b = vals[k];
+      if (level === 'interval') return (a - b) ** 2; if (level === 'ratio') return ((a - b) / (a + b)) ** 2;
+      if (level === 'ordinal') { const lo = Math.min(c, k), hi = Math.max(c, k); let s = 0; for (let g = lo; g <= hi; g++) s += nc[g]; return (s - (nc[c] + nc[k]) / 2) ** 2; }
+      return 1; };
+    let Do = 0, De = 0; for (let c = 0; c < K; c++) for (let k = 0; k < K; k++) { const d = d2(c, k); Do += O[c][k] * d; De += nc[c] * nc[k] * d; }
+    Do /= n; De /= n * (n - 1); return { alpha: 1 - Do / De, n, units: M.filter(u => u.filter(v => isFinite(v)).length >= 2).length, K };
+  }
+  // Gwet's AC1 for several raters (nominal; missing ratings allowed)
+  function gwetAC1(M) {
+    const cats = [...new Set(M.flat().filter(v => isFinite(v)))], q = cats.length; if (q < 2) return null;
+    let pa = 0, nn = 0; const pi = new Array(q).fill(0); let nu = 0;
+    M.forEach(u => { const x = u.filter(v => isFinite(v)), r = x.length; if (!r) return; nu++;
+      const cnt = cats.map(c => x.filter(v => v === c).length); cnt.forEach((k, j) => { pi[j] += k / r; });
+      if (r >= 2) { nn++; pa += sum(cnt.map(k => k * (k - 1))) / (r * (r - 1)); } });
+    pa /= nn; const pk = pi.map(v => v / nu), pe = sum(pk.map(v => v * (1 - v))) / (q - 1);
+    return { ac1: (pa - pe) / (1 - pe), pa, pe, n: nn };
+  }
+  // bootstrap percentile interval of a statistic of the units (rows), seeded
+  function bootUnits(M, f, B = 1000, seed = 11) { const r = seeded(seed), out = [];
+    for (let b = 0; b < B; b++) { const s = M.map(() => M[Math.floor(r() * M.length)]), v = f(s); if (isFinite(v)) out.push(v); }
+    return out.length > 20 ? { lo: quantile(out, QL()), hi: quantile(out, QU()) } : { lo: NaN, hi: NaN }; }
+  // LOWESS (Cleveland; tricube weights, robustness iterations), as statsmodels' lowess with delta = 0; returns fitted values at the sorted x
+  function lowess(x, y, frac = 2 / 3, iters = 3) {
+    const idx = x.map((_, i) => i).sort((a, b) => x[a] - x[b]), xs = idx.map(i => x[i]), ys = idx.map(i => y[i]), n = xs.length, k = Math.min(n, Math.max(2, Math.ceil(frac * n - 1e-9)));
+    let rw = new Array(n).fill(1), fit = new Array(n).fill(0);
+    for (let it = 0; it <= iters; it++) {
+      for (let i = 0; i < n; i++) {
+        let lo = 0, hi = n - 1; // the k nearest neighbours of xs[i]
+        const d = xs.map(v => Math.abs(v - xs[i])), h = [...d].sort((a, b) => a - b)[k - 1];
+        let sw = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+        for (let j = lo; j <= hi; j++) { const u = h > 0 ? d[j] / h : 0; if (u >= 1) continue; const wj = (1 - u ** 3) ** 3 * rw[j]; sw += wj; sx += wj * xs[j]; sy += wj * ys[j]; sxx += wj * xs[j] * xs[j]; sxy += wj * xs[j] * ys[j]; }
+        if (sw <= 0) { fit[i] = ys[i]; continue; }
+        const mx = sx / sw, my = sy / sw, vx = sxx / sw - mx * mx;
+        fit[i] = vx > 1e-12 * (1 + mx * mx) ? my + (sxy / sw - mx * my) / vx * (xs[i] - mx) : my;
+      }
+      if (it === iters) break;
+      const res = ys.map((v, i) => v - fit[i]), s = median(res.map(Math.abs));
+      rw = res.map(e => { const u = s > 0 ? e / (6 * s) : 0; return Math.abs(u) < 1 ? (1 - u * u) ** 2 : 0; });
+    }
+    return { x: xs, y: fit };
+  }
+  // calibration of predicted risks: Brier score, calibration-in-the-large (offset model), calibration slope, E:O ratio
+  function calibration(prob, y) {
+    const n = y.length, lp = prob.map(p => Math.log(Math.min(1 - 1e-12, Math.max(1e-12, p)) / (1 - Math.min(1 - 1e-12, Math.max(1e-12, p)))));
+    const brier = mean(prob.map((p, i) => (p - y[i]) ** 2)), ybar = mean(y), bMax = ybar * (1 - ybar);
+    let a = 0; for (let it = 0; it < 50; it++) { const mu = lp.map(v => 1 / (1 + Math.exp(-(v + a)))), g = sum(y.map((v, i) => v - mu[i])), h = sum(mu.map(m => m * (1 - m))); const st = g / h; a += st; if (Math.abs(st) < 1e-12) break; }
+    const hA = sum(lp.map(v => { const m = 1 / (1 + Math.exp(-(v + a))); return m * (1 - m); })), seA = 1 / Math.sqrt(hA);
+    const sl = logisticRegression(lp.map(v => [v]), y);
+    return { n, brier, scaledBrier: bMax > 0 ? 1 - brier / bMax : NaN, citl: a, citlLo: a - ZC() * seA, citlHi: a + ZC() * seA, citlP: zP(a / seA),
+      slope: sl ? sl.terms[1].B : NaN, slopeLo: sl ? sl.terms[1].B - ZC() * sl.terms[1].se : NaN, slopeHi: sl ? sl.terms[1].B + ZC() * sl.terms[1].se : NaN, eo: sum(prob) / sum(y), auc: aucOf(prob, y) };
+  }
+  // OLS with Newey-West (HAC, Bartlett kernel) covariance; small-sample t inference
+  function neweyWest(y, X, lag) {
+    const n = y.length, p = X[0].length, A = X[0].map((_, a) => X[0].map((_, b) => sum(X.map(r => r[a] * r[b])))), Ai = invert(A); if (!Ai) return null;
+    const beta = mv(Ai, X[0].map((_, a) => sum(X.map((r, i) => r[a] * y[i])))), e = y.map((v, i) => v - sum(X[i].map((x, j) => x * beta[j])));
+    const S = Array.from({ length: p }, (_, a) => Array.from({ length: p }, (_, b) => sum(X.map((r, i) => e[i] * e[i] * r[a] * r[b]))));
+    for (let l = 1; l <= lag; l++) { const wl = 1 - l / (lag + 1); for (let t = l; t < n; t++) for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) S[a][b] += wl * e[t] * e[t - l] * (X[t][a] * X[t - l][b] + X[t - l][a] * X[t][b]); }
+    const cov = Ai.map((r, a) => Ai.map((_, b) => r.reduce((t, v, k) => t + v * S[k].reduce((s, m, l2) => s + m * Ai[l2][b], 0), 0)));
+    const df = n - p, tc = jStat.studentt.inv(QU(), df);
+    const terms = beta.map((B, j) => { const se = Math.sqrt(cov[j][j]); return { B, se, lo: B - tc * se, hi: B + tc * se, p: 2 * (1 - jStat.studentt.cdf(Math.abs(B / se), df)) }; });
+    return { beta, cov, terms, df, resid: e, dw: sum(e.slice(1).map((v, i) => (v - e[i]) ** 2)) / sum(e.map(v => v * v)) };
+  }
+  // two-stage least squares: y on endogenous x with instruments Z and exogenous covariates W (homoskedastic, n − k)
+  function iv2sls(y, x, Z, W) {
+    const n = y.length, Wr = W || y.map(() => []), first = linearRegression(Z.map((z, i) => [...z, ...Wr[i]]), x); if (!first) return null;
+    const xh = first.terms.length ? Z.map((z, i) => sum([1, ...z, ...Wr[i]].map((v, j) => v * first.coef[j]))) : x;
+    const red = Wr[0].length ? linearRegression(Wr, x) : null, sseR = red ? red.sse : sum(x.map(v => (v - mean(x)) ** 2)), q = Z[0].length;
+    const F = ((sseR - first.sse) / q) / (first.sse / first.df);
+    const Xh = xh.map((v, i) => [1, v, ...Wr[i]]), Xo = x.map((v, i) => [1, v, ...Wr[i]]), p = Xh[0].length;
+    const A = Xh[0].map((_, a) => Xh[0].map((_, b) => sum(Xh.map(r => r[a] * r[b])))), Ai = invert(A); if (!Ai) return null;
+    const beta = mv(Ai, Xh[0].map((_, a) => sum(Xh.map((r, i) => r[a] * y[i])))), e = y.map((v, i) => v - sum(Xo[i].map((u, j) => u * beta[j])));
+    const s2 = sum(e.map(v => v * v)) / (n - p), df = n - p, tc = jStat.studentt.inv(QU(), df);
+    const terms = beta.map((B, j) => { const se = Math.sqrt(Ai[j][j] * s2); return { B, se, lo: B - tc * se, hi: B + tc * se, p: 2 * (1 - jStat.studentt.cdf(Math.abs(B / se), df)) }; });
+    // Durbin-Wu-Hausman (control function): the first-stage residual added to the OLS model
+    const v = x.map((u, i) => u - xh[i]), cf = linearRegression(x.map((u, i) => [u, ...Wr[i], v[i]]), y), hz = cf ? cf.terms[cf.terms.length - 1] : null;
+    const ols = linearRegression(x.map((u, i) => [u, ...Wr[i]]), y);
+    return { terms, n, F, dfF: [q, first.df], pF: 1 - jStat.centralF.cdf(F, q, first.df), hausman: hz ? { t: hz.t, p: hz.p } : null, ols: ols ? ols.terms[1] : null };
+  }
+  // latent class analysis of binary items (EM with seeded random starts); M rows of 0/1/NaN
+  function lca(M, K, starts = 20, seed = 5) {
+    const n = M.length, J = M[0].length, r = seeded(seed); let best = null;
+    for (let s = 0; s < starts; s++) {
+      let pi = new Array(K).fill(1 / K), th = Array.from({ length: K }, () => Array.from({ length: J }, () => 0.2 + 0.6 * r())), ll = -Infinity, post;
+      for (let it = 0; it < 1000; it++) {
+        let llN = 0; post = M.map(row => { const lw = pi.map((pk, k) => Math.log(pk) + row.reduce((t, v, j) => isFinite(v) ? t + (v ? Math.log(th[k][j]) : Math.log(1 - th[k][j])) : t, 0)), m = Math.max(...lw), e = lw.map(v => Math.exp(v - m)), se = sum(e); llN += m + Math.log(se); return e.map(v => v / se); });
+        pi = Array.from({ length: K }, (_, k) => sum(post.map(q => q[k])) / n);
+        th = Array.from({ length: K }, (_, k) => Array.from({ length: J }, (_, j) => { let a = 0, b = 0; M.forEach((row, i) => { if (isFinite(row[j])) { a += post[i][k] * row[j]; b += post[i][k]; } }); return Math.min(1 - 1e-6, Math.max(1e-6, b ? a / b : 0.5)); }));
+        if (Math.abs(llN - ll) < 1e-9) { ll = llN; break; } ll = llN;
+      }
+      if (!best || ll > best.ll + 1e-9) best = { ll, pi, th, post };
+    }
+    const npar = K - 1 + K * J, nObs = n, ent = K > 1 ? 1 - sum(best.post.map(q => -sum(q.map(v => v > 0 ? v * Math.log(v) : 0)))) / (n * Math.log(K)) : 1;
+    const ord = best.pi.map((_, k) => k).sort((a, b) => best.pi[b] - best.pi[a]);
+    return { K, ll: best.ll, aic: -2 * best.ll + 2 * npar, bic: -2 * best.ll + npar * Math.log(nObs), entropy: ent, pi: ord.map(k => best.pi[k]), theta: ord.map(k => best.th[k]), cls: best.post.map(q => ord.indexOf(q.indexOf(Math.max(...q)))), npar };
+  }
+  // k-means (k-means++ starts, seeded) on the rows of X (already scaled) and the mean silhouette width
+  function kmeans(X, k, starts = 20, seed = 7) {
+    const n = X.length, r = seeded(seed), d2 = (a, b) => a.reduce((t, v, j) => t + (v - b[j]) ** 2, 0); let best = null;
+    for (let s = 0; s < starts; s++) {
+      const C = [X[Math.floor(r() * n)].slice()];
+      while (C.length < k) { const dd = X.map(x => Math.min(...C.map(c => d2(x, c)))), tot = sum(dd); let u = r() * tot, i = 0; while (i < n - 1 && (u -= dd[i]) > 0) i++; C.push(X[i].slice()); }
+      let lab = new Array(n).fill(-1);
+      for (let it = 0; it < 300; it++) { let ch = false; X.forEach((x, i) => { let bj = 0, bd = Infinity; C.forEach((c, j) => { const d = d2(x, c); if (d < bd) { bd = d; bj = j; } }); if (lab[i] !== bj) { lab[i] = bj; ch = true; } });
+        C.forEach((c, j) => { const m = X.filter((_, i) => lab[i] === j); if (m.length) c.forEach((_, a) => { c[a] = mean(m.map(x => x[a])); }); }); if (!ch) break; }
+      const inertia = sum(X.map((x, i) => d2(x, C[lab[i]])));
+      if (!best || inertia < best.inertia - 1e-9) best = { inertia, lab: lab.slice(), C: C.map(c => c.slice()) };
+    }
+    // clusters numbered by size
+    const sizes = Array.from({ length: k }, (_, j) => best.lab.filter(l => l === j).length), ord = sizes.map((_, j) => j).sort((a, b) => sizes[b] - sizes[a]), lab = best.lab.map(l => ord.indexOf(l));
+    return { k, inertia: best.inertia, labels: lab, sizes: ord.map(j => sizes[j]), silhouette: silhouette(X, lab) };
+  }
+  function silhouette(X, lab) {
+    const n = X.length, ks = [...new Set(lab)], d = (a, b) => Math.sqrt(a.reduce((t, v, j) => t + (v - b[j]) ** 2, 0)); if (ks.length < 2) return NaN;
+    return mean(X.map((x, i) => { const own = lab[i], cnt = {}; ks.forEach(k => { cnt[k] = [0, 0]; });
+      X.forEach((y, j) => { if (j !== i) { cnt[lab[j]][0] += d(x, y); cnt[lab[j]][1]++; } });
+      if (cnt[own][1] === 0) return 0; const a = cnt[own][0] / cnt[own][1], b = Math.min(...ks.filter(k => k !== own && cnt[k][1]).map(k => cnt[k][0] / cnt[k][1])); return (b - a) / Math.max(a, b); }));
+  }
+  // exploratory factor analysis: iterated principal axis factoring (= minimum residual at convergence), varimax or promax rotation,
+  // the number of factors by parallel analysis (95th percentile of random-data eigenvalues) unless given
+  function efa(X, nf, rotation = 'varimax', seed = 9) {
+    const n = X.length, p = X[0].length, cols = Array.from({ length: p }, (_, j) => X.map(r => r[j])), z = cols.map(c => { const m = mean(c), s = sd(c); return c.map(v => (v - m) / s); });
+    const corr = Z => Z.map(a => Z.map(b => sum(a.map((v, i) => v * b[i])) / (a.length - 1)));
+    const R = corr(z), ev = eigenSym(R).values;
+    let pa = null; if (!nf) { const rnd = seeded(seed), nrm = () => Math.sqrt(-2 * Math.log(rnd() || 1e-12)) * Math.cos(2 * Math.PI * rnd()), sims = [];
+      for (let s = 0; s < 100; s++) { const Zs = Array.from({ length: p }, () => { const c = Array.from({ length: n }, nrm), m = mean(c), sdv = sd(c); return c.map(v => (v - m) / sdv); }); sims.push(eigenSym(corr(Zs)).values); }
+      pa = ev.map((_, j) => quantile(sims.map(s => s[j]), 0.95)); nf = Math.max(1, ev.findIndex((v, j) => v <= pa[j])); if (nf < 0 || ev.every((v, j) => v > pa[j])) nf = Math.max(1, p - 1); }
+    const Ri = invert(R); let h = Ri ? Ri.map((r, i) => 1 - 1 / r[i]) : new Array(p).fill(0.5), L = null;
+    for (let it = 0; it < 1000; it++) { const Rr = R.map((r, i) => r.map((v, j) => i === j ? h[i] : v)), e = eigenSym(Rr);
+      L = Array.from({ length: p }, (_, i) => Array.from({ length: nf }, (_, f) => e.vectors[f][i] * Math.sqrt(Math.max(e.values[f], 0))));
+      const hn = L.map(r => sum(r.map(v => v * v))), dlt = Math.max(...hn.map((v, i) => Math.abs(v - h[i]))); h = hn; if (dlt < 1e-8) break; }
+    L = L.map(r => r.slice()); for (let f = 0; f < nf; f++) { const s = Math.sign(sum(L.map(r => r[f]))) || 1; L.forEach(r => { r[f] *= s; }); }
+    let rot = nf > 1 ? varimax(L) : L, phi = null;
+    if (nf > 1 && rotation === 'promax') { const Xv = rot, Y = Xv.map(r => r.map(v => v * Math.abs(v) ** 3)), XtX = invert(Xv[0].map((_, a) => Xv[0].map((_, b) => sum(Xv.map(r => r[a] * r[b])))));
+      let C = XtX.map(r => Xv[0].map((_, b) => sum(r.map((v, k) => v * sum(Xv.map((row, i) => row[k] * Y[i][b])))))); const CtC = invert(C[0].map((_, a) => C[0].map((_, b) => sum(C.map(r => r[a] * r[b])))));
+      const dg = CtC.map((r, i) => Math.sqrt(r[i])); C = C.map(r => r.map((v, b) => v * dg[b])); rot = Xv.map(r => C[0].map((_, b) => sum(r.map((v, k) => v * C[k][b]))));
+      const Ci = invert(C); if (Ci) phi = Ci.map((r, a) => Ci.map((q, b) => sum(r.map((v, k) => v * q[k])))); }
+    // variance explained by each factor (sum of squared loadings) in the order of size
+    const ss = Array.from({ length: nf }, (_, f) => sum(rot.map(r => r[f] ** 2))), ord = ss.map((_, f) => f).sort((a, b) => ss[b] - ss[a]);
+    rot = rot.map(r => ord.map(f => r[f])); if (phi) phi = ord.map(a => ord.map(b => phi[a][b]));
+    const kmo = (() => { if (!Ri) return NaN; let r2 = 0, q2 = 0; for (let i = 0; i < p; i++) for (let j = 0; j < p; j++) if (i !== j) { r2 += R[i][j] ** 2; q2 += (-Ri[i][j] / Math.sqrt(Ri[i][i] * Ri[j][j])) ** 2; } return r2 / (r2 + q2); })();
+    let det = 1; { const A = R.map(r => r.slice()); for (let c = 0; c < p; c++) { let pv = c; for (let r2 = c + 1; r2 < p; r2++) if (Math.abs(A[r2][c]) > Math.abs(A[pv][c])) pv = r2; [A[c], A[pv]] = [A[pv], A[c]]; det *= A[c][c]; if (pv !== c) det = -det; for (let r2 = c + 1; r2 < p; r2++) { const f = A[r2][c] / A[c][c]; for (let j = c; j < p; j++) A[r2][j] -= f * A[c][j]; } } }
+    const bChi = -(n - 1 - (2 * p + 5) / 6) * Math.log(Math.abs(det)), bDf = p * (p - 1) / 2;
+    return { nf, eigen: ev, parallel: pa, loadings: rot, communality: h, ss: ord.map(f => ss[f]), phi, kmo, bartlett: { chi: bChi, df: bDf, p: 1 - jStat.chisquare.cdf(bChi, bDf) }, n };
+  }
+  // dichotomous Rasch model by conditional maximum likelihood (item difficulties sum to zero), person abilities by ML, infit / outfit
+  function rasch(M) {
+    const J = M[0].length, R = M.filter(r => r.every(v => v === 0 || v === 1)), sc = R.map(r => sum(r)), keep = R.filter((_, i) => sc[i] > 0 && sc[i] < J);
+    if (keep.length < 5) return null;
+    const esf = eps => { const g = new Array(J + 1).fill(0); g[0] = 1; eps.forEach(e => { for (let r = J; r >= 1; r--) g[r] += e * g[r - 1]; }); return g; };
+    const nr = new Array(J + 1).fill(0); keep.forEach(r => { nr[sum(r)]++; }); const sj = Array.from({ length: J }, (_, j) => sum(keep.map(r => r[j])));
+    const ll = b => { const eps = b.map(v => Math.exp(-v)), g = esf(eps); return -sum(sj.map((s, j) => s * b[j])) - sum(nr.map((c, r) => c ? c * Math.log(g[r]) : 0)); };
+    const grad = b => { const eps = b.map(v => Math.exp(-v)), g = esf(eps);
+      return b.map((_, j) => { const gj = esf(eps.filter((_, k) => k !== j)); let e = 0; for (let r = 1; r <= J; r++) if (nr[r]) e += nr[r] * eps[j] * gj[r - 1] / g[r]; return -sj[j] + e; }); };
+    // Newton on J − 1 free difficulties (the last = −sum), numerical Hessian of the analytic gradient
+    const full = t => [...t, -sum(t)], gF = t => { const g = grad(full(t)); return t.map((_, j) => g[j] - g[J - 1]); };
+    let th = sj.slice(0, J - 1).map(s => Math.log((keep.length - s + 0.5) / (s + 0.5))); const m0 = mean([...th, Math.log((keep.length - sj[J - 1] + 0.5) / (sj[J - 1] + 0.5))]); th = th.map(v => v - m0);
+    let Hinv = null;
+    for (let it = 0; it < 100; it++) { const g = gF(th), H = th.map((_, a) => { const e = 1e-5, tp = th.slice(); tp[a] += e; const g2 = gF(tp); return g2.map((v, b) => (v - g[b]) / e); });
+      Hinv = invert(H.map(r => r.map(v => -v))); if (!Hinv) return null; const st = mv(Hinv, g); let lam = 1, cur = ll(full(th)), nt;
+      do { nt = th.map((v, j) => v + lam * st[j]); lam /= 2; } while (ll(full(nt)) < cur - 1e-10 && lam > 1e-4);
+      const dl = Math.max(...nt.map((v, j) => Math.abs(v - th[j]))); th = nt; if (dl < 1e-9) break; }
+    const b = full(th), seF = th.map((_, j) => Math.sqrt(Hinv[j][j])), vL = sum(Hinv.flat());
+    const se = [...seF, Math.sqrt(vL)];
+    // person ability (ML) for each raw score 1 … J − 1
+    const theta = Array.from({ length: J + 1 }, (_, r) => { if (r === 0 || r === J) return NaN; let t = Math.log(r / (J - r)); for (let it = 0; it < 100; it++) { const P = b.map(v => 1 / (1 + Math.exp(v - t))), f = sum(P) - r, d = sum(P.map(q => q * (1 - q))); const st = f / d; t -= st; if (Math.abs(st) < 1e-10) break; } return t; });
+    const fit = b.map((bj, j) => { let zo = 0, wi = 0, vi = 0; keep.forEach(r => { const t = theta[sum(r)], P = 1 / (1 + Math.exp(bj - t)), W = P * (1 - P), res = r[j] - P; zo += res * res / W; wi += res * res; vi += W; }); return { outfit: zo / keep.length, infit: wi / vi }; });
+    return { b, se, theta, fit, n: keep.length, nExtreme: R.length - keep.length, condLL: ll(b) };
+  }
+  // sample size: survival (Schoenfeld events), correlation (Fisher z), paired / one-sample mean (t, iterated), one proportion (precision)
+  function nSurvival(hr, pEvent, alpha = 0.05, power = 0.8, ratio = 1) { const za = jStat.normal.inv(1 - alpha / 2, 0, 1), zb = jStat.normal.inv(power, 0, 1), p1 = ratio / (1 + ratio), p2 = 1 - p1;
+    const events = Math.ceil((za + zb) ** 2 / (p1 * p2 * Math.log(hr) ** 2)); return { events, n: Math.ceil(events / pEvent) }; }
+  function nCorrelation(r, alpha = 0.05, power = 0.8) { const za = jStat.normal.inv(1 - alpha / 2, 0, 1), zb = jStat.normal.inv(power, 0, 1), C = 0.5 * Math.log((1 + r) / (1 - r)); return Math.ceil(((za + zb) / C) ** 2 + 3); }
+  function nPairedMean(diff, sdd, alpha = 0.05, power = 0.8) { const es = Math.abs(diff) / sdd;
+    for (let n = 2; n < 1e6; n++) { const df = n - 1, ncp = es * Math.sqrt(n), tc = jStat.studentt.inv(1 - alpha / 2, df); if (1 - nctCdf(tc, df, ncp) + nctCdf(-tc, df, ncp) >= power) return n; } return NaN; }
+  function nOneProp(p, margin, alpha = 0.05) { const z = jStat.normal.inv(1 - alpha / 2, 0, 1); return Math.ceil(z * z * p * (1 - p) / (margin * margin)); }
+  // cost-effectiveness of two groups: incremental cost and effect, ICER, bootstrap (seeded) for the CE plane and acceptability curve
+  function icer(c0, e0, c1, e1, wtp = [], B = 2000, seed = 13) {
+    const dC = mean(c1) - mean(c0), dE = mean(e1) - mean(e0), r = seeded(seed), bs = [];
+    for (let b = 0; b < B; b++) { const i0 = c0.map(() => Math.floor(r() * c0.length)), i1 = c1.map(() => Math.floor(r() * c1.length));
+      bs.push([mean(i1.map(i => c1[i])) - mean(i0.map(i => c0[i])), mean(i1.map(i => e1[i])) - mean(i0.map(i => e0[i]))]); }
+    const q = v => ({ lo: quantile(v, QL()), hi: quantile(v, QU()) });
+    const ceac = wtp.map(l => ({ wtp: l, p: bs.filter(([c, e]) => l * e - c > 0).length / B, nmb: l * dE - dC }));
+    return { dC, dE, icer: dE !== 0 ? dC / dE : NaN, ciC: q(bs.map(x => x[0])), ciE: q(bs.map(x => x[1])), boot: bs, ceac,
+      quadrant: { ne: bs.filter(([c, e]) => e > 0 && c > 0).length / B, se: bs.filter(([c, e]) => e > 0 && c <= 0).length / B, nw: bs.filter(([c, e]) => e <= 0 && c > 0).length / B, sw: bs.filter(([c, e]) => e <= 0 && c <= 0).length / B } };
+  }
+  // Bayesian logistic regression: normal priors N(m, s²) on the log odds ratios (flat on the intercept), posterior mode and Laplace approximation
+  function bayesLogistic(X0, y, priorSd = 2.5, priorMean = 0) {
+    const X = X0.map(r => [1, ...r]), p = X[0].length, pv = j => j ? priorSd * priorSd : Infinity, pm = j => j ? (Array.isArray(priorMean) ? priorMean[j - 1] : priorMean) : 0;
+    let b = new Array(p).fill(0), Ai = null;
+    for (let it = 0; it < 100; it++) { const mu = X.map(x => 1 / (1 + Math.exp(-sum(x.map((v, j) => v * b[j])))));
+      const A = X[0].map((_, a) => X[0].map((_, c) => sum(X.map((x, i) => mu[i] * (1 - mu[i]) * x[a] * x[c])) + (a === c && isFinite(pv(a)) ? 1 / pv(a) : 0)));
+      const g = X[0].map((_, a) => sum(X.map((x, i) => (y[i] - mu[i]) * x[a])) - (isFinite(pv(a)) ? (b[a] - pm(a)) / pv(a) : 0));
+      Ai = invert(A); if (!Ai) return null; const st = mv(Ai, g); b = b.map((v, j) => v + st[j]); if (Math.max(...st.map(Math.abs)) < 1e-10) break; }
+    const terms = b.map((B, j) => { const sdv = Math.sqrt(Ai[j][j]); return { B, sd: sdv, or: Math.exp(B), lo: Math.exp(B - ZC() * sdv), hi: Math.exp(B + ZC() * sdv), pPos: jStat.normal.cdf(B / sdv, 0, 1) }; });
+    return { terms, cov: Ai, n: y.length };
+  }
+  // LASSO (linear or logistic) on standardised predictors by coordinate descent (logistic: proximal Newton), λ by k-fold cross-validation
+  function lassoFit(Z, y, lam, family, b0 = null) {
+    const n = y.length, p = Z[0].length; let b = b0 ? b0.slice() : new Array(p + 1).fill(0);
+    if (!b0) b[0] = family === 'binomial' ? Math.log(mean(y) / (1 - mean(y))) : mean(y);
+    const soft = (z, g) => z > g ? z - g : z < -g ? z + g : 0;
+    for (let outer = 0; outer < (family === 'binomial' ? 100 : 1); outer++) {
+      let w, zr; if (family === 'binomial') { const eta = Z.map((x, i) => b[0] + x.reduce((t, v, j) => t + v * b[j + 1], 0)), mu = eta.map(e => 1 / (1 + Math.exp(-e)));
+        w = mu.map(m => Math.max(m * (1 - m), 1e-5)); zr = eta.map((e, i) => e + (y[i] - mu[i]) / w[i]); } else { w = new Array(n).fill(1); zr = y; }
+      const old = b.slice(), r = zr.map((v, i) => v - b[0] - Z[i].reduce((t, u, j) => t + u * b[j + 1], 0)), xw = Array.from({ length: p }, (_, j) => sum(Z.map((x, i) => w[i] * x[j] * x[j])) / n), sw = sum(w) / n;
+      for (let it = 0; it < 1000; it++) { let mx = 0;
+        const d0 = sum(r.map((v, i) => w[i] * v)) / n / sw; b[0] += d0; for (let i = 0; i < n; i++) r[i] -= d0; mx = Math.abs(d0);
+        for (let j = 0; j < p; j++) { const rho = sum(Z.map((x, i) => w[i] * x[j] * r[i])) / n + xw[j] * b[j + 1], nb = xw[j] > 0 ? soft(rho, lam) / xw[j] : 0, d = nb - b[j + 1];
+          if (d) { for (let i = 0; i < n; i++) r[i] -= d * Z[i][j]; b[j + 1] = nb; mx = Math.max(mx, Math.abs(d)); } }
+        if (mx < 1e-9) break; }
+      if (family !== 'binomial' || Math.max(...b.map((v, j) => Math.abs(v - old[j]))) < 1e-8) break;
+    }
+    return b;
+  }
+  function lasso(X, y, family = 'gaussian', folds = 10, seed = 17, nl = 50) {
+    const n = y.length, p = X[0].length, mu = Array.from({ length: p }, (_, j) => mean(X.map(r => r[j]))), sg = Array.from({ length: p }, (_, j) => Math.sqrt(mean(X.map(r => (r[j] - mu[j]) ** 2))) || 1);
+    const Z = X.map(r => r.map((v, j) => (v - mu[j]) / sg[j])), base = family === 'binomial' ? mean(y) : mean(y);
+    const lmax = Math.max(...Array.from({ length: p }, (_, j) => Math.abs(sum(Z.map((x, i) => x[j] * (y[i] - base))) / n)));
+    const lams = Array.from({ length: nl }, (_, k) => lmax * Math.pow(0.01, k / (nl - 1)));
+    const path = []; let b = null; lams.forEach(l => { b = lassoFit(Z, y, l, family, b); path.push(b.slice()); });
+    // cross-validation (seeded folds)
+    const r = seeded(seed), ord = y.map((_, i) => [i, r()]).sort((a, c) => a[1] - c[1]).map(a => a[0]), fold = new Array(n); ord.forEach((i, k) => { fold[i] = k % folds; });
+    const loss = (bb, I) => mean(I.map(i => { const e = bb[0] + Z[i].reduce((t, v, j) => t + v * bb[j + 1], 0); if (family === 'binomial') { const pr = Math.min(1 - 1e-12, Math.max(1e-12, 1 / (1 + Math.exp(-e)))); return -2 * (y[i] * Math.log(pr) + (1 - y[i]) * Math.log(1 - pr)); } return (y[i] - e) ** 2; }));
+    const cvm = lams.map(() => []);
+    for (let f = 0; f < folds; f++) { const tr = y.map((_, i) => i).filter(i => fold[i] !== f), te = y.map((_, i) => i).filter(i => fold[i] === f); if (!te.length) continue;
+      let bb = null; lams.forEach((l, k) => { bb = lassoFit(tr.map(i => Z[i]), tr.map(i => y[i]), l, family, bb); cvm[k].push(loss(bb, te)); }); }
+    const cv = cvm.map(v => mean(v)), cse = cvm.map(v => sd(v) / Math.sqrt(v.length)), kMin = cv.indexOf(Math.min(...cv)), k1se = cv.findIndex(v => v <= cv[kMin] + cse[kMin]);
+    const orig = bb => { const c = bb.slice(1).map((v, j) => v / sg[j]); return [bb[0] - sum(c.map((v, j) => v * mu[j])), ...c]; };
+    return { lambdas: lams, path, cv, cvSe: cse, kMin, k1se, coefMin: orig(path[kMin]), coef1se: orig(path[k1se]), std: path, n, p };
+  }
+
   return {
+    coxFit, fineGray, rmst, rmstCompare, phTest, cIndex, metaHet, krippAlpha, gwetAC1, bootUnits, lowess, calibration, neweyWest, iv2sls, lca, kmeans, silhouette, efa, rasch, nSurvival, nCorrelation, nPairedMean, nOneProp, icer, bayesLogistic, lasso, lassoFit,
     cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, seeded, moodMedian, permutationTest, huberRegression, olsCluster, vanElteren, kendallW, powerTwoMeans, powerTwoProps, wlsRobust, weightedLogistic, bayesMeans, bayesProps, groupSequential, padjust, nMargin, gee, glmmLogit, gaussHermite,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
