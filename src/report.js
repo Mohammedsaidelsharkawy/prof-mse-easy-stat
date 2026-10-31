@@ -269,15 +269,18 @@ const Report = (() => {
       if (model.intro) { children.push(para(model.intro)); arAfter(model.intro); }
       const fl = figLabel(pre + fig++, opts.captionStyle), ft = model.flowCaption || 'CONSORT flowchart of the enrolled patients';
       listFigs.push(`${fl} ${ft}`);
-      if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600, true, ft));
-      else children.push(image(model.consort.url, model.consort.w, model.consort.h, opts.paper ? 470 : 600, true, ft), caption(`${fl} ${ft}`));
+      if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, Math.min(opts.paper ? 470 : 600, Math.floor(PAGE_W / 15)), true, ft));
+      else children.push(image(model.consort.url, model.consort.w, model.consort.h, Math.min(opts.paper ? 470 : 600, Math.floor(PAGE_W / 15)), true, ft), caption(`${fl} ${ft}`));
       if (AR) children.push(arPara(`الشكل ${pre + (fig - 1)}: ${AR.caption(ft)}`, { bold: true, center: true, line: 276, after: 160 }));
     } else if (opts.paper && model.intro) children.push(para(model.intro));
     if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => { if (t.trim()) { children.push(para(t.trim())); arAfter(t.trim()); } });
     // one combined results paragraph instead of a comment with each table
     const merged = opts.commentMerge === 'combined' && opts.commentPlace !== 'none';
     if (merged) { const all = model.sections.filter(s => s.tableOn !== false && s.comment).map(s => s.comment.trim()).join(' '); if (all) children.push(commentPara(all, { boldSig: opts.boldSigText })); }
-    const [w1, w2] = opts.twoCol ? [270, 135] : FIG_W[opts.figWidth] || FIG_W.full;
+    // figure width: small / medium / full, a share of the text width, or a size in cm; never wider than the text (e.g. on B5 pages)
+    const textPx = PAGE_W / 15, pct = /^pct(\d+)$/.exec(opts.figWidth || ''), cm = opts.figWidth === 'cm' && +opts.figWidthCm > 0 ? +opts.figWidthCm / 2.54 * 96 : 0;
+    let [w1, w2] = opts.twoCol ? [270, 135] : pct ? [textPx * +pct[1] / 100, (textPx - 20) / 2 * Math.min(1, +pct[1] / 100 * 1.05)] : cm ? [cm, Math.min(cm, (textPx - 20) / 2)] : FIG_W[opts.figWidth] || FIG_W.full;
+    w1 = Math.round(Math.min(w1, textPx)); w2 = Math.round(Math.min(w2, (textPx - 20) / 2));
     const placeFigures = list => {
       const apa = opts.captionStyle === 'apa';
       const figs = list.filter(f => f.url).map(f => { const num = figLabel(pre + fig++, opts.captionStyle); listFigs.push(`${num} ${f.caption}`); return { ...f, apa, num, label: `${num} ${f.caption}` }; });

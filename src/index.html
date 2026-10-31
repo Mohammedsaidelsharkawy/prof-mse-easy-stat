@@ -1133,7 +1133,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Chart style</label><select id="optChart"><option value="auto" selected>Auto (bars for mean ± SD, box plots for medians)</option><option value="bar">Bars</option><option value="line">Lines over time</option><option value="box">Box plots</option></select></div>
         <div><label class="f">Chart colours</label><select id="optPal"></select></div>
         <div><label class="f">Error bars (mean charts)</label><select id="optErrorBar"><option value="sd" selected>Standard deviation (SD)</option><option value="sem">Standard error (SEM)</option><option value="ci">95% confidence interval</option></select></div>
-        <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option></select></div>
+        <div><label class="f">Figure size in Word</label><select id="optFigWidth"><option value="full" selected>Full width</option><option value="medium">Medium</option><option value="small">Small</option><option value="pct100">100% of the text width</option><option value="pct75">75% of the text width</option><option value="pct50">50% of the text width</option><option value="cm">Exact width (cm) →</option></select></div>
+        <div><label class="f">Figure width (cm, with “Exact width”)</label><input type="number" id="optFigWidthCm" min="3" max="30" step="0.5" value="15"></div>
         <div><label class="f">Figures per row in Word</label><select id="optFigPerRow"><option value="1" selected>One</option><option value="2">Two side by side</option></select></div>
         <div><label class="f">Figure placement (classify)</label><select id="optFigPlacement"><option value="after" selected>After each table</option><option value="end">All at the end (Figures section)</option><option value="endType">At the end, grouped by chart type</option></select></div>
         <div><label class="f">Caption style</label><select id="optCaptionStyle"><option value="colon" selected>Figure 1: …</option><option value="period">Figure 1. …</option><option value="fig">Fig. 1. …</option></select></div>
@@ -1374,6 +1375,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Chapter number (optional)</label><input type="text" id="fmtChapter" placeholder="e.g. 4 → Table 4.1" style="width:180px"></div>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtHeads"><span>A subheading before each table</span></label>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtNewPage"><span>Each table starts on a new page</span></label>
+          <div><label class="f">Page size</label><select id="fmtPage" style="width:auto"><option value="">As in step 5</option><option value="a4">A4 (21 × 29.7 cm)</option><option value="b5">B5 (17.6 × 25 cm)</option></select></div>
         </div>
         <div class="row fmt-opts" id="fmtPaper" style="display:none">
           <div><label class="f">Figures in the paper</label><select id="fmtMaxFigs" style="width:auto"><option value="0">None</option><option>1</option><option>2</option><option value="3">3</option><option>4</option><option>5</option><option>6</option><option>8</option><option>10</option><option value="99">All</option></select></div>
