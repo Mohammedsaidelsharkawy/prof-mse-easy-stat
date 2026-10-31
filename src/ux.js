@@ -29,7 +29,7 @@
     [...top.querySelectorAll(':scope > .btn, :scope > label.btn'), ...menu.querySelectorAll('.btn')].forEach(b => { if (b.querySelector('.tl')) return; const t = [...b.childNodes].find(n => n.nodeType === 3 && n.textContent.trim()); if (!t) return;
       const m = /^(\s*[^\sA-Za-z0-9]+\s*)?(.*)$/s.exec(t.textContent), ic = (m[1] || '').trim(), lab = (m[2] || '').trim(); const sp = el('span', 'tl', esc(lab)); t.replaceWith(document.createTextNode(ic ? ic + ' ' : ''), sp); if (!b.title) b.title = lab; if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', lab); });
     const close = () => { menu.classList.remove('open'); mb.setAttribute('aria-expanded', 'false'); };
-    mb.onclick = e => { e.stopPropagation(); const o = menu.classList.toggle('open'); mb.setAttribute('aria-expanded', String(o)); };
+    mb.onclick = e => { e.stopPropagation(); document.querySelectorAll('.ux-pop.open').forEach(p => p.classList.remove('open')); const o = menu.classList.toggle('open'); mb.setAttribute('aria-expanded', String(o)); };
     menu.addEventListener('click', e => { if (e.target.closest('.btn') && !e.target.closest('label')) close(); });
     document.addEventListener('click', e => { if (!more.contains(e.target)) close(); }); document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); }); })();
   const live = el('div', 'ux-sr'); live.setAttribute('aria-live', 'polite'); live.id = 'uxLive'; document.body.appendChild(live);
