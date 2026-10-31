@@ -19,11 +19,11 @@
   if (keys) keys.parentNode.insertBefore(bar, keys.nextSibling);
   // the header on one row: everyday actions in view, the rest under "☰ More"; the labels shrink to icons on narrow screens
   (function tidyHeader() { const top = $('.top-actions'); if (!top) return;
-    const more = el('div', 'ux-more'), mb = el('button', 'btn light small', '☰ <span class="tl">More</span>'); mb.type = 'button'; mb.id = 'uxMore'; mb.title = 'Theme, shortcuts, tour, display, setups'; mb.setAttribute('aria-haspopup', 'true'); mb.setAttribute('aria-expanded', 'false');
+    const more = el('div', 'ux-more'), mb = el('button', 'btn light small', '☰ <span class="tl">More</span>'); mb.type = 'button'; mb.id = 'uxMore'; mb.title = 'Tour, display settings, setups'; mb.setAttribute('aria-haspopup', 'true'); mb.setAttribute('aria-expanded', 'false');
     const menu = el('div', 'ux-menu'); menu.setAttribute('role', 'menu'); more.append(mb, menu);
-    ['#uxTour', '#uxView', '#btnTheme', '#btnKeys', '#btnSaveCfg'].forEach(q => { const b = $(q); if (b) menu.appendChild(b); });
+    ['#uxTour', '#uxView', '#btnSaveCfg'].forEach(q => { const b = $(q); if (b) menu.appendChild(b); });
     const load = $('#cfgFile') && $('#cfgFile').closest('label'); if (load) menu.appendChild(load);
-    const order = ['#btnNew', () => $('#projFile') && $('#projFile').closest('label'), '#btnSaveProj', '#uxPal', '#uxExport', '#uxBell', '#uxSaved'];
+    const order = ['#btnNew', () => $('#projFile') && $('#projFile').closest('label'), '#btnSaveProj', '#btnTheme', '#btnKeys', '#uxPal', '#uxExport', '#uxBell', '#uxSaved'];
     order.forEach(q => { const n = typeof q === 'function' ? q() : $(q); if (n) top.appendChild(n); }); top.appendChild(more); bar.remove();
     // icon + label: the label hides on narrow screens, the full name stays as the tooltip
     [...top.querySelectorAll(':scope > .btn, :scope > label.btn'), ...menu.querySelectorAll('.btn')].forEach(b => { if (b.querySelector('.tl')) return; const t = [...b.childNodes].find(n => n.nodeType === 3 && n.textContent.trim()); if (!t) return;
@@ -90,7 +90,7 @@
     ['#p1 .card', 'Step 1 · Your data', 'Upload an Excel, CSV, SPSS or Stata file — or open an example. The sheet can be edited here, with undo.'],
     ['#btnSaveProj', 'Save your project', 'Saves the data, every setting and your edited text in one file. Your work is also kept in this browser automatically.'],
     ['#uxPal', 'Find anything', 'Press Ctrl+K to find any action or setting by name, from any step.'],
-    ['#uxMore', 'More', 'Theme, keyboard shortcuts, this tour, display settings (text size, contrast, easy-reading font, reduced motion) and saved setups.'], ['#uxExport', 'Exports', 'Every export — Word, PDF, PowerPoint, figures, Excel — in one place.']];
+    ['#uxMore', 'More', 'This tour, display settings (text size, contrast, easy-reading font, reduced motion) and saved setups.'], ['#uxExport', 'Exports', 'Every export — Word, PDF, PowerPoint, figures, Excel — in one place.']];
   function tour(i = 0) {
     $$('.ux-tour').forEach(x => x.remove()); if (i >= TOUR.length) return; const [sel, h, t] = TOUR[i], target = $(sel); if (!target || !target.offsetParent) return tour(i + 1);
     target.scrollIntoView({ block: 'center' }); const r = target.getBoundingClientRect(), hl = el('div', 'ux-tour ux-tour-hl'), card = el('div', 'ux-tour ux-tour-card');
