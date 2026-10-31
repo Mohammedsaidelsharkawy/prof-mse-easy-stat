@@ -1173,14 +1173,16 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="grid g3" style="margin:6px 0 4px"><div><label class="f">Flowchart type</label><select id="cType">
         <option value="consort">CONSORT 2010 — randomized trial</option><option value="strobe">STROBE — observational study</option>
         <option value="stard">STARD 2015 — diagnostic accuracy</option><option value="simple">Simple flowchart — custom steps</option>
-        <option value="crossover">CONSORT — crossover trial (sequences, periods, washout)</option><option value="cluster">CONSORT — cluster-randomized trial</option><option value="prisma">PRISMA 2020 — systematic review</option></select></div>
+        <option value="crossover">CONSORT — crossover trial (sequences, periods, washout)</option><option value="cluster">CONSORT — cluster-randomized trial</option><option value="prisma">PRISMA 2020 — systematic review</option><option value="factorial">CONSORT — 2 × 2 factorial trial</option></select></div>
         <div class="row" style="gap:6px;align-items:flex-end"><button class="btn ghost small" id="cUndo" type="button" title="Undo the last change of the flowchart">↶ Undo</button><button class="btn ghost small" id="cRedo" type="button" title="Redo">↷ Redo</button></div>
         <div class="row" style="gap:6px;align-items:flex-end;flex-wrap:wrap"><select id="cStyleList"><option value="">— saved flowchart styles —</option></select><button class="btn ghost small" id="cStyleApply" type="button">Apply</button><button class="btn ghost small" id="cStyleSave" type="button">💾 Save style…</button></div></div>
       <details class="fl-style"><summary><b>Appearance</b> — colours, corners, lines, text</summary>
         <div class="grid g4" style="margin-top:8px">
-          <div><label class="f">Colour theme</label><select data-fs="theme"><option value="classic">Classic — white boxes, coloured labels</option><option value="tinted">Tinted — lightly coloured boxes</option><option value="filled">Filled — main boxes in colour</option><option value="bw">Black and white</option></select></div>
+          <div><label class="f">Colour theme</label><select data-fs="theme"><option value="classic">Classic — white boxes, coloured labels</option><option value="tinted">Tinted — lightly coloured boxes</option><option value="filled">Filled — main boxes in colour</option><option value="pastel">Pastel — a soft colour per box type</option><option value="grey">Grey — neutral fills for print</option><option value="bw">Black and white</option></select></div>
           <div><label class="f">Colour</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select data-fs="colorMode" style="width:auto"><option value="palette">Chart palette</option><option value="custom">Custom</option></select><input type="color" data-fs="color" value="#7B2FBE" style="width:52px;padding:2px"></div></div>
-          <div><label class="f">Box corners</label><select data-fs="corners"><option value="square">Square</option><option value="rounded">Rounded</option></select></div>
+          <div><label class="f">Box corners</label><select data-fs="corners"><option value="square">Square</option><option value="rounded">Rounded</option><option value="pill">Pill</option></select></div>
+          <div><label class="f">Box border</label><select data-fs="boxStyle"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="double">Double</option><option value="bar">Accent bar on the left</option></select></div>
+          <div><label class="f">Moved-box arrows</label><select data-fs="arrowShape"><option value="elbow">Elbow (right angles)</option><option value="curved">Curved</option></select></div>
           <div><label class="f">Lines</label><select data-fs="lines"><option value="thin">Thin</option><option value="normal">Normal</option><option value="bold">Bold</option></select></div>
           <div><label class="f">Text size</label><select data-fs="textSize"><option value="small">Small</option><option value="normal">Normal</option><option value="large">Large</option></select></div>
           <div><label class="f">Font</label><select data-fs="font"><option value="sans">Segoe UI</option><option value="arial">Arial</option><option value="calibri">Calibri</option><option value="times">Times New Roman</option></select></div>
@@ -1217,7 +1219,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div id="cWarn"></div>
       <div class="grid g2">
         <div id="cForm"></div>
-        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><span class="legend-note" style="float:left">Drag any box to move it.</span><button class="btn ghost small" id="flowResetPos" type="button" title="Every box back to its automatic position">↺ Box positions</button> <button class="btn ghost small" id="flowCopy" type="button" title="Copy the flowchart, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button></div></div>
+        <div><canvas id="consortCanvas" class="consort-prev"></canvas><div style="text-align:right;margin-top:6px"><span class="legend-note" style="float:left">Drag any box to move it; it snaps to the other boxes (hold Alt to move freely).</span><button class="btn ghost small" id="flowResetPos" type="button" title="Every box back to its automatic position">↺ Box positions</button> <button class="btn ghost small" id="flowCopy" type="button" title="Copy the flowchart, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" id="flowPng" type="button">⬇ Export flowchart…</button> <button class="btn ghost small" id="flowPptx" type="button" title="The flowchart as a PowerPoint slide">⬇ PowerPoint</button> <button class="btn ghost small" id="flowSave" type="button" title="Numbers, texts, style and box positions as a file">💾 Save layout</button> <button class="btn ghost small" id="flowLoad" type="button">📂 Load layout</button><input type="file" id="flowLoadFile" accept=".json" hidden></div></div>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="8">← Back</button><button class="btn primary" data-go="10">Next: Results by variable →</button></div>
@@ -28971,7 +28973,7 @@ const Charts = (() => {
       { full: `Studies included in review ${N(v('studies'))}${v('reports') ? `\nReports of included studies ${N(v('reports'))}` : ''}`, n: v('studies'), exN: 0 }
     ];
   }
-  const FLOW_LABELS = { prisma: ['Identification', 'Screening', 'Included'], consort: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], crossover: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], cluster: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], strobe: ['Identification', 'Inclusion', 'Follow-Up', 'Analysis'], stard: ['Enrollment', 'Index test', 'Reference', 'Diagnosis'] };
+  const FLOW_LABELS = { prisma: ['Identification', 'Screening', 'Included'], consort: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], crossover: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], cluster: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], strobe: ['Identification', 'Inclusion', 'Follow-Up', 'Analysis'], factorial: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], stard: ['Enrollment', 'Index test', 'Reference', 'Diagnosis'] };
   function flowStyle(c, pal) {
     const st = c.style || {}, theme = st.theme || 'classic';
     const accent = theme === 'bw' ? '#444444' : /^#[0-9a-f]{6}$/i.test(st.color || '') ? st.color : pal[0];
@@ -28980,12 +28982,15 @@ const Charts = (() => {
       classic: { main: ['#ffffff', '#222222', '#111111'], side: ['#ffffff', '#222222', '#111111'], col: ['#ffffff', '#222222', '#111111'] },
       bw: { main: ['#ffffff', '#222222', '#111111'], side: ['#ffffff', '#222222', '#111111'], col: ['#ffffff', '#222222', '#111111'] },
       tinted: { main: [mix(accent, '#ffffff', 0.8), accent, '#111111'], side: ['#f5f5f5', '#9a9a9a', '#222222'], col: [mix(accent, '#ffffff', 0.9), accent, '#111111'] },
-      filled: { main: [accent, accent, '#ffffff'], side: ['#ffffff', '#9a9a9a', '#222222'], col: [mix(accent, '#ffffff', 0.86), accent, '#111111'] }
+      filled: { main: [accent, accent, '#ffffff'], side: ['#ffffff', '#9a9a9a', '#222222'], col: [mix(accent, '#ffffff', 0.86), accent, '#111111'] },
+      // pastel: a soft tint per role; grey: neutral fills for print
+      pastel: { main: [mix(accent, '#ffffff', 0.84), mix(accent, '#000000', 0.15), '#111111'], side: ['#fff6e5', '#d9a441', '#222222'], col: ['#eaf4fb', '#5b8fd1', '#111111'] },
+      grey: { main: ['#e9e9e9', '#555555', '#111111'], side: ['#f7f7f7', '#999999', '#222222'], col: ['#f2f2f2', '#666666', '#111111'] }
     }[theme] || {};
     return {
       fill: r => (F[r] || F.main)[0], stroke: r => (F[r] || F.main)[1], text: r => (F[r] || F.main)[2],
       accent, arrow: theme === 'classic' || theme === 'bw' ? '#222222' : mix(accent, '#000000', 0.35),
-      lw: { thin: 1.6, bold: 4 }[st.lines] || 2.5, radius: st.corners === 'rounded' ? 14 : 0, fs, lh: Math.round(fs * 1.3),
+      lw: { thin: 1.6, bold: 4 }[st.lines] || 2.5, radius: st.corners === 'rounded' ? 14 : st.corners === 'pill' ? 34 : 0, border: st.boxStyle || 'solid', curved: st.arrowShape === 'curved', fs, lh: Math.round(fs * 1.3),
       pills: st.pills !== false, shadow: !!st.shadow, font: FONTS[st.font] || FONTS.sans,
       // numbers: "n=30" (default), "n = 30" or "N=30", optional percentages, exclusion box side, final boxes emphasised, spacing, resolution
       N: v => `${{ spaced: 'n = ', upper: 'N=' }[st.nFmt] || 'n='}${v}`, pct: !!st.pct, exLeft: st.exSide === 'left', emph: !!st.emph,
@@ -29005,7 +29010,12 @@ const Charts = (() => {
     if (S.radius) { ctx.beginPath(); ctx.roundRect(x, y, w, h, S.radius); ctx.fill(); } else ctx.fillRect(x, y, w, h);
     ctx.restore();
     ctx.strokeStyle = S.stroke(role); ctx.lineWidth = S.lw;
-    if (S.radius) { ctx.beginPath(); ctx.roundRect(x, y, w, h, S.radius); ctx.stroke(); } else ctx.strokeRect(x, y, w, h);
+    // box border: solid, dashed, double, or a thick accent bar on the left
+    const outline = (xx, yy, ww, hh, r) => { if (r) { ctx.beginPath(); ctx.roundRect(xx, yy, ww, hh, r); ctx.stroke(); } else ctx.strokeRect(xx, yy, ww, hh); };
+    if (S.border === 'dashed') ctx.setLineDash([12, 7]);
+    outline(x, y, w, h, Math.min(S.radius, h / 2)); ctx.setLineDash([]);
+    if (S.border === 'double') outline(x + 5, y + 5, w - 10, h - 10, Math.max(0, Math.min(S.radius, h / 2) - 5));
+    if (S.border === 'bar') { ctx.fillStyle = S.accent; ctx.fillRect(x, y, 8, h); }
     ctx.fillStyle = S.text(role);
   }
   function consort(c, groupLabels, palName = 'brand', res) {
@@ -29025,14 +29035,14 @@ const Charts = (() => {
     const boxH = (lines, k = 1) => lines.reduce((h, ln) => { ctx.font = `${ln.b ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`; return h + measureLines(ctx, ln.t, ln.w - 28) * Math.round(lh * k); }, 0) + 26;
 
     const ex = c.excluded.filter(e => +e.n > 0);
-    const exTotal = ex.reduce((s, e) => s + +e.n, 0);
+    const exTotal = ex.filter(e => !e.sub).reduce((s, e) => s + +e.n, 0);
     const topW = Math.round(440 * S.wScale), exW = S.wScale > 1 ? Math.max(500, Math.round((CW - (S.pills ? 80 : 0)) / 2 - 60)) : Math.round(500 * S.wScale);
     // "(n=12)" or with a percentage of its base: "(n=12, 9.5%)"
     const NP = (v, base) => `(${S.N(+v || 0)}${S.pct && +base > 0 ? `, ${Math.round(1000 * (+v || 0) / base) / 10}%` : ''})`;
     const strobe = type === 'strobe';
     const topText = type === 'stard' ? 'Potentially eligible participants' : strobe ? 'Potentially eligible individuals' : 'Assessed for eligibility';
     const assessed = [{ t: `${topText} ${NP(c.assessed)}`, b: true, w: topW }];
-    const excluded = [{ t: `Excluded ${NP(exTotal, c.assessed)}`, b: true, w: exW }, ...ex.map(e => ({ t: `• ${e.text} ${NP(e.n, c.assessed)}`, w: exW }))];
+    const excluded = [{ t: `Excluded ${NP(exTotal, c.assessed)}`, b: true, w: exW }, ...ex.map(e => ({ t: `${e.sub ? '    ◦ ' : '• '}${e.text} ${NP(e.n, c.assessed)}`, w: exW }))]; // a sub-reason is indented under the reason above it
     const midN = branches ? +c.stard.tested || 0 : c.groups.reduce((s, g) => s + (+g.allocated || 0), 0);
     const randomized = [{ t: `${type === 'stard' ? 'Received index test' : strobe ? 'Included in the study' : 'Randomized'} ${NP(midN)}${type === 'cluster' && c.groups.some(g => +g.clusters) ? ` in ${c.groups.reduce((t, g) => t + (+g.clusters || 0), 0)} clusters` : ''}`, b: true, w: topW },
       ...(c.randInfo && !strobe && type !== 'stard' ? [{ t: c.randInfo, w: topW }] : [])];
@@ -29055,7 +29065,7 @@ const Charts = (() => {
       // intention-to-treat and per-protocol populations, or one "Analysed" box
       anal = c.groups.map(g => c.itt
         ? [{ t: `Intention-to-treat ${NP(g.allocated)}`, b: true, w: colW }, { t: `Per-protocol ${NP(g.analysed, g.allocated)}`, b: true, w: colW }, { t: `Excluded from per-protocol ${NP((+g.allocated || 0) - (+g.analysed || 0), g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]
-        : [{ t: `Analysed ${NP(g.analysed, g.allocated)}${type === 'cluster' && +g.clustersAnalysed ? ` in ${g.clustersAnalysed} clusters` : ''}`, b: true, w: colW }, { t: `Excluded from analysis ${NP(g.excludedAnalysis, g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
+        : [{ t: `Analysed ${NP(g.analysed, g.allocated)}${type === 'cluster' && +g.clustersAnalysed ? ` in ${g.clustersAnalysed} clusters` : ''}`, b: true, w: colW }, ...(c.centreCol && g.centreText ? [{ t: g.centreText, w: colW }] : []), { t: `Excluded from analysis ${NP(g.excludedAnalysis, g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
     }
     // section labels: the user's own text where given, else the defaults of the flowchart type
     const own = ((c.style || {}).labels || {})[type] || [];
@@ -29098,7 +29108,9 @@ const Charts = (() => {
     // a box above another: a straight arrow, or an elbow when one was dragged sideways
     const link = (a, b) => { const ax = a.x + a.w / 2, bx = b.x + b.w / 2, y1 = a.y + a.h, y2 = b.y;
       if (Math.abs(ax - bx) < 0.5) { arrow(ax, y1, bx, y2); return; }
-      const my = (y1 + y2) / 2; ctx.strokeStyle = S.arrowColor || S.arrow; ctx.lineWidth = S.lw; ctx.beginPath(); ctx.moveTo(ax, y1); ctx.lineTo(ax, my); ctx.lineTo(bx, my); ctx.stroke(); arrow(bx, my, bx, y2); };
+      const my = (y1 + y2) / 2; ctx.strokeStyle = S.arrowColor || S.arrow; ctx.lineWidth = S.lw; ctx.beginPath(); ctx.moveTo(ax, y1);
+      if (S.curved) { const ye = y2 - Math.min(24, (y2 - y1) / 3); ctx.bezierCurveTo(ax, my, bx, my, bx, ye); ctx.stroke(); arrow(bx, ye, bx, y2); return; }
+      ctx.lineTo(ax, my); ctx.lineTo(bx, my); ctx.stroke(); arrow(bx, my, bx, y2); };
     // an exclusion box beside the path: a horizontal arrow from the path to its edge
     const side = (from, r) => { const cx = from.x + from.w / 2, y = r.y + r.h / 2; arrow(cx, y, r.x + r.w / 2 < cx ? r.x + r.w : r.x, y); };
     const pill = (label, y1, y2) => {
@@ -33766,7 +33778,8 @@ if (typeof module !== 'undefined') module.exports = Sav;
     simple: 'A simple flowchart: a chain of steps, each with an optional exclusion box, optionally split into the study groups at the end.',
     crossover: 'CONSORT for crossover trials: each group is a treatment sequence, with its two periods and the washout between them.',
     cluster: 'CONSORT for cluster-randomized trials: clusters and participants allocated and analysed in each group.',
-    prisma: 'PRISMA 2020 — for systematic reviews and meta-analyses: records identified, screened, assessed and included. Later numbers follow from those entered.'
+    prisma: 'PRISMA 2020 — for systematic reviews and meta-analyses: records identified, screened, assessed and included. Later numbers follow from those entered.',
+    factorial: 'CONSORT for 2 × 2 factorial trials: each study group is one combination of the two factors (e.g. A + B, A + placebo, placebo + B, placebo + placebo).'
   };
   function ensureConsort() {
     const cfg = state.cfg, groups = activeGroups();
@@ -33815,7 +33828,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const defs = Charts.FLOW_LABELS[t] || [], own = (fsv.labels || {})[t] || [];
     document.querySelectorAll('#p9 [data-fsl]').forEach(el => { el.placeholder = defs[+el.dataset.fsl] || ''; el.value = own[+el.dataset.fsl] || ''; });
     $('#cHint').textContent = FLOW_HINTS[t];
-    const excluded = `<h3>Excluded (reasons)</h3>${c.excluded.map((e, i) => `<div class="row" style="margin-bottom:6px"><input type="text" data-ex="${i}" data-f="text" value="${esc(e.text)}" style="flex:3">${num(`data-ex="${i}" data-f="n" style="flex:1;max-width:100px"`, e.n)}<button class="btn ghost small" data-exdel="${i}" type="button">✕</button></div>`).join('')}
+    const excluded = `<h3>Excluded (reasons)</h3>${c.excluded.map((e, i) => `<div class="row" style="margin-bottom:6px"><input type="text" data-ex="${i}" data-f="text" value="${esc(e.text)}" style="flex:3">${num(`data-ex="${i}" data-f="n" style="flex:1;max-width:100px"`, e.n)}${i ? `<label class="check" style="margin:0" title="Indented under the reason above; not added to the total"><input type="checkbox" data-ex="${i}" data-f="sub" ${e.sub ? 'checked' : ''}><span>sub</span></label>` : ''}<button class="btn ghost small" data-exdel="${i}" type="button">✕</button></div>`).join('')}
       <button class="btn ghost small" data-cact="addEx" type="button">+ Add reason</button>`;
     let html = '';
     const pr = c.prisma, prNum = (k, label) => `<div><label class="f">${label}</label>${num(`data-pr="${k}"`, pr[k])}</div>`;
@@ -33825,7 +33838,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
         <h3>Reports excluded at full text (reasons)</h3>${pr.reasons.map((r, i) => `<div class="row" style="margin-bottom:6px"><input type="text" data-prr="${i}" data-f="text" value="${esc(r.text)}" style="flex:3">${num(`data-prr="${i}" data-f="n" style="flex:1;max-width:110px"`, r.n)}<button class="btn ghost small" data-prdel="${i}" type="button">✕</button></div>`).join('')}
         <button class="btn ghost small" data-cact="addPr" type="button">+ Add reason</button>
         <h3>Included</h3><div class="grid g2">${prNum('studies', 'Studies included')}${prNum('reports', 'Reports of included studies')}</div>`;
-    } else if (t === 'consort' || t === 'strobe' || t === 'crossover' || t === 'cluster') {
+    } else if (t === 'consort' || t === 'strobe' || t === 'crossover' || t === 'cluster' || t === 'factorial') {
       const S = t === 'strobe';
       html = `<h3>${S ? 'Identification' : 'Enrollment'}</h3><div class="grid g2">${calcBox(S ? 'Potentially eligible individuals' : 'Assessed for eligibility', c.assessed, `= excluded + total ${S ? 'included' : 'allocated'} in the groups`)}</div>
         ${excluded}<h3>Per group</h3><div class="grid">${c.groups.map((g, i) => `<div class="gcard"><h4>${esc(gl[i])}</h4>
@@ -33860,14 +33873,14 @@ if (typeof module !== 'undefined') module.exports = Sav;
             <div><label class="f">Exclusion box text (optional)</label><input type="text" data-st="${i}" data-f="exText" value="${esc(st.exText)}" placeholder="e.g. Excluded: refused consent"></div>
             <div><label class="f">Excluded (n)</label>${num(`data-st="${i}" data-f="exN"`, st.exN)}</div>
           </div></div>`).join('')}
-        <button class="btn ghost small" data-cact="addStep" type="button">+ Add step</button>
+        <button class="btn ghost small" data-cact="addStep" type="button">+ Add step</button> <button class="btn ghost small" data-cact="cohortTpl" type="button" title="Source population, eligible, enrolled, each follow-up wave, analysed">STROBE cohort template</button>
         <h3>Groups</h3><label class="check"><input type="checkbox" data-c="splitGroups" ${c.splitGroups ? 'checked' : ''}><span>Split into the study groups at the end</span></label>
         <div class="grid g3">${c.groups.map((g, i) => `<div><label class="f">${esc(gl[i])} — analysed (n)</label>${num(`data-cg="${i}" data-f="analysed"`, g.analysed)}</div>`).join('')}</div>`;
     }
     // more for every type: an earlier stage, randomisation details, ITT / per-protocol, a footnote, reasons read from the data, the enrolment timeline
-    const trial = ['consort', 'crossover', 'cluster'].includes(t), cols = state.data.headers;
+    const trial = ['consort', 'crossover', 'cluster', 'factorial'].includes(t), cols = state.data.headers;
     html += `<details class="gcard" style="margin-top:10px"><summary><b>More</b> — earlier stage, randomisation, populations, footnote, reasons from the data, enrolment timeline</summary>
-      ${['consort', 'strobe', 'crossover', 'cluster'].includes(t) ? `<label class="check"><input type="checkbox" data-cp="on" ${c.pre.on ? 'checked' : ''}><span><b>Earlier stage</b> above the eligibility assessment (e.g. screened)</span></label>
+      ${['consort', 'strobe', 'crossover', 'cluster', 'factorial'].includes(t) ? `<label class="check"><input type="checkbox" data-cp="on" ${c.pre.on ? 'checked' : ''}><span><b>Earlier stage</b> above the eligibility assessment (e.g. screened)</span></label>
       <div class="grid g4"><div><label class="f">Text</label><input type="text" data-cp="text" value="${esc(c.pre.text)}"></div><div><label class="f">n</label>${num('data-cp="n"', c.pre.n)}</div>
         <div><label class="f">Excluded text</label><input type="text" data-cp="exText" value="${esc(c.pre.exText)}"></div><div><label class="f">Excluded (n)</label>${num('data-cp="exN"', c.pre.exN)}</div></div>` : ''}
       ${trial ? `<div><label class="f">Randomisation details (under “Randomized”)</label><input type="text" data-c="randInfo" value="${esc(c.randInfo || '')}" placeholder="e.g. 1:1, blocks of 4, stratified by sex and centre" style="width:100%"></div>
@@ -33878,6 +33891,14 @@ if (typeof module !== 'undefined') module.exports = Sav;
         <select id="cReasonTo"><option value="excluded">→ Excluded (enrolment)</option><option value="lost">→ Lost to follow-up (per group)</option><option value="exAnalysis">→ Excluded from analysis (per group)</option></select><button class="btn ghost small" id="cReasonGo" type="button">Fill</button></div>
         <p class="legend-note" style="margin:2px 0 0">Every non-empty value of the column is a reason; patients are counted per reason (and per group).</p>` : ''}
       <div class="row" style="gap:6px;margin-top:6px"><label class="f" style="margin:0">Enrolment timeline (report table and chart) from the date column</label><select id="cTimeline"><option value="">— none —</option>${cols.map(h => `<option ${state.cfg.timeline && state.cfg.timeline.col === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>
+      ${t !== 'prisma' && t !== 'stard' ? `<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"><label class="f" style="margin:0">Patients per centre in the “Analysed” boxes</label><select data-c="centreCol"><option value="">— none —</option>${cols.map(h => `<option ${c.centreCol === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><label class="f" style="margin:0">Lost per visit from a repeated variable</label><select id="cVisitVar">${state.cfg.variables.filter(v => v.kind === 'repeated').map(v => `<option value="${esc(v.id)}">${esc(v.label)}</option>`).join('') || '<option value="">— no repeated variable —</option>'}</select><button class="btn ghost small" id="cVisitGo" type="button">Fill “Lost to follow-up”</button></div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><label class="f" style="margin:0">Missing values of a column</label><select id="cMissCol">${cols.map(h => `<option>${esc(h)}</option>`).join('')}</select><select id="cMissTo"><option value="lost">→ Lost to follow-up</option><option value="exAnalysis">→ Excluded from analysis</option></select><button class="btn ghost small" id="cMissGo" type="button">Count</button></div>` : ''}
+      ${trial ? `<h3 style="margin-top:12px">Randomisation list</h3><div class="grid g4"><div><label class="f">Patients</label><input type="number" id="rlN" min="2" value="${c.groups.reduce((a2, g) => a2 + (+g.allocated || 0), 0) || 60}"></div>
+        <div><label class="f">Block sizes</label><input type="text" id="rlBlocks" value="4, 6" placeholder="e.g. 4, 6 (random mix)"></div><div><label class="f">Allocation ratio</label><input type="text" id="rlRatio" value="${c.groups.map(() => 1).join(':')}"></div>
+        <div><label class="f">Strata (optional)</label><input type="text" id="rlStrata" placeholder="e.g. Male, Female"></div><div><label class="f">Seed</label><input type="number" id="rlSeed" value="2024"></div>
+        <div style="align-self:end"><button class="btn ghost small" id="rlGo" type="button">⬇ Randomisation list (.xlsx)</button></div></div>
+        <p class="legend-note" style="margin:2px 0 0">Permuted blocks of randomly chosen sizes, within each stratum; the same seed gives the same list.</p>` : ''}
     </details>`;
     $('#cForm').innerHTML = html;
     drawConsortPreview();
@@ -33885,12 +33906,15 @@ if (typeof module !== 'undefined') module.exports = Sav;
   // checks that the numbers of the flowchart add up
   function flowWarnings(c) {
     const w = [], n = v => +v || 0;
-    if (['consort', 'strobe', 'crossover', 'cluster', 'simple'].includes(c.type)) {
+    if (['consort', 'strobe', 'crossover', 'cluster', 'factorial', 'simple'].includes(c.type)) {
       const N = activeGroups().map(groupN);
       c.groups.forEach((g, i) => { const gl = state.cfg.groupLabels[activeGroups()[i]] || `Group ${i + 1}`;
         if (c.type !== 'simple' && n(g.allocated) - n(g.lost) - n(g.excludedAnalysis) !== n(g.analysed)) w.push(`${gl}: allocated (${n(g.allocated)}) − lost (${n(g.lost)}) − excluded (${n(g.excludedAnalysis)}) ≠ analysed (${n(g.analysed)})`);
         if (N[i] !== undefined && n(g.analysed) !== N[i] && !c.itt) w.push(`${gl}: analysed ${n(g.analysed)}, but the data have ${N[i]} patients`);
-        if (c.type === 'cluster' && n(g.clustersAnalysed) > n(g.clusters)) w.push(`${gl}: more clusters analysed than allocated`); });
+        if (c.type === 'cluster' && n(g.clustersAnalysed) > n(g.clusters)) w.push(`${gl}: more clusters analysed than allocated`);
+        // the analysed number against the patients who have each primary outcome
+        state.cfg.variables.filter(v => v.include && v.role === 'primary' && v.kind !== 'repeated').forEach(v => { const have = state.data.rows.filter(r => Analysis.groupOf(state.cfg, r) === activeGroups()[i] && !isBlank(r[v.cols[0].col])).length;
+          if (c.type !== 'simple' && have < n(g.analysed)) w.push(`${gl}: ${n(g.analysed)} analysed, but only ${have} have ${v.label} (the tables will show n=${have})`); }); });
       if (c.pre && c.pre.on && n(c.pre.n) && n(c.pre.n) - n(c.pre.exN) !== n(c.assessed)) w.push(`Screened (${n(c.pre.n)}) − not eligible (${n(c.pre.exN)}) ≠ assessed for eligibility (${n(c.assessed)})`);
     }
     if (c.type === 'simple') c.steps.forEach((s2, i) => { const nx = c.steps[i + 1]; if (nx && n(s2.n) - n(s2.exN) !== n(nx.n)) w.push(`Step ${i + 1}: ${n(s2.n)} − ${n(s2.exN)} excluded ≠ ${n(nx.n)} in step ${i + 2}`); });
@@ -33901,7 +33925,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       if (as - ex !== n(p.studies) && n(p.studies)) w.push(`Reports assessed (${as}) − excluded (${ex}) = ${as - ex}, but ${n(p.studies)} studies are included (fine when several reports belong to one study)`); }
     return w;
   }
-  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {}, nFmt: 'tight', spacing: 'normal', exSide: 'right', res: '1', pct: false, emph: false, boxWidth: 'normal', arrowHead: 'filled', arrowColor: '', sideText: 'normal', legend: false, direction: 'tb' };
+  const FLOW_STYLE = { theme: 'classic', color: '', corners: 'square', lines: 'normal', textSize: 'normal', font: 'sans', pills: true, shadow: false, pillColor: '', pillTextColor: '#ffffff', labels: {}, nFmt: 'tight', spacing: 'normal', exSide: 'right', res: '1', pct: false, emph: false, boxWidth: 'normal', arrowHead: 'filled', arrowColor: '', sideText: 'normal', legend: false, direction: 'tb' , boxStyle: 'solid', arrowShape: 'elbow' };
   function readConsort() {
     const c = state.cfg && state.cfg.consort; if (!c || !$('#cForm').innerHTML) return;
     c.enabled = $('#cEnabled').checked;
@@ -33912,7 +33936,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     c.style = { theme: st.theme, color: st.colorMode === 'custom' ? st.color : '', corners: st.corners, lines: st.lines, textSize: st.textSize, font: st.font, pills: st.pills, shadow: st.shadow,
       pillColor: st.pillMode === 'custom' ? st.pillColor : '', pillTextColor: st.pillTextColor, labels,
       nFmt: st.nFmt, spacing: st.spacing, exSide: st.exSide, res: st.res, pct: st.pct, emph: st.emph,
-      direction: st.direction, boxWidth: st.boxWidth, arrowHead: st.arrowHead, arrowColor: st.arrowMode === 'custom' ? st.arrowColor : '', sideText: st.sideText, legend: st.legend };
+      direction: st.direction, boxWidth: st.boxWidth, arrowHead: st.arrowHead, arrowColor: st.arrowMode === 'custom' ? st.arrowColor : '', sideText: st.sideText, legend: st.legend, boxStyle: st.boxStyle, arrowShape: st.arrowShape };
     const val = el => el.type === 'checkbox' ? el.checked : el.type === 'number' ? (+el.value || 0) : el.value;
     document.querySelectorAll('#cForm [data-pr]').forEach(el => { c.prisma[el.dataset.pr] = val(el); });
     document.querySelectorAll('#cForm [data-prr]').forEach(el => { c.prisma.reasons[+el.dataset.prr][el.dataset.f] = val(el); });
@@ -33924,6 +33948,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     document.querySelectorAll('#cForm [data-sd]').forEach(el => { c.stard[el.dataset.sd] = val(el); });
     document.querySelectorAll('#cForm [data-sb]').forEach(el => { c.stard.branches[+el.dataset.sb][el.dataset.f] = val(el); });
     document.querySelectorAll('#cForm [data-st]').forEach(el => { c.steps[+el.dataset.st][el.dataset.f] = val(el); });
+    centreTexts(c);
     syncAssessed(c);
   }
   // group sizes from the data again; the type, style, labels and the on/off switch stay
@@ -33962,6 +33987,46 @@ if (typeof module !== 'undefined') module.exports = Sav;
       if (to === 'lost') { G.lost = tot; G.lostReason = why; } else { G.excludedAnalysis = tot; G.excludedReason = why; } G.analysed = Math.max(0, G.allocated - G.lost - G.excludedAnalysis); });
     renderConsortForm(); toast(`Reasons taken from “${col}”`);
   }
+  const isBlank = v => v === null || v === undefined || String(v).trim() === '';
+  // lost to follow-up per visit: patients without a value at each later time point of a repeated variable
+  function lostPerVisit(vid) {
+    const v = state.cfg.variables.find(x => x.id === vid), c = state.cfg.consort; if (!v || v.cols.length < 2) { toast('Choose a repeated variable with two or more time points'); return; }
+    activeGroups().forEach((g, i) => { const G = c.groups[i]; if (!G) return; const rs = state.data.rows.filter(r => Analysis.groupOf(state.cfg, r) === g);
+      const miss = v.cols.slice(1).map(tc => [tc.label || tc.tp || tc.col, rs.filter(r => isBlank(r[tc.col])).length]);
+      G.lost = miss[miss.length - 1][1]; G.lostReason = miss.filter(m => m[1]).map(([l, n]) => `Missing at ${l} (n=${n})`).join('; ');
+      G.analysed = Math.max(0, (+G.allocated || 0) - G.lost - (+G.excludedAnalysis || 0)); });
+    renderConsortForm(); toast(`Lost to follow-up counted at each visit of “${v.label}”`);
+  }
+  // patients with a missing value of a column, per group
+  function missingCounts(col, to) {
+    const c = state.cfg.consort, lab = Analysis.columnLabel(state.cfg, col);
+    activeGroups().forEach((g, i) => { const G = c.groups[i]; if (!G) return; const n = state.data.rows.filter(r => Analysis.groupOf(state.cfg, r) === g && isBlank(r[col])).length;
+      if (to === 'lost') { G.lost = n; G.lostReason = n ? `Missing ${lab} (n=${n})` : ''; } else { G.excludedAnalysis = n; G.excludedReason = n ? `Missing ${lab} (n=${n})` : ''; }
+      G.analysed = Math.max(0, (+G.allocated || 0) - (+G.lost || 0) - (+G.excludedAnalysis || 0)); });
+    renderConsortForm(); toast(`Missing values of “${lab}” counted`);
+  }
+  // permuted-block randomisation list (block sizes chosen at random from the list), stratified, seeded
+  function randomisationList() {
+    const arms = activeGroups().map(g => state.cfg.groupLabels[g] || g), n = Math.max(2, +$('#rlN').value || 0), seed = +$('#rlSeed').value || 1, rnd = Stats.seeded(seed);
+    const ratio = String($('#rlRatio').value).split(/[:,\s]+/).map(Number).filter(x => x > 0), rr = ratio.length === arms.length ? ratio : arms.map(() => 1), unit = rr.reduce((a, b) => a + b, 0);
+    const blocks = String($('#rlBlocks').value).split(/[,;\s]+/).map(Number).filter(x => x > 0 && x % unit === 0);
+    if (!blocks.length) { toast(`Block sizes must be multiples of ${unit} (the sum of the ratio)`); return; }
+    const strata = String($('#rlStrata').value).split(',').map(x => x.trim()).filter(Boolean), aoa = [['Stratum', 'Sequence number', 'Block', 'Block size', 'Allocation']];
+    (strata.length ? strata : ['All']).forEach(stv => { let k = 0, b = 0;
+      while (k < n) { const size = blocks[Math.floor(rnd() * blocks.length)], m = size / unit, list = arms.flatMap((a, i) => Array(rr[i] * m).fill(a)); b++;
+        for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+        list.forEach(a => { if (k < n) aoa.push([stv, ++k, b, size, a]); }); } });
+    const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 8 }, { wch: 10 }, { wch: 28 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Randomisation list');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Method', 'Permuted blocks'], ['Block sizes', blocks.join(', ')], ['Ratio', rr.join(':')], ['Arms', arms.join(', ')], ['Patients per stratum', n], ['Strata', strata.join(', ') || 'none'], ['Seed', seed], ['Made', new Date().toISOString().slice(0, 10)]]), 'Settings');
+    XLSX.writeFile(wb, `${baseName()} - Randomisation list.xlsx`); toast(`Randomisation list of ${aoa.length - 1} allocations saved`);
+  }
+  // patients per centre in each group (shown in the "Analysed" boxes)
+  function centreTexts(c) {
+    if (!c || !c.centreCol || !c.groups) return; const col = c.centreCol;
+    activeGroups().forEach((g, i) => { const G = c.groups[i]; if (!G) return; const m = new Map(); state.data.rows.filter(r => Analysis.groupOf(state.cfg, r) === g && !isBlank(r[col])).forEach(r => { const k = String(r[col]).trim(); m.set(k, (m.get(k) || 0) + 1); });
+      G.centreText = [...m.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]), undefined, { numeric: true })).map(([k, n]) => `${k}: ${n}`).join(', '); if (G.centreText) G.centreText = `By centre (all allocated): ${G.centreText}`; });
+  }
   // dragging boxes of the flowchart preview: the move is kept as an offset of that box (in the Word file and every export too)
   const flowBoxAt = (e, cv) => { const h = Charts.flowHits(), r = cv.getBoundingClientRect(), k = h.W / r.width, x = (e.clientX - r.left) * k, y = (e.clientY - r.top) * k;
     return { k, hit: [...h.list].reverse().find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h), W: h.W }; };
@@ -33969,10 +34034,19 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const c = state.cfg && state.cfg.consort; if (!c) return; const { k, hit, W } = flowBoxAt(e, e.target); if (!hit) return;
     e.preventDefault(); c.offsets = c.offsets || {}; const o0 = { ...(c.offsets[hit.key] || { dx: 0, dy: 0 }) }, x0 = e.clientX, y0 = e.clientY, base = { x: hit.x - o0.dx, y: hit.y - o0.dy, w: hit.w };
     state.flowDrag = true;
+    // other boxes: their centres and edges are guides that the dragged box snaps to (within 10 units)
+    const others = Charts.flowHits().list.filter(b => b.key !== hit.key);
     const move = ev => { const snap = v => Math.round(v / 5) * 5;
-      let dx = snap(o0.dx + (ev.clientX - x0) * k), dy = snap(o0.dy + (ev.clientY - y0) * k);
+      let dx = snap(o0.dx + (ev.clientX - x0) * k), dy = snap(o0.dy + (ev.clientY - y0) * k); const guides = [];
+      if (!ev.altKey) { const cx = base.x + dx + base.w / 2, lx = base.x + dx, ty = base.y + dy;
+        let best = null; others.forEach(b => [[b.x + b.w / 2, cx], [b.x, lx]].forEach(([g, cur]) => { const d = g - cur; if (Math.abs(d) <= 10 && (!best || Math.abs(d) < Math.abs(best.d))) best = { d, g }; }));
+        if (best) { dx += best.d; guides.push({ x: best.g }); }
+        let bestY = null; others.forEach(b => { const d = b.y - ty; if (Math.abs(d) <= 10 && (!bestY || Math.abs(d) < Math.abs(bestY.d))) bestY = { d, g: b.y }; });
+        if (bestY) { dy += bestY.d; guides.push({ y: bestY.g }); } }
       dx = Math.max(-base.x, Math.min(W - base.x - base.w, dx)); dy = Math.max(-base.y, dy);
-      if (dx || dy) c.offsets[hit.key] = { dx, dy }; else delete c.offsets[hit.key]; drawConsortPreview(); };
+      if (dx || dy) c.offsets[hit.key] = { dx, dy }; else delete c.offsets[hit.key]; drawConsortPreview();
+      const cvx = $('#consortCanvas'), q = cvx.width / Charts.flowHits().W, g2 = cvx.getContext('2d'); g2.save(); g2.strokeStyle = '#E8590C'; g2.lineWidth = 2; g2.setLineDash([8, 6]);
+      guides.forEach(gd => { g2.beginPath(); if (gd.x !== undefined) { g2.moveTo(gd.x * q, 0); g2.lineTo(gd.x * q, cvx.height); } else { g2.moveTo(0, gd.y * q); g2.lineTo(cvx.width, gd.y * q); } g2.stroke(); }); g2.restore(); };
     const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); state.flowDrag = false; drawConsortPreview(); };
     document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
   });
@@ -33996,13 +34070,28 @@ if (typeof module !== 'undefined') module.exports = Sav;
     try { localStorage.setItem(FS_KEY, JSON.stringify(all)); } catch (e) { toast('This browser does not allow saving'); return; } renderFlowStyles(); $('#cStyleList').value = name; toast(`Flowchart style “${name}” saved`); };
   $('#cStyleApply').onclick = () => { const st = flowStyles()[$('#cStyleList').value]; if (!st) return; state.cfg.consort.style = JSON.parse(JSON.stringify(st)); renderConsortForm(); toast('Flowchart style applied'); };
   renderFlowStyles();
-  $('#cType').addEventListener('change', e => { readConsort(); state.cfg.consort.type = e.target.value; renderConsortForm(); });
+  $('#cType').addEventListener('change', e => { readConsort(); const c = state.cfg.consort; c.type = e.target.value; if (c.type === 'factorial' && !c.randInfo) c.randInfo = '2 × 2 factorial design'; renderConsortForm(); });
+  // the whole flowchart (numbers, texts, style and box positions) saved to a file and loaded again
+  $('#flowSave').onclick = () => { readConsort(); saveUrl(URL.createObjectURL(new Blob([JSON.stringify({ app: 'Prof MSE Easy Stat', kind: 'flowchart', consort: state.cfg.consort }, null, 1)], { type: 'application/json' })), `${baseName()} - Flowchart layout.json`); toast('Flowchart layout saved'); };
+  $('#flowLoad').onclick = () => $('#flowLoadFile').click();
+  $('#flowLoadFile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try { const j = JSON.parse(await f.text()), c = j.consort || j; if (!c || !c.groups) throw new Error('not a flowchart file');
+      if (c.groups.length !== activeGroups().length) toast(`The layout has ${c.groups.length} groups, the data ${activeGroups().length}: the numbers are taken from the data`);
+      else { state.cfg.consort = c; renderConsortForm(); toast('Flowchart layout loaded'); } } catch (err) { toast('This file is not a flowchart layout'); } };
+  $('#flowPptx').onclick = () => { readConsort(); const cv = Charts.consort(state.cfg.consort, activeGroups().map(g => state.cfg.groupLabels[g]), chartPalette(state.cfg.options), 2);
+    saveUrl(URL.createObjectURL(buildPptx([{ url: cv.toDataURL('image/png'), w: cv.width, h: cv.height, caption: 'Flowchart of the studied patients' }], state.cfg.study.title || 'Flowchart')), `${baseName()} - Flowchart.pptx`); toast('Flowchart saved as a PowerPoint slide'); };
   $('#cForm').addEventListener('click', e => {
     if (e.target.id === 'cReasonGo') { readConsort(); fillReasons($('#cReasonCol').value, $('#cReasonTo').value); return; }
+    if (e.target.id === 'cVisitGo') { readConsort(); lostPerVisit($('#cVisitVar').value); return; }
+    if (e.target.id === 'cMissGo') { readConsort(); missingCounts($('#cMissCol').value, $('#cMissTo').value); return; }
+    if (e.target.id === 'rlGo') { randomisationList(); return; }
     const c = state.cfg.consort, b = e.target.closest('[data-cact],[data-exdel],[data-stdel],[data-prdel]'); if (!b) return;
     readConsort();
     if (b.dataset.cact === 'addEx') c.excluded.push({ text: 'Other reasons', n: 0 });
     else if (b.dataset.cact === 'addStep') c.steps.push({ text: 'Next step', n: 0, exText: '', exN: 0 });
+    else if (b.dataset.cact === 'cohortTpl') { const N0 = c.groups.reduce((a2, g) => a2 + (+g.analysed || 0), 0);
+      c.steps = [{ text: 'Source population', n: 0, exText: 'Not eligible', exN: 0 }, { text: 'Eligible', n: 0, exText: 'Declined to take part', exN: 0 }, { text: 'Enrolled at baseline', n: N0, exText: 'Lost by the first follow-up', exN: 0 },
+        { text: 'Followed up (wave 1)', n: N0, exText: 'Lost by the second follow-up', exN: 0 }, { text: 'Followed up (wave 2)', n: N0, exText: 'Missing outcome data', exN: 0 }, { text: 'Included in the analysis', n: N0, exText: '', exN: 0 }]; }
     else if (b.dataset.cact === 'addPr') c.prisma.reasons.push({ text: 'Other reason', n: 0 });
     else if (b.dataset.prdel !== undefined) c.prisma.reasons.splice(+b.dataset.prdel, 1);
     else if (b.dataset.exdel !== undefined) c.excluded.splice(+b.dataset.exdel, 1);

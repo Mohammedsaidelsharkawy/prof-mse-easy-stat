@@ -1315,7 +1315,7 @@ const Charts = (() => {
       { full: `Studies included in review ${N(v('studies'))}${v('reports') ? `\nReports of included studies ${N(v('reports'))}` : ''}`, n: v('studies'), exN: 0 }
     ];
   }
-  const FLOW_LABELS = { prisma: ['Identification', 'Screening', 'Included'], consort: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], crossover: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], cluster: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], strobe: ['Identification', 'Inclusion', 'Follow-Up', 'Analysis'], stard: ['Enrollment', 'Index test', 'Reference', 'Diagnosis'] };
+  const FLOW_LABELS = { prisma: ['Identification', 'Screening', 'Included'], consort: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], crossover: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], cluster: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], strobe: ['Identification', 'Inclusion', 'Follow-Up', 'Analysis'], factorial: ['Enrollment', 'Allocation', 'Follow-Up', 'Analysis'], stard: ['Enrollment', 'Index test', 'Reference', 'Diagnosis'] };
   function flowStyle(c, pal) {
     const st = c.style || {}, theme = st.theme || 'classic';
     const accent = theme === 'bw' ? '#444444' : /^#[0-9a-f]{6}$/i.test(st.color || '') ? st.color : pal[0];
@@ -1324,12 +1324,15 @@ const Charts = (() => {
       classic: { main: ['#ffffff', '#222222', '#111111'], side: ['#ffffff', '#222222', '#111111'], col: ['#ffffff', '#222222', '#111111'] },
       bw: { main: ['#ffffff', '#222222', '#111111'], side: ['#ffffff', '#222222', '#111111'], col: ['#ffffff', '#222222', '#111111'] },
       tinted: { main: [mix(accent, '#ffffff', 0.8), accent, '#111111'], side: ['#f5f5f5', '#9a9a9a', '#222222'], col: [mix(accent, '#ffffff', 0.9), accent, '#111111'] },
-      filled: { main: [accent, accent, '#ffffff'], side: ['#ffffff', '#9a9a9a', '#222222'], col: [mix(accent, '#ffffff', 0.86), accent, '#111111'] }
+      filled: { main: [accent, accent, '#ffffff'], side: ['#ffffff', '#9a9a9a', '#222222'], col: [mix(accent, '#ffffff', 0.86), accent, '#111111'] },
+      // pastel: a soft tint per role; grey: neutral fills for print
+      pastel: { main: [mix(accent, '#ffffff', 0.84), mix(accent, '#000000', 0.15), '#111111'], side: ['#fff6e5', '#d9a441', '#222222'], col: ['#eaf4fb', '#5b8fd1', '#111111'] },
+      grey: { main: ['#e9e9e9', '#555555', '#111111'], side: ['#f7f7f7', '#999999', '#222222'], col: ['#f2f2f2', '#666666', '#111111'] }
     }[theme] || {};
     return {
       fill: r => (F[r] || F.main)[0], stroke: r => (F[r] || F.main)[1], text: r => (F[r] || F.main)[2],
       accent, arrow: theme === 'classic' || theme === 'bw' ? '#222222' : mix(accent, '#000000', 0.35),
-      lw: { thin: 1.6, bold: 4 }[st.lines] || 2.5, radius: st.corners === 'rounded' ? 14 : 0, fs, lh: Math.round(fs * 1.3),
+      lw: { thin: 1.6, bold: 4 }[st.lines] || 2.5, radius: st.corners === 'rounded' ? 14 : st.corners === 'pill' ? 34 : 0, border: st.boxStyle || 'solid', curved: st.arrowShape === 'curved', fs, lh: Math.round(fs * 1.3),
       pills: st.pills !== false, shadow: !!st.shadow, font: FONTS[st.font] || FONTS.sans,
       // numbers: "n=30" (default), "n = 30" or "N=30", optional percentages, exclusion box side, final boxes emphasised, spacing, resolution
       N: v => `${{ spaced: 'n = ', upper: 'N=' }[st.nFmt] || 'n='}${v}`, pct: !!st.pct, exLeft: st.exSide === 'left', emph: !!st.emph,
@@ -1349,7 +1352,12 @@ const Charts = (() => {
     if (S.radius) { ctx.beginPath(); ctx.roundRect(x, y, w, h, S.radius); ctx.fill(); } else ctx.fillRect(x, y, w, h);
     ctx.restore();
     ctx.strokeStyle = S.stroke(role); ctx.lineWidth = S.lw;
-    if (S.radius) { ctx.beginPath(); ctx.roundRect(x, y, w, h, S.radius); ctx.stroke(); } else ctx.strokeRect(x, y, w, h);
+    // box border: solid, dashed, double, or a thick accent bar on the left
+    const outline = (xx, yy, ww, hh, r) => { if (r) { ctx.beginPath(); ctx.roundRect(xx, yy, ww, hh, r); ctx.stroke(); } else ctx.strokeRect(xx, yy, ww, hh); };
+    if (S.border === 'dashed') ctx.setLineDash([12, 7]);
+    outline(x, y, w, h, Math.min(S.radius, h / 2)); ctx.setLineDash([]);
+    if (S.border === 'double') outline(x + 5, y + 5, w - 10, h - 10, Math.max(0, Math.min(S.radius, h / 2) - 5));
+    if (S.border === 'bar') { ctx.fillStyle = S.accent; ctx.fillRect(x, y, 8, h); }
     ctx.fillStyle = S.text(role);
   }
   function consort(c, groupLabels, palName = 'brand', res) {
@@ -1369,14 +1377,14 @@ const Charts = (() => {
     const boxH = (lines, k = 1) => lines.reduce((h, ln) => { ctx.font = `${ln.b ? 700 : 400} ${Math.round(fs * k)}px ${FONT}`; return h + measureLines(ctx, ln.t, ln.w - 28) * Math.round(lh * k); }, 0) + 26;
 
     const ex = c.excluded.filter(e => +e.n > 0);
-    const exTotal = ex.reduce((s, e) => s + +e.n, 0);
+    const exTotal = ex.filter(e => !e.sub).reduce((s, e) => s + +e.n, 0);
     const topW = Math.round(440 * S.wScale), exW = S.wScale > 1 ? Math.max(500, Math.round((CW - (S.pills ? 80 : 0)) / 2 - 60)) : Math.round(500 * S.wScale);
     // "(n=12)" or with a percentage of its base: "(n=12, 9.5%)"
     const NP = (v, base) => `(${S.N(+v || 0)}${S.pct && +base > 0 ? `, ${Math.round(1000 * (+v || 0) / base) / 10}%` : ''})`;
     const strobe = type === 'strobe';
     const topText = type === 'stard' ? 'Potentially eligible participants' : strobe ? 'Potentially eligible individuals' : 'Assessed for eligibility';
     const assessed = [{ t: `${topText} ${NP(c.assessed)}`, b: true, w: topW }];
-    const excluded = [{ t: `Excluded ${NP(exTotal, c.assessed)}`, b: true, w: exW }, ...ex.map(e => ({ t: `• ${e.text} ${NP(e.n, c.assessed)}`, w: exW }))];
+    const excluded = [{ t: `Excluded ${NP(exTotal, c.assessed)}`, b: true, w: exW }, ...ex.map(e => ({ t: `${e.sub ? '    ◦ ' : '• '}${e.text} ${NP(e.n, c.assessed)}`, w: exW }))]; // a sub-reason is indented under the reason above it
     const midN = branches ? +c.stard.tested || 0 : c.groups.reduce((s, g) => s + (+g.allocated || 0), 0);
     const randomized = [{ t: `${type === 'stard' ? 'Received index test' : strobe ? 'Included in the study' : 'Randomized'} ${NP(midN)}${type === 'cluster' && c.groups.some(g => +g.clusters) ? ` in ${c.groups.reduce((t, g) => t + (+g.clusters || 0), 0)} clusters` : ''}`, b: true, w: topW },
       ...(c.randInfo && !strobe && type !== 'stard' ? [{ t: c.randInfo, w: topW }] : [])];
@@ -1399,7 +1407,7 @@ const Charts = (() => {
       // intention-to-treat and per-protocol populations, or one "Analysed" box
       anal = c.groups.map(g => c.itt
         ? [{ t: `Intention-to-treat ${NP(g.allocated)}`, b: true, w: colW }, { t: `Per-protocol ${NP(g.analysed, g.allocated)}`, b: true, w: colW }, { t: `Excluded from per-protocol ${NP((+g.allocated || 0) - (+g.analysed || 0), g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]
-        : [{ t: `Analysed ${NP(g.analysed, g.allocated)}${type === 'cluster' && +g.clustersAnalysed ? ` in ${g.clustersAnalysed} clusters` : ''}`, b: true, w: colW }, { t: `Excluded from analysis ${NP(g.excludedAnalysis, g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
+        : [{ t: `Analysed ${NP(g.analysed, g.allocated)}${type === 'cluster' && +g.clustersAnalysed ? ` in ${g.clustersAnalysed} clusters` : ''}`, b: true, w: colW }, ...(c.centreCol && g.centreText ? [{ t: g.centreText, w: colW }] : []), { t: `Excluded from analysis ${NP(g.excludedAnalysis, g.allocated)}${g.excludedReason && +g.excludedAnalysis ? '\n' + g.excludedReason : ''}`, w: colW }]);
     }
     // section labels: the user's own text where given, else the defaults of the flowchart type
     const own = ((c.style || {}).labels || {})[type] || [];
@@ -1442,7 +1450,9 @@ const Charts = (() => {
     // a box above another: a straight arrow, or an elbow when one was dragged sideways
     const link = (a, b) => { const ax = a.x + a.w / 2, bx = b.x + b.w / 2, y1 = a.y + a.h, y2 = b.y;
       if (Math.abs(ax - bx) < 0.5) { arrow(ax, y1, bx, y2); return; }
-      const my = (y1 + y2) / 2; ctx.strokeStyle = S.arrowColor || S.arrow; ctx.lineWidth = S.lw; ctx.beginPath(); ctx.moveTo(ax, y1); ctx.lineTo(ax, my); ctx.lineTo(bx, my); ctx.stroke(); arrow(bx, my, bx, y2); };
+      const my = (y1 + y2) / 2; ctx.strokeStyle = S.arrowColor || S.arrow; ctx.lineWidth = S.lw; ctx.beginPath(); ctx.moveTo(ax, y1);
+      if (S.curved) { const ye = y2 - Math.min(24, (y2 - y1) / 3); ctx.bezierCurveTo(ax, my, bx, my, bx, ye); ctx.stroke(); arrow(bx, ye, bx, y2); return; }
+      ctx.lineTo(ax, my); ctx.lineTo(bx, my); ctx.stroke(); arrow(bx, my, bx, y2); };
     // an exclusion box beside the path: a horizontal arrow from the path to its edge
     const side = (from, r) => { const cx = from.x + from.w / 2, y = r.y + r.h / 2; arrow(cx, y, r.x + r.w / 2 < cx ? r.x + r.w : r.x, y); };
     const pill = (label, y1, y2) => {
