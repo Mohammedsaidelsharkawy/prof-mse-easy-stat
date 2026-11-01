@@ -2091,8 +2091,198 @@ const Stats = (() => {
       loglik, aic: -2 * loglik + 2 * q, bic: -2 * loglik + q * Math.log(N), load, corr, theta: T.map((v, i) => ({ est: v, se: se[nL + nP + i] })), rel, resid: resid.slice(0, 5), heywood: T.some(v => v < 0), converged: it < 2000 };
   }
 
+  /* ---------- structural equation models (ML; one or several groups; equality constraints by label) ---------- */
+  // groups: [{ X (rows × p items) }]; model: { k latent, ind: [[item indices] per latent] (a single-item latent = an observed variable),
+  //   paths: [[to, from]], cov: [[a, b]] (free covariances among exogenous latents), single: [latent indices whose one indicator has λ = 1, θ = 0] }
+  //   lab(g, kind, ...) names a parameter: the same name in two groups = one shared parameter; fix(g, kind, ...) returns a number to fix it
+  function semFit(groups, model, o = {}) {
+    const G = groups.length, p = groups[0].X[0].length, k = model.k, means = !!o.means;
+    const st = groups.map(({ X }) => { const N = X.length, m = Array.from({ length: p }, (_, j) => mean(X.map(r => r[j]))), S = Array.from({ length: p }, (_, a) => Array.from({ length: p }, (_, b) => sum(X.map(r => (r[a] - m[a]) * (r[b] - m[b]))) / N)); return { N, m, S, ldS: detLog(S) }; });
+    const Ntot = sum(st.map(s => s.N)), names = [], idx = new Map(), start = [];
+    const par = (name, s0) => { if (!idx.has(name)) { idx.set(name, names.length); names.push(name); start.push(s0); } return idx.get(name); };
+    const endo = new Set(model.paths.map(([to]) => to)), single = new Set(model.single || []);
+    // the parameter map of each group
+    const maps = st.map((s, g) => { const L = [], B = [], Ps = [], Th = [], Nu = [], Al = [], lab = (...a) => (o.lab ? o.lab(g, ...a) : null) || `g${g}:${a.join(',')}`, fix = (...a) => o.fix ? o.fix(g, ...a) : undefined;
+      model.ind.forEach((items, f) => items.forEach(i => { if (single.has(f)) L.push([i, f, null, 1]); else { const v = fix('L', i, f); L.push([i, f, v === undefined ? par(lab('L', i, f), Math.sqrt(0.6 * s.S[i][i])) : null, v]); } }));
+      model.paths.forEach(([to, fr]) => { const v = fix('B', to, fr); B.push([to, fr, v === undefined ? par(lab('B', to, fr), 0) : null, v]); });
+      for (let f = 0; f < k; f++) { const v = fix('P', f, f); const it = model.ind[f][0], s0 = single.has(f) ? s.S[it][it] : 1; Ps.push([f, f, v === undefined ? par(lab('P', f, f), s0) : null, v]); }
+      (model.cov || []).forEach(([a, b]) => { const v = fix('P', a, b); Ps.push([a, b, v === undefined ? par(lab('P', a, b), 0) : null, v]); });
+      const covered = new Set(model.ind.flatMap((items, f) => single.has(f) ? [] : items));
+      for (let i = 0; i < p; i++) { if (!covered.has(i)) continue; const v = fix('T', i); Th.push([i, v === undefined ? par(lab('T', i), 0.4 * s.S[i][i]) : null, v]); }
+      if (means) { for (let i = 0; i < p; i++) { const v = fix('N', i); Nu.push([i, v === undefined ? par(lab('N', i), s.m[i]) : null, v]); }
+        for (let f = 0; f < k; f++) { const v = fix('A', f); if (v === undefined && single.has(f)) continue; Al.push([f, v === undefined ? par(lab('A', f), 0) : null, v ?? 0]); } }
+      return { L, B, Ps, Th, Nu, Al }; });
+    void endo;
+    const q = names.length;
+    const mats = (th, g) => { const M = maps[g], get = (ix, fx) => ix === null ? fx : th[ix];
+      const L = Array.from({ length: p }, () => new Array(k).fill(0)), B = Array.from({ length: k }, () => new Array(k).fill(0)), Ps = Array.from({ length: k }, () => new Array(k).fill(0)), T = new Array(p).fill(0), nu = new Array(p).fill(0), al = new Array(k).fill(0);
+      M.L.forEach(([i, f, ix, fx]) => { L[i][f] = get(ix, fx); }); M.B.forEach(([a, b, ix, fx]) => { B[a][b] = get(ix, fx); }); M.Ps.forEach(([a, b, ix, fx]) => { Ps[a][b] = Ps[b][a] = get(ix, fx); });
+      M.Th.forEach(([i, ix, fx]) => { T[i] = get(ix, fx); }); M.Nu.forEach(([i, ix, fx]) => { nu[i] = get(ix, fx); }); M.Al.forEach(([f, ix, fx]) => { al[f] = get(ix, fx); });
+      const IB = invert(B.map((r, a) => r.map((v, b) => (a === b ? 1 : 0) - v))); if (!IB) return null;
+      const C = mm(mm(IB, Ps), tr(IB)), Sg = mm(mm(L, C), tr(L)); T.forEach((v, i) => { Sg[i][i] += v; });
+      const mu = means ? nu.map((v, i) => v + L[i].reduce((t, l, f) => t + l * IB[f].reduce((u, w, j) => u + w * al[j], 0), 0)) : null; return { L, B, Ps, T, nu, al, IB, C, Sg, mu }; };
+    const Fg = (th, g) => { const M = mats(th, g); if (!M || !isPD(M.Sg)) return Infinity; const Si = invert(M.Sg); if (!Si) return Infinity; const s = st[g]; let t = 0;
+      for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) t += s.S[a][b] * Si[b][a]; let f = detLog(M.Sg) + t - s.ldS - p;
+      if (means) { const d = s.m.map((v, i) => v - M.mu[i]); f += d.reduce((u, v, a) => u + v * d.reduce((w, x, b) => w + Si[a][b] * x, 0), 0); } return f; };
+    const F = th => { let t = 0; for (let g = 0; g < G; g++) { const f = Fg(th, g); if (!isFinite(f)) return Infinity; t += st[g].N * f; } return t / Ntot; };
+    const grad = th => th.map((v, j) => { const h = 1e-6 * Math.max(1, Math.abs(v)), a = th.slice(), b = th.slice(); a[j] += h; b[j] -= h; return (F(a) - F(b)) / (2 * h); });
+    let th = start.slice(), f = F(th); if (!isFinite(f)) { th = th.map((v, j) => /:L,/.test(names[j]) ? v * 0.5 : v); f = F(th); } if (!isFinite(f)) return null;
+    let g = grad(th), H = Array.from({ length: q }, (_, a) => Array.from({ length: q }, (_, b) => +(a === b))), it = 0;
+    for (; it < 3000; it++) { const d = mv(H, g).map(v => -v), slope = g.reduce((t, v, j) => t + v * d[j], 0); if (slope >= 0) { H = H.map((r, a) => r.map((_, b) => +(a === b))); continue; }
+      let s2 = 1, nt, fn; for (let j = 0; j < 60; j++) { nt = th.map((v, i) => v + s2 * d[i]); fn = F(nt); if (fn <= f + 1e-4 * s2 * slope) break; s2 /= 2; } if (!(fn < Infinity) || fn > f) break;
+      const gn = grad(nt), sv = nt.map((v, i) => v - th[i]), yv = gn.map((v, i) => v - g[i]), sy = sv.reduce((t, v, i) => t + v * yv[i], 0);
+      if (sy > 1e-16) { const Hy = mv(H, yv), yHy = yv.reduce((t, v, i) => t + v * Hy[i], 0); H = H.map((r, a) => r.map((v, b) => v + (sy + yHy) * sv[a] * sv[b] / (sy * sy) - (Hy[a] * sv[b] + sv[a] * Hy[b]) / sy)); }
+      const conv = Math.abs(f - fn) < 1e-14 && Math.max(...gn.map(Math.abs)) < 1e-7; th = nt; f = fn; g = gn; if (conv) break; }
+    // expected information from numerical derivatives of Σ and μ
+    const I = Array.from({ length: q }, () => new Array(q).fill(0));
+    for (let gg = 0; gg < G; gg++) { const M0 = mats(th, gg), Si = invert(M0.Sg), dS = [], dM = [];
+      for (let j = 0; j < q; j++) { const h = 1e-6 * Math.max(1, Math.abs(th[j])), a = th.slice(), b = th.slice(); a[j] += h; b[j] -= h; const Ma = mats(a, gg), Mb = mats(b, gg);
+        dS.push(Ma.Sg.map((r, x) => r.map((v, y) => (v - Mb.Sg[x][y]) / (2 * h)))); dM.push(means ? Ma.mu.map((v, x) => (v - Mb.mu[x]) / (2 * h)) : null); }
+      const W = dS.map(D => mm(Si, D));
+      for (let a = 0; a < q; a++) for (let b = a; b < q; b++) { let t = 0; for (let x = 0; x < p; x++) for (let y = 0; y < p; y++) t += W[a][x][y] * W[b][y][x];
+        let m2 = 0; if (means) for (let x = 0; x < p; x++) for (let y = 0; y < p; y++) m2 += dM[a][x] * Si[x][y] * dM[b][y];
+        const v = st[gg].N / 2 * t + st[gg].N * m2; I[a][b] += v; if (a !== b) I[b][a] += v; } }
+    const cov = invert(I), se = cov ? cov.map((r, j) => Math.sqrt(Math.max(0, r[j]))) : th.map(() => NaN);
+    const chi = Ntot * f, df = G * (p * (p + 1) / 2 + (means ? p : 0)) - q, chi0 = sum(st.map(s => s.N * (sum(s.S.map((r, i) => Math.log(r[i]))) - s.ldS))), df0 = G * p * (p - 1) / 2;
+    const cfi = 1 - Math.max(chi - df, 0) / Math.max(chi0 - df0, chi - df, 0), tli = df > 0 ? (chi0 / df0 - chi / df) / (chi0 / df0 - 1) : NaN, rmsea = df > 0 ? Math.sqrt(G) * Math.sqrt(Math.max(chi - df, 0) / (df * Ntot)) : NaN;
+    const solve = target => { if (ncChi2Cdf(chi, df, 0) < target) return 0; let lo = 0, hi = Math.max(10, chi * 3); while (ncChi2Cdf(chi, df, hi) > target) hi *= 2; for (let j = 0; j < 100; j++) { const md = (lo + hi) / 2; if (ncChi2Cdf(chi, df, md) > target) lo = md; else hi = md; } return (lo + hi) / 2; };
+    const rLo = df > 0 ? Math.sqrt(G) * Math.sqrt(solve(0.95) / (df * Ntot)) : NaN, rHi = df > 0 ? Math.sqrt(G) * Math.sqrt(solve(0.05) / (df * Ntot)) : NaN;
+    let sr = 0, nr = 0; st.forEach((s, gg) => { const Sg = mats(th, gg).Sg; for (let a = 0; a < p; a++) for (let b = 0; b <= a; b++) { sr += ((s.S[a][b] - Sg[a][b]) / Math.sqrt(s.S[a][a] * s.S[b][b])) ** 2; nr++; } });
+    const loglik = -sum(st.map((s, gg) => s.N / 2 * (p * Math.log(2 * Math.PI) + Fg(th, gg) + s.ldS + p)));
+    return { th, se, cov, names, idx, mats: gg => mats(th, gg), chi, df, pChi: df > 0 ? 1 - jStat.chisquare.cdf(chi, df) : NaN, cfi, tli, rmsea, rmseaLo: rLo, rmseaHi: rHi, srmr: Math.sqrt(sr / nr), loglik, aic: -2 * loglik + 2 * q, bic: -2 * loglik + q * Math.log(Ntot), q, N: Ntot, converged: it < 3000 };
+  }
+  // a single-group SEM from factors, structural paths and observed variables; std.lv identification (latent (residual) variances 1)
+  // spec: { factors: [{ name, items: [col indices] }], observed: [{ name, col }], paths: [[toName, fromName]] }
+  function sem(X, spec) {
+    const lat = [...spec.factors.map(f => ({ name: f.name, items: f.items })), ...spec.observed.map(o => ({ name: o.name, items: [o.col], obs: true }))], k = lat.length, nameIx = n => lat.findIndex(l => l.name === n);
+    const paths = spec.paths.map(([a, b]) => [nameIx(a), nameIx(b)]).filter(([a, b]) => a >= 0 && b >= 0), endo = new Set(paths.map(x => x[0]));
+    const exo = lat.map((_, i) => i).filter(i => !endo.has(i)), cov = []; for (let a = 0; a < exo.length; a++) for (let b = a + 1; b < exo.length; b++) cov.push([exo[a], exo[b]]);
+    const single = lat.map((l, i) => l.obs ? i : -1).filter(i => i >= 0);
+    const m = semFit([{ X }], { k, ind: lat.map(l => l.items), paths, cov, single }, { fix: (g, kind, a, b) => kind === 'P' && a === b && !single.includes(a) ? 1 : undefined });
+    if (!m) return null; const M = m.mats(0), C = M.C, sdL = lat.map((_, i) => Math.sqrt(C[i][i]));
+    const pi = (kind, a, b) => m.idx.get(`g0:${kind},${a},${b}`);
+    const est = (kind, a, b) => { const j = pi(kind, a, b); return j === undefined ? null : { est: m.th[j], se: m.se[j], p: zP(m.th[j] / m.se[j]), j }; };
+    const pathsOut = paths.map(([to, fr]) => { const e = est('B', to, fr); return { to: lat[to].name, from: lat[fr].name, ...e, std: e.est * sdL[fr] / sdL[to] }; });
+    const loads = []; lat.forEach((l, f) => { if (l.obs) return; l.items.forEach(i => { const e = est('L', i, f); loads.push({ factor: l.name, item: i, ...e, std: e.est * sdL[f] / Math.sqrt(M.Sg[i][i]) }); }); });
+    // indirect effects X → M → Y through each mediator (products of two paths), delta-method SE
+    const ind = []; pathsOut.forEach(a => pathsOut.forEach(b => { if (a.to !== b.from) return; const ja = a.j, jb = b.j, e = a.est * b.est, se = Math.sqrt(b.est ** 2 * m.cov[ja][ja] + a.est ** 2 * m.cov[jb][jb] + 2 * a.est * b.est * m.cov[ja][jb]);
+      ind.push({ from: a.from, via: a.to, to: b.to, est: e, se, lo: e - ZC() * se, hi: e + ZC() * se, p: zP(e / se), std: a.std * b.std }); }));
+    const r2 = [...endo].map(i => ({ name: lat[i].name, r2: 1 - M.Ps[i][i] / C[i][i] }));
+    return { ...m, lat, paths: pathsOut, loads, indirect: ind, r2 };
+  }
+  // measurement invariance across groups: configural, metric (equal loadings) and scalar (equal loadings and intercepts) CFA models
+  function invariance(Xs, factors) {
+    const p = Xs[0][0].length, k = factors.length, cov = []; for (let a = 0; a < k; a++) for (let b = a + 1; b < k; b++) cov.push([a, b]);
+    const model = { k, ind: factors, paths: [], cov }, groups = Xs.map(X => ({ X }));
+    const fit = level => semFit(groups, model, { means: true,
+      lab: (g, kind, ...a) => (kind === 'L' && level !== 'configural') || (kind === 'N' && level === 'scalar') ? `all:${kind},${a.join(',')}` : null,
+      fix: (g, kind, a, b) => { if (kind === 'P' && a === b && (level === 'configural' || g === 0)) return 1; if (kind === 'A' && (level !== 'scalar' || g === 0)) return 0; return undefined; } });
+    const out = ['configural', 'metric', 'scalar'].map(l => ({ level: l, m: fit(l) })).filter(x => x.m);
+    out.forEach((x, i) => { if (!i) return; const a = out[i - 1].m, b = x.m, dchi = b.chi - a.chi, ddf = b.df - a.df; x.dchi = dchi; x.ddf = ddf; x.p = ddf > 0 ? 1 - jStat.chisquare.cdf(dchi, ddf) : NaN; x.dcfi = b.cfi - a.cfi; x.drmsea = b.rmsea - a.rmsea; });
+    return { levels: out, p };
+  }
+
+  /* ---------- generalised additive model: penalised cubic B-splines (P-splines), smoothing chosen by GCV ---------- */
+  function bsplineBasis(x, lo, hi, nseg = 10, deg = 3) {
+    const dx = (hi - lo) / nseg, knots = Array.from({ length: nseg + 2 * deg + 1 }, (_, i) => lo + (i - deg) * dx), nb = nseg + deg;
+    const one = v => { const B = new Array(knots.length - 1).fill(0); for (let i = 0; i < knots.length - 1; i++) B[i] = (v >= knots[i] && v < knots[i + 1]) || (i === nseg + deg - 1 + 0 && v === hi && v >= knots[i] && v <= knots[i + 1]) ? 1 : 0;
+      if (v >= hi) { B.fill(0); B[nseg + deg - 1] = 1; }
+      for (let d = 1; d <= deg; d++) for (let i = 0; i < knots.length - 1 - d; i++) { const a = knots[i + d] - knots[i] ? (v - knots[i]) / (knots[i + d] - knots[i]) * B[i] : 0, b = knots[i + d + 1] - knots[i + 1] ? (knots[i + d + 1] - v) / (knots[i + d + 1] - knots[i + 1]) * B[i + 1] : 0; B[i] = a + b; }
+      return B.slice(0, nb); };
+    return { rows: x.map(one), nb, one };
+  }
+  // y ~ intercept + linear terms Z + Σ f_j(x_j); family gaussian or binomial (P-IRLS); λ_j by GCV on a grid, one smooth at a time (2 sweeps)
+  function gam(y, smooths, Z = null, family = 'gaussian', nseg = 10) {
+    const n = y.length, nz = Z ? Z[0].length : 0;
+    const terms = smooths.map(x => { const lo = Math.min(...x), hi = Math.max(...x), bs = bsplineBasis(x, lo, hi, nseg), cm = Array.from({ length: bs.nb }, (_, j) => mean(bs.rows.map(r => r[j])));
+      return { lo, hi, bs, cm, X: bs.rows.map(r => r.map((v, j) => v - cm[j])) }; });
+    const cols = 1 + nz + sum(terms.map(t => t.bs.nb)), off = []; let c0 = 1 + nz; terms.forEach(t => { off.push(c0); c0 += t.bs.nb; });
+    const X = y.map((_, i) => [1, ...(Z ? Z[i] : []), ...terms.flatMap(t => t.X[i])]);
+    const pen = lam => { const P = Array.from({ length: cols }, () => new Array(cols).fill(0)); terms.forEach((t, j) => { const m = t.bs.nb, o = off[j];
+      for (let r = 0; r < m - 2; r++) { const d = [1, -2, 1]; for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) P[o + r + a][o + r + b] += lam[j] * d[a] * d[b]; }
+      for (let a = 0; a < m; a++) P[o + a][o + a] += 1e-8; }); return P; };
+    const fit = lam => { const P = pen(lam); let beta = new Array(cols).fill(0), w = new Array(n).fill(1), z = y.slice();
+      if (family === 'binomial') { const mu0 = Math.min(0.99, Math.max(0.01, mean(y))); beta[0] = Math.log(mu0 / (1 - mu0)); }
+      let A, Ai, eta;
+      for (let it = 0; it < (family === 'binomial' ? 50 : 1); it++) { if (family === 'binomial') { eta = X.map(r => r.reduce((t, v, j) => t + v * beta[j], 0)); const mu = eta.map(e => 1 / (1 + Math.exp(-e))); w = mu.map(m => Math.max(m * (1 - m), 1e-6)); z = eta.map((e, i) => e + (y[i] - mu[i]) / w[i]); }
+        A = Array.from({ length: cols }, (_, a) => Array.from({ length: cols }, (_, b) => P[a][b])); const bv = new Array(cols).fill(0);
+        X.forEach((r, i) => { for (let a = 0; a < cols; a++) { if (!r[a]) continue; bv[a] += w[i] * r[a] * z[i]; for (let b = 0; b < cols; b++) A[a][b] += w[i] * r[a] * r[b]; } });
+        Ai = invert(A); if (!Ai) return null; const nb = mv(Ai, bv), dl = Math.max(...nb.map((v, j) => Math.abs(v - beta[j]))); beta = nb; if (dl < 1e-9) break; }
+      // trace of the influence matrix, per term too
+      const F = X.map(r => mv(Ai, r)); let edf = 0; const edfT = terms.map(() => 0); X.forEach((r, i) => { for (let a = 0; a < cols; a++) { const v = w[i] * r[a] * F[i][a]; edf += v; terms.forEach((t, j) => { if (a >= off[j] && a < off[j] + t.bs.nb) edfT[j] += v; }); } });
+      eta = X.map(r => r.reduce((t, v, j) => t + v * beta[j], 0)); const rss = sum(z.map((v, i) => w[i] * (v - eta[i]) ** 2)), gcv = n * rss / (n - edf) ** 2;
+      return { beta, Ai, edf, edfT, rss, gcv, w, eta }; };
+    const grid = Array.from({ length: 29 }, (_, i) => Math.pow(10, -4 + i * 0.5)); let lam = terms.map(() => 1);
+    for (let sweep = 0; sweep < 2; sweep++) terms.forEach((_, j) => { let best = null; grid.forEach(l => { const L2 = lam.slice(); L2[j] = l; const f = fit(L2); if (f && (!best || f.gcv < best.g)) best = { g: f.gcv, l }; }); if (best) lam[j] = best.l; });
+    const f = fit(lam); if (!f) return null;
+    const scale = family === 'gaussian' ? f.rss / (n - f.edf) : 1, V = f.Ai.map(r => r.map(v => v * scale));
+    const out = terms.map((t, j) => { const o = off[j], m = t.bs.nb, bj = f.beta.slice(o, o + m), Vj = V.slice(o, o + m).map(r => r.slice(o, o + m));
+      // approximate test of the smooth: Wald χ² on its coefficients with the effective degrees of freedom
+      const Vi = invert(Vj.map((r, a) => r.map((v, b) => v + (a === b ? 1e-10 : 0)))), chi = Vi ? bj.reduce((u, v, a) => u + v * bj.reduce((s2, x, b) => s2 + Vi[a][b] * x, 0), 0) : NaN, df = Math.max(1, f.edfT[j]);
+      const curve = Array.from({ length: 60 }, (_, i) => { const xv = t.lo + (t.hi - t.lo) * i / 59, b = t.bs.one(xv).map((v, a) => v - t.cm[a]), est = b.reduce((u, v, a) => u + v * bj[a], 0), se = Math.sqrt(Math.max(0, b.reduce((u, v, a) => u + v * b.reduce((s2, x, c) => s2 + Vj[a][c] * x, 0), 0))); return { x: xv, est, lo: est - 2 * se, hi: est + 2 * se }; });
+      return { edf: f.edfT[j], chi, df, p: family === 'gaussian' ? 1 - jStat.centralF.cdf(chi / df, df, n - f.edf) : 1 - jStat.chisquare.cdf(chi, df), F: chi / df, lambda: lam[j], curve }; });
+    const lin = Array.from({ length: nz }, (_, j) => { const B = f.beta[1 + j], se = Math.sqrt(V[1 + j][1 + j]); return { B, se, p: family === 'gaussian' ? 2 * (1 - jStat.studentt.cdf(Math.abs(B / se), n - f.edf)) : zP(B / se) }; });
+    const r2 = family === 'gaussian' ? 1 - f.rss / sum(y.map(v => (v - mean(y)) ** 2)) : NaN, dev = family === 'binomial' ? -2 * sum(y.map((v, i) => { const pr = Math.min(1 - 1e-12, Math.max(1e-12, 1 / (1 + Math.exp(-f.eta[i])))); return v * Math.log(pr) + (1 - v) * Math.log(1 - pr); })) : NaN;
+    return { smooths: out, linear: lin, edf: f.edf, r2, deviance: dev, n, intercept: f.beta[0], fitted: f.eta, gcv: f.gcv };
+  }
+  /* ---------- linear mixed model with a random intercept and slope (REML), for the two-stage joint model ---------- */
+  function lmmSlope(y, X, t, subj) {
+    const ids = [...new Set(subj)], G = ids.map(s => subj.map((x, i) => x === s ? i : -1).filter(i => i >= 0)), N = y.length, p = X[0].length;
+    const build = th => { const l11 = Math.exp(th[0]), l21 = th[1], l22 = Math.exp(th[2]); return [[l11 * l11, l11 * l21], [l11 * l21, l21 * l21 + l22 * l22]]; };
+    const pieces = th => { const D = build(th); let XtX = Array.from({ length: p }, () => new Array(p).fill(0)), Xty = new Array(p).fill(0), ld = 0; const Vi = [];
+      for (const g of G) { const Zg = g.map(i => [1, t[i]]), V = g.map((i, a) => g.map((j, b) => Zg[a][0] * (D[0][0] * Zg[b][0] + D[0][1] * Zg[b][1]) + Zg[a][1] * (D[1][0] * Zg[b][0] + D[1][1] * Zg[b][1]) + (a === b ? 1 : 0)));
+        const Vinv = invert(V); if (!Vinv) return null; ld += detLog(V); Vi.push(Vinv);
+        for (let a = 0; a < g.length; a++) for (let b = 0; b < g.length; b++) { const w = Vinv[a][b]; for (let r = 0; r < p; r++) { Xty[r] += X[g[a]][r] * w * y[g[b]]; for (let c = 0; c < p; c++) XtX[r][c] += X[g[a]][r] * w * X[g[b]][c]; } } }
+      const A = invert(XtX); if (!A) return null; const beta = mv(A, Xty); let q = 0;
+      G.forEach((g, k) => { const r = g.map(i => y[i] - X[i].reduce((u, v, j) => u + v * beta[j], 0)); for (let a = 0; a < g.length; a++) for (let b = 0; b < g.length; b++) q += r[a] * Vi[k][a][b] * r[b]; });
+      const s2 = q / (N - p); return { beta, s2, ll: -0.5 * ((N - p) * Math.log(s2) + ld + detLog(XtX)), A, D, Vi }; };
+    const fobj = th => { const r = pieces(th); return r ? -r.ll : Infinity; };
+    // Nelder-Mead on the three parameters of the relative random-effects covariance (log-Cholesky)
+    let simplex = [[0, 0, -1], [1, 0, -1], [0, 0.5, -1], [0, 0, 0]].map(v => ({ v, f: fobj(v) }));
+    for (let it = 0; it < 600; it++) { simplex.sort((a, b) => a.f - b.f); const cen = [0, 1, 2].map(j => mean(simplex.slice(0, 3).map(s2 => s2.v[j]))), w = simplex[3], tryP = c => { const v = cen.map((x, j) => x + c * (w.v[j] - x)); return { v, f: fobj(v) }; };
+      const r = tryP(-1); if (r.f < simplex[0].f) { const e = tryP(-2); simplex[3] = e.f < r.f ? e : r; } else if (r.f < simplex[2].f) simplex[3] = r; else { const c = tryP(0.5); if (c.f < w.f) simplex[3] = c; else simplex = simplex.map((s2, i) => i ? (v => ({ v, f: fobj(v) }))(s2.v.map((x, j) => simplex[0].v[j] + 0.5 * (x - simplex[0].v[j]))) : s2); }
+      if (Math.abs(simplex[3].f - simplex[0].f) < 1e-11) break; }
+    simplex.sort((a, b) => a.f - b.f); const R = pieces(simplex[0].v), D = R.D.map(r => r.map(v => v * R.s2));
+    const blup = G.map((g, k) => { const r = g.map(i => y[i] - X[i].reduce((u, v, j) => u + v * R.beta[j], 0)), Zg = g.map(i => [1, t[i]]), u = Zg.map((z, a) => g.reduce((s2, _, b) => s2 + R.Vi[k][a][b] * r[b], 0));
+      return [0, 1].map(c => R.D[c][0] * Zg.reduce((s2, z, a) => s2 + z[0] * u[a], 0) + R.D[c][1] * Zg.reduce((s2, z, a) => s2 + z[1] * u[a], 0)); });
+    return { beta: R.beta, se: R.A.map((r, j) => Math.sqrt(r[j] * R.s2)), D, s2: R.s2, ids, blup, ll: R.ll };
+  }
+  /* ---------- win ratio for a hierarchical composite (unmatched pairs), Bebu-Lachin variance ---------- */
+  // comps: [{ kind: 'tte', t: [...], e: [...] } | { kind: 'num', v: [...], higher: true }] for every patient; trt: 1 / 0
+  function winRatio(trt, comps) {
+    const T = trt.map((v, i) => v ? i : -1).filter(i => i >= 0), C = trt.map((v, i) => v ? -1 : i).filter(i => i >= 0), n1 = T.length, n0 = C.length, K = comps.length;
+    const cmp = (i, j) => { for (let c = 0; c < K; c++) { const m = comps[c];
+      if (m.kind === 'tte') { const ti = m.t[i], tj = m.t[j]; if (!isFinite(ti) || !isFinite(tj)) continue; const tau = Math.min(ti, tj), ei = m.e[i] && ti <= tau, ej = m.e[j] && tj <= tau;
+        if (ei && ej) { if (ti < tj) return [-1, c]; if (tj < ti) return [1, c]; continue; } if (ej) return [1, c]; if (ei) return [-1, c]; }
+      else { const a = m.v[i], b = m.v[j]; if (!isFinite(a) || !isFinite(b) || a === b) continue; return [(a > b) === (m.higher !== false) ? 1 : -1, c]; } } return [0, -1]; };
+    const W = T.map(() => new Float64Array(n0)), Lm = T.map(() => new Float64Array(n0)), byC = Array.from({ length: K }, () => [0, 0]); let ties = 0;
+    T.forEach((i, a) => C.forEach((j, b) => { const [r, c] = cmp(i, j); if (r > 0) { W[a][b] = 1; byC[c][0]++; } else if (r < 0) { Lm[a][b] = 1; byC[c][1]++; } else ties++; }));
+    const tw = sum(W.map(r => sum(r))) / (n1 * n0), tl = sum(Lm.map(r => sum(r))) / (n1 * n0), wi = W.map(r => mean(r)), li = Lm.map(r => mean(r)), wj = C.map((_, b) => mean(W.map(r => r[b]))), lj = C.map((_, b) => mean(Lm.map(r => r[b])));
+    const cv = (a, b) => { const ma = mean(a), mb = mean(b); return sum(a.map((v, i) => (v - ma) * (b[i] - mb))) / (a.length - 1); };
+    const vw = cv(wi, wi) / n1 + cv(wj, wj) / n0, vl = cv(li, li) / n1 + cv(lj, lj) / n0, cwl = cv(wi, li) / n1 + cv(wj, lj) / n0;
+    const lwr = Math.log(tw / tl), se = Math.sqrt(vw / tw ** 2 + vl / tl ** 2 - 2 * cwl / (tw * tl)), nb = tw - tl, seNb = Math.sqrt(vw + vl - 2 * cwl);
+    return { wins: Math.round(tw * n1 * n0), losses: Math.round(tl * n1 * n0), ties, pairs: n1 * n0, wr: Math.exp(lwr), lo: Math.exp(lwr - ZC() * se), hi: Math.exp(lwr + ZC() * se), p: zP(lwr / se),
+      netBenefit: nb, nbLo: nb - ZC() * seNb, nbHi: nb + ZC() * seNb, winOdds: (tw + (1 - tw - tl) / 2) / (tl + (1 - tw - tl) / 2), byComponent: byC, n1, n0 };
+  }
+  /* ---------- categorical net reclassification (risk categories), with the reclassification tables ---------- */
+  function nriCategories(pOld, pNew, y, cuts) {
+    const cat = p => cuts.filter(c => p >= c).length, K = cuts.length + 1, tab = ev => Array.from({ length: K }, (_, a) => Array.from({ length: K }, (_, b) => y.filter((v, i) => +v === ev && cat(pOld[i]) === a && cat(pNew[i]) === b).length));
+    const part = ev => { const t = tab(ev), n = sum(t.flat()); let up = 0, dn = 0; t.forEach((r, a) => r.forEach((v, b) => { if (b > a) up += v; if (b < a) dn += v; })); return { t, n, up, dn }; };
+    const E = part(1), NE = part(0), nE = (E.up - E.dn) / E.n, nN = (NE.dn - NE.up) / NE.n;
+    const vE = (E.up + E.dn) / E.n ** 2 - (E.up - E.dn) ** 2 / E.n ** 3, vN = (NE.up + NE.dn) / NE.n ** 2 - (NE.up - NE.dn) ** 2 / NE.n ** 3, nri = nE + nN, se = Math.sqrt(vE + vN);
+    return { events: E, nonevents: NE, nriE: nE, nriNE: nN, nri, se, lo: nri - ZC() * se, hi: nri + ZC() * se, p: zP(nri / se), K };
+  }
+  /* ---------- Bayes factors with a prior scale r: one-way ANOVA (Zellner-Siow / JZS regression prior) and the t-test ---------- */
+  function bayesFactorAnova(groups, r = 0.5) {
+    const all = groups.flat(), N = all.length, p = groups.length - 1, m = mean(all), sst = sum(all.map(v => (v - m) ** 2)), sse = sum(groups.map(g => { const mg = mean(g); return sum(g.map(v => (v - mg) ** 2)); })), R2 = 1 - sse / sst;
+    const s = r * r * N / 2, lf = g => ((N - p - 1) / 2) * Math.log1p(g) - ((N - 1) / 2) * Math.log1p(g * (1 - R2)) + 0.5 * Math.log(s) - jStat.gammaln(0.5) - 1.5 * Math.log(g) - s / g;
+    let tot = 0; const lo = -15, hi = 20, steps = 6000, h = (hi - lo) / steps; for (let i = 0; i <= steps; i++) { const u = lo + i * h, g = Math.exp(u), w = i === 0 || i === steps ? 1 : i % 2 ? 4 : 2; tot += w * Math.exp(lf(g) + u); }
+    return tot * h / 3;
+  }
+  const bfSensitivity = (f, rs = Array.from({ length: 30 }, (_, i) => 0.1 + i * 0.05)) => rs.map(r => ({ r, bf: f(r) }));
+
   return {
-    cfa, ncChi2Cdf, coxFit, fineGray, rmst, rmstCompare, phTest, cIndex, metaHet, krippAlpha, gwetAC1, bootUnits, lowess, calibration, neweyWest, iv2sls, lca, kmeans, silhouette, efa, rasch, nSurvival, nCorrelation, nPairedMean, nOneProp, icer, bayesLogistic, lasso, lassoFit,
+    gam, bsplineBasis, lmmSlope, winRatio, nriCategories, bayesFactorAnova, bfSensitivity, semFit, sem, invariance, cfa, ncChi2Cdf, coxFit, fineGray, rmst, rmstCompare, phTest, cIndex, metaHet, krippAlpha, gwetAC1, bootUnits, lowess, calibration, neweyWest, iv2sls, lca, kmeans, silhouette, efa, rasch, nSurvival, nCorrelation, nPairedMean, nOneProp, icer, bayesLogistic, lasso, lassoFit,
     cumIncidence, rcsKnots, rcsBasis, waldTest, tdAuc, tdAucCI, rubin, mice, quantReg, fleissKappa, rmCorr, firthLogistic, poissonReg, negBinReg, ordinalLogit, multinomLogit, deming, passingBablok, eigenSym, pca, partialCorr, twoWayAnova, mediation, aucOf, nriIdi, netBenefit, optimismAuc, propensityMatch, smd, mauchly, skewKurtZ, bootMedianDiff, mannWhitneyExact, fisherRxC, jonckheere, cochranArmitage, effectSizes, nTwoMeans, nTwoProps, mantelHaenszel, brownForsytheMeans, yuen, conditionalLogit, bayesFactorT, tost, newcombeDiff, fmZ, marginTest, boxCoxLambda, boxCox, profileAnalysis, seeded, moodMedian, permutationTest, huberRegression, olsCluster, vanElteren, kendallW, powerTwoMeans, powerTwoProps, wlsRobust, weightedLogistic, bayesMeans, bayesProps, groupSequential, padjust, nMargin, gee, glmmLogit, gaussHermite,
     lmmRandomIntercept, cochranQ, setConf, ZC, QU,
     littleMCAR, invert,
