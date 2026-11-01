@@ -33,9 +33,9 @@
     mb.onclick = e => { e.stopPropagation(); document.querySelectorAll('.ux-pop.open').forEach(p => p.classList.remove('open')); const o = menu.classList.toggle('open'); mb.setAttribute('aria-expanded', String(o)); };
     menu.addEventListener('click', e => { if (e.target.closest('.btn') && !e.target.closest('label')) close(); });
     document.addEventListener('click', e => { if (!more.contains(e.target)) close(); }); document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); }); })();
-  // the Word report from any step: the report is run first when needed (step 11), then downloaded
+  // the Word report from any step: the report is run first when needed (step 12), then downloaded
   async function downloadWord() { const st = S(); if (!st.data) { U.toast('Load data first'); return; }
-    if (!st.result || st.step !== 11) { U.go(11); const t0 = Date.now(); while (!(st.result && !$('#busy').classList.contains('show')) && Date.now() - t0 < 180000) await new Promise(r => setTimeout(r, 250)); }
+    if (!st.result || st.step !== 12) { U.go(12); const t0 = Date.now(); while (!(st.result && !$('#busy').classList.contains('show')) && Date.now() - t0 < 180000) await new Promise(r => setTimeout(r, 250)); }
     if (!st.result) { U.toast('The report could not be run'); return; } const b = $('#btnDocx'); if (b && !b.disabled) b.click(); }
   document.addEventListener('keydown', e => { if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'w') { e.preventDefault(); downloadWord(); } });
   const live = el('div', 'ux-sr'); live.setAttribute('aria-live', 'polite'); live.id = 'uxLive'; document.body.appendChild(live);
@@ -92,7 +92,7 @@
   document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); } if (e.key === 'Escape') $$('.ux-pop.open').forEach(p => p.classList.remove('open')); }, true);
 
   /* ---------- 1. guided tour (offered once, never blocking) ---------- */
-  const TOUR = [['#stepper', 'The 11 steps', 'Work from left to right: upload, choose variables, set tests, tables, comments, figures, advanced analyses, flowchart, check results, then the Word report. Click any step to jump to it.'],
+  const TOUR = [['#stepper', 'The 12 steps', 'Work from left to right: upload, choose variables, set tests, tables, comments, figures, advanced analyses, flowchart, check results, page setup, then the Word report. Click any step to jump to it.'],
     ['#p1 .card', 'Step 1 · Your data', 'Upload an Excel, CSV, SPSS or Stata file — or open an example. The sheet can be edited here, with undo.'],
     ['#btnSaveProj', 'Save your project', 'Saves the data, every setting and your edited text in one file. Your work is also kept in this browser automatically.'],
     ['#uxPal', 'Find anything', 'Press Ctrl+K to find any action or setting by name, from any step.'],
@@ -152,7 +152,7 @@
     if (n !== lastStep) { if (n === 1 && lastStep > 1 && st.data) { backFrom = { step: lastStep, y: scrollY }; backBtn.textContent = `↩ Back to step ${lastStep}`; backBtn.style.display = ''; } else if (n !== 1) { backFrom = null; backBtn.style.display = 'none'; }
       lastStep = n; if (n >= 2) applyGoal(); onStepEnter(n); }
     const h = health(); $$('#stepper .step').forEach((s, i) => { const k = i + 1; s.classList.toggle('ux-ok', visited.has(k) && !h[k] && k !== n); s.classList.toggle('ux-warn', !!h[k]); if (h[k]) s.title = 'Needs checking'; });
-    const left = st.data ? [...Array(10)].map((_, i) => i + 2).filter(k => !visited.has(k)).length : 11; tl.textContent = !st.data ? '' : st.result ? '✓ Report ready — download it in step 11' : `≈ ${Math.max(1, Math.round(left * 0.7))} min to a Word report (${left} step${left === 1 ? '' : 's'} not opened yet)`;
+    const left = st.data ? [...Array(11)].map((_, i) => i + 2).filter(k => !visited.has(k)).length : 12; tl.textContent = !st.data ? '' : st.result ? '✓ Report ready — download it in step 12' : `≈ ${Math.max(1, Math.round(left * 0.7))} min to a Word report (${left} step${left === 1 ? '' : 's'} not opened yet)`;
     showSampleBanner(); crumb();
   }
   if (stepper) new MutationObserver(onStepper).observe(stepper, { childList: true });
@@ -313,7 +313,7 @@
     box.onclick = e => { const f = e.target.closest('[data-ifix]'), d = e.target.closest('[data-idis]'); if (f) { is[+f.dataset.ifix].fix(); U.toast('Fixed (Undo is available)'); drawChecks(); } if (d) { S().uxDismiss.add(is[+d.dataset.idis].id); drawChecks(); onStepper(); } }; }
   if (prev) new MutationObserver(() => { clearTimeout(drawChecks._h); drawChecks._h = setTimeout(() => { drawChecks(); showSampleBanner(); }, 300); }).observe(prev, { childList: true });
 
-  /* ---------- step 11 reading aids: 8 mini-map, 27 P colours, 28 all sources, 29 changes, 30 focus, 31 word bar, 32 column glossary, 45 copy as, 35 what changed, 38 problems ---------- */
+  /* ---------- step 12 reading aids: 8 mini-map, 27 P colours, 28 all sources, 29 changes, 30 focus, 31 word bar, 32 column glossary, 45 copy as, 35 what changed, 38 problems ---------- */
   const GLOSS = { 'OR': 'Odds ratio: the odds of the outcome in one group divided by those in the other (1 = no difference).', 'RR': 'Relative risk: the risk in one group divided by the risk in the other.', 'HR': 'Hazard ratio: the instantaneous risk of the event in one group relative to the other.',
     'CI': 'Confidence interval: the range of values compatible with the data (95%: would contain the true value 95% of the time).', 'P': 'P value: how surprising the data would be if there were no real difference (small = surprising).', 'SD': 'Standard deviation: the spread of the values around the mean.',
     'IQR': 'Interquartile range: the middle 50% of the values (25th to 75th percentile).', 'B': 'Regression coefficient: the change in the outcome for one unit of the predictor.', 'β': 'Standardised coefficient: the change in SDs of the outcome per SD of the predictor.',
@@ -364,7 +364,7 @@
   function miniMap() { let m = $('#uxMini'); if (!m) { m = el('nav', 'ux-mini'); m.id = 'uxMini'; m.setAttribute('aria-label', 'Report sections'); document.body.appendChild(m); }
     const secs = $$('#report .report-sec'); m.innerHTML = '<b>Report</b>' + secs.map((s, i) => { const t = (s.querySelector('.fcap') || {}).value || (s.querySelector('h3') || {}).textContent || `Section ${i + 1}`; return `<a href="#" data-mm="${i}" title="${esc(t)}">${esc(String(t).slice(0, 42))}</a>`; }).join('');
     m.onclick = e => { const a = e.target.closest('[data-mm]'); if (!a) return; e.preventDefault(); const s = secs[+a.dataset.mm]; if (document.documentElement.classList.contains('ux-focus')) focusSec(+a.dataset.mm); else scrollTo(0, s.getBoundingClientRect().top + scrollY - 140); }; miniSpy(); }
-  function miniSpy() { const m = $('#uxMini'); if (!m) return; m.style.display = activeStep() === 11 && S().result ? '' : 'none'; if (m.style.display) return; const secs = $$('#report .report-sec'); let cur = 0; secs.forEach((s, i) => { if (s.getBoundingClientRect().top < 200) cur = i; }); m.querySelectorAll('[data-mm]').forEach((a, i) => a.classList.toggle('on', i === cur)); }
+  function miniSpy() { const m = $('#uxMini'); if (!m) return; m.style.display = activeStep() === 12 && S().result ? '' : 'none'; if (m.style.display) return; const secs = $$('#report .report-sec'); let cur = 0; secs.forEach((s, i) => { if (s.getBoundingClientRect().top < 200) cur = i; }); m.querySelectorAll('[data-mm]').forEach((a, i) => a.classList.toggle('on', i === cur)); }
   const repEl = $('#report'); if (repEl) new MutationObserver(() => { clearTimeout(onReport._h); onReport._h = setTimeout(onReport, 120); }).observe(repEl, { childList: true });
   document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#report')) { clearTimeout(wordBar._h); wordBar._h = setTimeout(wordBar, 400); } });
 
@@ -378,24 +378,24 @@
     ok(!r.sections.some(s => s.meta && s.meta.m && (s.meta.m.unstable || s.meta.m.heywood)), 'No unstable models', 'Some models are unstable — see the warning above the report');
     panel('uxReadyP', 'Ready to submit?', out.map(([g, t]) => `<div>${g ? '✅' : '⚠️'} ${esc(t)}</div>`).join('') + `<p class="legend-note">${out.filter(x => x[0]).length} of ${out.length} checks passed.</p>`); }
 
-  /* ---------- 47. shareable report file: this page with the project inside, opening at step 11 ---------- */
+  /* ---------- 47. shareable report file: this page with the project inside, opening at step 12 ---------- */
   function shareFile() { const st = S(); if (!st.data || !window.__SRC_HTML) { U.toast('Not available'); return; } U.syncEdits(); U.readUiIntoCfg();
-    const proj = { app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: st.file, sheet: st.sheet, step: 11, data: st.data, cfg: st.cfg, shared: true };
+    const proj = { app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: st.file, sheet: st.sheet, step: 12, steps: 12, data: st.data, cfg: st.cfg, shared: true };
     // the tag is built from pieces so that this code never contains it (the page's own text is copied below)
     const SC = '<scr' + 'ipt', open = `${SC} id="ux-project">`, close = '</scr' + 'ipt>', inj = `${open}window.__PROJECT__=${JSON.stringify(proj).replace(/<\//g, '<\\/')};${close}`;
     let src = window.__SRC_HTML; const h = src.indexOf('<head>') + 6; if (src.startsWith(open, h)) src = src.slice(0, h) + src.slice(src.indexOf(close, h) + close.length);
     const html = '<!DOCTYPE html>\n' + src.replace('<head>', '<head>' + inj); U.saveUrl(URL.createObjectURL(new Blob([html], { type: 'text/html' })), `${U.baseName()} - shared report.html`); U.toast('Shareable file saved — it opens this report with its data, in any browser, offline'); }
-  if (window.__PROJECT__) setTimeout(() => { try { U.openProject(window.__PROJECT__, window.__PROJECT__.file); U.go(11); document.documentElement.classList.add('ux-shared');
+  if (window.__PROJECT__) setTimeout(() => { try { U.openProject(window.__PROJECT__, window.__PROJECT__.file); U.go(12); document.documentElement.classList.add('ux-shared');
       const b = el('div', 'ux-sample', '<b>Shared report</b> — opened from a shared file. Changes stay in this browser; 💾 Save project to keep your own copy.'); $('main').prepend(b); } catch (e) { U.toast('The shared report could not be opened'); } }, 300);
 
   /* ---------- 44. export centre ---------- */
-  const EXPORTS = [['Report', [['btnDocx', 11], ['btnPdf', 11], ['btnReview', 11], ['btnSupp', 11], ['btnOnePage', 11], ['btnMd', 11], ['btnTex', 11], ['btnHtml', 11], ['btnLetter', 11]]],
-    ['Figures', [['btnPngs', 11], ['btnPptx', 11], ['btnFigPdf', 11], ['btnCombo', 11], ['btnGA', 11], ['flowPng', 9], ['flowPptx', 9]]], ['Tables and data', [['btnXlsx', 11], ['btnXlsxF', 11], ['xpWord', 10], ['xpXlsx', 10]]], ['Other', [['btnRis', 11], ['btnGdocs', 11], ['btnSaveProj', 0]]]];
+  const EXPORTS = [['Report', [['btnDocx', 12], ['btnPdf', 12], ['btnReview', 12], ['btnSupp', 12], ['btnOnePage', 12], ['btnMd', 12], ['btnTex', 12], ['btnHtml', 12], ['btnLetter', 12]]],
+    ['Figures', [['btnPngs', 12], ['btnPptx', 12], ['btnFigPdf', 12], ['btnCombo', 12], ['btnGA', 12], ['flowPng', 9], ['flowPptx', 9]]], ['Tables and data', [['btnXlsx', 12], ['btnXlsxF', 12], ['xpWord', 10], ['xpXlsx', 10]]], ['Other', [['btnRis', 12], ['btnGdocs', 12], ['btnSaveProj', 0]]]];
   $('#uxExport').onclick = () => { const last = ls.get('lastExport', []), lab = id => { const b = document.getElementById(id); return b ? (b.textContent.replace(/\s+/g, ' ').trim() || b.title) + (b.title ? ` <span class="legend-note">— ${esc(b.title)}</span>` : '') : ''; };
     const p = panel('uxExpP', 'Exports', (last.length ? `<h4>Recently used</h4>${last.map(id => `<div class="ux-exp"><button class="btn primary small" type="button" data-ex="${id}">Go</button> ${lab(id)}</div>`).join('')}` : '')
-      + EXPORTS.map(([g, list]) => `<h4>${g}</h4>${list.filter(([id]) => document.getElementById(id)).map(([id]) => `<div class="ux-exp"><button class="btn ghost small" type="button" data-ex="${id}">Go</button> ${lab(id)}</div>`).join('')}`).join('') + '<p class="legend-note">Report exports need a run of the report (step 11).</p>');
+      + EXPORTS.map(([g, list]) => `<h4>${g}</h4>${list.filter(([id]) => document.getElementById(id)).map(([id]) => `<div class="ux-exp"><button class="btn ghost small" type="button" data-ex="${id}">Go</button> ${lab(id)}</div>`).join('')}`).join('') + '<p class="legend-note">Report exports need a run of the report (step 12).</p>');
     p.onclick = e => { const b = e.target.closest('[data-ex]'); if (!b) return; const id = b.dataset.ex, step = (EXPORTS.flatMap(x => x[1]).find(x => x[0] === id) || [0, 0])[1]; p.classList.remove('open'); ls.set('lastExport', [id, ...ls.get('lastExport', []).filter(x => x !== id)].slice(0, 3));
-      goTo(step, () => { const t = document.getElementById(id); if (!t) return; const d = t.closest('details'); if (d) d.open = true; if (step === 11 && !S().result) { U.toast('Run the report first (step 11)'); return; } flash(t); t.click(); }); }; };
+      goTo(step, () => { const t = document.getElementById(id); if (!t) return; const d = t.closest('details'); if (d) d.open = true; if (step === 12 && !S().result) { U.toast('Run the report first (step 12)'); return; } flash(t); t.click(); }); }; };
 
   /* ---------- 49. style memory: settings you keep choosing, offered as your default preset ---------- */
   function stylMemory() { const st = S(); if (!st.cfg) return; const d = U.defaultOptions(), o = st.cfg.options, h = ls.get('optHist', {}), day = new Date().toISOString().slice(0, 10);
@@ -406,5 +406,5 @@
 
   setTimeout(onStepper, 0); // after every part of this module is set up
   /* ---------- step entry hooks ---------- */
-  function onStepEnter(n) { if (n >= 4 && n <= 8) setTimeout(markChanged, 50); if (n === 4) setTimeout(smartBanner, 80); if (n === 8) setTimeout(() => { favRow(); decorateAdv(); }, 80); if (n === 1) setTimeout(drawChecks, 80); if (n === 11) setTimeout(onReport, 150); miniSpy(); }
+  function onStepEnter(n) { if ((n >= 4 && n <= 8) || n === 11) setTimeout(markChanged, 50); if (n === 4) setTimeout(smartBanner, 80); if (n === 8) setTimeout(() => { favRow(); decorateAdv(); }, 80); if (n === 1) setTimeout(drawChecks, 80); if (n === 11) setTimeout(onReport, 150); miniSpy(); }
 })();

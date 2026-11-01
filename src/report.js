@@ -3,6 +3,8 @@ const Report = (() => {
   const D = () => window.docx;
   const DEFAULT_FONT = 'Times New Roman';
   let BODY_FONT = DEFAULT_FONT; // set per build from the report options
+  // body text from step 11 (page setup): size (half-points), alignment, space before / after (twips) and first-line indent
+  let BODY_SZ = 24, BODY_ALIGN = 'both', PARA_AFTER = 160, PARA_BEFORE = 0, INDENT = 0;
   const PORTRAIT_W = 9026, LANDSCAPE_W = 13958; // A4 text width with 1" margins (DXA)
   let PAGE_W = PORTRAIT_W; // set per build from the page orientation
   let ITALIC_P = false; // APA / AMA / NEJM: the P of P values in italics
@@ -37,7 +39,7 @@ const Report = (() => {
     const { TextRun } = D();
     // with a Word template the body text takes the template's font and size (only explicit sizes, e.g. of tables, stay)
     const mk = o.styled ? (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size, color: o.color })
-      : (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || (TEMPLATE ? undefined : 24), font: o.font || (TEMPLATE ? undefined : BODY_FONT), color: o.color });
+      : (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || (TEMPLATE ? undefined : BODY_SZ), font: o.font || (TEMPLATE ? undefined : BODY_FONT), color: o.color });
     if (!ITALIC_P || !text) return [mk(text || '')];
     if (/^[pP]( value| Value)?$/.test(text)) return [mk(text[0], true), ...(text.length > 1 ? [mk(text.slice(1))] : [])];
     const out = [], re = /(?<![A-Za-z])[pP](?=\s?(?:value\s?)?[=<>≤])/g;
@@ -70,9 +72,11 @@ const Report = (() => {
   function para(text, o = {}) {
     const { Paragraph, TextRun, AlignmentType } = D();
     if (STYLED && (o.pStyle || o.size === undefined)) return styledPara(text, o);
+    const body = o.align === undefined && o.size === undefined && !o.cap, after = o.after ?? (body ? PARA_AFTER : 160), before = o.before ?? (body ? PARA_BEFORE : 0);
     return new Paragraph({
-      alignment: o.align || AlignmentType.JUSTIFIED,
-      spacing: TEMPLATE && o.line === undefined ? { after: o.after ?? 160, before: o.before ?? 0 } : { after: o.after ?? 160, line: o.line ?? LINE, before: o.before ?? 0 },
+      alignment: o.align || BODY_ALIGN,
+      spacing: TEMPLATE && o.line === undefined ? { after, before } : { after, line: o.line ?? LINE, before },
+      ...(body && INDENT && text ? { indent: { firstLine: INDENT } } : {}),
       keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: [...runs(text, o), ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, bold: false, size: o.noteSize || o.size }) : [])]
     });
@@ -84,7 +88,7 @@ const Report = (() => {
     if (!o.boldSig) return para(text, o);
     const { Paragraph, AlignmentType } = D(), ss = String(text).match(SENT) || [text];
     if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) })) });
-    return new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { after: 160, line: LINE }, keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
+    return new Paragraph({ alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, line: LINE, ...(PARA_BEFORE ? { before: PARA_BEFORE } : {}) }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}), keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) })) });
   }
   // headings: Word's Heading 1 / 2; with WORD_STYLES the look comes from the document's styles only (so a university template can restyle them)
@@ -121,7 +125,7 @@ const Report = (() => {
       const id = Object.keys(notes).length + 1; notes[id] = { children: [new Paragraph({ children: [new TextRun({ text: `${m[1]}: ${ABBR_FOOT[m[1]]}.`, size: 18, font: BODY_FONT })] })] };
       kids.push(new FootnoteReferenceRun(id)); last = m.index + m[1].length; }
     kids.push(...runs(text.slice(last)));
-    return new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { after: 160, line: LINE }, children: kids });
+    return new Paragraph({ alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, line: LINE, ...(PARA_BEFORE ? { before: PARA_BEFORE } : {}) }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}), children: kids });
   }
   function caption(text, o = {}) {
     const { AlignmentType } = D();
@@ -275,8 +279,11 @@ const Report = (() => {
     ITALIC_P = !!opts.italicP; ALT = !!opts.altText; AUTO = !!opts.autoNum; SEQ_N = {};
     const landscape = opts.orientation === 'landscape';
     // page: A4 or US Letter, normal / narrow / wide margins (the text width follows), body line spacing
-    const pg = opts.page || {}, tp = opts.tplPage, [pw0, ph0] = tp ? [tp.w, tp.h] : { letter: [12240, 15840], b5: [9979, 14173], a5: [8391, 11906], legal: [12240, 20160] }[pg.size] || [11906, 16838], mg = tp ? Math.round((tp.l + tp.r) / 2) : { narrow: 720, wide: 1800 }[pg.margin] || 1440;
-    PAGE_W = (landscape ? ph0 : pw0) - 2 * mg;
+    const pg = opts.page || {}, tp = opts.tplPage, [pw0, ph0] = tp ? [tp.w, tp.h] : pg.wh || { letter: [12240, 15840], b5: [9979, 14173], a5: [8391, 11906], legal: [12240, 20160] }[pg.size] || [11906, 16838], mg = tp ? Math.round((tp.l + tp.r) / 2) : { narrow: 720, wide: 1800 }[pg.margin] || 1440;
+    // margins: top, right, bottom, left (custom in step 11), plus a binding gutter
+    const [mT, mR, mB, mL] = !tp && pg.mar ? pg.mar : [mg, mg, mg, mg], gut = tp ? 0 : pg.gutter || 0, sideW = mR + mL + gut;
+    PAGE_W = (landscape ? ph0 : pw0) - sideW;
+    BODY_SZ = pg.bodySize || 24; BODY_ALIGN = pg.align === 'left' ? AlignmentType.LEFT : AlignmentType.JUSTIFIED; PARA_AFTER = pg.after ?? 160; PARA_BEFORE = pg.before || 0; INDENT = pg.indent || 0;
     if (opts.twoCol) PAGE_W = Math.floor((PAGE_W - 708) / 2); // tables and figures fit one column
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [], footnotes = {};
@@ -355,7 +362,7 @@ const Report = (() => {
     const findings = s => opts.keyFindings && s.findings && s.findings.length
       ? [para('Key findings:', { bold: true, after: 60, keepNext: true }), ...s.findings.map((x, i) => para(`${i + 1}. ${x}`, { after: 40, line: 276, align: AlignmentType.LEFT }))] : [];
     // orientation "auto": wide tables (more than 7 columns) on landscape pages of their own
-    const turns = [], portraitW = PAGE_W, landW = ph0 - 2 * mg, nColsOf = h => h.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0);
+    const turns = [], portraitW = PAGE_W, landW = ph0 - sideW, nColsOf = h => h.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0);
     // long tables split into parts of at most N rows (never inside a variable), each part after the first captioned "(continued)"
     const chunks = rows => { const N = +opts.splitRows; if (!N || rows.length <= N) return [rows];
       const blocks = []; let cover = 0; // a block is one variable: a row and the rows its row spans cover
@@ -440,25 +447,30 @@ const Report = (() => {
       title: opts.title || 'Statistical report',
       ...(opts.toc ? { features: { updateFields: true } } : {}),
       ...(Object.keys(footnotes).length ? { footnotes } : {}),
-      styles: STYLED ? { default: { document: { run: { font: BODY_FONT, size: 24 }, paragraph: { alignment: AlignmentType.JUSTIFIED, spacing: { after: 160, line: LINE, lineRule: D().LineRuleType.AUTO } } } },
+      styles: STYLED ? { default: { document: { run: { font: BODY_FONT, size: BODY_SZ }, paragraph: { alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, before: PARA_BEFORE, line: LINE, lineRule: D().LineRuleType.AUTO }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}) } } },
         paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120),
           { id: 'Caption', name: 'caption', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
           { id: 'CaptionTitle', name: 'Caption Title', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { italics: true }, paragraph: { alignment: AlignmentType.LEFT, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
           { id: 'TableText', name: 'Table Text', basedOn: 'Normal', quickFormat: true, run: { size: TT_SZ, ...((opts.tableLook || {}).font ? { font: opts.tableLook.font } : {}) }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240, lineRule: D().LineRuleType.AUTO } } },
           { id: 'TableNote', name: 'Table Note', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { size: 18 }, paragraph: { spacing: { before: 60, after: 160, line: 240, lineRule: D().LineRuleType.AUTO } } }] }
-        : { default: { document: { run: { font: BODY_FONT, size: 24 } } }, ...(WORD_STYLES ? { paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120)] } : {}) },
-      sections: parts.filter(pt => pt.kids.length).map(pt => ({
-        properties: { page: { size: pt.land ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 }, margin: { top: mg, bottom: mg, left: mg, right: mg } },
+        : { default: { document: { run: { font: BODY_FONT, size: BODY_SZ } } }, ...(WORD_STYLES ? { paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120)] } : {}) },
+      sections: parts.filter(pt => pt.kids.length).map((pt, pi) => ({
+        properties: { page: { size: pt.land ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 },
+            margin: { top: mT, bottom: mB, left: mL, right: mR, ...(gut ? { gutter: gut } : {}), ...(pg.hdr !== undefined ? { header: pg.hdr } : {}), ...(pg.ftr !== undefined ? { footer: pg.ftr } : {}) },
+            ...(pi === 0 && (pg.start !== undefined || pg.numFmt) ? { pageNumbers: { ...(pg.start !== undefined ? { start: pg.start } : {}), ...(pg.numFmt ? { formatType: pg.numFmt } : {}) } } : pi > 0 && pg.numFmt ? { pageNumbers: { formatType: pg.numFmt } } : {}) },
+          ...(pi === 0 && pg.firstHide ? { titlePage: true } : {}),
           // line numbers for journal submission, and a two-column layout
           ...(opts.lineNumbers ? { lineNumbers: { countBy: 1, restart: D().LineNumberRestartFormat.CONTINUOUS } } : {}), ...(opts.twoCol ? { column: { count: 2, space: 708 } } : {}) },
-        headers: { default: new Header({ children: headerKids.map(k => k) }) },
+        headers: { default: new Header({ children: headerKids.map(k => k) }), ...(pi === 0 && pg.firstHide ? { first: new Header({ children: [] }) } : {}) },
         footers: {
-          // page numbers: centred (default), right, "Page 3 of 12" or none
+          ...(pi === 0 && pg.firstHide ? { first: new Footer({ children: [] }) } : {}),
+          // page numbers: centred (default), right, left, "Page 3 of 12" or none; an optional footer text above them
           default: new Footer({
-            children: pg.pageNum === 'none' ? [] : [new Paragraph({
-              alignment: pg.pageNum === 'right' ? AlignmentType.RIGHT : AlignmentType.CENTER,
+            children: [...(opts.footerText ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: opts.footerText, size: 18, font: BODY_FONT, color: '555555' })] })] : []),
+              ...(pg.pageNum === 'none' ? [] : [new Paragraph({
+              alignment: pg.pageNum === 'right' ? AlignmentType.RIGHT : pg.pageNum === 'left' ? AlignmentType.LEFT : AlignmentType.CENTER,
               children: pg.pageNum === 'of' ? [new TextRun({ children: ['Page ', PageNumber.CURRENT, ' of ', PageNumber.TOTAL_PAGES], size: 18, font: BODY_FONT })] : [new TextRun({ children: [PageNumber.CURRENT], size: 18, font: BODY_FONT })]
-            })]
+            })])]
           })
         },
         children: pt.kids
@@ -470,7 +482,7 @@ const Report = (() => {
   // results by variable: every table of each variable, with its figure, in a landscape document
   async function buildResults(model, opts) {
     const { Document, Packer, Paragraph, TextRun, Footer, AlignmentType, PageNumber, PageOrientation } = D();
-    BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false; ALT = false; AUTO = false; STYLED = false;
+    BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false; ALT = false; AUTO = false; STYLED = false; BODY_SZ = 24; BODY_ALIGN = D().AlignmentType.JUSTIFIED; PARA_AFTER = 160; PARA_BEFORE = 0; INDENT = 0;
     PAGE_W = LANDSCAPE_W; LINE = 360;
     const children = [para(opts.title || 'Results by variable', { bold: true, size: 32, align: AlignmentType.CENTER, after: 120 })];
     if (opts.subtitle) children.push(para(opts.subtitle, { align: AlignmentType.CENTER, size: 20, after: 240 }));

@@ -3,7 +3,7 @@
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const STEPS = [['Upload', 'Excel file'], ['Variables', 'Groups & roles'], ['Timepoints', 'Per outcome'], ['Tests', 'Statistics'], ['Tables', 'Layout & numbers'],
-    ['Comments', 'Text'], ['Figures', 'Charts'], ['Advanced', 'Regression, ROC …'], ['Flowchart', 'CONSORT / STROBE …'], ['Results', 'Each variable'], ['Report', 'Preview & Word']];
+    ['Comments', 'Text'], ['Figures', 'Charts'], ['Advanced', 'Regression, ROC …'], ['Flowchart', 'CONSORT / STROBE …'], ['Results', 'Each variable'], ['Page setup', 'Paper & margins'], ['Report', 'Preview & Word']];
   const TP_RE = /^(baseline|base|bl|pre|post|preop|postop|before|after|final|end|(t|v|visit|day|d|week|wk|w|month|mo|m|h|hr|y|yr|session)\d+(\.\d+)?|\d+(\.\d+)?(h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks|m|mo|mon|month|months|y|yr|yrs|year|years|min|mins))$/i;
   const UNIT_RE = /^(\d+(\.\d+)?-\d+(\.\d+)?|years?|yrs|months?|days?|weeks?|hours?|deg|degrees?|kg|g|cm|mm|m2|kg\/m2|mmhg|bpm|percent|pct|%|min|mins|sec|ml|mg|mg\/dl|mmol\/l|iu|u\/l|ng|pg|ug|mcg|µg|mmol|umol|µmol|meq|x?10e\d+|x?10\^\d+|celsius|fahrenheit|miu|uiu|µiu|mu|nmol|pmol|mosm|cmh2o|kpa|bsa173|\[[^\]]+\]|\([^)]+\))$/i;
   // a unit followed by one of these reads as "per": mg_L → mg/L, kg_m2 → kg/m2
@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmAncova: false, rmSphReport: false, rmEachGroup: false, rawData: false, rmProfile: false, rmImpute: 'none', panelStyle: 'classic', axisSize: 'normal', titleSize: 'normal', valueSize: 'normal', boxMeanVal: false, figHeat: false, figForestAll: false, figPanels: false, figNormCurve: false, figRefBand: false, figUnitLine: false, figStackSort: false, figWatermark: '', capAbove: false, commentTpl: false, tplSig: '{Variable} differed significantly {groups} (P value {P}), being highest in {highest}.', tplNs: '{Variable} did not differ significantly {groups} (P value {P}).', varyWording: false, commentTone: 'standard', trendWord: false, nsCI: false, comMaxWords: '', boldSigText: false, phraseDict: '', keyFindings: false, absMaxWords: '', effConv: 'cohen', figRef: false, commentMerge: 'table', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmAncova: false, rmSphReport: false, rmEachGroup: false, rawData: false, rmProfile: false, rmImpute: 'none', panelStyle: 'classic', axisSize: 'normal', titleSize: 'normal', valueSize: 'normal', boxMeanVal: false, figHeat: false, figForestAll: false, figPanels: false, figNormCurve: false, figRefBand: false, figUnitLine: false, figStackSort: false, figWatermark: '', capAbove: false, commentTpl: false, tplSig: '{Variable} differed significantly {groups} (P value {P}), being highest in {highest}.', tplNs: '{Variable} did not differ significantly {groups} (P value {P}).', varyWording: false, commentTone: 'standard', trendWord: false, nsCI: false, comMaxWords: '', boldSigText: false, phraseDict: '', keyFindings: false, absMaxWords: '', effConv: 'cohen', figRef: false, commentMerge: 'table', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', pageW: '', pageH: '', marTop: '', marBottom: '', marLeft: '', marRight: '', gutter: '', pageMirror: false, hdrDist: '', ftrDist: '', pageNumFmt: 'decimal', pageStart: '', pageFirstHide: false, footerText: '', bodySize: '12', bodyAlign: 'justify', paraBefore: '', paraAfter: '', firstIndent: '',  listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,7 +47,7 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], panelStyle: ['optPanelStyle'], axisSize: ['optAxisSize'], titleSize: ['optTitleSize'], valueSize: ['optValueSize'], boxMeanVal: ['optBoxMeanVal', true], figHeat: ['optFigHeat', true], figForestAll: ['optFigForestAll', true], figPanels: ['optFigPanels', true], figNormCurve: ['optFigNormCurve', true], figRefBand: ['optFigRefBand', true], figUnitLine: ['optFigUnitLine', true], figStackSort: ['optFigStackSort', true], figWatermark: ['optFigWatermark'], capAbove: ['optCapAbove', true], commentTpl: ['optCommentTpl', true], tplSig: ['optTplSig'], tplNs: ['optTplNs'], varyWording: ['optVaryWording', true], commentTone: ['optCommentTone'], trendWord: ['optTrendWord', true], nsCI: ['optNsCI', true], comMaxWords: ['optComMaxWords'], boldSigText: ['optBoldSigText', true], phraseDict: ['optPhraseDict'], keyFindings: ['optKeyFindings', true], absMaxWords: ['optAbsMaxWords'], effConv: ['optEffConv'], figRef: ['optFigRef', true], commentMerge: ['optCommentMerge'], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmAncova: ['optRmAncova', true], rmSphReport: ['optRmSphReport', true], rmEachGroup: ['optRmEachGroup', true], rawData: ['optRawData', true], rmProfile: ['optRmProfile', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], panelStyle: ['optPanelStyle'], axisSize: ['optAxisSize'], titleSize: ['optTitleSize'], valueSize: ['optValueSize'], boxMeanVal: ['optBoxMeanVal', true], figHeat: ['optFigHeat', true], figForestAll: ['optFigForestAll', true], figPanels: ['optFigPanels', true], figNormCurve: ['optFigNormCurve', true], figRefBand: ['optFigRefBand', true], figUnitLine: ['optFigUnitLine', true], figStackSort: ['optFigStackSort', true], figWatermark: ['optFigWatermark'], capAbove: ['optCapAbove', true], commentTpl: ['optCommentTpl', true], tplSig: ['optTplSig'], tplNs: ['optTplNs'], varyWording: ['optVaryWording', true], commentTone: ['optCommentTone'], trendWord: ['optTrendWord', true], nsCI: ['optNsCI', true], comMaxWords: ['optComMaxWords'], boldSigText: ['optBoldSigText', true], phraseDict: ['optPhraseDict'], keyFindings: ['optKeyFindings', true], absMaxWords: ['optAbsMaxWords'], effConv: ['optEffConv'], figRef: ['optFigRef', true], commentMerge: ['optCommentMerge'], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmAncova: ['optRmAncova', true], rmSphReport: ['optRmSphReport', true], rmEachGroup: ['optRmEachGroup', true], rawData: ['optRawData', true], rmProfile: ['optRmProfile', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], pageW: ['optPageW'], pageH: ['optPageH'], marTop: ['optMarTop'], marBottom: ['optMarBottom'], marLeft: ['optMarLeft'], marRight: ['optMarRight'], gutter: ['optGutter'], pageMirror: ['optPageMirror', true], hdrDist: ['optHdrDist'], ftrDist: ['optFtrDist'], pageNumFmt: ['optPageNumFmt'], pageStart: ['optPageStart'], pageFirstHide: ['optPageFirstHide', true], footerText: ['optFooterText'], bodySize: ['optBodySize'], bodyAlign: ['optBodyAlign'], paraBefore: ['optParaBefore'], paraAfter: ['optParaAfter'], firstIndent: ['optFirstIndent'],  listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -110,7 +110,7 @@
     if (n === 2) renderVariables();
     if (n === 1) renderMessyTasks();
     if (n === 3) renderTimepoints();
-    if (n >= 4 && n <= 8) renderOptions();
+    if ((n >= 4 && n <= 8) || n === 11) renderOptions();
     if (n === 7) { renderFigureTable(); renderFigDesign(); }
     if (n === 4) renderTestPlan();
     if (n === 6) renderCommentPreview();
@@ -118,7 +118,8 @@
     if (n === 8) renderAdvanced();
     if (n === 9) renderConsortForm();
     if (n === 10) renderExplore();
-    if (n === 11) runAnalysis();
+    if (n === 11) renderPageSetup();
+    if (n === 12) runAnalysis();
     $('#presetBar').style.display = n >= 4 ? '' : 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -2968,7 +2969,7 @@
     if (['linear', 'logistic', 'cox'].includes(t)) out.push(`<div>${box('forest', 'Forest plot of the estimates')}</div>`);
     if (['linear', 'logistic'].includes(t)) { const pc = [['', '— none —'], ...(a.predictors || []).map(c => [c, Analysis.columnLabel(state.cfg, c)])];
       out.push(`<div><label class="f">Interaction term</label><div class="row" style="gap:4px">${sel('int1', pc, a.int1 || '')}×${sel('int2', pc, a.int2 || '')}</div></div>`,
-        `<div>${box('epv', 'Sample size check (events per variable)')}</div>`, `<div>${box('calc', 'Model equation + risk calculator (step 11)')}</div>`); }
+        `<div>${box('epv', 'Sample size check (events per variable)')}</div>`, `<div>${box('calc', 'Model equation + risk calculator (step 12)')}</div>`); }
     if (t === 'logistic') out.push(`<div>${box('optimism', 'Bootstrap validation (optimism-corrected AUC)')}</div>`, `<div>${box('dca', 'Decision curve (net benefit)')}</div>`,
       `<div><label class="f">Added value of one predictor (NRI, IDI)</label>${sel('nriVar', [['', '— none —'], ...(a.predictors || []).map(c => [c, Analysis.columnLabel(state.cfg, c)])], a.nriVar || '')}</div>`);
     if (['linear', 'logistic'].includes(t)) { const nc = (a.predictors || []).filter(c => Analysis.columnKind(state.cfg, analysedRows(), c) === 'numeric').map(c => [c, Analysis.columnLabel(state.cfg, c)]);
@@ -4878,6 +4879,88 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   $('#arOut').addEventListener('change', e => { if (e.target.dataset.grpar === undefined || !state.result) return; const map = arLabels(), ed = state.result.arEdits || {};
     document.querySelectorAll('#arOut [data-aren]').forEach(t => { if (ed[t.dataset.aren] === undefined) t.value = Ar.translate(t.dataset.aren, map).text; }); });
   $('#arOut').addEventListener('click', e => { if (e.target.id === 'arRedo' && state.result) { state.result.arEdits = {}; $('#arPrev').onclick(); } });
+  /* ---------- step 11: page setup — paper, margins, text, header and footer; presets and a live drawing of the page ---------- */
+  const PAPER_CM = { a4: [21, 29.7], letter: [21.59, 27.94], b5: [17.6, 25], a5: [14.8, 21], legal: [21.59, 35.56] };
+  const MARGIN_CM = { normal: 2.54, narrow: 1.27, wide: 3.175 };
+  const cmNum = (v, lo, hi) => { const x = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(x) && x >= lo && x <= hi ? x : null; };
+  const TW = cm => Math.round(cm * 567);
+  // the page of the Word file from the options: everything left at its default gives the same file as before
+  function pageOptions(o, rp = report()) {
+    const pg = { size: rp.format === 'thesis' && rp.thesisPage ? rp.thesisPage : o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum };
+    if (pg.size === 'custom') { const w = cmNum(o.pageW, 5, 60), h = cmNum(o.pageH, 5, 90); if (w && h) pg.wh = [TW(w), TW(h)]; else pg.size = 'a4'; }
+    if (o.pageMargin === 'custom') { const m = [o.marTop, o.marRight, o.marBottom, o.marLeft].map(v => cmNum(v, 0, 10)); if (m.every(x => x !== null)) pg.mar = m.map(TW); }
+    const g = cmNum(o.gutter, 0.01, 5), hd = cmNum(o.hdrDist, 0, 5), fd = cmNum(o.ftrDist, 0, 5);
+    if (g) pg.gutter = TW(g); if (hd !== null) pg.hdr = TW(hd); if (fd !== null) pg.ftr = TW(fd);
+    if (o.pageNumFmt && o.pageNumFmt !== 'decimal') pg.numFmt = o.pageNumFmt;
+    const st = parseInt(o.pageStart, 10); if (isFinite(st) && st >= 0 && String(o.pageStart).trim() !== '') pg.start = st;
+    if (o.pageFirstHide) pg.firstHide = true;
+    if (o.bodySize && o.bodySize !== '12') pg.bodySize = 2 * +o.bodySize;
+    if (o.bodyAlign === 'left') pg.align = 'left';
+    const pb = cmNum(o.paraBefore, 0, 48), pa = cmNum(o.paraAfter, 0, 48), fi = cmNum(o.firstIndent, 0.01, 3);
+    if (pb !== null) pg.before = Math.round(pb * 20); if (pa !== null) pg.after = Math.round(pa * 20); if (fi) pg.indent = TW(fi);
+    return pg;
+  }
+  // Word's mirror margins (a document setting the docx library does not write)
+  async function mirrorMargins(blob) {
+    const CFB = XLSX.CFB, doc = CFB.read(new Uint8Array(await blob.arrayBuffer()), { type: 'array' });
+    const e = doc.FileIndex[doc.FullPaths.indexOf('Root Entry/word/settings.xml')]; if (!e) return blob;
+    const x = new TextDecoder().decode(e.content); if (/<w:mirrorMargins/.test(x)) return blob;
+    const y = x.replace(/(<w:settings[^>]*>)/, '$1<w:mirrorMargins/>'), u = new TextEncoder().encode(y); e.content = u; e.size = u.length;
+    return new Blob([CFB.write(doc, { fileType: 'zip', type: 'array', compression: true })], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  }
+  const PAGE_PRESETS = {
+    thesis: { o: { pageSize: 'a4', orientation: 'portrait', pageMargin: 'custom', marTop: '2.5', marBottom: '2.5', marLeft: '3.5', marRight: '2.5', gutter: '', pageMirror: false, lineSpacing: '1.5', bodySize: '12', bodyAlign: 'justify', paraBefore: '', paraAfter: '', firstIndent: '', pageNum: 'center', pageNumFmt: 'decimal' }, r: { lineNumbers: false, twoCol: false } },
+    journal: { o: { pageSize: 'a4', orientation: 'portrait', pageMargin: 'normal', marTop: '', marBottom: '', marLeft: '', marRight: '', gutter: '', pageMirror: false, lineSpacing: '2', bodySize: '12', bodyAlign: 'left', paraBefore: '', paraAfter: '', firstIndent: '', pageNum: 'right', pageNumFmt: 'decimal', pageFirstHide: false }, r: { lineNumbers: true, twoCol: false } },
+    compact: { o: { pageMargin: 'narrow', marTop: '', marBottom: '', marLeft: '', marRight: '', gutter: '', lineSpacing: '1', bodySize: '11', paraBefore: '', paraAfter: '6', firstIndent: '' }, r: { twoCol: false } }
+  };
+  const PAGE_KEYS = ['pageSize', 'pageW', 'pageH', 'orientation', 'pageMargin', 'marTop', 'marBottom', 'marLeft', 'marRight', 'gutter', 'pageMirror', 'hdrDist', 'ftrDist', 'font', 'bodySize', 'lineSpacing', 'bodyAlign', 'paraBefore', 'paraAfter', 'firstIndent', 'pageNum', 'pageNumFmt', 'pageStart', 'pageFirstHide', 'headerText', 'footerText', 'branding'];
+  document.addEventListener('click', e => { const b = e.target.closest('[data-pgpreset]'); if (!b || !state.cfg) return;
+    readUiIntoCfg(); const o = state.cfg.options, k = b.dataset.pgpreset;
+    if (k === 'default') { PAGE_KEYS.forEach(x => { o[x] = DEFAULT_OPTIONS[x]; }); Object.assign(report(), { lineNumbers: false, twoCol: false, watermark: '', wordStyles: false }); }
+    else { // a preset starts from the defaults (keeping the font and the typed header and footer texts), then sets its own values
+      PAGE_KEYS.filter(x => !['font', 'headerText', 'footerText', 'branding'].includes(x)).forEach(x => { o[x] = DEFAULT_OPTIONS[x]; });
+      Object.assign(report(), { lineNumbers: false, twoCol: false }, PAGE_PRESETS[k].r); Object.assign(o, PAGE_PRESETS[k].o); }
+    renderOptions(); renderPageSetup(); toast(`Page setup: ${b.textContent.trim()}`); });
+  // the margins shown in the boxes follow the chosen preset; typing a margin switches to custom margins
+  function marginBoxes() { const o = state.cfg.options;
+    if (o.pageMargin !== 'custom') { const m = MARGIN_CM[o.pageMargin] || 2.54; ['optMarTop', 'optMarBottom', 'optMarLeft', 'optMarRight'].forEach(id => { $('#' + id).value = ''; $('#' + id).placeholder = String(m); }); } }
+  function pageGeom() {
+    const o = state.cfg.options, pg = pageOptions(o), land = o.orientation === 'landscape';
+    let [w, h] = pg.wh ? pg.wh.map(x => x / 567) : PAPER_CM[pg.size] || PAPER_CM.a4; if (land) [w, h] = [h, w];
+    const m0 = MARGIN_CM[o.pageMargin] || 2.54, [t, r, b, l] = pg.mar ? pg.mar.map(x => x / 567) : [m0, m0, m0, m0];
+    return { o, pg, w, h, t, r, b, l, g: (pg.gutter || 0) / 567, hd: pg.hdr !== undefined ? pg.hdr / 567 : 1.25, fd: pg.ftr !== undefined ? pg.ftr / 567 : 1.25 };
+  }
+  function renderPageSetup() {
+    if (!state.cfg || !$('#pgPreview')) return;
+    marginBoxes();
+    document.querySelectorAll('#p11 [data-rx]').forEach(el => { const v = report()[el.dataset.rx]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v ?? ''); });
+    const { o, pg, w, h, t, r, b, l, g, hd, fd } = pageGeom(), rp = report(), S = 230 / Math.max(w, h * 0.78), W = w * S, H = h * S;
+    const tw = w - l - r - g, th = h - t - b, mirror = o.pageMirror;
+    const sp = { '1': 1, '1.15': 1.15, '2': 2 }[o.lineSpacing] || 1.5, fs = (+o.bodySize || 12) * 0.0353, lineH = fs * 1.2 * sp, pa = (pg.after ?? 160) / 20 * 0.0353, pb = (pg.before || 0) / 20 * 0.0353;
+    const lines = []; let y = 0, n = 0, cols = rp.twoCol ? 2 : 1, cw = (tw - (cols - 1) * 1.25) / cols;
+    while (y + lineH <= th && lines.length < 400) { // paragraphs of 5 lines: the last one shorter, the first indented
+      const k = n % 5, x0 = k === 0 ? (pg.indent || 0) / 567 : 0, len = k === 4 ? 0.55 : pg.align === 'left' ? 0.8 + 0.18 * ((n * 7) % 3) / 2 : 1;
+      if (k === 0 && n) y += pa + pb;
+      for (let c = 0; c < cols; c++) lines.push(`<div class="pg-line" style="left:${((c * (cw + 1.25)) + x0) * S}px;top:${(y + lineH / 2) * S}px;width:${Math.max(4, (cw - x0) * len * S)}px;height:${Math.max(1, fs * 0.5 * S)}px"></div>`);
+      y += lineH; n++; }
+    const left = l + (g || 0), num = o.pageNum === 'none' ? '' : `<div class="pg-hf" style="bottom:${(fd) * S}px;${o.pageNum === 'right' ? `right:${r * S}px` : o.pageNum === 'left' ? `left:${left * S}px` : 'left:0;right:0;text-align:center'}">${o.pageNum === 'of' ? 'Page 3 of 12' : { lowerRoman: 'iii', upperRoman: 'III' }[o.pageNumFmt] || '3'}</div>`;
+    $('#pgPreview').innerHTML = `<div class="pg-page" style="width:${W}px;height:${H}px">
+      ${g ? `<div class="pg-gut" style="left:0;width:${g * S}px"></div>` : ''}
+      ${o.headerText || rp.watermark || o.branding ? `<div class="pg-hf" style="top:${hd * S}px;right:${r * S}px;max-width:${tw * S}px;font-style:italic">${esc(o.headerText || (o.branding ? 'Prof MSE' : ''))}</div>` : ''}
+      ${rp.watermark ? `<div class="pg-wm" style="top:${(hd + 0.6) * S}px">${esc(String(rp.watermark).toUpperCase())}</div>` : ''}
+      <div class="pg-text" style="left:${left * S}px;top:${t * S}px;width:${tw * S}px;height:${th * S}px">${lines.join('')}</div>
+      ${o.footerText ? `<div class="pg-hf" style="bottom:${(fd + 0.35) * S}px;left:${left * S}px;right:${r * S}px;text-align:center">${esc(o.footerText)}</div>` : ''}${num}
+      ${rp.lineNumbers ? `<div class="pg-hf" style="top:${t * S}px;left:${Math.max(0, left - 0.6) * S}px;color:#aaa">1<br>2<br>3</div>` : ''}</div>`;
+    const f1 = x => (Math.round(x * 100) / 100).toString();
+    $('#pgInfo').innerHTML = `${f1(w)} × ${f1(h)} cm${o.orientation === 'landscape' ? ' (landscape)' : ''} · text area ${f1(tw)} × ${f1(th)} cm<br>margins ${f1(t)} / ${f1(b)} / ${f1(l)} / ${f1(r)} cm (top / bottom / ${mirror ? 'inside / outside' : 'left / right'})${g ? ` + ${f1(g)} cm gutter` : ''} · ${o.bodySize || 12} pt, ${{ '1': 'single', '1.15': '1.15', '2': 'double' }[o.lineSpacing] || '1.5'} spacing`;
+  }
+  $('#p11').addEventListener('input', e => {
+    if (!state.cfg) return;
+    const k = e.target.dataset.rx; if (k) report()[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (e.target.dataset.pgmar !== undefined && $('#optPageMargin').value !== 'custom') { const m = MARGIN_CM[$('#optPageMargin').value] || 2.54; ['optMarTop', 'optMarBottom', 'optMarLeft', 'optMarRight'].forEach(id => { if ($('#' + id).value === '') $('#' + id).value = m; }); $('#optPageMargin').value = 'custom'; }
+    if (e.target.id === 'optPageW' || e.target.id === 'optPageH') $('#optPageSize').value = 'custom';
+    readUiIntoCfg(); if (e.target.id === 'optPageMargin' && e.target.value === 'custom') { const o = state.cfg.options, m = 2.54; ['marTop', 'marBottom', 'marLeft', 'marRight'].forEach(x => { if (cmNum(o[x], 0, 10) === null) o[x] = String(m); }); renderOptions(); }
+    renderPageSetup(); });
   /* ---------- your own Word template (.dotx / .docx): its styles, theme fonts and colours, and page setup ---------- */
   async function applyTemplate(blob, tplBytes) {
     const CFB = XLSX.CFB, doc = CFB.read(new Uint8Array(await blob.arrayBuffer()), { type: 'array' }), tpl = CFB.read(tplBytes, { type: 'array' });
@@ -5149,7 +5232,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       refs: rp.refs && r0 ? METHOD_REFS.filter(([re]) => re.test(r0.methods || '')).map(x => x[1]) : null, appendix: r0 ? appendixTables(r0, plan0) : [],
       autoNum: !!rp.autoNum, altText: !!rp.altText, front: [['Declaration', rp.frontDecl], ['Dedication', rp.frontDed], ['Acknowledgements', rp.frontAck]].filter(x => String(x[1] || '').trim()) };
     return { ...extras, numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
-        tableNewPage: rp.format === 'thesis' ? !!rp.newPage : rp.format === 'paper' ? false : !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: { size: rp.format === 'thesis' && rp.thesisPage ? rp.thesisPage : o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum }, listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), tableLook: { autoFit: !!o.autoFit, width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figWidthCm: o.figWidthCm, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
+        tableNewPage: rp.format === 'thesis' ? !!rp.newPage : rp.format === 'paper' ? false : !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: pageOptions(o, rp), listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), footerText: String(o.footerText || '').trim(), tableLook: { autoFit: !!o.autoFit, width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figWidthCm: o.figWidthCm, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, capAbove: !!o.capAbove, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings, tableIntro: !!o.tableIntro };
   }
   const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
@@ -5352,6 +5435,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       const wo = wordOptions(); if (rp.citeText && rp.refs && r.methods) { const c2 = citeMethods(r.methods, rp.citeText); r.methods = c2.text; wo.refs = c2.refs; }
       let blob = await Report.build(r, wo);
       if (state.wordTemplate) blob = await applyTemplate(blob, state.wordTemplate.bytes);
+      if (o.pageMirror && !state.wordTemplate) blob = await mirrorMargins(blob);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;
@@ -5420,7 +5504,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (state.step === 7) renderFigureTable();
     if (state.step === 9) renderConsortForm();
     if (state.step === 10) renderExplore();
-    if (state.step === 11) runAnalysis();
+    if (state.step === 11) renderPageSetup();
+    if (state.step === 12) runAnalysis();
     toast(`Preset applied: ${p.name}`);
   };
   $('#presetSave').onclick = () => {
@@ -5479,7 +5564,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   $('#btnSaveProj').onclick = () => {
     if (!state.data) { toast('Nothing to save yet — load an Excel file or an example'); return; }
     readUiIntoCfg();
-    const proj = { app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step,
+    const proj = { app: 'ProfMSE-EasyStat-project', version: 1, steps: STEPS.length, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step,
       data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], snapshots: state.snapshots || [] };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(proj)], { type: 'application/json' }));
@@ -5508,7 +5593,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       $('#to2').disabled = false; renderGrid(); renderPrep(); $('#hdrRow').innerHTML = '<option>1</option>';
       // leave no step active, so the controls of the old project are not read into the opened one
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      go(Math.min(STEPS.length, Math.max(2, +j.step || 2)));
+      go(Math.min(STEPS.length, Math.max(2, (!j.steps && +j.step === 11 ? 12 : +j.step) || 2)));
       toast(`Project opened: ${state.data.rows.length} patients, saved ${String(j.saved || '').slice(0, 10)}`);
     }
   }
@@ -5520,7 +5605,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     autosaveTimer = setTimeout(() => {
       if (!state.data || !state.cfg) return;
       try {
-        const txt = JSON.stringify({ app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step, data: state.data, cfg: state.cfg });
+        const txt = JSON.stringify({ app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step, steps: STEPS.length, data: state.data, cfg: state.cfg });
         if (txt.length < 4.5e6) localStorage.setItem(AUTOSAVE_KEY, txt);
       } catch (e) { /* storage full or blocked: nothing kept */ }
     }, 1500);
@@ -5540,8 +5625,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   /* ---------- keyboard shortcuts (single keys only when not typing) ---------- */
   const KEYS = [['Anywhere'], [['Ctrl', 'S'], 'Save the project'], [['Alt', 'W'], 'Download the Word report (from any step)'], [['Ctrl', 'O'], 'Open a project'], [['Ctrl', 'Z'], 'Undo the last change to the data'], [['Ctrl', 'Y'], 'Redo (also Ctrl+Shift+Z)'],
     [['Alt', '→'], 'Next step'], [['Alt', '←'], 'Previous step'], [[']'], 'Next step'], [['['], 'Previous step'], [['1 … 9'], 'Go to step 1 … 9'], [['0'], 'Step 10 · Results by variable'],
-    [['R'], 'Step 11 · Report'], [['/'], 'Search on this step'], [['T'], 'Light / dark theme'], [['?'], 'This list'],
-    ['On a step'], [['C'], 'Check the data (step 1)'], [['E'], 'Edit the sheet (step 1)'], [['F'], 'Export figures (steps 7, 9 and 11)'], [['W'], 'Download Word (steps 10 and 11)'], [['X'], 'Download Excel (steps 10 and 11)'], [['V'], 'Next view (step 10)']];
+    [['P'], 'Step 11 · Page setup'], [['R'], 'Step 12 · Report'], [['/'], 'Search on this step'], [['T'], 'Light / dark theme'], [['?'], 'This list'],
+    ['On a step'], [['C'], 'Check the data (step 1)'], [['E'], 'Edit the sheet (step 1)'], [['F'], 'Export figures (steps 7, 9 and 12)'], [['W'], 'Download Word (steps 10 and 12)'], [['X'], 'Download Excel (steps 10 and 11)'], [['V'], 'Next view (step 10)']];
   const typing = el => el && (el.isContentEditable || /^(TEXTAREA|SELECT)$/.test(el.tagName) || (el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|color|range|file)$/i.test(el.type)));
   function showKeys() {
     $('#keysList').innerHTML = KEYS.map(k => k.length === 1 ? `<div class="sec">${k[0]}</div>` : `<div class="k">${k[0].map(x => `<kbd>${esc(x === 'Ctrl' && /Mac/.test(navigator.platform) ? '⌘' : x)}</kbd>`).join('+')}</div><div>${esc(k[1])}</div>`).join('');
@@ -5567,15 +5652,16 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     let done = true;
     if (e.key === '?') showKeys();
     else if (/^[0-9]$/.test(e.key) && (state.data || e.key === '1')) go(e.key === '0' ? 10 : +e.key);
-    else if (k === 'r' && state.data) go(11);
+    else if (k === 'r' && state.data) go(12);
+    else if (k === 'p' && state.data) go(11);
     else if ((e.key === ']' || e.key === '[') && state.data) go(Math.min(STEPS.length, Math.max(1, step + (e.key === ']' ? 1 : -1))));
     else if (e.key === '/') { const box = at(1) ? $('#gridSearch') : at(2) ? $('#varSearch') : at(10) ? ($('#xpOpts').open = true, document.querySelector('[data-xo="q"]')) : null; if (box && box.offsetParent !== null) box.focus(); else done = false; }
     else if (k === 't') $('#btnTheme').click();
     else if (k === 'c' && at(1) && state.data) $('#gridCheck').click();
     else if (k === 'e' && at(1) && state.data) $('#gridEdit').click();
-    else if (k === 'f') done = at(11) ? clickIf('#btnPngs') : at(7) ? clickIf('#figPrevPng') : at(9) ? clickIf('#flowPng') : false;
-    else if (k === 'w') done = at(11) ? clickIf('#btnDocx') : at(10) ? clickIf('#xpWord') : false;
-    else if (k === 'x') done = at(11) ? clickIf('#btnXlsx') : at(10) ? clickIf('#xpXlsx') : false;
+    else if (k === 'f') done = at(12) ? clickIf('#btnPngs') : at(7) ? clickIf('#figPrevPng') : at(9) ? clickIf('#flowPng') : false;
+    else if (k === 'w') done = at(12) ? clickIf('#btnDocx') : at(10) ? clickIf('#xpWord') : false;
+    else if (k === 'x') done = at(12) ? clickIf('#btnXlsx') : at(10) ? clickIf('#xpXlsx') : false;
     else if (k === 'v' && at(10)) { const sel = $('#xpView'); sel.selectedIndex = (sel.selectedIndex + 1) % sel.options.length; sel.dispatchEvent(new Event('change')); toast(`View: ${sel.options[sel.selectedIndex].text}`); }
     else done = false;
     if (done) e.preventDefault();
@@ -5635,7 +5721,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   renderStepper();
   window.EasyStat = state; // for debugging
   // what the interface layer (ux.js) may use
-  window.EasyUI = { state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
+  window.EasyUI = { REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
     renderAdvanced, renderVariables, renderOptions, effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();

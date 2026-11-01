@@ -37,7 +37,7 @@
     panel('tlDashP', 'Project dashboard', `<div class="tl-cards">${card(d.rows.length, 'patients')}${card(d.headers.length, 'columns')}${card((100 * miss / cells).toFixed(1) + '%', 'empty cells')}${card(inc.length, 'variables in the report')}${card(adv.length, 'advanced analyses')}${card(r ? r.sections.length : '—', 'tables')}${card(r ? r.sections.reduce((t, s) => t + s.figures.length, 0) : '—', 'figures')}${card(r ? r.sections.reduce((t, s) => t + words(s.comment), 0) : '—', 'words of results')}</div>
       <p><b>Groups:</b> ${groups || '—'}</p><p><b>Variables:</b> ${by('numeric')} numeric, ${by('categorical')} categorical, ${by('repeated')} repeated measures${adv.length ? `; <b>analyses:</b> ${esc(adv.map(a => U.ADV_TYPES[a.type] || a.type).join('; '))}` : ''}</p>
       <h4>Warnings (${warn.length})</h4>${warn.length ? `<ul>${warn.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '<p class="legend-note">None.</p>'}<h4>Exports</h4>${exRows ? `<ul>${exRows}</ul>` : '<p class="legend-note">Nothing exported yet in this browser.</p>'}
-      <p class="legend-note">${r ? `Report last run with ${r.sections.length} tables.` : 'The report has not been run yet (step 11).'}</p>`, true); }
+      <p class="legend-note">${r ? `Report last run with ${r.sections.length} tables.` : 'The report has not been run yet (step 12).'}</p>`, true); }
 
   /* ---------- 32. study templates ---------- */
   const BUILTIN = { rct: { name: 'RCT thesis', note: 'CONSORT flowchart, thesis format with chapter numbers, effect sizes and 95% CIs, comments with the tests named.', o: { esCol: true, testInText: true, tableIntro: true, limits: true, conclusion: true }, report: { format: 'thesis', checklist: 'consort', refs: true, toc: true }, flow: 'consort', adv: [] },
@@ -51,7 +51,7 @@
     (t.adv || []).forEach(type => { if (!(c.advanced || []).some(a => a.type === type)) c.advanced.push({ type, include: true, outcome: '', positive: '', predictors: [] }); });
     U.renderOptions(); U.go(S().step || 2); U.toast(`Template applied${(t.adv || []).length ? ` — choose the columns of the added analyses in step 8` : ''}`); }
   function templates() { const mine = ls.get('templates', {});
-    const p = panel('tlTplP', 'Study templates', `<p class="legend-note">A template keeps the settings of steps 4–11, the flowchart type and style and the kinds of advanced analyses — not the data or the columns.</p>
+    const p = panel('tlTplP', 'Study templates', `<p class="legend-note">A template keeps the settings of steps 4–12, the flowchart type and style and the kinds of advanced analyses — not the data or the columns.</p>
       <h4>Ready-made</h4>${Object.entries(BUILTIN).map(([k, t]) => `<div class="tl-row"><div><b>${esc(t.name)}</b><div class="legend-note">${esc(t.note)}</div></div><button class="btn primary small" type="button" data-tpl="b:${k}">Apply</button></div>`).join('')}
       <h4>Yours</h4>${Object.keys(mine).length ? Object.entries(mine).map(([k, t]) => `<div class="tl-row"><div><b>${esc(k)}</b><div class="legend-note">saved ${esc(t.saved || '')}</div></div><span><button class="btn primary small" type="button" data-tpl="m:${esc(k)}">Apply</button> <button class="btn ghost small" type="button" data-tpldel="${esc(k)}">✕</button></span></div>`).join('') : '<p class="legend-note">None yet.</p>'}
       <div class="row" style="gap:6px;margin-top:8px"><button class="btn ghost small" type="button" id="tplSave">💾 Save this setup as a template…</button><button class="btn ghost small" type="button" id="tplExp">⬇ Export</button><label class="btn ghost small">⬆ Import<input type="file" id="tplImp" accept=".json" hidden></label></div>`);
@@ -93,7 +93,7 @@
     $('#hlQ').oninput = draw; draw(); $('#hlQ').focus(); void p; }
 
   /* ---------- 34. batch reports: other files, or each level of a column (e.g. centre) ---------- */
-  function batch() { const st = S(); if (!st.cfg || !st.result) { U.toast('Set up the analysis and run the report (step 11) first; the batch uses this setup'); return; }
+  function batch() { const st = S(); if (!st.cfg || !st.result) { U.toast('Set up the analysis and run the report (step 12) first; the batch uses this setup'); return; }
     const cols = st.data.headers.filter(h => { const n = new Set(st.data.rows.map(r => r[h]).filter(v => !U.isMissing(v))).size; return n >= 2 && n <= 30 && h !== st.cfg.groupCol; });
     const p = panel('tlBatchP', 'Batch reports', `<p class="legend-note">The current setup (variables, tests, options, analyses) is run again for each part and a Word file is saved for each.</p>
       <h4>Each level of a column</h4><div class="row" style="gap:6px"><select id="btCol">${cols.map(h => `<option>${esc(h)}</option>`).join('')}</select><button class="btn primary small" type="button" id="btGo">One report per level</button></div>
@@ -104,10 +104,10 @@
         await new Promise(r => setTimeout(r, 400)); $('#btnDocx').click(); await new Promise(r => setTimeout(r, 2500)); out(`✓ ${name}: ${data.rows.length} patients, ${st.result.sections.length} tables`); }
       catch (err) { out(`✕ ${name}: ${err.message}`); } finally { Object.assign(st, keep); } };
     const finish = () => { U.runAnalysis(); U.toast('Batch finished — the current data are back'); };
-    $('#btGo').onclick = async () => { const col = $('#btCol').value, lv = [...new Set(st.data.rows.map(r => r[col]).filter(v => !U.isMissing(v)).map(String))]; if (S().step !== 11) U.go(11);
+    $('#btGo').onclick = async () => { const col = $('#btCol').value, lv = [...new Set(st.data.rows.map(r => r[col]).filter(v => !U.isMissing(v)).map(String))]; if (S().step !== 12) U.go(12);
       for (const l of lv) await runOne({ headers: st.data.headers, rows: st.data.rows.filter(r => String(r[col]) === l) }, `${String(st.file || 'data').replace(/\.[^.]+$/, '')} - ${col} ${l}.xlsx`); finish(); };
     $('#btFiles').onclick = () => $('#btFileIn').click();
-    $('#btFileIn').onchange = async e => { const fs = [...e.target.files]; e.target.value = ''; if (S().step !== 11) U.go(11);
+    $('#btFileIn').onchange = async e => { const fs = [...e.target.files]; e.target.value = ''; if (S().step !== 12) U.go(12);
       for (const f of fs) { try { const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }), aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null, raw: true, blankrows: false }), hd = aoa[0].map((h, i) => h === null || h === '' ? `Column_${i + 1}` : String(h).trim());
           const missing = st.data.headers.filter(h => !hd.includes(h) && st.cfg.variables.some(v => v.include && v.cols.some(c => c.col === h))); if (missing.length) { out(`✕ ${f.name}: missing column${missing.length > 1 ? 's' : ''} ${missing.slice(0, 5).join(', ')}`); continue; }
           await runOne({ headers: hd, rows: aoa.slice(1).filter(r => r.some(v => v !== null && String(v).trim() !== '')).map(r => Object.fromEntries(hd.map((h, i) => [h, r[i] ?? null]))) }, f.name); } catch (err) { out(`✕ ${f.name}: ${err.message}`); } }
