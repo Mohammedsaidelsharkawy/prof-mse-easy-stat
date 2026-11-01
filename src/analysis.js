@@ -1318,14 +1318,19 @@ const Analysis = (() => {
     // swimmer plot: every patient's follow-up, event or censored
     if (a.swimmer) sec.figures.push({ sig: true, caption: `Follow-up of each patient (swimmer plot)`,
       spec: { type: 'swimmer', xLabel: timeLabel, groups: one ? [] : gl, rows: T.flatMap((x, g) => x.map((r, i) => ({ t: toNum(r[a.outcome]), event: ev[g][i], g, id: cfg.idCols && cfg.idCols[0] ? r[cfg.idCols[0]] : undefined }))) } });
-    if (!a.risk) return sec;
+    if (!a.risk && !a.riskUnder) return sec;
     // number at risk: at the chosen survival times, or at six even times over the follow-up
     const tMax = Math.max(...times.flat()), sc = niceScale(0, tMax, 5), rt = [];
     if (ats.length) rt.push(0, ...ats.filter(t => t > 0)); else for (let t = 0; t <= tMax + 1e-9; t += sc.step) rt.push(+t.toFixed(10));
     const atRisk = (g, t) => times[g].filter(x => x >= t).length;
+    // events and censored patients in each interval up to the next time
+    const inInt = (g, k, ev2) => times[g].filter((x, i) => x >= rt[k] && (k + 1 < rt.length ? x < rt[k + 1] : true) && !!ev[g][i] === ev2).length;
+    if (a.riskUnder && sec.figures[0] && sec.figures[0].spec.type === 'km') sec.figures[0].spec.riskTable = { times: rt, title: 'Number at risk', rows: km.map((m, g) => ({ name: one ? 'All patients' : gl[g], series: g, n: rt.map(t => atRisk(g, t)) })) };
+    if (!a.risk) return sec;
     return [sec, { kind: 'survival', title: `Number of patients at risk${one ? '' : ' in the studied groups'}`, head: [`Time${unit ? ` (${unit})` : ''}`, ...rt.map(t => fmt(t, d))],
-      rows: km.map((m, g) => [{ t: [one ? 'All patients' : gl[g]], b: true }, ...rt.map(t => ({ t: [String(atRisk(g, t))] }))]),
-      footnote: 'Patients still followed up and free of the event at each time.', comment: '', figures: [], meta: {} }];
+      rows: km.flatMap((m, g) => [[{ t: [one ? 'All patients' : gl[g]], b: true }, ...rt.map(t => ({ t: [String(atRisk(g, t))] }))],
+        ...(a.riskCens ? [[{ t: ['   events (censored) to the next time'] }, ...rt.map((t, k) => ({ t: [`${inInt(g, k, true)} (${inInt(g, k, false)})`] }))]] : [])]),
+      footnote: `Patients still followed up and free of the event at each time${a.riskCens ? '; under each group: events and, in brackets, patients censored from that time to the next' : ''}.`, comment: '', figures: [], meta: {} }];
   }
 
   // Cox proportional hazards regression: hazard ratios for time to event
@@ -3096,6 +3101,15 @@ const Analysis = (() => {
               const pct = pairsV.every(q => q.a > 0);
               return { sig: sigAny, vid: v.id, caption: v.caption || `${pct ? 'Percentage change' : 'Change'} in ${lowerFirst(plain(v.label))} from ${lowerFirst(tps[0])} to ${lowerFirst(tps[tps.length - 1])} in each patient (waterfall plot)`,
                 spec: { type: 'waterfall', percent: pct, groups: k > 1 ? gl : [], yLabel: `${pct ? '% change' : 'Change'} in ${plain(v.label)}`, bars: pairsV.map(q => ({ v: pct ? 100 * (q.b - q.a) / q.a : q.b - q.a, g: q.g, id: q.id })) } };
+            }
+            // spaghetti: each patient's course (thin lines), the group means in bold, unusual patients (beyond 1.5 × IQR at any time) marked with their ID
+            if (ct === 'spaghetti') {
+              const tr = byGroup.map(rs => rs.map(r => ({ y: v.cols.map(c => toNum(r[c.col])), id: cfg.idCols && cfg.idCols[0] ? r[cfg.idCols[0]] : '' })));
+              const fences = v.cols.map((_, t) => { const a = tr.flat().map(q => q.y[t]).filter(isFinite).sort((x, y) => x - y), q1 = S.quantile(a, 0.25), q3 = S.quantile(a, 0.75); return [q1 - 1.5 * (q3 - q1), q3 + 1.5 * (q3 - q1)]; });
+              const odd = q => q.y.some((y, t) => isFinite(y) && (y < fences[t][0] || y > fences[t][1])), xs = v.cols.map((_, t) => t);
+              const series = [...tr.flatMap((list, g) => list.filter(q => q.y.filter(isFinite).length >= 2).map(q => ({ x: xs, y: q.y.map(y => isFinite(y) ? y : NaN), pi: g, width: odd(q) ? 3.5 : 1.6, alpha: odd(q) ? 0.95 : 0.28, label: odd(q) && q.id !== '' ? q.id : '' }))),
+                ...tr.map((list, g) => ({ name: withN(gl, gN)[g], x: xs, y: v.cols.map((_, t) => S.mean(list.map(q => q.y[t]).filter(isFinite))), pi: g, width: 7 }))];
+              return { sig: sigAny, vid: v.id, caption: v.caption || `${v.label}: each patient's course and the group means (spaghetti plot)`, spec: { type: 'xy', xcats: tps, xLabel: 'Time', yLabel: v.ylabel || v.label, legend: k > 1 ? undefined : false, series } };
             }
             if (ct === 'violin' || ct === 'rain' || ct === 'meanci') return { sig: sigAny, vid: v.id,
               caption: v.caption || `${v.label} of the studied groups${ct === 'meanci' ? ' (mean with 95% CI)' : ct === 'rain' ? ' (raincloud plot)' : ''}`,

@@ -1147,6 +1147,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       </div>
       <h3>Chart appearance</h3>
       <div class="grid g4">
+        <div><label class="check" style="margin-top:22px" title="Font, text size and colours of the figures also for the flowchart"><input type="checkbox" id="optFlowSame"><span>Flowchart in the same style as the figures</span></label></div>
         <div><label class="f">Chart text size</label><select id="optChartText"><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>
         <div><label class="f">Chart shape</label><select id="optAspect"><option value="wide" selected>Wide</option><option value="standard">Standard (4:3)</option><option value="square">Square</option></select></div>
         <div><label class="f">Bar fill</label><select id="optBarFill"><option value="gradient" selected>Gradient</option><option value="solid">Solid</option><option value="outline">Outline only</option><option value="hatched">Hatched (black &amp; white print)</option></select></div>
@@ -1452,7 +1453,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="row" style="margin-top:10px"><b id="fxCount"></b><span class="spacer"></span><button type="button" class="btn ghost small" id="fxAll">Select all</button> <button type="button" class="btn ghost small" id="fxNone">Clear</button></div>
     <div id="fxList"></div>
     <div class="fx-grid">
-      <div><label class="f">Format</label><select id="fxFormat"><option value="png">PNG (lossless)</option><option value="jpg">JPEG</option><option value="tiff">TIFF (journal submission)</option><option value="svg">SVG (vector, scalable)</option></select></div>
+      <div><label class="f">Format</label><select id="fxFormat"><option value="png">PNG (lossless)</option><option value="jpg">JPEG</option><option value="tiff">TIFF (journal submission)</option><option value="svg">SVG (vector, scalable)</option><option value="eps">EPS (vector PostScript, journal production)</option></select></div>
       <div><label class="f">Text size (journal)</label><select id="fxText"><option value="0" selected>As on screen</option><option value="8">8 pt at this width</option><option value="10">10 pt at this width</option></select></div>
       <div><label class="f">Resolution</label><select id="fxDpi"><option value="96">96 dpi (screen)</option><option value="150">150 dpi</option><option value="300" selected>300 dpi (print)</option><option value="600">600 dpi</option><option value="900">900 dpi</option><option value="1200">1200 dpi (line art)</option></select></div>
       <div><label class="f">Width</label><select id="fxWidth"><option value="report">As in the Word report</option><option value="8.5">8.5 cm (single column)</option><option value="12">12 cm (1.5 column)</option><option value="17.4">17.4 cm (double column)</option></select></div>

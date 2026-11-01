@@ -928,17 +928,19 @@ const Charts = (() => {
   function xyChart(spec, paletteName, st) {
     const pal = palette(paletteName);
     const { c, ctx, W, H, ts, F } = setup(st);
-    const ser = spec.series.filter(s => s.x && s.x.length), items = ser.filter(s => s.name).map((s, i) => ({ name: s.name, color: s.color || pal[ser.indexOf(s) % pal.length], dash: !!s.dash }));
+    const ser = spec.series.filter(s => s.x && s.x.length), colOf = (s, i) => s.color || pal[(s.pi ?? i) % pal.length], items = ser.filter(s => s.name).map(s => ({ name: s.name, color: colOf(s, ser.indexOf(s)), dash: !!s.dash }));
     const lm = legendMetrics(ctx, spec.legend === false ? [] : items, st, ts);
     const L = 120 + 40 * ts, R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0), pw = W - L - R, ph = H - T - B;
     const fx = v => isFinite(v), xs = ser.flatMap(s => s.x).filter(fx), ys = ser.flatMap(s => s.y).filter(fx).concat(spec.hline != null ? [spec.hline] : []);
-    const sx = niceScale(spec.xmin ?? Math.min(...xs), spec.xmax ?? Math.max(...xs)), sy = niceScale(spec.ymin ?? Math.min(...ys), spec.ymax ?? Math.max(...ys));
+    // named categories on the x axis (e.g. visits): one tick per category
+    const sx = spec.xcats ? { min: -0.3, max: spec.xcats.length - 0.7, step: 1 } : niceScale(spec.xmin ?? Math.min(...xs), spec.xmax ?? Math.max(...xs)), sy = niceScale(spec.ymin ?? Math.min(...ys), spec.ymax ?? Math.max(...ys));
     const X = v => L + (v - sx.min) / (sx.max - sx.min) * pw, Y = v => T + ph - (v - sy.min) / (sy.max - sy.min) * ph;
     ctx.font = F(600, 26); ctx.lineWidth = 1.5;
     for (let v = sy.min; v <= sy.max + 1e-9; v += sy.step) { if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(fmtTick(v, sy.step), L - 14, Y(v)); }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    for (let v = sx.min; v <= sx.max + 1e-9; v += sx.step) { if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); }
+    if (spec.xcats) spec.xcats.forEach((lab, k) => { ctx.fillStyle = '#444'; ctx.fillText(String(lab), X(k), T + ph + 12); });
+    else for (let v = sx.min; v <= sx.max + 1e-9; v += sx.step) { if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); }
       ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sx.step), X(v), T + ph + 12); }
     ctx.strokeStyle = '#333'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
     ctx.font = F(700, 28); ctx.fillStyle = '#333'; ctx.fillText(spec.xLabel || '', L + pw / 2, T + ph + 60 * ts);
@@ -948,12 +950,14 @@ const Charts = (() => {
     if (spec.diag) { const a = Math.max(sx.min, sy.min), b = Math.min(sx.max, sy.max); ref(X(a), Y(a), X(b), Y(b)); }
     if (spec.hline != null) ref(L, Y(spec.hline), L + pw, Y(spec.hline));
     if (spec.vline != null) ref(X(spec.vline), T, X(spec.vline), T + ph);
-    ser.forEach((s, i) => { const col = s.color || pal[i % pal.length], P0 = s.x.map((x, k) => [x, s.y[k]]), P = P0.filter(([x, y]) => fx(x) && fx(y));
+    ser.forEach((s, i) => { const col = colOf(s, i), P0 = s.x.map((x, k) => [x, s.y[k]]), P = P0.filter(([x, y]) => fx(x) && fx(y));
       if (s.points) { ctx.fillStyle = col; ctx.globalAlpha = s.alpha ?? 0.8; P.forEach(([x, y]) => { ctx.beginPath(); ctx.arc(X(x), Y(y), (s.size || 7) * ts, 0, Math.PI * 2); ctx.fill(); }); ctx.globalAlpha = 1; }
       if (s.points && !s.line) return;
-      ctx.strokeStyle = col; ctx.lineWidth = (s.width || 5) * lw(st); ctx.setLineDash(s.dash ? [16, 10] : []); ctx.beginPath();
+      ctx.strokeStyle = col; ctx.lineWidth = (s.width || 5) * lw(st); ctx.setLineDash(s.dash ? [16, 10] : []); ctx.globalAlpha = s.points ? 1 : s.alpha ?? 1; ctx.beginPath();
       // a missing point breaks the line (e.g. before and after an intervention)
-      let prev = null; P0.forEach(([x, y]) => { if (!fx(x) || !fx(y)) { prev = null; return; } if (!prev) ctx.moveTo(X(x), Y(y)); else { if (s.step) ctx.lineTo(X(x), Y(prev[1])); ctx.lineTo(X(x), Y(y)); } prev = [x, y]; }); ctx.stroke(); ctx.setLineDash([]); });
+      let prev = null; P0.forEach(([x, y]) => { if (!fx(x) || !fx(y)) { prev = null; return; } if (!prev) ctx.moveTo(X(x), Y(y)); else { if (s.step) ctx.lineTo(X(x), Y(prev[1])); ctx.lineTo(X(x), Y(y)); } prev = [x, y]; }); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+      // a label at the end of a line (e.g. the ID of an unusual patient)
+      if (s.label && P.length) { const [x, y] = P[P.length - 1]; ctx.font = F(700, 20); ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(String(s.label), X(x) + 8, Y(y)); } });
     ctx.restore();
     if (spec.note) { ctx.font = F(700, 26); ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = '#222'; ctx.fillText(spec.note, L + 16, T + 10); }
     drawLegend(ctx, items, 'line', st, lm, lm.pos === 'inside' ? { W, H, L, T: T + ph - lm.h - 24, pw, ph, ts } : { W, H, L, T, pw, ph, ts });
@@ -964,7 +968,8 @@ const Charts = (() => {
     const { c, ctx, W, H, ts, F } = setup(st);
     const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: i === 2, ...(st.series === 'shapes' ? { dashArr: DASHES[i % 6] } : {}) }));
     const lm = legendMetrics(ctx, items, st, ts);
-    const L = 110 + 40 * ts, R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    const rk = spec.riskTable, rkH = rk ? (rk.rows.length + 1) * 38 * ts + 20 : 0, labW = rk ? (ctx.font = F(700, 22), Math.min(W * 0.35, Math.max(...rk.rows.map(r => ctx.measureText(r.name).width)) + 40)) : 0;
+    const L = Math.max(110 + 40 * ts, labW), R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0) + rkH;
     const pw = W - L - R, ph = H - T - B;
     const tMax = Math.max(1, ...spec.series.flatMap(s => [...s.steps.map(q => q.t), ...s.censored.map(q => q.t)]));
     const sx = niceScale(0, tMax), X = v => L + v / sx.max * pw, Y = v => T + ph - v * ph;
@@ -1005,7 +1010,11 @@ const Charts = (() => {
       ctx.font = F(700, 28); ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillStyle = '#222';
       ctx.fillText(spec.note, L + pw - 10, T + 10);
     }
-    drawLegend(ctx, items, 'line', st, lm, lm.pos === 'inside' ? { W, H, L, T: T + ph - lm.h - 24, pw, ph, ts } : { W, H, L, T, pw, ph, ts });
+    // number at risk (and censored) at each time, under the curve, as journals ask
+    if (rk) { let y = T + ph + 100 * ts; ctx.textBaseline = 'middle'; ctx.font = F(700, 24); ctx.fillStyle = '#222'; ctx.textAlign = 'left'; ctx.fillText(rk.title || 'Number at risk', 10, y); y += 38 * ts;
+      rk.rows.forEach((r, i) => { ctx.font = F(700, 22); ctx.textAlign = 'left'; ctx.fillStyle = r.series !== undefined ? items[r.series % items.length].color : '#555'; ctx.fillText(r.name, 10, y);
+        ctx.font = F(600, 22); ctx.fillStyle = '#333'; ctx.textAlign = 'center'; rk.times.forEach((t, k) => { if (t <= sx.max + 1e-9) ctx.fillText(String(r.n[k]), X(t), y); }); y += 38 * ts; }); }
+    drawLegend(ctx, items, 'line', st, lm, lm.pos === 'inside' ? { W, H, L, T: T + ph - lm.h - 24, pw, ph, ts } : { W, H, L, T: rk && lm.pos === 'bottom' ? T : T, pw, ph, ts });
     return c;
   }
 
@@ -1718,6 +1727,47 @@ const Charts = (() => {
   }
 
   // the flowchart as SVG
+
+  /* ---------- EPS (vector PostScript) from the SVG of a figure: paths, rectangles, text, clipping and dashes; transparency is blended with white ---------- */
+  function svgToEps(svgText, widthPt = 482) {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml'), root = doc.documentElement, W = +root.getAttribute('width'), H = +root.getAttribute('height'), k = widthPt / W;
+    const defs = {}; root.querySelectorAll('[id]').forEach(e => { defs[e.id] = e; });
+    const NAMED = { white: [1, 1, 1], black: [0, 0, 0], none: null }, out = [];
+    const rgb = (c, op = 1) => { if (!c || c === 'none') return null; let v = null; const m = /^url\(#(.+)\)$/.exec(c);
+      if (m) { const g = defs[m[1]]; const st = g && g.querySelector('stop'); c = st ? st.getAttribute('stop-color') : '#888888'; }
+      if (/^#[0-9a-f]{6}$/i.test(c)) v = [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) / 255); else if (/^#[0-9a-f]{3}$/i.test(c)) v = [1, 2, 3].map(i => parseInt(c[i] + c[i], 16) / 255);
+      else if (/^rgba?\(/.test(c)) { const n = c.match(/[\d.]+/g).map(Number); v = n.slice(0, 3).map(x => x / 255); if (n.length > 3) op *= n[3]; } else v = NAMED[c.toLowerCase()] || [0, 0, 0];
+      return v.map(x => (1 - op) + op * x).map(x => x.toFixed(4)).join(' '); };
+    const f2 = v => (+v).toFixed(2), pathPS = d => { const t = d.match(/[MLQCZ]|-?[\d.]+(?:e-?\d+)?/gi) || [], o = []; let i = 0, cx = 0, cy = 0;
+      while (i < t.length) { const c = t[i++]; const n = () => +t[i++];
+        if (c === 'M' || c === 'L') { cx = n(); cy = n(); o.push(`${f2(cx)} ${f2(cy)} ${c === 'M' ? 'moveto' : 'lineto'}`); }
+        else if (c === 'C') { const a = [n(), n(), n(), n(), n(), n()]; o.push(`${a.map(f2).join(' ')} curveto`); cx = a[4]; cy = a[5]; }
+        else if (c === 'Q') { const qx = n(), qy = n(), x = n(), y = n(); o.push(`${f2(cx + 2 / 3 * (qx - cx))} ${f2(cy + 2 / 3 * (qy - cy))} ${f2(x + 2 / 3 * (qx - x))} ${f2(y + 2 / 3 * (qy - y))} ${f2(x)} ${f2(y)} curveto`); cx = x; cy = y; }
+        else if (c === 'Z' || c === 'z') o.push('closepath'); }
+      return 'newpath ' + o.join(' '); };
+    // text: Latin-1 Helvetica / Times; characters outside it are written in plain ASCII
+    const SUB = { '≤': '<=', '≥': '>=', '−': '-', '–': '-', '—': '-', '…': '...', '‘': "'", '’': "'", '“': '"', '”': '"', 'χ': 'chi', 'η': 'eta', 'α': 'alpha', 'β': 'beta', 'κ': 'kappa', 'τ': 'tau', 'ε': 'eps', 'Δ': 'Delta', '₁': '1', '₀': '0', '→': '->', '×': '\\327', '±': '\\261', '²': '\\262', '°': '\\260', 'µ': '\\265', '·': '\\267' };
+    const psStr = t => '(' + [...String(t)].map(ch => SUB[ch] !== undefined ? SUB[ch] : ch === '(' || ch === ')' || ch === '\\' ? '\\' + ch : ch.charCodeAt(0) > 126 ? (ch.charCodeAt(0) < 256 ? '\\' + ch.charCodeAt(0).toString(8) : '?') : ch).join('') + ')';
+    const font = e => { const fam = (e.getAttribute('font-family') || '').toLowerCase(), bold = /^(bold|[6-9]00)$/.test(e.getAttribute('font-weight') || ''), it = e.getAttribute('font-style') === 'italic', serif = /times|serif/.test(fam) && !/sans/.test(fam);
+      return serif ? (bold ? (it ? 'Times-BoldItalic' : 'Times-Bold') : it ? 'Times-Italic' : 'Times-Roman') : (bold ? (it ? 'Helvetica-BoldOblique' : 'Helvetica-Bold') : it ? 'Helvetica-Oblique' : 'Helvetica'); };
+    const walk = (el, op) => { [...el.children].forEach(e => { const tag = e.tagName.toLowerCase(), o2 = op * (+(e.getAttribute('opacity') || 1)), clip = (/url\(#(.+)\)/.exec(e.getAttribute('clip-path') || '') || [])[1];
+      if (tag === 'defs' || tag === 'clippath' || tag === 'lineargradient' || tag === 'pattern') return;
+      if (clip && defs[clip]) { const cp = defs[clip].querySelector('path'); out.push('gsave', pathPS(cp.getAttribute('d')), 'clip'); }
+      if (tag === 'g') { const m = /matrix\(([^)]+)\)/.exec(e.getAttribute('transform') || ''), tr = /translate\(([^)]+)\)/.exec(e.getAttribute('transform') || ''), sc = /scale\(([^)]+)\)/.exec(e.getAttribute('transform') || '');
+        out.push('gsave'); if (m) out.push(`[${m[1].trim().split(/[\s,]+/).join(' ')}] concat`); if (tr) out.push(`${tr[1].trim().split(/[\s,]+/).join(' ')} translate`); if (sc) out.push(`${sc[1].trim().split(/[\s,]+/).join(' ')} scale`); walk(e, o2); out.push('grestore'); }
+      else if (tag === 'path') { const d = e.getAttribute('d'), fill = rgb(e.getAttribute('fill'), o2), stroke = rgb(e.getAttribute('stroke'), o2);
+        if (fill) out.push(pathPS(d), `${fill} setrgbcolor fill`);
+        if (stroke) { const da = (e.getAttribute('stroke-dasharray') || '').trim(); out.push(pathPS(d), `${f2(e.getAttribute('stroke-width') || 1)} setlinewidth ${{ round: 1, square: 2 }[e.getAttribute('stroke-linecap')] || 0} setlinecap ${{ round: 1, bevel: 2 }[e.getAttribute('stroke-linejoin')] || 0} setlinejoin [${da ? da.split(/[\s,]+/).map(f2).join(' ') : ''}] 0 setdash ${stroke} setrgbcolor stroke`); } }
+      else if (tag === 'text') { const m = /matrix\(([^)]+)\)/.exec(e.getAttribute('transform') || ''), size = +(e.getAttribute('font-size') || 10), anchor = e.getAttribute('text-anchor') || 'start', col = rgb(e.getAttribute('fill') || '#000', o2) || '0 0 0', s2 = psStr(e.textContent);
+        out.push('gsave', m ? `[${m[1].trim().split(/[\s,]+/).join(' ')}] concat` : '', `/${font(e)} findfont ${f2(size)} scalefont setfont ${col} setrgbcolor`, `${f2(e.getAttribute('x') || 0)} ${f2(e.getAttribute('y') || 0)} moveto 1 -1 scale`,
+          anchor === 'middle' ? `${s2} dup stringwidth pop -2 div 0 rmoveto show` : anchor === 'end' ? `${s2} dup stringwidth pop neg 0 rmoveto show` : `${s2} show`, 'grestore'); }
+      if (clip && defs[clip]) out.push('grestore'); }); };
+    walk(root, 1);
+    const re = f => `/${f} findfont dup length dict begin {1 index /FID ne {def} {pop pop} ifelse} forall /Encoding ISOLatin1Encoding def currentdict end /${f} exch definefont pop`;
+    return ['%!PS-Adobe-3.0 EPSF-3.0', `%%BoundingBox: 0 0 ${Math.ceil(W * k)} ${Math.ceil(H * k)}`, '%%Creator: Prof MSE Easy Stat', '%%EndComments',
+      ...['Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique', 'Helvetica-BoldOblique', 'Times-Roman', 'Times-Bold', 'Times-Italic', 'Times-BoldItalic'].map(re),
+      'gsave', `${k.toFixed(5)} ${k.toFixed(5)} scale 0 ${H} translate 1 -1 scale`, '1 1 1 setrgbcolor 0 0 moveto ' + W + ' 0 lineto ' + W + ' ' + H + ' lineto 0 ' + H + ' lineto closepath fill', ...out.filter(Boolean), 'grestore', 'showpage', '%%EOF'].join('\n');
+  }
   function flowSVG(c, gl, pal) { VECTOR = true; try { return consort(c, gl, pal, 1).toSVG(); } finally { VECTOR = false; } }
-  return { draw, drawSVG, flowSVG, flowHits: () => FLOW_HITS, makeCanvas, hits: () => hitsOf, consort, exportImage, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
+  return { svgToEps, draw, drawSVG, flowSVG, flowHits: () => FLOW_HITS, makeCanvas, hits: () => hitsOf, consort, exportImage, PALETTES, PALETTE_NAMES, PALETTE_GROUPS, DEFAULT_STYLE, FLOW_LABELS };
 })();

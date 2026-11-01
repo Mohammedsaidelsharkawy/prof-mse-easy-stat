@@ -16,7 +16,7 @@
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
     commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, clinWord: false, testInText: false, tableIntro: false, limits: false, discuss: false, conclusion: false, subSummary: false, formerLatter: false, numWords: false, spelling: '', hedge: '', voice: '', tense: '', esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figWidthCm: '15', figPerRow: 1, valueLabels: false,
-    chartText: 'normal', chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
+    chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
     welch: false, dunn: true, chiPost: true, mixed: false, normality: 'sw', catEffect: 'rr',
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
@@ -35,7 +35,7 @@
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
     branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], clinWord: ['optClinWord', true], testInText: ['optTestInText', true], tableIntro: ['optTableIntro', true], limits: ['optLimits', true], discuss: ['optDiscuss', true], conclusion: ['optConclusion', true], subSummary: ['optSubSummary', true], formerLatter: ['optFormerLatter', true], numWords: ['optNumWords', true], spelling: ['optSpelling'], hedge: ['optHedge'], voice: ['optVoice'], tense: ['optTense'], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figWidthCm: ['optFigWidthCm'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
-    chartText: ['optChartText'], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
+    chartText: ['optChartText'], flowSameStyle: ['optFlowSame', true], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
     legendSize: ['optLegendSize'], legendTitle: ['optLegendTitle'], legendFrame: ['optLegendFrame', true],
     normality: ['optNormality'], catEffect: ['optCatEffect'], welch: ['optWelch', true],
@@ -52,6 +52,8 @@
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
+  // the flowchart drawn in the figures' font, text size and colours (step 7 option)
+  const flowStyled = c => { const o = state.cfg && state.cfg.options; if (!c || !o || !o.flowSameStyle) return c; return { ...c, style: { ...(c.style || {}), font: o.chartFont || (c.style || {}).font, textSize: o.chartText === 'normal' ? 'normal' : 'large', color: '', pillColor: '', arrowColor: '' } }; };
   const chartStyle = o => ({ unitLine: !!o.figUnitLine, stackSort: !!o.figStackSort, watermark: String(o.figWatermark || '').trim(), text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
     legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont, frame: o.figFrame,
     sigLabel: o.sigLabel, panel: o.panelStyle === 'classic' ? '' : o.panelStyle, axisSize: o.axisSize, titleSize: o.titleSize, valueSize: o.valueSize, boxMeanVal: !!o.boxMeanVal, series: o.seriesStyle, lineWeight: o.lineWeight, errBars: o.errBars, errColor: o.errColor, gridStyle: o.gridStyle, ticks: o.yTicks, pLead: +o.pLead !== 0 });
@@ -2460,7 +2462,7 @@
 
   /* ---------- figures by variable + live preview ---------- */
   const CHART_TYPES = {
-    repeated: [['auto', 'Auto (chart style)'], ['bar', 'Bars'], ['line', 'Lines over time'], ['meanci', 'Means with 95% CI over time'], ['box', 'Box plots'], ['dot', 'Box plots + every patient'], ['violin', 'Violin plots'], ['rain', 'Raincloud plots'], ['waterfall', 'Waterfall (each patient, first → last)'], ['none', 'No figure']],
+    repeated: [['auto', 'Auto (chart style)'], ['bar', 'Bars'], ['line', 'Lines over time'], ['meanci', 'Means with 95% CI over time'], ['box', 'Box plots'], ['dot', 'Box plots + every patient'], ['violin', 'Violin plots'], ['rain', 'Raincloud plots'], ['spaghetti', 'Spaghetti (each patient, unusual ones marked)'], ['waterfall', 'Waterfall (each patient, first → last)'], ['none', 'No figure']],
     numeric: [['auto', 'Auto'], ['bar', 'Bars (mean ± error / median, IQR)'], ['box', 'Box plot'], ['violin', 'Violin plot'], ['dot', 'Dot plot (every patient)'], ['meanci', 'Mean with 95% CI (error plot)'], ['dotci', 'Every patient + mean with 95% CI'], ['rain', 'Raincloud plot'], ['hist', 'Histogram'], ['none', 'No figure']],
     categorical: [['auto', 'Auto (bars)'], ['hbar', 'Horizontal bars'], ['stacked', '100% stacked bar'], ['diverging', 'Diverging bars (Likert scales)'], ['pie', 'Donut'], ['piefull', 'Pie'], ['mosaic', 'Mosaic (widths = group sizes)'], ['none', 'No figure']]
   };
@@ -2960,7 +2962,7 @@
     if (t === 'survival') out.push(`<div>${box('kmHR', 'Hazard ratio on the plot (two groups)')}</div>`);
     if (t === 'agreement') out.push(`<div>${box('baReg', 'Proportional bias line on the Bland-Altman plot')}</div>`);
     if (t === 'roc') out.push(`<div>${box('rocBand', '95% confidence band of the curve (bootstrap)')}</div>`);
-    if (t === 'survival') out.push(`<div>${box('swimmer', 'Swimmer plot of every patient')}</div>`, `<div>${box('ciBand', '95% CI bands on the curves')}</div>`, `<div>${box('risk', 'Number at risk table')}</div>`, `<div>${box('pairwise', 'Pairwise log-rank tests (3+ groups, Bonferroni)')}</div>`);
+    if (t === 'survival') out.push(`<div>${box('swimmer', 'Swimmer plot of every patient')}</div>`, `<div>${box('ciBand', '95% CI bands on the curves')}</div>`, `<div>${box('riskUnder', 'Number at risk under the curve')}</div>`, `<div>${box('riskCens', 'Events and censored per interval (risk table)')}</div>`, `<div>${box('risk', 'Number at risk table')}</div>`, `<div>${box('pairwise', 'Pairwise log-rank tests (3+ groups, Bonferroni)')}</div>`);
     if (t === 'kappa') out.push(`<div><label class="f">Weighted kappa (ordered categories)</label>${sel('weights', [['none', 'No — Cohen\'s kappa only'], ['linear', 'Linear weights'], ['quadratic', 'Quadratic weights']], a.weights)}</div>`);
     if (t === 'agreement') out.push(`<div><label class="f">ICC type</label>${sel('iccType', [['agreement', 'Absolute agreement (A,1)'], ['consistency', 'Consistency (C,1)']], a.iccType)}</div>`, `<div>${box('baPct', 'Bland-Altman of % differences')}</div>`);
     if (t === 'diagnostic') out.push(`<div><label class="f">Predictive values at a prevalence of (%)</label><input type="text" data-af="prev" value="${esc(a.prev || '')}" placeholder="e.g. 10"></div>`);
@@ -3267,7 +3269,7 @@
     const c = state.cfg.consort, gl = activeGroups().map(g => state.cfg.groupLabels[g]);
     if (!state.flowDrag) flowPush(c);
     const wn = flowWarnings(c); $('#cWarn').innerHTML = wn.length ? `<div class="chip warn" style="display:block;white-space:normal;padding:6px 10px"><b>Check the numbers:</b><br>${wn.map(esc).join('<br>')}</div>` : '';
-    const cv = Charts.consort(c, gl, chartPalette(state.cfg.options));
+    const cv = Charts.consort(flowStyled(c), gl, chartPalette(state.cfg.options));
     const tgt = $('#consortCanvas');
     tgt.width = cv.width; tgt.height = cv.height; tgt.getContext('2d').drawImage(cv, 0, 0);
   }
@@ -3383,7 +3385,7 @@
     try { const j = JSON.parse(await f.text()), c = j.consort || j; if (!c || !c.groups) throw new Error('not a flowchart file');
       if (c.groups.length !== activeGroups().length) toast(`The layout has ${c.groups.length} groups, the data ${activeGroups().length}: the numbers are taken from the data`);
       else { state.cfg.consort = c; renderConsortForm(); toast('Flowchart layout loaded'); } } catch (err) { toast('This file is not a flowchart layout'); } };
-  $('#flowPptx').onclick = () => { readConsort(); const cv = Charts.consort(state.cfg.consort, activeGroups().map(g => state.cfg.groupLabels[g]), chartPalette(state.cfg.options), 2);
+  $('#flowPptx').onclick = () => { readConsort(); const cv = Charts.consort(flowStyled(state.cfg.consort), activeGroups().map(g => state.cfg.groupLabels[g]), chartPalette(state.cfg.options), 2);
     saveUrl(URL.createObjectURL(buildPptx([{ url: cv.toDataURL('image/png'), w: cv.width, h: cv.height, caption: 'Flowchart of the studied patients' }], state.cfg.study.title || 'Flowchart')), `${baseName()} - Flowchart.pptx`); toast('Flowchart saved as a PowerPoint slide'); };
   $('#cForm').addEventListener('click', e => {
     if (e.target.id === 'cReasonGo') { readConsort(); fillReasons($('#cReasonCol').value, $('#cReasonTo').value); return; }
@@ -4377,7 +4379,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         const pal = chartPalette(cfg.options);
         const gl = res.groups;
         if (cfg.consort.enabled) {
-          const cv = Charts.consort(cfg.consort, gl, pal);
+          const cv = Charts.consort(flowStyled(cfg.consort), gl, pal);
           res.consort = { url: cv.toDataURL('image/png'), w: cv.width, h: cv.height };
         }
         state.result = res;
@@ -5126,7 +5128,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       svg: text => Charts.drawSVG({ ...f.spec, title: o.chartTitle ? f.caption : null }, chartPalette(o), { ...chartStyle(o), ...(text ? { text } : {}) }) };
   };
   const flowItem = (c, gl, name) => {
-    const pal = chartPalette(state.cfg.options), cv = Charts.consort(c, gl, pal, 1);
+    c = flowStyled(c); const pal = chartPalette(state.cfg.options), cv = Charts.consort(c, gl, pal, 1);
     return { name, w: cv.width, h: cv.height, pt: flowPt(), draw: res => Charts.consort(c, gl, pal, res), svg: () => Charts.flowSVG(c, gl, pal) };
   };
   let fxItems = [];
@@ -5165,7 +5167,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   $('#fxCancel').onclick = () => $('#figDlg').close();
   $('#fxGo').onclick = async () => {
     const ch = fxChosen(); if (!ch.length) return;
-    const fmt = $('#fxFormat').value, grey = $('#fxColor').value === 'grey', zip = ch.length > 1 && $('#fxZip').value === 'zip', ext = { png: 'png', jpg: 'jpg', tiff: 'tif', svg: 'svg' }[fmt];
+    const fmt = $('#fxFormat').value, grey = $('#fxColor').value === 'grey', zip = ch.length > 1 && $('#fxZip').value === 'zip', ext = { png: 'png', jpg: 'jpg', tiff: 'tif', svg: 'svg', eps: 'eps' }[fmt];
     try { localStorage.setItem('easystat.figExport', JSON.stringify(Object.fromEntries(['Format', 'Dpi', 'Width', 'Color', 'Zip', 'Text'].map(k => [k, $('#fx' + k).value])))); } catch (e) { /* not kept */ }
     $('#figDlg').close(); busy(true);
     await new Promise(r => setTimeout(r, 30));
@@ -5174,11 +5176,14 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       for (const it of ch) {
         // journal text size: the axis numbers printed at 8 or 10 pt at the chosen width
         const s = fxScale(it), pt = +$('#fxText').value, inch = $('#fxWidth').value === 'report' ? it.pt / 96 : +$('#fxWidth').value / 2.54, txt = pt ? pt * it.w / (72 * 26 * inch) : 0;
-        if (fmt === 'svg' && !it.svg) { toast(`${it.name}: SVG is not available for this figure — exported as PNG`); }
-        const blob = fmt === 'svg' && it.svg ? new Blob([it.svg(txt)], { type: 'image/svg+xml' }) : await Charts.exportImage(it.draw(s.res, txt), { format: fmt === 'svg' ? 'png' : fmt, dpi: s.dpi, grey });
-        let name = safeName(it.name) + (grey ? ' (greyscale)' : ''), k = 2; while (used.has(name)) name = `${safeName(it.name)} (${k++})`; used.add(name);
-        if (z) XLSX.CFB.utils.cfb_add(z, `${name}.${ext}`, new Uint8Array(await blob.arrayBuffer()));
-        else { const url = URL.createObjectURL(blob); saveUrl(url, `${name}.${ext}`); setTimeout(() => URL.revokeObjectURL(url), 60000); await new Promise(r => setTimeout(r, 300)); }
+        const vec = fmt === 'svg' || fmt === 'eps';
+        if (vec && !it.svg) { toast(`${it.name}: ${fmt.toUpperCase()} is not available for this figure — exported as PNG`); }
+        // EPS: vector PostScript converted from the figure's SVG, at the chosen width
+        const blob = vec && it.svg ? (fmt === 'svg' ? new Blob([it.svg(txt)], { type: 'image/svg+xml' }) : new Blob([Charts.svgToEps(it.svg(txt), ($('#fxWidth').value === 'report' ? it.pt / 96 : +$('#fxWidth').value / 2.54) * 72)], { type: 'application/postscript' }))
+          : await Charts.exportImage(it.draw(s.res, txt), { format: vec ? 'png' : fmt, dpi: s.dpi, grey });
+        let name = safeName(it.name) + (grey ? ' (greyscale)' : ''), k = 2; while (used.has(name)) name = `${safeName(it.name)} (${k++})`; used.add(name); const ext2 = (fmt === 'svg' || fmt === 'eps') && !it.svg ? 'png' : ext;
+        if (z) XLSX.CFB.utils.cfb_add(z, `${name}.${ext2}`, new Uint8Array(await blob.arrayBuffer()));
+        else { const url = URL.createObjectURL(blob); saveUrl(url, `${name}.${ext2}`); setTimeout(() => URL.revokeObjectURL(url), 60000); await new Promise(r => setTimeout(r, 300)); }
       }
       if (z) {
         const out = XLSX.CFB.write(z, { fileType: 'zip', type: 'array', compression: fmt === 'tiff' });
