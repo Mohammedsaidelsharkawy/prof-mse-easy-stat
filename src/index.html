@@ -310,6 +310,16 @@ html.ux-rail .stepper{position:fixed;left:0;top:78px;bottom:0;width:178px;flex-d
 html.ux-rail main{margin-left:190px}html.ux-rail .ux-timeleft{margin-left:190px}
 :focus-visible{outline:3px solid #E8590C!important;outline-offset:2px}
 #prepMore details.pm{border-top:1px dashed var(--line);padding:6px 0}#prepMore details.pm summary{cursor:pointer}
+/* project tools (tools.js) */
+.tl-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:8px}.tl-card{background:var(--lav);border-radius:10px;padding:8px 10px}.tl-card b{display:block;font-size:20px}.tl-card span{font-size:12px;color:var(--muted)}
+.tl-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
+.tl-guide{border-bottom:1px solid var(--line);padding:6px 0}.tl-guide summary{cursor:pointer}
+html.tl-explain #report table.rt td{cursor:help}html.tl-explain #report table.rt td:hover{outline:2px solid #E8590C}
+/* shared report on a phone: only the report, readable widths, tables scroll sideways */
+@media (max-width:700px){html.ux-shared .stepper,html.ux-shared .ux-timeleft,html.ux-shared #fmtBar,html.ux-shared #rxBox,html.ux-shared .ux-repbar,html.ux-shared .ux-mini,html.ux-shared .preset-bar,html.ux-shared .top-actions{display:none!important}
+  html.ux-shared #p11 .card{padding:10px}html.ux-shared #report .report-sec{padding:8px}html.ux-shared #report table{font-size:12px}html.ux-shared #report .report-sec > div{overflow-x:auto}
+  html.ux-shared #report textarea{font-size:14px;min-height:0;border:0;background:transparent;resize:none;field-sizing:content;height:auto;overflow:hidden}html.ux-shared #report input.fcap{field-sizing:content;width:100%;white-space:normal;border:0;background:transparent}html.ux-shared #report img{max-width:100%;height:auto}html.ux-shared #report button{display:none}
+  html.ux-shared #p11 .card > .row > .btn:not(#btnDocx),html.ux-shared #p11 .card > .hint,html.ux-shared #p11 .exp-bar,html.ux-shared #p11 .card > details,html.ux-shared #report details,html.ux-shared .ux-offer,html.ux-shared #report label.check,html.ux-shared #report .legend-note{display:none!important}}
 /* step 10: dark tables */
 #explore.xp-dark table.t { background: #1f1b26; color: #ece8f2; }
 #explore.xp-dark table.t th { background: #2c2636; color: #fff; }

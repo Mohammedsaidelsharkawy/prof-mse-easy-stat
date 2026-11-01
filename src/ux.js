@@ -101,7 +101,7 @@
     card.onclick = e => { const b = e.target.closest('[data-t]'); if (!b) return; const d = b.dataset.t; if (d === 'x') return $$('.ux-tour').forEach(x => x.remove()); tour(i + +d); };
   }
   $('#uxTour').onclick = () => tour(0);
-  if (!ls.get('tourOffered', false)) { ls.set('tourOffered', true); const o = el('div', 'ux-offer', `New here? <button class="btn primary small" type="button" data-o="y">Take a 1-minute tour</button> <button class="btn ghost small" type="button" data-o="n">No thanks</button>`); document.body.appendChild(o);
+  if (!ls.get('tourOffered', false) && !window.__PROJECT__) { ls.set('tourOffered', true); const o = el('div', 'ux-offer', `New here? <button class="btn primary small" type="button" data-o="y">Take a 1-minute tour</button> <button class="btn ghost small" type="button" data-o="n">No thanks</button>`); document.body.appendChild(o);
     o.onclick = e => { const b = e.target.closest('[data-o]'); if (!b) return; o.remove(); if (b.dataset.o === 'y') tour(0); }; setTimeout(() => o.remove(), 20000); }
 
   /* ---------- 2. "What do you want to do?" — sets up the analyses for the goal ---------- */
@@ -154,9 +154,9 @@
   /* ---------- 5. recent work ---------- */
   function recordRecent() { const st = S(), list = ls.get('recent', []).filter(r => r.file !== st.file); list.unshift({ file: st.file, rows: st.data.rows.length, at: Date.now() }); ls.set('recent', list.slice(0, 6)); drawRecent(); }
   function drawRecent() { const list = ls.get('recent', []); let box = $('#uxRecent'); if (!p1card) return; if (!box) { box = el('div', 'ux-recent'); box.id = 'uxRecent'; p1card.appendChild(box); }
-    box.innerHTML = list.length ? `<h4 style="margin:10px 0 4px">Recent work</h4>${list.map((r, i) => `<button class="chip ux-rc" type="button" data-rc="${i}" title="Continue this work">📄 ${esc(String(r.file || '').replace(/\.[^.]+$/, ''))} · ${r.rows} rows · ${new Date(r.at).toLocaleDateString()}</button>`).join(' ')}` : ''; }
+    box.innerHTML = list.length ? `<h4 style="margin:10px 0 4px">Recent work</h4>${list.map((r, i) => `<button class="chip ux-rc" type="button" data-uxrecent="${i}" title="Continue this work">📄 ${esc(String(r.file || '').replace(/\.[^.]+$/, ''))} · ${r.rows} rows · ${new Date(r.at).toLocaleDateString()}</button>`).join(' ')}` : ''; }
   drawRecent();
-  document.addEventListener('click', e => { const b = e.target.closest('[data-rc]'); if (!b) return; const r = ls.get('recent', [])[+b.dataset.rc]; let j = null; try { j = JSON.parse(localStorage.getItem('easystat.autosave') || 'null'); } catch (err) { /* none */ }
+  document.addEventListener('click', e => { const b = e.target.closest('[data-uxrecent]'); if (!b) return; const r = ls.get('recent', [])[+b.dataset.uxrecent]; let j = null; try { j = JSON.parse(localStorage.getItem('easystat.autosave') || 'null'); } catch (err) { /* none */ }
     if (j && j.file === r.file) { if (!S().data || confirm('Continue this work? The current data are replaced.')) U.openProject(j, j.file); } else U.toast(`“${r.file}” is not kept in this browser — open its project file (📂 Open project) or the data file again`); });
 
   /* ---------- 6. example-data banner ---------- */
