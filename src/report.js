@@ -9,7 +9,31 @@ const Report = (() => {
   let TEMPLATE = false; // a Word template gives the styles
 
   // text runs of a paragraph; with ITALIC_P the letter P of "P = 0.01", "p < .001" or a "P" heading is set in italics
+  // automatic numbers (step 11 option): "Table 3" / "Figure 2" at the start of a caption is a bookmarked SEQ field, elsewhere a REF field to that bookmark
+  let AUTO = false, SEQ_N = {};
+  const REF_RE = /\b(Table|Figure|Fig\.)\s(\d+(?:\.\d+)?)(?![\d.]?\d)/g;
+  const bmId = (kind, num) => `_Ref${kind === 'Table' ? 'Tbl' : 'Fig'}${String(num).replace(/\./g, '_')}`;
   function runs(text, o = {}) {
+    if (AUTO && text && !o.noFields && REF_RE.test(String(text))) { REF_RE.lastIndex = 0; return autoRuns(String(text), o); }
+    return plainRuns(text, o);
+  }
+  function autoRuns(text, o) {
+    const { TextRun, SimpleField, Bookmark } = D(), out = []; let last = 0, m;
+    const field = (instr, shown) => { const f = new SimpleField(instr, shown); f.root[f.root.length - 1] = plainRuns(shown, o)[0] || new TextRun(shown); return f; };
+    REF_RE.lastIndex = 0;
+    while ((m = REF_RE.exec(text))) {
+      if (m.index > last) out.push(...plainRuns(text.slice(last, m.index), o));
+      const kind = m[1] === 'Table' ? 'Table' : 'Figure', num = m[2], pre = num.includes('.') ? num.slice(0, num.lastIndexOf('.') + 1) : '', n = num.slice(pre.length);
+      if (o.cap && m.index === 0) { // the caption itself: "Table " + SEQ inside a bookmark
+        const first = !SEQ_N[kind]; SEQ_N[kind] = +n; const restart = first && +n !== 1 ? ` \\r ${n}` : '';
+        out.push(new Bookmark({ id: bmId(kind, num), children: [...plainRuns(`${m[1]} ${pre}`, o), field(` SEQ ${kind} \\* ARABIC${restart} `, n)] }));
+      } else out.push(field(` REF ${bmId(kind, num)} \\h `, m[0]));
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out.push(...plainRuns(text.slice(last), o));
+    return out;
+  }
+  function plainRuns(text, o = {}) {
     const { TextRun } = D();
     // with a Word template the body text takes the template's font and size (only explicit sizes, e.g. of tables, stay)
     const mk = (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || (TEMPLATE ? undefined : 24), font: o.font || (TEMPLATE ? undefined : BODY_FONT), color: o.color });
@@ -85,12 +109,12 @@ const Report = (() => {
   }
   function caption(text, o = {}) {
     const { AlignmentType } = D();
-    return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true, ...o });
+    return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true, cap: true, ...o });
   }
   // APA: the number in bold on its own line, the title in italics below it, both left-aligned
   function apaCaption(label, title, o = {}) {
     const { AlignmentType } = D();
-    return [para(label, { bold: true, align: AlignmentType.LEFT, after: 0, line: 276, keepNext: true, pageBreakBefore: o.pageBreakBefore }),
+    return [para(label, { bold: true, align: AlignmentType.LEFT, after: 0, line: 276, keepNext: true, pageBreakBefore: o.pageBreakBefore, cap: true }),
       para(title, { italic: true, align: AlignmentType.LEFT, after: 120, line: 276, keepNext: true })];
   }
   // alternative text of the figures (screen readers), when chosen in step 11: the caption of the figure
@@ -204,7 +228,7 @@ const Report = (() => {
         children: f ? (f.apa
           ? [para(f.num, { bold: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 0 }), para(f.caption, { italic: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 60 }),
             image(f.url, f.w, f.h, w, true, f.label), ...(f.note ? [para('Note. ' + f.note, { align: D().AlignmentType.LEFT, size: 18, line: 240, after: 160 })] : [])]
-          : [image(f.url, f.w, f.h, w, true, f.label), para(f.label, { bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160, note: f.note, noteSize: 18 })]) : [new Paragraph('')]
+          : [image(f.url, f.w, f.h, w, true, f.label), para(f.label, { cap: true, bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160, note: f.note, noteSize: 18 })]) : [new Paragraph('')]
       })) }));
     }
     return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: [half, PAGE_W - half], rows,
@@ -229,7 +253,7 @@ const Report = (() => {
     const { Document, Packer, Paragraph, TextRun, Header, Footer, ImageRun, AlignmentType, PageNumber, BorderStyle } = D();
     const brand = opts.branding;
     BODY_FONT = opts.font || DEFAULT_FONT;
-    ITALIC_P = !!opts.italicP; ALT = !!opts.altText;
+    ITALIC_P = !!opts.italicP; ALT = !!opts.altText; AUTO = !!opts.autoNum; SEQ_N = {};
     const landscape = opts.orientation === 'landscape';
     // page: A4 or US Letter, normal / narrow / wide margins (the text width follows), body line spacing
     const pg = opts.page || {}, tp = opts.tplPage, [pw0, ph0] = tp ? [tp.w, tp.h] : { letter: [12240, 15840], b5: [9979, 14173], a5: [8391, 11906], legal: [12240, 20160] }[pg.size] || [11906, 16838], mg = tp ? Math.round((tp.l + tp.r) / 2) : { narrow: 720, wide: 1800 }[pg.margin] || 1440;
@@ -421,7 +445,7 @@ const Report = (() => {
   // results by variable: every table of each variable, with its figure, in a landscape document
   async function buildResults(model, opts) {
     const { Document, Packer, Paragraph, TextRun, Footer, AlignmentType, PageNumber, PageOrientation } = D();
-    BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false; ALT = false;
+    BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false; ALT = false; AUTO = false;
     PAGE_W = LANDSCAPE_W; LINE = 360;
     const children = [para(opts.title || 'Results by variable', { bold: true, size: 32, align: AlignmentType.CENTER, after: 120 })];
     if (opts.subtitle) children.push(para(opts.subtitle, { align: AlignmentType.CENTER, size: 20, after: 240 }));

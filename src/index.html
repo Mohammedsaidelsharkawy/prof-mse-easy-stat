@@ -31,6 +31,7 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 .brand p{margin:0;font-size:12.5px;opacity:.75}
 .top-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:nowrap;align-items:center;justify-content:flex-end;min-width:0;flex:1 1 auto}
 .top-actions > .btn,.top-actions > label.btn{white-space:nowrap}
+.top-actions .ux-word{background:#fff;color:var(--navy);font-weight:700;border:0}.top-actions .ux-word:hover{background:#EFE4FA}
 .ux-more{position:relative}
 .ux-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:220px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(28,22,72,.28);padding:6px;display:none;flex-direction:column;gap:2px;z-index:75}
 .ux-menu.open{display:flex}
@@ -924,6 +925,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div>
           <label class="check"><input type="checkbox" id="optRmAncova"><span><b>ANCOVA at each later timepoint</b> — the groups compared after adjusting for the baseline (reference) value</span></label>
           <label class="check"><input type="checkbox" id="optRmSphReport"><span><b>Sphericity report</b> — Mauchly's test with the Greenhouse-Geisser and Huynh-Feldt ε in the footnote (3+ timepoints)</span></label>
+          <label class="check"><input type="checkbox" id="optRmEachGroup"><span><b>Each group separately too</b> — after the comparison of the groups, a table of the change over time within each group (one-group repeated-measures test and pairwise comparisons)</span></label>
           <label class="check"><input type="checkbox" id="optRmProfile"><span><b>Profile analysis</b> — parallelism (MANOVA, Wilks' Λ), levels and flatness (Hotelling's T²)</span></label>
           <label class="check"><input type="checkbox" id="optRmIndividual"><span><b>Individual patient lines</b> on line charts of repeated measures (spaghetti plot)</span></label>
         </div>
@@ -1419,8 +1421,12 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Citations in the text (with References)</label><select data-rx="citeText"><option value="">None</option><option value="vancouver">Numbered [1] (Vancouver)</option><option value="apa">(Author, year) (APA)</option></select></div>
           <div><label class="f">Reporting checklist (appendix)</label><select data-rx="checklist"><option value="">None</option><option value="consort">CONSORT 2010</option><option value="strobe">STROBE</option></select></div>
           <div><label class="f">Word limit of Results (warning)</label><input type="number" min="0" step="50" data-rx="wordLimit" placeholder="none"></div>
+          <div><label class="check" style="margin-top:22px" title="Table and figure numbers are Word fields (SEQ), and every “Table 3” or “Figure 2” in the text is a cross-reference to them: after moving or deleting a table, select all (Ctrl+A) and press F9 to renumber"><input type="checkbox" data-rx="autoNum"><span><b>Automatic numbers and cross-references</b> (Word fields)</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="altText"><span><b>Alternative text</b> of the figures (screen readers)</span></label></div>
-          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="appData"><span><b>Data analysed</b> as an appendix table</span></label></div>
+          <div><label class="f">Master sheet at the end</label><select data-rx="appSheet"><option value="">None</option><option value="analysed">Columns of the analysed variables</option><option value="all">Every column</option><option value="chosen">Chosen columns →</option></select></div>
+          <div><label class="f">Chosen columns (comma-separated)</label><input type="text" data-rx="appSheetCols" placeholder="e.g. ID, Age_years, CRP_mg_L"></div>
+          <div><label class="f">Rows of the master sheet</label><input type="number" min="0" data-rx="appSheetRows" placeholder="all"></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="appSheetAllRows"><span>Every row (also patients outside the studied groups)</span></label></div>
           <div><label class="f">Declaration (thesis front matter)</label><textarea data-rx="frontDecl" style="min-height:40px" placeholder="e.g. I declare that this thesis is my own work…"></textarea></div>
           <div><label class="f">Dedication</label><textarea data-rx="frontDed" style="min-height:40px"></textarea></div>
           <div><label class="f">Acknowledgements</label><textarea data-rx="frontAck" style="min-height:40px"></textarea></div>

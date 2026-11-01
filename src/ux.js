@@ -23,8 +23,9 @@
     const menu = el('div', 'ux-menu'); menu.setAttribute('role', 'menu'); more.append(mb, menu);
     ['#uxTour', '#uxView', '#btnSaveCfg'].forEach(q => { const b = $(q); if (b) menu.appendChild(b); });
     const load = $('#cfgFile') && $('#cfgFile').closest('label'); if (load) menu.appendChild(load);
-    const order = ['#btnNew', () => $('#projFile') && $('#projFile').closest('label'), '#btnSaveProj', '#btnTheme', '#btnKeys', '#uxPal', '#uxExport', '#uxBell', '#uxSaved'];
-    order.forEach(q => { const n = typeof q === 'function' ? q() : $(q); if (n) top.appendChild(n); }); top.appendChild(more); bar.remove();
+    const wordBtn = el('button', 'btn small ux-word', '⬇ <span class="tl">Word</span>'); wordBtn.type = 'button'; wordBtn.id = 'uxWord'; wordBtn.title = 'Download the Word report (Alt+W)'; wordBtn.onclick = () => downloadWord();
+    const order = [wordBtn, '#btnNew', () => $('#projFile') && $('#projFile').closest('label'), '#btnSaveProj', '#btnTheme', '#btnKeys', '#uxPal', '#uxExport', '#uxBell', '#uxSaved'];
+    order.forEach(q => { const n = typeof q === 'function' ? q() : typeof q === 'string' ? $(q) : q; if (n) top.appendChild(n); }); top.appendChild(more); bar.remove();
     // icon + label: the label hides on narrow screens, the full name stays as the tooltip
     [...top.querySelectorAll(':scope > .btn, :scope > label.btn'), ...menu.querySelectorAll('.btn')].forEach(b => { if (b.querySelector('.tl')) return; const t = [...b.childNodes].find(n => n.nodeType === 3 && n.textContent.trim()); if (!t) return;
       const m = /^(\s*[^\sA-Za-z0-9]+\s*)?(.*)$/s.exec(t.textContent), ic = (m[1] || '').trim(), lab = (m[2] || '').trim(); const sp = el('span', 'tl', esc(lab)); t.replaceWith(document.createTextNode(ic ? ic + ' ' : ''), sp); if (!b.title) b.title = lab; if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', lab); });
@@ -32,6 +33,11 @@
     mb.onclick = e => { e.stopPropagation(); document.querySelectorAll('.ux-pop.open').forEach(p => p.classList.remove('open')); const o = menu.classList.toggle('open'); mb.setAttribute('aria-expanded', String(o)); };
     menu.addEventListener('click', e => { if (e.target.closest('.btn') && !e.target.closest('label')) close(); });
     document.addEventListener('click', e => { if (!more.contains(e.target)) close(); }); document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); }); })();
+  // the Word report from any step: the report is run first when needed (step 11), then downloaded
+  async function downloadWord() { const st = S(); if (!st.data) { U.toast('Load data first'); return; }
+    if (!st.result || st.step !== 11) { U.go(11); const t0 = Date.now(); while (!(st.result && !$('#busy').classList.contains('show')) && Date.now() - t0 < 180000) await new Promise(r => setTimeout(r, 250)); }
+    if (!st.result) { U.toast('The report could not be run'); return; } const b = $('#btnDocx'); if (b && !b.disabled) b.click(); }
+  document.addEventListener('keydown', e => { if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'w') { e.preventDefault(); downloadWord(); } });
   const live = el('div', 'ux-sr'); live.setAttribute('aria-live', 'polite'); live.id = 'uxLive'; document.body.appendChild(live);
 
   /* ---------- 34. message history (every toast) ---------- */

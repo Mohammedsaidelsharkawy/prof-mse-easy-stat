@@ -66,7 +66,7 @@ const Analysis = (() => {
   // label without a trailing unit, for use inside sentences: "Age (years)" → "Age"
   const plain = s => s.replace(/\s*\([^)]*\)\s*$/, '');
   // the unit of a variable for the comments: the ⚙ unit, the brackets of its label ("Age (years)", "CRP (mg/L)") or a unit word at the end ("Weight kg")
-  const UNIT_TOK = /^(years?|yrs?|months?|mos?|weeks?|wks?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|ms|kg|g|mg|mcg|µg|μg|ug|ng|pg|l|dl|ml|µl|ul|mmol|µmol|umol|nmol|pmol|meq|iu|u|miu|mu|cm|mm|m|m2|m²|m3|mm3|µm|nm|mmhg|cmh2o|kpa|bpm|beats|breaths|%|percent|pct|°c|°f|kcal|cal|mosm|osm|cells|copies|x10|×10|10|gm|lb|lbs|in|ft|min|h|d|s|dl|mmol\/l|mg\/dl|g\/dl)$/i;
+  const UNIT_TOK = /^(years?|yrs?|months?|mos?|weeks?|wks?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|ms|kg|g|mg|mcg|µg|μg|ug|ng|pg|l|dl|ml|µl|ul|mmol|µmol|umol|nmol|pmol|meq|iu|u|miu|mu|cm|mm|m|m2|m²|m3|mm3|µm|nm|mmhg|cmh2o|kpa|bpm|beats|breaths|%|percent|pct|°c|°f|kcal|cal|mosm|osm|cells|copies|x10|×10|10|×10[⁰¹²³⁴⁵⁶⁷⁸⁹]+|10[⁰¹²³⁴⁵⁶⁷⁸⁹]+|µiu|uiu|cmh₂o|mosm|1\.73|gm|lb|lbs|in|ft|min|h|d|s|dl|mmol\/l|mg\/dl|g\/dl)$/i;
   const STRONG_UNIT = /^(years?|months?|weeks?|days?|hours?|minutes?|mins?|kg|mg|g|cm|mm|ml|mmhg|bpm|%|°c|kcal|lbs?)$/i;
   function unitOfText(u) {
     u = String(u || '').trim(); if (!u || u.length > 18) return '';
@@ -2212,12 +2212,24 @@ const Analysis = (() => {
     const trows = [...W.map(([n, w]) => [{ t: [`${n} (overall)`], b: true }, { t: [`Wald χ²(${w.df}) = ${fmt(w.chi, 2)}`] }, { t: [fmtP(w.p, alpha)] }]),
       ...names.map((n, q) => { const r = est(q + 1); return [{ t: [n], b: true }, { t: [E(r)] }, { t: [fmtP(r.p, alpha)] }]; })];
     const what = binary ? `${lowerFirst(plain(v.label))} (${pos})` : lowerFirst(plain(v.label)), wi = W.find(x => x[0] === 'Group × time'), wg = W.find(x => x[0] === 'Study group'), wt = W.find(x => x[0] === 'Time');
-    const sent = [];
-    if (wi) sent.push(`The change in ${what} over time ${wi[1].p <= alpha ? 'differed significantly' : 'did not differ significantly'} between the groups (group × time P value ${pTxt(wi[1].p)}).`);
-    if (wg) sent.push(`${binary ? `The odds of ${what}` : cap(what)} ${wg[1].p <= alpha ? 'differed significantly' : 'did not differ significantly'} between the groups${inter ? ' at the first measurement' : ''} (P value ${pTxt(wg[1].p)}).`);
-    if (wt) sent.push(`${cap(what)} ${wt[1].p <= alpha ? 'changed significantly' : 'did not change significantly'} over time${inter && k > 1 ? ` in ${gl[0]}` : ''} (P value ${pTxt(wt[1].p)}).`);
-    const sigC = Ci.map((j, q) => [cov.flatMap(e => e.terms.map(t => t.label))[q], est(j)]).filter(([, r]) => r.p <= alpha);
-    if (sigC.length) sent.push(`${cap(listJoin(sigC.map(([l, r]) => `${lowerFirst(plain(l))} (${eName} = ${fmt(r.e, dd)}, P value ${pTxt(r.p)})`)))} ${sigC.length > 1 ? 'were' : 'was'} also significantly associated with ${what}.`);
+    // the observed course of each group (first → last measurement), then the model: interaction, the groups at the first measurement, time, covariates
+    const obs = groups.map(g => cols.map(c => { const vs = rows.filter(r => groupOf(cfg, r) === g).map(r => binary ? (toCat(r[c.col]) === null ? NaN : +(toCat(r[c.col]) === pos)) : toNum(r[c.col])).filter(isFinite); return vs.length ? S.mean(vs) : NaN; }));
+    const showV = x => binary ? `${fmt(100 * x, 1)}%` : fmt(x, d), dirOf = g => { const dl = obs[g][T - 1] - obs[g][0]; return !isFinite(dl) ? '' : Math.abs(dl) < 1e-9 ? 'stayed at' : dl < 0 ? (binary ? 'fell from' : 'decreased from') : (binary ? 'rose from' : 'increased from'); };
+    const same = groups.every((_, g) => dirOf(g) === dirOf(0)), where = g => k > 1 ? gl[g] : 'the studied patients', first = tLab(cols[0]), lastL = tLab(cols[T - 1]);
+    const lead = binary ? `The percentage with ${what}` : family === 'poisson' ? `The mean ${what}` : `The mean ${what}`;
+    const sent = [`From ${lowerFirst(first)} to ${lowerFirst(lastL)}, ${lowerFirst(lead)} ${groups.map((_, g) => `${!same || g === 0 ? dirOf(g) : dirOf(g) === 'stayed at' ? 'at' : 'from'} ${showV(obs[g][0])}${dirOf(g) === 'stayed at' ? '' : ` to ${showV(obs[g][T - 1])}`} in ${where(g)}`).reduce((t, x, i, arr) => !i ? x : i === arr.length - 1 ? `${t} and ${x}` : `${t}, ${x}`, '')}.`];
+    const scale = family === 'binomial' ? 'odds' : family === 'poisson' ? 'rate' : 'mean', fe = v => expo && Math.abs(v) < 0.01 && v !== 0 ? (+v.toPrecision(2)).toString() : fmt(v, dd);
+    const ciT = r => `${eName} = ${fe(r.e)}, 95% CI ${fe(r.lo)} to ${fe(r.hi)}`, ofWhat = family === 'gaussian' ? `mean ${what}` : `${scale} of ${what}`;
+    if (wi) { const jLast = linT ? Ii[0] : Ii[nt - 1], ri = est(jLast);
+      const more = expo ? `${fe(ri.e)} times as large` : `${fmt(Math.abs(ri.e), dd)} ${ri.e >= 0 ? 'more' : 'less'}`;
+      sent.push(wi[1].p <= alpha ? `The change over time differed significantly between the groups (group × time Wald χ²(${wi[1].df}) = ${fmt(wi[1].chi, 2)}, P value ${pTxt(wi[1].p)}): ${linT ? `per unit of time, the ${ofWhat} changed ${more} in ${gl[1]} ${expo ? 'as' : 'than'} in ${gl[0]}` : `the ${expo ? `${scale} ratio` : 'change'} from ${lowerFirst(first)} to ${lowerFirst(lastL)} was ${more} in ${gl[1]} ${expo ? 'as' : 'than'} in ${gl[0]}`} (${expo ? 'ratio of ' + scale + ' ratios, ' : 'difference, '}${ciT(ri)})${k > 2 ? ', first comparison group' : ''}.`
+        : `The change over time did not differ significantly between the groups (group × time Wald χ²(${wi[1].df}) = ${fmt(wi[1].chi, 2)}, P value ${pTxt(wi[1].p)}).`); }
+    if (wg && k > 1) { const rg = est(Gi[0]); sent.push(`${inter ? `At ${lowerFirst(first)}, the` : 'The'} ${ofWhat} ${wg[1].p <= alpha ? 'differed significantly' : 'did not differ significantly'} between the groups${k === 2 ? ` (${gl[1]} vs ${gl[0]}: ${ciT(rg)}, P value ${pTxt(wg[1].p)})` : ` (P value ${pTxt(wg[1].p)})`}.`); }
+    if (wt) { const rt = est(linT ? Ti[0] : Ti[nt - 1]); sent.push(`The ${ofWhat} ${wt[1].p <= alpha ? 'changed significantly' : 'did not change significantly'} over time${inter && k > 1 ? ` in ${gl[0]}` : ''} (${linT ? 'per unit of time' : `${lastL} vs ${first}`}: ${ciT(rt)}, P value ${pTxt(wt[1].p)}).`); }
+    const covT = Ci.map((j, q) => [cov.flatMap(e => e.terms.map(t => t.label))[q], est(j)]), sigC = covT.filter(([, r]) => r.p <= alpha), nsC = covT.filter(([, r]) => r.p > alpha);
+    if (sigC.length) sent.push(`${cap(listJoin(sigC.map(([l, r]) => `${lowerFirst(plain(l))} (${ciT(r)}, P value ${pTxt(r.p)})`)))} ${sigC.length > 1 ? 'were' : 'was'} also significantly associated with ${what}.`);
+    if (nsC.length && (a.commentDetail === 'detailed' || !sigC.length)) sent.push(`${cap(listJoin(nsC.map(([l]) => lowerFirst(plain(l)))))} ${nsC.length > 1 ? 'were' : 'was'} not significantly associated with ${what}.`);
+    if (a.commentDetail === 'detailed') sent.push(glmm ? `The estimates are patient-specific (for a given patient); ${fmt(100 * m.icc, 0)}% of the variation was between patients (ICC = ${fmt(m.icc, 2)}).` : `The estimates are population-averaged (for the group as a whole), with standard errors robust to the correlation of each patient's measurements.`);
     const fam = { binomial: 'logistic (binary outcome)', poisson: 'Poisson (counts)', gaussian: 'linear (numeric outcome)' }[family];
     const foot = glmm ? `Generalised linear mixed model, logistic with a random intercept per patient (adaptive Gauss-Hermite quadrature, 15 points); random-intercept variance = ${fmt(m.var, 3)}, ICC = ${fmt(m.icc, 2)}; ${m.clusters} patients, ${m.n} measurements`
       : `Generalised estimating equations, ${fam}, ${corr === 'ar1' ? 'AR(1)' : corr} working correlation${corr !== 'independence' ? ` (α = ${fmt(m.alpha, 3)})` : ''}, robust (sandwich) standard errors; ${m.clusters} patients, ${m.n} measurements`;
@@ -3589,6 +3601,18 @@ const Analysis = (() => {
       }
     }
 
+    // repeated measures: also each study group on its own (the change over time within the group), right after the comparison of the groups
+    if (opts.rmEachGroup && k > 1 && !cfg._sub) {
+      cfg.variables.filter(v => v.include && v.kind === 'repeated').forEach(v => {
+        const at = sections.map((sec, i) => [sec, i]).filter(([sec]) => sec.kind === 'repeated' && (sec.vid === v.id || (sec.figures || []).some(f => f.vid === v.id) || sec.title.startsWith(v.label))).map(x => x[1]).pop(); if (at === undefined) return;
+        const extra = [];
+        groups.forEach((g, gi) => { let sub = null;
+          try { sub = run(data, { ...cfg, _sub: true, groupInclude: Object.fromEntries(cfg.groupOrder.map(x => [x, x === g])), variables: [{ ...v, include: true }], advanced: [], consort: null, timeline: null, options: { ...cfg.options, rmEachGroup: false, correlation: false, summary: false } }); } catch (e) { sub = null; }
+          (sub ? sub.sections : []).filter(sec => sec.kind === 'repeated').forEach(sec => { const inG = t => String(t || '').replace(/\s+of the studied (patients|groups)/g, '').replace(/\s+in the studied patients/g, '');
+            extra.push({ ...sec, title: `${inG(sec.title)} in ${gl[gi]}`, comment: sec.comment ? `In ${gl[gi]}, ` + (/^[A-Z][a-z]/.test(sec.comment) && !/^[A-Z][a-z]+\s*\(/.test(sec.comment) && !sec.comment.startsWith(v.label) ? sec.comment.charAt(0).toLowerCase() + sec.comment.slice(1) : sec.comment) : sec.comment,
+              figures: (sec.figures || []).map(f => ({ ...f, caption: `${inG(f.caption)} in ${gl[gi]}` })), eachGroup: gl[gi] }); }); });
+        sections.splice(at + 1, 0, ...extra); });
+    }
     // which figures go in the report: all, only those of significant results, or none
     if (opts.figures === 'none') sections.forEach(s => { s.figures = []; });
     else if (opts.figures === 'sig') sections.forEach(s => { s.figures = s.figures.filter(f => f.sig !== false); });
