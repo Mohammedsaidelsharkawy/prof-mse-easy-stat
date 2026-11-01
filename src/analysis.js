@@ -2857,7 +2857,7 @@ const Analysis = (() => {
       if (opts.missingNote) f.push(flags.missing.length ? `Missing data: ${flags.missing.join(', ')}` : 'No missing data');
       const notes = b.vars.map(v => v.note).filter(Boolean); if (notes.length) f.push(notes.join(', '));
       return { kind: 'single', title: `${b.table} of the studied patients`, head, rows: trows, footnote: f.join(', ') + '.', comment: wording(sent.join(' ')), figures, twoCol: true,
-        meta: { res: [] }, brief: opts.paperStyle ? wording(sent.slice(0, 3).join(' ')) : '', briefSig: false };
+        meta: { res: [], rawVars: b.vars.filter(v => v.type === 'numeric').map(v => v.id) }, brief: opts.paperStyle ? wording(sent.slice(0, 3).join(' ')) : '', briefSig: false };
     }
     function oneGroupRepeated(v) {
       const tps = v.cols.map(c => c.label || cfg.tpLabels[c.tp] || c.tp), T = tps.length, G = gl[0], lab = plain(v.label);
@@ -3612,6 +3612,46 @@ const Analysis = (() => {
             extra.push({ ...sec, title: `${inG(sec.title)} in ${gl[gi]}`, comment: sec.comment ? `In ${gl[gi]}, ` + (/^[A-Z][a-z]/.test(sec.comment) && !/^[A-Z][a-z]+\s*\(/.test(sec.comment) && !sec.comment.startsWith(v.label) ? sec.comment.charAt(0).toLowerCase() + sec.comment.slice(1) : sec.comment) : sec.comment,
               figures: (sec.figures || []).map(f => ({ ...f, caption: `${inG(f.caption)} in ${gl[gi]}` })), eachGroup: gl[gi] }); }); });
         sections.splice(at + 1, 0, ...extra); });
+    }
+    // raw data under each table of numeric results: one row per patient, then the mean and SD (or median and IQR) of each column and its P value from the table
+    if (opts.rawData && !cfg._sub) {
+      const idCol = cfg.idCols && cfg.idCols[0] && data.headers.includes(cfg.idCols[0]) ? cfg.idCols[0] : '';
+      const txt = c => [].concat(c && c.t !== undefined ? c.t : c ?? '').join(' ');
+      const cellAt = (row, col) => { let x = 0; for (const c of row) { if (x === col) return c; x += c.span || 1; if (x > col) return null; } return null; };
+      const pOf = sec => { let x = 0, at = -1; sec.head.forEach(h => { if (at < 0 && /^P\b|^P value/i.test(txt(h)) && !/trend|adjusted|stratified|cluster/i.test(txt(h))) at = x; x += h.span || 1; });
+        const m = {}; if (at >= 0) sec.rows.forEach(r => { const lab = txt(r[0]).trim(); if (!lab || m[lab] !== undefined) return; const c = cellAt(r, at); if (c) m[lab] = txt(c); }); return m; };
+      const out = [];
+      sections.forEach(sec => { out.push(sec);
+        let cols = [], within = false, gIdx = groups.map((g, i) => i);
+        if (sec.kind === 'repeated' && sec.vid) { const v = cfg.variables.find(x => x.id === sec.vid) || vars.find(x => x.id === sec.vid); if (!v || v.type !== 'numeric') return;
+          const labs = new Map(sec.rows.map(r => [txt(r[0]).trim().toLowerCase(), txt(r[0]).trim()])), tpl = cfg.tpLabels || {};
+          const cs = v.cols.map(c => { const hit = [tpl[c.tp], c.label, c.tp].find(l => l && labs.has(String(l).trim().toLowerCase())); return { col: c.col, label: hit ? labs.get(String(hit).trim().toLowerCase()) : tpl[c.tp] || c.label || c.tp || c.col, hit: !!hit }; });
+          cols = cs.filter(c => c.hit); if (!cols.length) cols = cs;
+          within = !!sec.eachGroup || k === 1 || /vs |Change from/.test(sec.head.map(txt).join(' '));
+          if (sec.eachGroup) gIdx = [gl.indexOf(sec.eachGroup)]; }
+        else if (sec.kind === 'single' && sec.meta && sec.meta.res) cols = (sec.meta.rawVars ? sec.meta.rawVars.map(id => ({ v: vars.find(x => x.id === id) })).filter(r => r.v) : sec.meta.res)
+          .filter(r => r.v && r.v.type === 'numeric' && r.v.cols && r.v.cols.length === 1).map(r => ({ col: r.v.cols[0].col, label: r.v.label }));
+        if (!cols.length || gIdx.some(i => i < 0)) return;
+        const param = sec.kind === 'repeated' ? sec.meta && sec.meta.param !== false && !/IQR/.test(JSON.stringify(sec.head)) : null, pm = pOf(sec), many = gIdx.length > 1;
+        const head = [...(many ? [{ t: 'Group' }] : []), { t: idCol ? idCol : 'No.' }, ...cols.map(c => ({ t: c.label }))], trows = [], f2 = x => isFinite(x) ? fmt(x, d) : '';
+        const stats = [];
+        gIdx.forEach(gi => { let rs = byGroup[gi];
+          if (within) rs = rs.filter(r => cols.every(c => isFinite(toNum(r[c.col]))));
+          rs.forEach((r, i) => trows.push([...(many && i === 0 ? [{ t: [gl[gi]], b: true, rs: rs.length }] : []), { t: [String(idCol ? r[idCol] ?? '' : i + 1)], b: true }, ...cols.map(c => { const x = toNum(r[c.col]); return { t: [isFinite(x) ? String(r[c.col]) : ''] }; })]));
+          stats.push([gi, cols.map(c => rs.map(r => toNum(r[c.col])).filter(isFinite))]); });
+        const usePm = c => { if (param !== null) return param; const rr = sec.rows.find(r => txt(r[0]).trim() === c.label), rt = rr ? rr.map(txt).join(' ') : '', num = ((sec.meta.res || []).find(r => r.v && r.v.label === c.label) || {}).num;
+          return num ? num.param !== false && !/IQR/.test(rt) : rt ? /±/.test(rt) : true; };
+        const mixed = cols.some(usePm) && !cols.every(usePm);
+        stats.forEach(([gi, vals]) => {
+          const lab = (t, first) => many ? [...(first ? [{ t: [gl[gi]], b: true, rs: 2 }] : []), { t: [t], b: true }] : [{ t: [t], b: true }];
+          trows.push([...lab(cols.every(usePm) ? 'Mean' : cols.some(usePm) ? 'Mean / median' : 'Median', true), ...vals.map((x, j) => ({ t: [x.length ? f2(usePm(cols[j]) ? S.mean(x) : S.median(x)) + (mixed && !usePm(cols[j]) ? ' (median)' : '') : ''] }))]);
+          trows.push([...lab(cols.every(usePm) ? 'SD' : cols.some(usePm) ? 'SD / IQR' : 'IQR'), ...vals.map((x, j) => ({ t: [x.length > 1 ? (usePm(cols[j]) ? f2(S.sd(x)) : `${f2(S.quantile(x, 0.25))} - ${f2(S.quantile(x, 0.75))}${mixed ? ' (IQR)' : ''}`) : ''] }))]); });
+        if (Object.keys(pm).length) trows.push([{ t: ['P value'], b: true, ...(many ? { span: 2 } : {}) }, ...cols.map(c => ({ t: [pm[c.label] ?? pm[String(c.label)] ?? ''], b: /\*/.test(pm[c.label] || '') }))]);
+        out.push({ kind: 'raw', title: `Raw data of ${sec.title.charAt(0).toLowerCase() === sec.title.charAt(0) ? sec.title : (/^[A-Z][a-z]+(\s|$)/.test(sec.title) ? sec.title.charAt(0).toLowerCase() + sec.title.slice(1) : sec.title)}`, head, rows: trows,
+          footnote: `Each row is one patient${within && sec.kind === 'repeated' ? ' with values at every timepoint' : ''}; ${cols.every(usePm) ? 'mean and standard deviation (SD)' : cols.some(usePm) ? 'mean and SD of normally distributed data, median and interquartile range (IQR) otherwise' : 'median and interquartile range (IQR)'} of each column${Object.keys(pm).length ? '; P values as in the table above' : ''}.`,
+          comment: '', figures: [], raw: true, ofTitle: sec.title });
+      });
+      sections.splice(0, sections.length, ...out);
     }
     // which figures go in the report: all, only those of significant results, or none
     if (opts.figures === 'none') sections.forEach(s => { s.figures = []; });

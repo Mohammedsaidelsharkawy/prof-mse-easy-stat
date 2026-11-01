@@ -26,7 +26,7 @@
     rmPost: 'first', rmAdjust: 'bonferroni', rmSph: 'gg', rmChange: 'none', rmPostAlways: false, rmAuc: false, rmIndividual: false,
     mwAdjust: 'none', chiAdjust: 'bonferroni', shadeSig: false, commentMagnitude: false, figFrame: false,
     sigLabel: 'stars', seriesStyle: 'colour', lineWeight: 'normal', errBars: 'both', gridStyle: 'solid', yTicks: 'normal',
-    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmAncova: false, rmSphReport: false, rmEachGroup: false, rmProfile: false, rmImpute: 'none', panelStyle: 'classic', axisSize: 'normal', titleSize: 'normal', valueSize: 'normal', boxMeanVal: false, figHeat: false, figForestAll: false, figPanels: false, figNormCurve: false, figRefBand: false, figUnitLine: false, figStackSort: false, figWatermark: '', capAbove: false, commentTpl: false, tplSig: '{Variable} differed significantly {groups} (P value {P}), being highest in {highest}.', tplNs: '{Variable} did not differ significantly {groups} (P value {P}).', varyWording: false, commentTone: 'standard', trendWord: false, nsCI: false, comMaxWords: '', boldSigText: false, phraseDict: '', keyFindings: false, absMaxWords: '', effConv: 'cohen', figRef: false, commentMerge: 'table', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
+    tableFontSize: '10', tableCapAlign: 'justify', tableWidth: '100', footExtra: '', rmLmm: false, rmTrend: false, rmAncova: false, rmSphReport: false, rmEachGroup: false, rawData: false, rmProfile: false, rmImpute: 'none', panelStyle: 'classic', axisSize: 'normal', titleSize: 'normal', valueSize: 'normal', boxMeanVal: false, figHeat: false, figForestAll: false, figPanels: false, figNormCurve: false, figRefBand: false, figUnitLine: false, figStackSort: false, figWatermark: '', capAbove: false, commentTpl: false, tplSig: '{Variable} differed significantly {groups} (P value {P}), being highest in {highest}.', tplNs: '{Variable} did not differ significantly {groups} (P value {P}).', varyWording: false, commentTone: 'standard', trendWord: false, nsCI: false, comMaxWords: '', boldSigText: false, phraseDict: '', keyFindings: false, absMaxWords: '', effConv: 'cohen', figRef: false, commentMerge: 'table', catLayout: 'merged', baselineNoP: false, postLetters: false, nCol: false, missCol: false, effectShow: 'all', tableGroupOrder: '', pColor: 'none', tableFont: 'same', decAlign: false, splitRows: '0', catTotal: false, confLevel: '95', alternative: 'two', npEffect: 'hl', effSize: 'auto', fdr: false, cltRule: false, exactSmall: false, ffh: false, groupTrend: false, completeCase: false, autoAbbr: false, labelLang: 'en', pageSize: 'a4', pageMargin: 'normal', lineSpacing: '1.5', pageNum: 'center', listTF: false, headerText: '', errColor: 'black', tableHead: 'auto', tableBands: false, firstColLeft: false, tablePad: 'normal', catFormat: 'npct',
     customColors: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B']
   };
   // option key → [element id, checkbox?]
@@ -47,7 +47,7 @@
     rmPost: ['optRmPost'], rmAdjust: ['optRmAdjust'], rmSph: ['optRmSph'], rmChange: ['optRmChange'], rmPostAlways: ['optRmPostAlways', true], rmAuc: ['optRmAuc', true], rmIndividual: ['optRmIndividual', true],
     mwAdjust: ['optMwAdjust'], chiAdjust: ['optChiAdjust'], shadeSig: ['optShadeSig', true], commentMagnitude: ['optCommentMagnitude', true], figFrame: ['optFigFrame', true],
     sigLabel: ['optSigLabel'], seriesStyle: ['optSeriesStyle'], lineWeight: ['optLineWeight'], errBars: ['optErrBars'], gridStyle: ['optGridStyle'], yTicks: ['optYTicks'],
-    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], panelStyle: ['optPanelStyle'], axisSize: ['optAxisSize'], titleSize: ['optTitleSize'], valueSize: ['optValueSize'], boxMeanVal: ['optBoxMeanVal', true], figHeat: ['optFigHeat', true], figForestAll: ['optFigForestAll', true], figPanels: ['optFigPanels', true], figNormCurve: ['optFigNormCurve', true], figRefBand: ['optFigRefBand', true], figUnitLine: ['optFigUnitLine', true], figStackSort: ['optFigStackSort', true], figWatermark: ['optFigWatermark'], capAbove: ['optCapAbove', true], commentTpl: ['optCommentTpl', true], tplSig: ['optTplSig'], tplNs: ['optTplNs'], varyWording: ['optVaryWording', true], commentTone: ['optCommentTone'], trendWord: ['optTrendWord', true], nsCI: ['optNsCI', true], comMaxWords: ['optComMaxWords'], boldSigText: ['optBoldSigText', true], phraseDict: ['optPhraseDict'], keyFindings: ['optKeyFindings', true], absMaxWords: ['optAbsMaxWords'], effConv: ['optEffConv'], figRef: ['optFigRef', true], commentMerge: ['optCommentMerge'], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmAncova: ['optRmAncova', true], rmSphReport: ['optRmSphReport', true], rmEachGroup: ['optRmEachGroup', true], rmProfile: ['optRmProfile', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
+    tableFontSize: ['optTableFontSize'], tableCapAlign: ['optTableCapAlign'], tableWidth: ['optTableWidth'], footExtra: ['optFootExtra'], rmLmm: ['optRmLmm', true], panelStyle: ['optPanelStyle'], axisSize: ['optAxisSize'], titleSize: ['optTitleSize'], valueSize: ['optValueSize'], boxMeanVal: ['optBoxMeanVal', true], figHeat: ['optFigHeat', true], figForestAll: ['optFigForestAll', true], figPanels: ['optFigPanels', true], figNormCurve: ['optFigNormCurve', true], figRefBand: ['optFigRefBand', true], figUnitLine: ['optFigUnitLine', true], figStackSort: ['optFigStackSort', true], figWatermark: ['optFigWatermark'], capAbove: ['optCapAbove', true], commentTpl: ['optCommentTpl', true], tplSig: ['optTplSig'], tplNs: ['optTplNs'], varyWording: ['optVaryWording', true], commentTone: ['optCommentTone'], trendWord: ['optTrendWord', true], nsCI: ['optNsCI', true], comMaxWords: ['optComMaxWords'], boldSigText: ['optBoldSigText', true], phraseDict: ['optPhraseDict'], keyFindings: ['optKeyFindings', true], absMaxWords: ['optAbsMaxWords'], effConv: ['optEffConv'], figRef: ['optFigRef', true], commentMerge: ['optCommentMerge'], catLayout: ['optCatLayout'], baselineNoP: ['optBaselineNoP', true], postLetters: ['optPostLetters', true], nCol: ['optNCol', true], missCol: ['optMissCol', true], effectShow: ['optEffectShow'], tableGroupOrder: ['optTableGroupOrder'], pColor: ['optPColor'], tableFont: ['optTableFont'], decAlign: ['optDecAlign', true], splitRows: ['optSplitRows'], catTotal: ['optCatTotal', true], confLevel: ['optConfLevel'], alternative: ['optAlternative'], npEffect: ['optNpEffect'], effSize: ['optEffSize'], fdr: ['optFdr', true], cltRule: ['optCltRule', true], exactSmall: ['optExactSmall', true], ffh: ['optFfh', true], groupTrend: ['optGroupTrend', true], completeCase: ['optCompleteCase', true], rmTrend: ['optRmTrend', true], rmAncova: ['optRmAncova', true], rmSphReport: ['optRmSphReport', true], rmEachGroup: ['optRmEachGroup', true], rawData: ['optRawData', true], rmProfile: ['optRmProfile', true], rmImpute: ['optRmImpute'], autoAbbr: ['optAutoAbbr', true], labelLang: ['optLabelLang'], pageSize: ['optPageSize'], pageMargin: ['optPageMargin'], lineSpacing: ['optLineSpacing'], pageNum: ['optPageNum'], listTF: ['optListTF', true], headerText: ['optHeaderText'], errColor: ['optErrColor'], tableHead: ['optTableHead'], tableBands: ['optTableBands', true], firstColLeft: ['optFirstColLeft', true], tablePad: ['optTablePad'], catFormat: ['optCatFormat']
   };
   const defaultOptions = () => ({ ...DEFAULT_OPTIONS, customColors: [...DEFAULT_OPTIONS.customColors] });
   // chart palette and drawing style from the options
@@ -907,31 +907,48 @@
   }
   $('#gridCheck').onclick = () => { if (toggleTool('checkBox')) renderCheck(); };
   /* ---------- recode values: rename, merge or blank the categories of a column ---------- */
+  // the kind of a column for the recode filter: categorical (text with few values, or number codes), yes/no, numeric, free text, dates
+  const ALL_CAT = '__allcat__';
+  function rcKind(col) {
+    const ci = columnInfo(state.data.rows, col), n = ci.distinct.length;
+    if (state.cfg && state.cfg.variables.some(v => v.type === 'categorical' && v.cols.some(c => c.col === col))) return n === 2 ? 'yesno' : 'cat';
+    if (n === 2) return 'yesno';
+    if (ci.numeric) return n <= 6 ? 'cat' : 'num';
+    if (dateShare(col, 'dmy') >= 0.6) return 'date';
+    return n <= 20 ? 'cat' : 'text';
+  }
   function renderRecode() {
-    const h = state.data.headers, col = h.includes($('#rcCol').value) ? $('#rcCol').value : (state.data.headers.find(x => columnInfo(state.data.rows, x).distinct.length <= 20 && !columnInfo(state.data.rows, x).numeric) || h[0]);
-    $('#rcCol').innerHTML = h.map(x => `<option ${x === col ? 'selected' : ''}>${esc(x)}</option>`).join('');
-    const cnt = new Map(); state.data.rows.forEach(r => { const v = r[col]; if (isMissing(v)) return; const k = String(v); cnt.set(k, (cnt.get(k) || 0) + 1); });
-    const list = [...cnt.entries()].sort((a, b) => b[1] - a[1]);
-    $('#rcTbl').innerHTML = `<thead><tr><th>Value in the sheet</th><th>Rows</th><th>New value</th><th>Blank</th></tr></thead><tbody>${list.slice(0, 200).map(([v, n], i) =>
-      `<tr><td class="mono">“${esc(v)}”</td><td>${n}</td><td><input type="text" data-rcv="${i}" value="${esc(v)}"></td><td><input type="checkbox" data-rcb="${i}"></td></tr>`).join('')}</tbody>`;
-    state.rcList = list.map(x => x[0]);
-    $('#rcInfo').textContent = `${list.length} different value${list.length === 1 ? '' : 's'}${list.length > 200 ? ' (first 200 shown)' : ''}`;
+    const h = state.data.headers, type = $('#rcType').value, kinds = Object.fromEntries(h.map(x => [x, rcKind(x)]));
+    const ok = x => type === 'all' || kinds[x] === type || (type === 'cat' && kinds[x] === 'yesno');
+    const shown = h.filter(ok), cats = h.filter(x => kinds[x] === 'cat' || kinds[x] === 'yesno');
+    const want = $('#rcCol').value, col = want === ALL_CAT && cats.length && (type === 'cat' || type === 'all') ? ALL_CAT : shown.includes(want) ? want : (shown.find(x => kinds[x] === 'cat' || kinds[x] === 'yesno') || shown[0] || h[0]);
+    $('#rcCol').innerHTML = (cats.length && (type === 'cat' || type === 'all') ? `<option value="${ALL_CAT}" ${col === ALL_CAT ? 'selected' : ''}>★ All categorical columns (${cats.length})</option>` : '') + shown.map(x => `<option ${x === col ? 'selected' : ''}>${esc(x)}</option>`).join('');
+    const cols = col === ALL_CAT ? cats : [col], list = [];
+    cols.forEach(c => { const cnt = new Map(); state.data.rows.forEach(r => { const v = r[c]; if (isMissing(v)) return; const k = String(v); cnt.set(k, (cnt.get(k) || 0) + 1); });
+      [...cnt.entries()].sort((a, b) => b[1] - a[1]).forEach(([v, n]) => list.push([c, v, n])); });
+    const many = cols.length > 1, lim = many ? 1000 : 200;
+    $('#rcTbl').innerHTML = `<thead><tr>${many ? '<th>Column</th>' : ''}<th>Value in the sheet</th><th>Rows</th><th>New value</th><th>Blank</th></tr></thead><tbody>${list.slice(0, lim).map(([c, v, n], i) =>
+      `<tr${many && i && list[i - 1][0] !== c ? ' style="border-top:2px solid var(--line)"' : ''}>${many ? `<td>${i && list[i - 1][0] === c ? '' : `<b>${esc(c)}</b>`}</td>` : ''}<td class="mono">“${esc(v)}”</td><td>${n}</td><td><input type="text" data-rcv="${i}" value="${esc(v)}"></td><td><input type="checkbox" data-rcb="${i}"></td></tr>`).join('')}</tbody>`;
+    state.rcList = list;
+    $('#rcInfo').textContent = many ? `${cols.length} categorical columns, ${list.length} categories${list.length > lim ? ` (first ${lim} shown)` : ''}` : `${list.length} different value${list.length === 1 ? '' : 's'}${list.length > lim ? ` (first ${lim} shown)` : ''}`;
   }
   $('#gridRecode').onclick = () => { if (toggleTool('recodeBox')) renderRecode(); };
-  $('#rcCol').onchange = renderRecode;
+  $('#rcCol').onchange = renderRecode; $('#rcType').onchange = () => { $('#rcCol').value = ''; renderRecode(); };
   $('#rcTitle').onclick = () => document.querySelectorAll('[data-rcv]').forEach(el => { const t = el.value.trim(); if (/[a-z]/i.test(t) && !/\d/.test(t)) el.value = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase(); });
   $('#rcGo').onclick = () => {
-    const col = $('#rcCol').value, map = new Map();
-    document.querySelectorAll('[data-rcv]').forEach(el => { const i = +el.dataset.rcv, old = state.rcList[i], blank = document.querySelector(`[data-rcb="${i}"]`).checked;
-      const nv = blank ? null : parseCell(el.value); if (blank || String(nv ?? '') !== old) map.set(old, nv); });
-    if (!map.size) { toast('Nothing to change — type new values or tick blank'); return; }
+    const maps = new Map();
+    document.querySelectorAll('[data-rcv]').forEach(el => { const i = +el.dataset.rcv, [col, old] = state.rcList[i], blank = document.querySelector(`[data-rcb="${i}"]`).checked;
+      const nv = blank ? null : parseCell(el.value); if (blank || String(nv ?? '') !== old) { if (!maps.has(col)) maps.set(col, new Map()); maps.get(col).set(old, nv); } });
+    if (!maps.size) { toast('Nothing to change — type new values or tick blank'); return; }
     let n = 0;
     editSheet(() => {
-      state.data.rows.forEach(r => { const v = r[col]; if (!isMissing(v) && map.has(String(v))) { r[col] = map.get(String(v)); n++; } });
-      if (state.cfg) { if (col === state.cfg.groupCol) refreshGroups();
-        state.cfg.variables.forEach(v => { if (v.type === 'categorical' && v.cols.some(c => c.col === col)) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); }
+      maps.forEach((map, col) => {
+        state.data.rows.forEach(r => { const v = r[col]; if (!isMissing(v) && map.has(String(v))) { r[col] = map.get(String(v)); n++; } });
+        if (state.cfg) { if (col === state.cfg.groupCol) refreshGroups();
+          state.cfg.variables.forEach(v => { if (v.type === 'categorical' && v.cols.some(c => c.col === col)) v.levels = defaultLevels(columnInfo(state.data.rows, v.cols[0].col).distinct); }); }
+      });
     });
-    renderRecode(); toast(`${n} cell${n === 1 ? '' : 's'} recoded in ${col}`);
+    renderRecode(); const names = [...maps.keys()]; toast(`${n} cell${n === 1 ? '' : 's'} recoded in ${names.length > 2 ? names.length + ' columns' : names.join(' and ')}`);
   };
 
   /* ---------- step 1, more tools: column menu, widths, rules, duplicates, missing data, dates, anonymising, snapshots, log, form ---------- */

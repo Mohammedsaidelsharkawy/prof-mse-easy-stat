@@ -39,7 +39,7 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 .ux-menu .btn:hover,.ux-menu .btn:focus-visible{background:var(--lav)!important}
 .top-actions .ux-saved{color:#fff}
 @media (max-width:1500px){.top-actions .ux-saved{display:none}}
-@media (max-width:1280px){.top-actions > .btn .tl,.top-actions > label.btn .tl{display:none}.top-actions{gap:6px}}
+@media (max-width:1480px){.top-actions > .btn:not(.ux-word) .tl,.top-actions > label.btn .tl{display:none}.top-actions{gap:6px}}
 @media (max-width:640px){.brand h1{font-size:17px}.logo{width:40px;height:40px}}
 .brand{flex-shrink:0}
 .pulse{height:4px;background:linear-gradient(90deg,var(--purple),#C9A2EC,var(--purple));background-size:200% 100%;animation:pulse 6s linear infinite}
@@ -582,6 +582,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
             <label class="check" style="margin:0"><input type="checkbox" id="gridSummary"><span>Column summary</span></label>
             <span class="spacer"></span>
             <button class="btn ghost small" id="gridEdit" type="button">✎ Edit sheet</button>
+            <button class="btn ghost small" id="gridSave" type="button" title="Download the sheet as it is now (with your edits) as an Excel file">⬇ Edited Excel</button>
           </div>
           <div class="row grid-bar" id="gridViewBar">
             <label class="f" style="margin:0">Density</label>
@@ -620,6 +621,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div class="gtool" id="checkBox" style="display:none"></div>
       <div class="gtool" id="recodeBox" style="display:none">
         <div class="row" style="gap:10px;align-items:flex-end">
+          <div><label class="f">Type of variable</label><select id="rcType" style="width:auto"><option value="cat" selected>Categorical (incl. yes/no)</option><option value="yesno">Yes / no (two values)</option><option value="num">Numeric</option><option value="text">Free text</option><option value="date">Dates</option><option value="all">All columns</option></select></div>
           <div><label class="f">Column</label><select id="rcCol" style="width:auto"></select></div>
           <button class="btn ghost small" id="rcTitle" type="button" style="margin-bottom:6px" title="male → Male, YES → Yes">Aa Capitalise all</button>
           <span class="legend-note" style="margin-bottom:8px">Type a new value to rename; give several values the same new value to merge them; tick “blank” to make them missing.</span>
@@ -703,7 +705,6 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
             <button class="btn ghost small" id="gridUndo" type="button" title="Undo (Ctrl+Z)">↶ Undo</button>
             <button class="btn ghost small" id="gridRedo" type="button" title="Redo (Ctrl+Y)">↷ Redo</button>
             <button class="btn ghost small" id="gridRedetect" type="button" title="Detect variables again from the edited sheet">⟳ Re-detect variables</button>
-            <button class="btn ghost small" id="gridSave" type="button">⬇ Edited Excel</button>
             <button class="btn ghost small" id="gridCsv" type="button">⬇ CSV</button>
           </div>
           <div class="tbl-wrap" style="max-height:480px"><table class="t dgrid" id="preview"></table></div>
@@ -1087,6 +1088,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optUnitsInText" checked><span><b>Units after the values</b> — taken from the variable name or label, e.g. Age (years) → 58.7 ± 7.6 years, CRP_mg_L → 12.4 mg/L</span></label>
           <label class="check"><input type="checkbox" id="optCommentEffect"><span><b>Effect sizes in comments</b> — the difference or RR/OR with 95% CI for significant two-group comparisons</span></label>
           <label class="check"><input type="checkbox" id="optCommentMagnitude"><span><b>Size of each significant effect</b> — Cohen's d, r, η² or Cramér's V, labelled small, medium or large</span></label>
+          <label class="check"><input type="checkbox" id="optRawData"><span><b>Raw data with each table</b> — after each table of numeric results (and each repeated-measures table), a table of every patient's values with the mean and SD (or median and IQR) and the P value of each column</span></label>
           <label class="check"><input type="checkbox" id="optSummary"><span><b>Summary of key findings</b> — a closing paragraph listing every significant result</span></label>
           <label class="check"><input type="checkbox" id="optKeyFindings"><span><b>Numbered key findings</b> under each table's comment (Word)</span></label>
         </div>
@@ -1411,7 +1413,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Department, university</label><input type="text" data-rx="coverDept"></div>
           <div><label class="f">Date</label><input type="text" data-rx="coverDate" placeholder="e.g. October 2026"></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="toc"><span><b>Table of contents</b> (Word fills it in)</span></label></div>
-          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="wordStyles"><span><b>Word heading styles only</b> — a thesis template restyles them</span></label></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="wordStyles"><span><b>Formatting by Word styles</b> — Heading 1, Heading 2, Normal, Caption, Table Text and Table Note carry the look, so changing a style in Word (or a thesis template) restyles the whole report</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="headNum"><span><b>Numbered subheadings</b> (4.1, 4.2 …, thesis)</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="lineNumbers"><span><b>Line numbers</b> (journal submission)</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="twoCol"><span><b>Two columns</b></span></label></div>

@@ -36,7 +36,8 @@ const Report = (() => {
   function plainRuns(text, o = {}) {
     const { TextRun } = D();
     // with a Word template the body text takes the template's font and size (only explicit sizes, e.g. of tables, stay)
-    const mk = (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || (TEMPLATE ? undefined : 24), font: o.font || (TEMPLATE ? undefined : BODY_FONT), color: o.color });
+    const mk = o.styled ? (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size, color: o.color })
+      : (t, it) => new TextRun({ text: t, bold: o.bold, italics: o.italic || it, size: o.size || (TEMPLATE ? undefined : 24), font: o.font || (TEMPLATE ? undefined : BODY_FONT), color: o.color });
     if (!ITALIC_P || !text) return [mk(text || '')];
     if (/^[pP]( value| Value)?$/.test(text)) return [mk(text[0], true), ...(text.length > 1 ? [mk(text.slice(1))] : [])];
     const out = [], re = /(?<![A-Za-z])[pP](?=\s?(?:value\s?)?[=<>≤])/g;
@@ -53,8 +54,22 @@ const Report = (() => {
   };
 
   let LINE = 360; // body text line spacing (240 = single, 360 = 1.5 lines), set per build
+  // formatting by Word styles (step 11, without a template): body text = Normal, captions = Caption, tables = Table Text, table notes = Table Note,
+  // headings = Heading 1 / 2 — the look lives in the styles, so changing a style in Word changes every paragraph that uses it
+  let STYLED = false, TT_SZ = 20;
+  const STYLE_ALIGN = { Caption: 'center', CaptionTitle: 'left', TableText: 'center', TableNote: 'both' };
+  function styledPara(text, o) {
+    const { Paragraph } = D(), st = o.pStyle, al = st ? STYLE_ALIGN[st] : 'both';
+    const explicit = o.after !== undefined || o.before !== undefined || o.line !== undefined;
+    return new Paragraph({ ...(st ? { style: st } : {}), ...(o.align && o.align !== al ? { alignment: o.align } : {}),
+      ...(!st && explicit ? { spacing: { after: o.after ?? 160, line: o.line ?? LINE, lineRule: D().LineRuleType.AUTO, before: o.before ?? 0 } } : {}),
+      keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
+      children: [...runs(text, { ...o, styled: true, bold: o.styleBold ? undefined : o.bold, size: undefined }),
+        ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, styled: true, bold: false, size: undefined }) : [])] });
+  }
   function para(text, o = {}) {
     const { Paragraph, TextRun, AlignmentType } = D();
+    if (STYLED && (o.pStyle || o.size === undefined)) return styledPara(text, o);
     return new Paragraph({
       alignment: o.align || AlignmentType.JUSTIFIED,
       spacing: TEMPLATE && o.line === undefined ? { after: o.after ?? 160, before: o.before ?? 0 } : { after: o.after ?? 160, line: o.line ?? LINE, before: o.before ?? 0 },
@@ -68,6 +83,7 @@ const Report = (() => {
   function commentPara(text, o = {}) {
     if (!o.boldSig) return para(text, o);
     const { Paragraph, AlignmentType } = D(), ss = String(text).match(SENT) || [text];
+    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) })) });
     return new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { after: 160, line: LINE }, keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) })) });
   }
@@ -109,20 +125,20 @@ const Report = (() => {
   }
   function caption(text, o = {}) {
     const { AlignmentType } = D();
-    return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true, cap: true, ...o });
+    return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true, cap: true, pStyle: STYLED ? 'Caption' : undefined, styleBold: true, ...o });
   }
   // APA: the number in bold on its own line, the title in italics below it, both left-aligned
   function apaCaption(label, title, o = {}) {
     const { AlignmentType } = D();
-    return [para(label, { bold: true, align: AlignmentType.LEFT, after: 0, line: 276, keepNext: true, pageBreakBefore: o.pageBreakBefore, cap: true }),
-      para(title, { italic: true, align: AlignmentType.LEFT, after: 120, line: 276, keepNext: true })];
+    return [para(label, { bold: true, align: AlignmentType.LEFT, after: 0, line: 276, keepNext: true, pageBreakBefore: o.pageBreakBefore, cap: true, pStyle: STYLED ? 'Caption' : undefined, styleBold: true }),
+      para(title, { italic: true, align: AlignmentType.LEFT, after: 120, line: 276, keepNext: true, pStyle: STYLED ? 'CaptionTitle' : undefined })];
   }
   // alternative text of the figures (screen readers), when chosen in step 11: the caption of the figure
   let ALT = false;
   function image(dataUrl, srcW, srcH, widthPx = 600, keepNext = true, alt = '') {
     const { Paragraph, ImageRun, AlignmentType } = D();
     return new Paragraph({
-      alignment: AlignmentType.CENTER, spacing: { after: 80 }, keepNext,
+      alignment: AlignmentType.CENTER, spacing: STYLED ? { after: 80, line: 240, lineRule: D().LineRuleType.AUTO } : { after: 80 }, keepNext,
       children: [new ImageRun({ type: 'png', data: dataUrlToBytes(dataUrl), transformation: { width: widthPx, height: Math.round(widthPx * srcH / srcW) }, ...(ALT && alt ? { altText: { title: String(alt).slice(0, 120), description: String(alt), name: 'Figure' } } : {}) })]
     });
   }
@@ -178,7 +194,10 @@ const Report = (() => {
         verticalAlign: VerticalAlign.CENTER, borders: apa ? apaBorders(isHead, isLast) : gridBorders,
         margins: { top: padV, bottom: padV, left: padH, right: padH },
         shading: isHead && !apa ? (headFill ? { type: ShadingType.CLEAR, color: 'auto', fill: headFill } : undefined) : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : band ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F2F2F2' } : undefined,
-        children: lines.map(l => new Paragraph({
+        children: lines.map(l => STYLED ? (() => { const al = dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left ? AlignmentType.LEFT : null, csz = cell.small ? sz - 3 : sz;
+            return new Paragraph({ style: 'TableText', ...(al ? { alignment: al } : {}), ...(dec ? { tabStops: [{ type: D().TabStopType.DECIMAL, position: Math.max(200, Math.round(w / 2 - padH)) }] } : {}),
+              children: runs((dec ? '\t' : '') + String(l), { styled: true, bold: isHead || cell.b, size: csz === TT_SZ ? undefined : csz,
+                color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : PCOL && sigRe && !isHead && sigRe.test(String(l)) ? PCOL : undefined }) }); })() : new Paragraph({
           alignment: dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 },
           ...(dec ? { tabStops: [{ type: D().TabStopType.DECIMAL, position: Math.max(200, Math.round(w / 2 - padH)) }] } : {}),
           children: runs((dec ? '\t' : '') + String(l), { bold: isHead || cell.b, size: cell.small ? sz - 3 : sz, font: look.font,
@@ -261,7 +280,7 @@ const Report = (() => {
     if (opts.twoCol) PAGE_W = Math.floor((PAGE_W - 708) / 2); // tables and figures fit one column
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [], footnotes = {};
-    TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE;
+    TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE; STYLED = !!opts.wordStyles && !TEMPLATE; TT_SZ = 2 * (+(opts.tableLook || {}).size || 10);
     // bilingual: AR gives the Arabic of a paragraph, heading, caption, footnote or column heading
     const AR = opts.ar || null, arAfter = (text, o) => { if (AR && text) { const t = AR.text(text); if (t) children.push(arPara(t, o)); } };
     const H1 = (t, b) => heading(AR && AR.heading(t) ? `${t} — ${AR.heading(t)}` : t, b);
@@ -365,7 +384,7 @@ const Report = (() => {
           if (pi > 0) { const cont = `${num} (continued)`; children.push(opts.tableCaption === 'apa' ? para(cont, { bold: true, align: D().AlignmentType.LEFT, after: 120, line: 276, keepNext: true, before: 200 }) : caption(cont, { before: 200, align: D().AlignmentType.LEFT })); }
           children.push(table(headAr, part, brand, opts.tableStyle, opts.tableLook));
         });
-        children.push(para(s.footnote, { size: 18, line: 240, after: 160, before: 60 }));
+        children.push(para(s.footnote, STYLED ? { pStyle: 'TableNote' } : { size: 18, line: 240, after: 160, before: 60 }));
         if (AR && s.footnote) children.push(arPara(AR.footnote(s.footnote), { size: 18, line: 240, after: 160 }));
         if (s.comment && !merged && (cp || 'after') === 'after') { children.push(commentPara(figRef(s, s.comment), { boldSig: opts.boldSigText })); arAfter(s.comment); }
         if (!merged && opts.commentPlace !== 'none') children.push(...findings(s));
@@ -421,7 +440,13 @@ const Report = (() => {
       title: opts.title || 'Statistical report',
       ...(opts.toc ? { features: { updateFields: true } } : {}),
       ...(Object.keys(footnotes).length ? { footnotes } : {}),
-      styles: { default: { document: { run: { font: BODY_FONT, size: 24 } } }, ...(WORD_STYLES ? { paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120)] } : {}) },
+      styles: STYLED ? { default: { document: { run: { font: BODY_FONT, size: 24 }, paragraph: { alignment: AlignmentType.JUSTIFIED, spacing: { after: 160, line: LINE, lineRule: D().LineRuleType.AUTO } } } },
+        paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120),
+          { id: 'Caption', name: 'caption', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
+          { id: 'CaptionTitle', name: 'Caption Title', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { italics: true }, paragraph: { alignment: AlignmentType.LEFT, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
+          { id: 'TableText', name: 'Table Text', basedOn: 'Normal', quickFormat: true, run: { size: TT_SZ, ...((opts.tableLook || {}).font ? { font: opts.tableLook.font } : {}) }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240, lineRule: D().LineRuleType.AUTO } } },
+          { id: 'TableNote', name: 'Table Note', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { size: 18 }, paragraph: { spacing: { before: 60, after: 160, line: 240, lineRule: D().LineRuleType.AUTO } } }] }
+        : { default: { document: { run: { font: BODY_FONT, size: 24 } } }, ...(WORD_STYLES ? { paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120)] } : {}) },
       sections: parts.filter(pt => pt.kids.length).map(pt => ({
         properties: { page: { size: pt.land ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 }, margin: { top: mg, bottom: mg, left: mg, right: mg } },
           // line numbers for journal submission, and a two-column layout
@@ -445,7 +470,7 @@ const Report = (() => {
   // results by variable: every table of each variable, with its figure, in a landscape document
   async function buildResults(model, opts) {
     const { Document, Packer, Paragraph, TextRun, Footer, AlignmentType, PageNumber, PageOrientation } = D();
-    BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false; ALT = false; AUTO = false;
+    BODY_FONT = opts.font || DEFAULT_FONT; ITALIC_P = false; ALT = false; AUTO = false; STYLED = false;
     PAGE_W = LANDSCAPE_W; LINE = 360;
     const children = [para(opts.title || 'Results by variable', { bold: true, size: 32, align: AlignmentType.CENTER, after: 120 })];
     if (opts.subtitle) children.push(para(opts.subtitle, { align: AlignmentType.CENTER, size: 20, after: 240 }));
