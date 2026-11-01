@@ -1406,6 +1406,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Watermark in the header</label><input type="text" data-rx="watermark" placeholder="e.g. DRAFT"></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="abbrFoot"><span><b>Abbreviations as footnotes</b> in the statistical analysis</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="refs"><span><b>References</b> of the statistical methods used</span></label></div>
+          <div><label class="f">Citations in the text (with References)</label><select data-rx="citeText"><option value="">None</option><option value="vancouver">Numbered [1] (Vancouver)</option><option value="apa">(Author, year) (APA)</option></select></div>
           <div><label class="f">Reporting checklist (appendix)</label><select data-rx="checklist"><option value="">None</option><option value="consort">CONSORT 2010</option><option value="strobe">STROBE</option></select></div>
           <div><label class="f">Word limit of Results (warning)</label><input type="number" min="0" step="50" data-rx="wordLimit" placeholder="none"></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="altText"><span><b>Alternative text</b> of the figures (screen readers)</span></label></div>
@@ -1427,11 +1428,14 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <button class="btn ghost small" id="btnReview" type="button" title="The report text with your edits as tracked changes and the 💬 comments as Word comments">⬇ Review copy (tracked changes)</button>
           <button class="btn ghost small" id="btnSupp" type="button" title="Every statistic and test of each variable, as a separate Word file">⬇ Supplementary file</button>
           <button class="btn ghost small" id="btnOnePage" type="button" title="Key findings, the key figure and a plain-language summary on one page">⬇ One-page summary</button>
-          <button class="btn ghost small" id="btnGA" type="button" title="Design, key finding and key figure in one landscape picture">⬇ Graphical abstract</button>
+          <span class="row" style="gap:4px"><select id="gaLayout" style="width:auto" title="Graphical abstract layout"><option value="landscape">Landscape</option><option value="portrait">Portrait</option><option value="square">Square (social media)</option></select><button class="btn ghost small" id="btnGA" type="button" title="Design, key finding and key figure in one picture">⬇ Graphical abstract</button></span>
           <button class="btn ghost small" id="btnRis" type="button" title="The references of the methods, for EndNote, Zotero or Mendeley">⬇ References (RIS)</button>
           <button class="btn ghost small" id="btnGdocs" type="button" title="Copy the report with its tables, to paste into Google Docs">⧉ Copy for Google Docs</button>
           <button class="btn ghost small" id="btnAbs" type="button" title="Background, methods, results and conclusion with word counts">Structured abstract</button>
           <button class="btn ghost small" id="btnLay" type="button" title="The results in plain words, for patients and the public">Plain-language summary</button>
+          <button class="btn ghost small" id="btnMethFull" type="button" title="Design and setting, participants, sample size, outcomes and statistical analysis">Full methods section</button>
+          <button class="btn ghost small" id="btnSap" type="button" title="A statistical analysis plan from the setup (kept in the project)">⬇ SAP</button><button class="btn ghost small" id="btnSapCmp" type="button" title="The analysis now against the SAP">Compare with the SAP</button>
+          <button class="btn ghost small" id="btnRvResp" type="button" title="Reviewer comments split into points, a response for each, and a response letter">Response to reviewers</button>
           <button class="btn ghost small" id="btnAccess" type="button" title="Alternative text, captions, text size, colours, headings, sentence length">♿ Accessibility check</button>
           <span class="row" style="gap:4px"><input type="text" id="clJournal" placeholder="Journal name" style="width:150px"><button class="btn ghost small" id="btnLetter" type="button" title="A cover letter to the editor from the title and the key finding">⬇ Cover letter</button></span>
           <span class="spacer"></span><button class="btn ghost small" id="repSnapSave" type="button">📸 Save a snapshot of the text</button><select id="repSnapList" style="width:auto"></select><button class="btn ghost small" id="repSnapCmp" type="button">Compare with the report now</button>
@@ -35287,7 +35291,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: false, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, appFull: false, thesisPage: '', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
+  const DEFAULT_REPORT = { bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: false, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, appFull: false, thesisPage: '', citeText: '', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
   // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
   const JOURNAL_STYLES = {
     none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
@@ -35302,6 +35306,13 @@ if (typeof module !== 'undefined') module.exports = Sav;
     lancet: { name: 'The Lancet', note: 'p=0·013 with the mid-line decimal point (0·5); mean (SD); IQR as 25–30.',
       o: { pWord: 'p', pHead: 'p value', pLead: 1, meanStyle: 'paren', iqrStyle: 'endash', tableCaption: 'colon', captionStyle: 'colon', midDot: true } }
   };
+  Object.assign(JOURNAL_STYLES, {
+    bmj: { name: 'BMJ', note: 'P=0.01 (no spaces), mean (SD), median (IQR); “Table 1” and “Figure 1”. Set the word limit and the number of tables and figures from the current instructions to authors.',
+      o: { pWord: 'P', pHead: 'P value', pLead: 1, meanStyle: 'paren', iqrStyle: 'endash', tableCaption: 'period', captionStyle: 'period' } },
+    plos: { name: 'PLOS ONE', note: 'P = 0.01; mean (SD); “Table 1.” / “Fig 1.”; figures as TIFF or EPS at 300–600 dpi (⬇ Figures). No strict word limit; reporting checklists are expected.',
+      o: { pWord: 'p', pHead: 'p-value', pLead: 1, meanStyle: 'paren', iqrStyle: 'endash', tableCaption: 'period', captionStyle: 'fig' } },
+    frontiers: { name: 'Frontiers', note: 'p = 0.01 (italic p); mean ± SD; “Table 1” and “Figure 1”; figures at 300 dpi or vector (EPS). Check the article-type limits in the instructions to authors.',
+      o: { pWord: 'p', pHead: 'p-value', pLead: 1, meanStyle: 'pm', iqrStyle: 'endash', tableCaption: 'period', captionStyle: 'period', italicP: true } } });
   $('#fmtStyle').innerHTML = Object.entries(JOURNAL_STYLES).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
   // the format adjusts a copy of the options; the options of steps 4–9 are never changed
   const FORMAT_PRESETS = {
@@ -35500,15 +35511,18 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const keySection = r => { const prim = state.cfg.variables.filter(v => v.role === 'primary').map(v => v.label); return r.sections.find(s => prim.some(l => s.title.includes(l)) && s.figures.length) || r.sections.find(s => s.figures.some(f => f.sig) && s.kind !== 'single') || r.sections.find(s => s.figures.length) || r.sections[0]; };
   // graphical abstract: one landscape picture with the question, the patients, the key figure and the key finding
   function graphicalAbstract() {
-    if (!state.result) return; syncEdits(); const r = state.result, W = 2400, H = 1350, c = Charts.makeCanvas(W, H), x = c.getContext('2d'), acc = ((pn => Array.isArray(pn) ? pn : Charts.PALETTES[pn] || [])(chartPalette(state.cfg.options))[0]) || '#7B2FBE', font = '"Segoe UI", Arial, sans-serif';
+    if (!state.result) return; syncEdits(); const lay = ($('#gaLayout') || {}).value || 'landscape', [W, H] = { landscape: [2400, 1350], portrait: [1350, 2400], square: [1800, 1800] }[lay] || [2400, 1350], r = state.result, c = Charts.makeCanvas(W, H), x = c.getContext('2d'), acc = ((pn => Array.isArray(pn) ? pn : Charts.PALETTES[pn] || [])(chartPalette(state.cfg.options))[0]) || '#7B2FBE', font = '"Segoe UI", Arial, sans-serif';
     const wrap = (t, X, Y, w, lh, maxLines = 99) => { const ws = String(t).split(/\s+/); let line = '', n = 0; for (const wd of ws) { const tt = line ? line + ' ' + wd : wd; if (x.measureText(tt).width > w && line) { if (n < maxLines) x.fillText(line, X, Y + n * lh); n++; line = wd; } else line = tt; } if (line && n < maxLines) { x.fillText(line, X, Y + n * lh); n++; } return n * lh; };
     x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.fillStyle = acc; x.fillRect(0, 0, W, 170);
     x.fillStyle = '#fff'; x.font = `700 58px ${font}`; x.textBaseline = 'top'; wrap(state.cfg.study.title || 'Study results', 60, 30, W - 120, 66, 2);
     const box = (X, Y, w, h, head, body) => { x.fillStyle = '#F6F2FB'; x.beginPath(); x.roundRect(X, Y, w, h, 24); x.fill(); x.fillStyle = acc; x.font = `700 40px ${font}`; x.fillText(head, X + 30, Y + 26); x.fillStyle = '#222'; x.font = `400 34px ${font}`; wrap(body, X + 30, Y + 90, w - 60, 44, Math.floor((h - 110) / 44)); };
-    box(60, 220, 700, 330, 'Design', `${cap1(studyDesign())}; ${groupsTxt()}.`);
-    const ks = keySection(r), f = ks && ks.figures[0]; box(60, 590, 700, 700, 'Key finding', keySents(ks ? ks.comment : r.summary).slice(0, 2).join(' ') || '—');
-    if (f && f.url) { const im = new Image(); im.onload = () => { const w = W - 920, h = Math.min(H - 300, w * f.h / f.w); x.drawImage(im, 860, 220 + (H - 260 - h) / 2, w, h); x.fillStyle = '#555'; x.font = `italic 400 28px ${font}`; x.fillText(f.caption.slice(0, 120), 860, H - 60); done(); }; im.src = f.url; } else done();
-    function done() { x.fillStyle = '#888'; x.font = `400 24px ${font}`; x.fillText('Made with Prof MSE Easy Stat', W - 420, H - 40); saveUrl(c.toDataURL('image/png'), `${baseName()} - Graphical abstract.png`); toast('Graphical abstract saved'); }
+    // landscape: the boxes on the left, the figure on the right; portrait and square: the boxes above the figure
+    const wide = lay === 'landscape', bw = wide ? 700 : (W - 160) / 2, ks = keySection(r), f = ks && ks.figures[0];
+    box(60, 220, bw, wide ? 330 : 520, 'Design', `${cap1(studyDesign())}; ${groupsTxt()}.`);
+    box(wide ? 60 : 100 + bw, wide ? 590 : 220, bw, wide ? 700 : 520, 'Key finding', keySents(ks ? ks.comment : r.summary).slice(0, 2).join(' ') || '—');
+    const fx = wide ? 860 : 60, fy = wide ? 220 : 790, fwMax = wide ? W - 920 : W - 120, fhMax = wide ? H - 300 : H - fy - 110;
+    if (f && f.url) { const im = new Image(); im.onload = () => { let w = fwMax, h = w * f.h / f.w; if (h > fhMax) { h = fhMax; w = h * f.w / f.h; } x.drawImage(im, fx + (fwMax - w) / 2, fy + (fhMax - h) / 2, w, h); x.fillStyle = '#555'; x.font = `italic 400 28px ${font}`; x.fillText(f.caption.slice(0, 120), fx, H - 60); done(); }; im.src = f.url; } else done();
+    function done() { x.fillStyle = '#888'; x.font = `400 24px ${font}`; x.fillText('Made with Prof MSE Easy Stat', W - 420, H - 40); saveUrl(c.toDataURL('image/png'), `${baseName()} - Graphical abstract (${lay}).png`); toast('Graphical abstract saved'); }
   }
   const cap1 = t => t ? t[0].toUpperCase() + t.slice(1) : t;
   // cover letter to a journal editor
@@ -35580,11 +35594,95 @@ if (typeof module !== 'undefined') module.exports = Sav;
 document.querySelectorAll('.report-sec').forEach(function(s){var h=s.querySelector('h3,.cap');if(!h)return;h.style.cursor='pointer';h.title='Click to fold';h.onclick=function(){[].slice.call(s.children).forEach(function(c){if(c!==h&&!c.contains(h))c.style.display=c.style.display==='none'?'':'none';});};});
 document.querySelectorAll('table').forEach(function(t){var hs=t.querySelectorAll('thead th');hs.forEach(function(th,ci){th.style.cursor='pointer';th.title='Sort';th.onclick=function(){var tb=t.tBodies[0];if(!tb)return;var rs=[].slice.call(tb.rows),d=th.dataset.d==='1'?-1:1;th.dataset.d=d===1?'1':'0';rs.sort(function(a,b){var x=(a.cells[ci]||{}).textContent||'',y=(b.cells[ci]||{}).textContent||'',nx=parseFloat(x),ny=parseFloat(y);return(isNaN(nx)||isNaN(ny)?x.localeCompare(y):nx-ny)*d;});rs.forEach(function(r){tb.appendChild(r);});};});});
 document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';im.onclick=function(){var o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:9;cursor:zoom-out';var b=im.cloneNode();b.style.cssText='max-width:95vw;max-height:95vh;background:#fff';o.appendChild(b);o.onclick=function(){o.remove();};document.body.appendChild(o);};});})();<\/script>`;
+  /* ---------- report and writing tools: tables merged, citations in the text, full methods, SAP, reviewer responses ---------- */
+  // two tables merged into one (same columns), the second introduced by a sub-heading row; chosen with "⇲ Merge with the next table"
+  function mergeTables(res) {
+    const pairs = state.cfg.mergeTables || []; if (!pairs.length) return;
+    pairs.forEach(([k1, k2]) => { const i = res.sections.findIndex(s => s.title === k1), j = res.sections.findIndex(s => s.title === k2); if (i < 0 || j < 0) return;
+      const a = res.sections[i], b = res.sections[j], nc = h => h.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0); if (nc(a.head) !== nc(b.head)) return;
+      const sub = t => [{ t: [t], b: true, span: nc(a.head) }];
+      const foot = [...new Set([a.footnote, b.footnote].filter(Boolean).flatMap(f => f.replace(/\.\s*$/, '').split(/,\s+(?=[^,]{1,40}:)/)))].join(', ');
+      res.sections[i] = { ...a, title: `${a.title.replace(/\s+of the studied (groups|patients)$/, '')} and ${lowerFirstA(b.title)}`, rows: [sub(a.title), ...a.rows, sub(b.title), ...b.rows], footnote: foot ? foot + '.' : '', comment: [a.comment, b.comment].filter(Boolean).join(' '), figures: [...a.figures, ...b.figures], merged: [k1, k2] };
+      res.sections.splice(j, 1); });
+  }
+  const lowerFirstA = t => t && /^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t;
+  // citations in the statistical analysis: [1] (Vancouver) or (Author, year) (APA) at the end of the sentence naming the method
+  function citeMethods(methods, style) {
+    const hits = METHOD_REFS.map(([re, ref]) => { const m = re.exec(methods); return m ? { at: m.index, ref } : null; }).filter(Boolean).sort((a, b) => a.at - b.at);
+    if (!hits.length) return { text: methods, refs: [] };
+    const apa = ref => { const au = ref.split('. ')[0].split(/,\s*/).map(x => x.trim().split(' ')[0]), y = (/(\d{4})/.exec(ref) || [, 'n.d.'])[1]; return `${au.length === 1 ? au[0] : au.length === 2 ? `${au[0]} & ${au[1]}` : `${au[0]} et al.`}, ${y}`; };
+    const ends = []; const sentEnd = at => { const m = /[.!?](\s|$)/.exec(methods.slice(at)); return m ? at + m.index : methods.length; };
+    hits.forEach((h, k) => { const e = sentEnd(h.at); let g = ends.find(x => x.e === e); if (!g) { g = { e, ids: [] }; ends.push(g); } g.ids.push(k); });
+    let out = methods; ends.sort((a, b) => b.e - a.e).forEach(g => { const c = style === 'apa' ? ` (${g.ids.map(k => apa(hits[k].ref)).join('; ')})` : ` [${g.ids.map(k => k + 1).join(',')}]`; out = out.slice(0, g.e) + c + out.slice(g.e); });
+    const refs = hits.map(h => h.ref); return { text: out, refs: style === 'apa' ? refs.slice().sort() : refs };
+  }
+  // a full methods section from the setup: design and setting, participants, sample size, outcomes, statistical analysis
+  function fullMethods() {
+    const r = state.result, cfg = state.cfg, mi = cfg.methodsInfo || {}, c = cfg.consort || {}, rp = report();
+    const prim = cfg.variables.filter(v => v.include && v.role === 'primary').map(v => lowerFirst(plain2(v.label))), sec = cfg.variables.filter(v => v.include && v.role === 'secondary').map(v => lowerFirst(plain2(v.label)));
+    const ex = (c.excluded || []).filter(e => +e.n > 0 && !e.sub).map(e => `${lowerFirst(e.text)} (n=${e.n})`), ss = r.sections.find(s => s.kind === 'ssize');
+    const parts = [['Study design and setting', `This was a ${studyDesign()}${mi.setting ? ` conducted at ${mi.setting}` : ''}${mi.period ? ` between ${mi.period}` : ''}.${mi.ethics ? ` ${mi.ethics}` : ' The study was approved by the institutional ethics committee, and written informed consent was obtained from every participant.'}`],
+      ['Participants', `${mi.inclusion ? `Patients were eligible if ${mi.inclusion}.` : `${groupsTxt()} were included.`}${mi.exclusion ? ` Patients were excluded if ${mi.exclusion}.` : ex.length ? ` Reasons for exclusion were ${listAnd(ex)}.` : ''}${(cfg.groupOrder || []).length > 1 ? ` Patients were allocated to ${listAnd(activeGroups().map(g => cfg.groupLabels[g] || g))}.` : ''}`],
+      ...(ss ? [['Sample size', ss.comment]] : mi.sampleSize ? [['Sample size', mi.sampleSize]] : []),
+      ['Outcomes', `${prim.length ? `The primary outcome${prim.length > 1 ? 's were' : ' was'} ${listAnd(prim)}.` : ''}${sec.length ? ` Secondary outcomes were ${listAnd(sec)}.` : ''}${!prim.length && !sec.length ? `The outcomes were ${listAnd(cfg.variables.filter(v => v.include).slice(0, 8).map(v => lowerFirst(plain2(v.label))))}.` : ''}`],
+      ['Statistical analysis', rp.citeText && rp.refs ? citeMethods(r.methods || '', rp.citeText).text : r.methods || '']];
+    return parts.filter(p => p[1].trim());
+  }
+  const plain2 = t => String(t).replace(/\s*\([^)]*\)\s*$/, '');
+  function showFullMethods() {
+    if (!state.result) return; syncEdits(); const mi = state.cfg.methodsInfo = state.cfg.methodsInfo || {}, f = (k, l, ph) => `<div><label class="f">${l}</label><input type="text" data-mi="${k}" value="${esc(mi[k] || '')}" placeholder="${esc(ph)}" style="width:100%"></div>`;
+    const draw = () => { const parts = fullMethods(); $('#fmText').innerHTML = parts.map(([h, t]) => `<h4 style="margin:8px 0 2px">${esc(h)}</h4><p style="margin:0">${esc(t)}</p>`).join(''); return parts; };
+    $('#accOut').innerHTML = `<div class="report-sec"><h3 style="margin:0 0 6px">Methods section</h3><div class="grid g2">${f('setting', 'Setting', 'e.g. the ICU of Cairo University Hospitals')}${f('period', 'Period', 'e.g. January 2024 and June 2025')}${f('inclusion', 'Eligible if', 'e.g. adults aged 18 to 80 years with …')}${f('exclusion', 'Excluded if', 'e.g. pregnancy, chronic kidney disease')}${f('ethics', 'Ethics sentence (optional)', 'own wording of the approval and consent')}${f('sampleSize', 'Sample size (when no calculator in step 8)', '')}</div>
+      <div id="fmText" style="margin-top:8px"></div><div class="row" style="gap:6px;margin-top:6px"><button class="btn ghost small" type="button" id="fmCopy">⧉ Copy</button><button class="btn ghost small" type="button" id="fmWord">⬇ Word</button></div></div>`;
+    draw(); $('#accOut').oninput = e => { const k = e.target.dataset.mi; if (!k) return; mi[k] = e.target.value; draw(); };
+    $('#fmCopy').onclick = () => navigator.clipboard.writeText(fullMethods().map(([h, t]) => `${h}\n${t}`).join('\n\n')).then(() => toast('Methods copied'));
+    $('#fmWord').onclick = async () => { const { Document, HeadingLevel } = DX(); await docSave(new Document({ sections: [{ children: [PX('Methods', { bold: true, size: 30 }), ...fullMethods().flatMap(([h, t]) => [PX(h, { bold: true, size: 26, after: 80 }), PX(t)])] }] }), `${baseName()} - Methods.docx`); void HeadingLevel; toast('Methods section saved'); };
+  }
+  // statistical analysis plan: what is planned, kept with the project to compare with what was done
+  function sapPlan() { let x = null; try { x = Analysis.explore(state.data, { ...state.cfg, options: effOptions() }, {}); } catch (e) { }
+    return { date: new Date().toISOString().slice(0, 10), alpha: state.cfg.options.alpha, tests: x ? Object.fromEntries(x.items.map(it => [it.label, it.test || '—'])) : {}, adv: (state.cfg.advanced || []).filter(a => a.include !== false).map(a => ADV_TYPES[a.type] || a.type),
+      options: { chiAdjust: state.cfg.options.chiAdjust || '', impute: !!state.cfg.variables.some(v => v.impute), pp: !!(state.cfg.consort && state.cfg.consort.itt) } }; }
+  async function sapDoc() {
+    if (!state.cfg) return; readUiIntoCfg(); const cfg = state.cfg, plan = sapPlan(), { Document, Table, TableRow, TableCell, WidthType } = DX(), cellP = t => new TableCell({ width: { size: 3000, type: WidthType.DXA }, children: [PX(t, { size: 20, after: 40, line: 240 })] });
+    const prim = cfg.variables.filter(v => v.include && v.role === 'primary').map(v => v.label), sec2 = cfg.variables.filter(v => v.include && v.role === 'secondary').map(v => v.label), sub = (cfg.subgroup && cfg.subgroup.cols) || [];
+    const kids = [PX(`Statistical analysis plan — ${cfg.study.title || 'study'}`, { bold: true, size: 30 }), PX(`Version 1.0, ${plan.date}. Prepared before the analysis of the outcome data.`, { italic: true, size: 20 }),
+      PX('1. Objectives', { bold: true, size: 26 }), PX(`Primary outcome${prim.length > 1 ? 's' : ''}: ${prim.length ? prim.join('; ') : 'to be named (step 2, role)'}. Secondary outcomes: ${sec2.length ? sec2.join('; ') : 'none named'}.`),
+      PX('2. Design and populations', { bold: true, size: 26 }), PX(`${cap1(studyDesign())} comparing ${listAnd(activeGroups().map(g => cfg.groupLabels[g] || g))}. Analysis population: ${plan.options.pp ? 'intention-to-treat, with a per-protocol analysis' : 'all patients with data (complete-case)'}.`),
+      PX('3. Planned comparisons', { bold: true, size: 26 }),
+      new Table({ width: { size: 9000, type: WidthType.DXA }, rows: [new TableRow({ children: [cellP('Variable'), cellP('Planned test')] }), ...Object.entries(plan.tests).map(([k, t]) => new TableRow({ children: [cellP(k), cellP(t)] }))] }),
+      PX(`Tests are chosen from the normality of each group (Shapiro-Wilk) and the expected counts, as listed. Two-sided P ≤ ${plan.alpha} is significant.`, { before: 120 }),
+      PX('4. Further analyses', { bold: true, size: 26 }), PX(plan.adv.length ? plan.adv.join('; ') + '.' : 'None planned.'),
+      PX('5. Missing data, multiplicity and subgroups', { bold: true, size: 26 }), PX(`Missing values: ${plan.options.impute ? 'imputed as set for each variable' : 'complete-case analysis'}. Multiple comparisons: ${plan.options.chiAdjust ? `${plan.options.chiAdjust} adjustment` : 'no adjustment; secondary results are exploratory'}. Subgroups: ${sub.length ? sub.join(', ') : 'none planned'}.`),
+      PX('6. Software', { bold: true, size: 26 }), PX(`Prof MSE Easy Stat (${cfg.study.software || 'statistical software'}).`)];
+    state.cfg.sap = plan; await docSave(new Document({ sections: [{ children: kids }] }), `${baseName()} - Statistical analysis plan.docx`); toast('SAP saved — it is also kept in the project to compare with the analysis later');
+  }
+  function sapCompare() { const old = state.cfg.sap; if (!old) { toast('No SAP yet — download the SAP first (it is kept in the project)'); return; } const now = sapPlan(), rows = [];
+    new Set([...Object.keys(old.tests), ...Object.keys(now.tests)]).forEach(k => { const a = old.tests[k], b = now.tests[k]; rows.push([k, a || '(not planned)', b || '(not analysed)', a === b ? 'as planned' : 'changed']); });
+    const advA = old.adv.filter(x => !now.adv.includes(x)), advB = now.adv.filter(x => !old.adv.includes(x));
+    $('#accOut').innerHTML = `<div class="report-sec"><h3 style="margin:0 0 6px">Analysis compared with the SAP of ${esc(old.date)}</h3><table class="t xp"><thead><tr><th>Variable</th><th>Planned</th><th>Now</th><th></th></tr></thead><tbody>${rows.map(r2 => `<tr><td class="b">${esc(r2[0])}</td><td>${esc(r2[1])}</td><td>${esc(r2[2])}</td><td class="${r2[3] === 'changed' ? 'sig' : ''}">${r2[3]}</td></tr>`).join('')}</tbody></table>
+      <p>${advA.length ? `Planned but not done: ${esc(advA.join('; '))}. ` : ''}${advB.length ? `Added after the SAP (post hoc): ${esc(advB.join('; '))}. ` : ''}${old.alpha !== now.alpha ? `Significance level changed from ${old.alpha} to ${now.alpha}.` : ''}${!advA.length && !advB.length && rows.every(r2 => r2[3] !== 'changed') ? 'Everything as planned.' : ''}</p><p class="legend-note">Report deviations from the SAP in the paper (e.g. in the statistical analysis or a supplement).</p></div>`; }
+  // reviewer comments split into points, with a response and the change for each; a response letter in Word
+  function splitComments(t) { const lines = String(t).replace(/\r/g, '').split('\n'), out = []; let who = '', cur = null;
+    lines.forEach(l => { const s2 = l.trim(); if (!s2) { cur = null; return; } if (/^(reviewer|referee|editor)\s*#?\s*\d*\s*:?\s*$/i.test(s2) || /^(reviewer|referee)\s*#?\s*\d+/i.test(s2) && s2.length < 30) { who = s2.replace(/:$/, ''); cur = null; return; }
+      const m = /^(\(?\d+[.)]|[-•*]|comment\s*\d+\s*[:.)-]?)\s*(.*)$/i.exec(s2); if (m) { cur = { who, c: m[2] || s2, r: '', where: '' }; out.push(cur); } else if (cur) cur.c += ' ' + s2; else { cur = { who, c: s2, r: '', where: '' }; out.push(cur); } });
+    return out; }
+  function showReviewer() {
+    const box = $('#accOut'), list = state.cfg && (state.cfg.reviewResp = state.cfg.reviewResp || []); if (!list) return;
+    const draw = () => { box.innerHTML = `<div class="report-sec"><h3 style="margin:0 0 6px">Response to reviewers</h3><label class="f">Paste the reviewers' comments (numbered points, bullets or paragraphs)</label><textarea id="rvIn" style="min-height:90px" placeholder="Reviewer 1&#10;1. The sample size calculation is not reported.&#10;2. Please give the effect sizes with 95% CI."></textarea>
+      <div class="row" style="gap:6px;margin:6px 0"><button class="btn ghost small" type="button" id="rvSplit">Split into points</button><span class="legend-note">${list.length} point${list.length === 1 ? '' : 's'}</span><span class="spacer"></span><button class="btn ghost small" type="button" id="rvWord">⬇ Response letter (Word)</button></div>
+      ${list.map((p, i) => `<div class="gcard" style="margin-top:6px"><div><b>${esc(p.who ? p.who + ' — ' : '')}Comment ${i + 1}.</b> ${esc(p.c)}</div><label class="f">Response</label><textarea data-rv="${i}" data-k="r" style="min-height:50px">${esc(p.r)}</textarea><label class="f">Change in the manuscript (where)</label><input type="text" data-rv="${i}" data-k="where" value="${esc(p.where)}" placeholder="e.g. Methods, page 6, lines 120–124" style="width:100%"></div>`).join('')}</div>`;
+      $('#rvSplit').onclick = () => { const add = splitComments($('#rvIn').value); if (!add.length) { toast('No comments found'); return; } list.push(...add); draw(); toast(`${add.length} point${add.length > 1 ? 's' : ''} added`); };
+      $('#rvWord').onclick = async () => { if (!list.length) return; const { Document } = DX(), kids = [PX(`Response to the reviewers — ${state.cfg.study.title || 'manuscript'}`, { bold: true, size: 30 }), PX('We thank the editor and the reviewers for their careful reading and helpful comments. Our point-by-point responses follow; the changes are shown in the revised manuscript.', { after: 240 })];
+        let who = null; list.forEach((p, i) => { if (p.who && p.who !== who) { who = p.who; kids.push(PX(who, { bold: true, size: 26, before: 200 })); } kids.push(PX(`Comment ${i + 1}: ${p.c}`, { italic: true }), PX(`Response: ${p.r || '[to be written]'}`), ...(p.where ? [PX(`Change: ${p.where}`, { size: 22, after: 240 })] : [])); });
+        await docSave(new Document({ sections: [{ children: kids }] }), `${baseName()} - Response to reviewers.docx`); toast('Response letter saved'); }; };
+    draw(); box.oninput = e => { const i = e.target.dataset.rv; if (i === undefined) return; list[+i][e.target.dataset.k] = e.target.value; };
+  }
   $('#btnReview').onclick = reviewCopy; $('#btnRis').onclick = risExport; $('#btnAbs').onclick = showAbstract; $('#btnSupp').onclick = supplementaryFile; $('#btnGA').onclick = graphicalAbstract;
-  $('#btnLetter').onclick = coverLetter; $('#btnOnePage').onclick = onePageSummary; $('#btnGdocs').onclick = copyForDocs; $('#btnAccess').onclick = accessCheck;
+  $('#btnLetter').onclick = coverLetter; $('#btnOnePage').onclick = onePageSummary; $('#btnGdocs').onclick = copyForDocs; $('#btnAccess').onclick = accessCheck; $('#btnRvResp').onclick = showReviewer; $('#btnMethFull').onclick = showFullMethods; $('#btnSap').onclick = sapDoc; $('#btnSapCmp').onclick = sapCompare;
   $('#btnLay').onclick = () => { if (!state.result) return; syncEdits(); const t = laySummary(); $('#accOut').innerHTML = `<div class="report-sec"><h3 style="margin:0 0 6px">Plain-language summary</h3><textarea id="layText" style="min-height:80px">${esc(t)}</textarea><button class="btn ghost small" id="layCopy" type="button">⧉ Copy</button></div>`; $('#layCopy').onclick = () => navigator.clipboard.writeText($('#layText').value).then(() => toast('Copied')); };
   // snapshots of the report text, and what changed since one
-  const repSnapText = r => ({ methods: r.methods || '', intro: r.intro || '', narrative: r.narrative || '', summary: r.summary || '', sections: r.sections.map(s => ({ title: s.title, comment: s.comment || '', footnote: s.footnote || '' })) });
+  const cellTxt = c => typeof c === 'object' && c ? (c.t || []).join(' ') : String(c ?? '');
+  const repSnapText = r => ({ methods: r.methods || '', intro: r.intro || '', narrative: r.narrative || '', summary: r.summary || '', sections: r.sections.map(s => ({ title: s.title, comment: s.comment || '', footnote: s.footnote || '', rows: s.rows.map(row => row.map(cellTxt)) })) });
   const renderRepSnaps = () => { const ss = (state.cfg && state.cfg.reportSnaps) || []; $('#repSnapList').innerHTML = ss.length ? ss.map((s, i) => `<option value="${i}">${esc(s.name)}</option>`).join('') : '<option value="">— no snapshot —</option>'; };
   $('#repSnapSave').onclick = () => { if (!state.result) return; syncEdits(); const ss = state.cfg.reportSnaps = state.cfg.reportSnaps || [];
     ss.push({ name: `${new Date().toLocaleString()}`, text: repSnapText(state.result) }); if (ss.length > 10) ss.shift(); renderRepSnaps(); $('#repSnapList').value = String(ss.length - 1); toast('Snapshot saved (kept in the saved project)'); };
@@ -35592,6 +35690,11 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     ['methods', 'intro', 'narrative', 'summary'].forEach(k => { if (old[k] !== now[k]) rows.push([k === 'methods' ? 'Statistical analysis' : k === 'intro' ? 'Flowchart text' : k === 'narrative' ? 'Results text' : 'Summary', old[k], now[k]]); });
     now.sections.forEach(ns => { const os = old.sections.find(x => x.title === ns.title); if (!os) rows.push([ns.title, '(new table)', ns.comment]); else if (os.comment !== ns.comment) rows.push([`${ns.title} — comment`, os.comment, ns.comment]); else if (os.footnote !== ns.footnote) rows.push([`${ns.title} — footnote`, os.footnote, ns.footnote]); });
     old.sections.forEach(os => { if (!now.sections.find(x => x.title === os.title)) rows.push([os.title, os.comment, '(removed)']); });
+    // the numbers of each table: changed cells (snapshots taken before this version have no table cells)
+    now.sections.forEach(ns => { const os = old.sections.find(x => x.title === ns.title); if (!os || !os.rows) return; const ch = [];
+      ns.rows.forEach((row, i) => row.forEach((v, j) => { const o2 = ((os.rows[i] || [])[j]); if (o2 !== undefined && o2 !== v) ch.push(`${row[0] || os.rows[i][0]}: ${o2} → ${v}`); }));
+      if (ns.rows.length !== os.rows.length) ch.push(`${os.rows.length} → ${ns.rows.length} rows`);
+      if (ch.length) rows.push([`${ns.title} — ${ch.length} changed cell${ch.length > 1 ? 's' : ''}`, '', ch.slice(0, 8).join('; ') + (ch.length > 8 ? ` … (+${ch.length - 8})` : '')]); });
     $('#repSnapOut').innerHTML = rows.length ? `<table class="t xp" style="margin-top:8px"><thead><tr><th>Part</th><th>Snapshot (${esc(s.name)})</th><th>Now</th></tr></thead><tbody>${rows.map(r => `<tr><td class="b">${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table>` : '<p class="legend-note">No change since this snapshot.</p>'; };
   renderRepSnaps();
   $('#fmtBar').addEventListener('click', e => {
@@ -35660,6 +35763,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
           res.sections.forEach(s => { if (!s.footnote) return; const parts = s.footnote.replace(/\.\s*$/, '').split(/, (?=[^,]{1,8}: )/), keep = [];
             parts.forEach(p => { if (isAb(p.trim())) { const [k2, ...v2] = p.trim().split(': '); if (!ab.has(k2)) ab.set(k2, v2.join(': ')); } else keep.push(p); }); s.footnote = keep.length ? keep.join(', ') + '.' : ''; });
           res.abbrev = ab.size ? [...ab.entries()].sort((a2, b2) => a2[0].localeCompare(b2[0])).map(([k2, v2]) => `${k2}: ${v2.replace(/\.$/, '')}`).join('; ') + '.' : ''; }
+        mergeTables(res);
         applyCellNotes(res);
         writeExtras(res, cfg);
         styleTexts(res, cfg.options);
@@ -35856,7 +35960,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><button class="btn ghost small" data-sents="${i}" type="button" title="Keep or drop single sentences">✂ Sentences</button><button class="btn ghost small" data-srcs="${i}" type="button" title="Point at a number to see its cell in the table">🔗 Sources</button><button class="btn ghost small" data-rephrase="${i}" type="button" title="Another wording of the same comment (click again for more)">↻ Rephrase</button><button class="btn ghost small" data-revnote="${i}" type="button" title="A reviewer's or supervisor's comment on this section (a Word comment in the review copy)">💬 ${(state.cfg.revNotes || {})[s.key || s.title] ? 'Comment ✓' : 'Comment'}</button><span class="legend-note">${words(s.comment)} words · readability ${flesch(s.comment)}</span></div><div class="explain" data-explainbox="${i}"></div><div data-sentbox="${i}"></div>
         ${o.keyFindings && s.findings && s.findings.length ? `<div class="legend-note"><b>Key findings:</b><ol style="margin:4px 0 0 18px;padding:0">${s.findings.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
-        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button> <button class="btn ghost small" data-pdftbl="${i}" type="button" title="This table on an A4 page (PDF)">⬇ PDF</button>${s.meta && s.meta.calc ? ` <button class="btn ghost small" data-riskcalc="${i}" type="button" title="A small web page that computes the prediction of this model">⬇ Risk calculator</button>` : ''}</div>
+        ${place === 'before' ? comment : ''}<div style="overflow-x:auto">${htmlTable(s.head, s.rows)}</div><div style="text-align:right"><button class="btn ghost small" data-copytbl="${i}" type="button" title="Copy the table with its caption and footnote, to paste into Word">⧉ Copy table</button> <button class="btn ghost small" data-wordtbl="${i}" type="button" title="This table alone, with its caption and footnote, as a Word file">⬇ Word</button> ${s.merged ? `<button class="btn ghost small" data-unmerge="${i}" type="button" title="Split the merged tables again">⇱ Split</button>` : i + 1 < r.sections.length ? `<button class="btn ghost small" data-mergenext="${i}" type="button" title="One table with the next one (same columns), each part under its own sub-heading">⇲ Merge with the next table</button>` : ''} <button class="btn ghost small" data-pngtbl="${i}" type="button" title="This table as a picture (PNG)">⬇ PNG</button> <button class="btn ghost small" data-pdftbl="${i}" type="button" title="This table on an A4 page (PDF)">⬇ PDF</button>${s.meta && s.meta.calc ? ` <button class="btn ghost small" data-riskcalc="${i}" type="button" title="A small web page that computes the prediction of this model">⬇ Risk calculator</button>` : ''}</div>
         <div class="foot">${esc(s.footnote)}</div>
         ${place !== 'before' ? comment : ''}</div>
         ${atEnd ? '' : `<div class="figs">${s.figures.map(figHtml).join('')}</div>`}</div>`;
@@ -36233,6 +36337,10 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   $('#flowCopy').onclick = () => copyImage($('#consortCanvas').toDataURL('image/png'));
   $('#report').addEventListener('click', e => {
     const cc = e.target.closest('[data-copycom]'), ex = e.target.closest('[data-explain]'), ca = e.target.closest('[data-riskcalc]');
+    const mg = e.target.closest('[data-mergenext]'), um = e.target.closest('[data-unmerge]');
+    if (mg) { const i = +mg.dataset.mergenext, a = state.result.sections[i], b = state.result.sections[i + 1], nc = h => h.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0); if (!b) return;
+      if (nc(a.head) !== nc(b.head)) { toast('The two tables have different columns'); return; } (state.cfg.mergeTables = state.cfg.mergeTables || []).push([a.merged ? a.merged[0] : a.title, b.title]); runAnalysis(); toast('Tables merged'); return; }
+    if (um) { const s2 = state.result.sections[+um.dataset.unmerge]; state.cfg.mergeTables = (state.cfg.mergeTables || []).filter(p => !(s2.merged && p[0] === s2.merged[0] && p[1] === s2.merged[1])); runAnalysis(); toast('Tables split'); return; }
     const rph = e.target.closest('[data-rephrase]'), rvn = e.target.closest('[data-revnote]');
     if (rph) { const i = +rph.dataset.rephrase, ta = document.querySelector(`[data-comment="${i}"]`); if (!ta) return; const k = state.rephraseK = state.rephraseK || {}; k[i] = (k[i] || 0) + 1;
       const base = (state.rephraseBase = state.rephraseBase || {})[i] ?? (state.rephraseBase[i] = ta.value); const t = rephrase(base, k[i]); if (t === ta.value) { toast('No other wording found for this comment'); return; } ta.value = t; syncEdits(); toast('Reworded — click again for another wording'); return; }
@@ -36511,7 +36619,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       (state.combos || []).forEach((cb, i) => r.sections.push({ kind: 'combo', title: cb.caption, head: [], rows: [], footnote: '', comment: '', tableOn: false, figures: [{ url: cb.url, w: cb.w, h: cb.h, caption: cb.caption, key: 'combo' + i }], meta: {} }));
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
-      let blob = await Report.build(r, wordOptions());
+      const wo = wordOptions(); if (rp.citeText && rp.refs && r.methods) { const c2 = citeMethods(r.methods, rp.citeText); r.methods = c2.text; wo.refs = c2.refs; }
+      let blob = await Report.build(r, wo);
       if (state.wordTemplate) blob = await applyTemplate(blob, state.wordTemplate.bytes);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
