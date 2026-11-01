@@ -309,6 +309,7 @@ html.ux-still *,html.ux-still *::before,html.ux-still *::after{animation:none!im
 html.ux-rail .stepper{position:fixed;left:0;top:78px;bottom:0;width:178px;flex-direction:column;overflow:auto;border-radius:0 16px 16px 0;margin:0;z-index:16}
 html.ux-rail main{margin-left:190px}html.ux-rail .ux-timeleft{margin-left:190px}
 :focus-visible{outline:3px solid #E8590C!important;outline-offset:2px}
+#prepMore details.pm{border-top:1px dashed var(--line);padding:6px 0}#prepMore details.pm summary{cursor:pointer}
 /* step 10: dark tables */
 #explore.xp-dark table.t { background: #1f1b26; color: #ece8f2; }
 #explore.xp-dark table.t th { background: #2c2636; color: #fff; }
@@ -553,9 +554,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
                 <button class="btn ghost small" id="mergeSheetGo" type="button" style="margin-bottom:6px;display:none">Add from sheet</button>
                 <button class="btn ghost small" id="stackSheets" type="button" style="margin-bottom:6px;display:none" title="Every sheet of this file one under another (e.g. one sheet per centre), with a column naming the sheet">Stack all sheets</button>
                 <button class="btn ghost small" id="mergeBtn" type="button" style="margin-bottom:6px">Choose file…</button>
-                <input type="file" id="mergeFile" accept=".xlsx,.xls,.csv" hidden>
+                <input type="file" id="mergeFile" accept=".xlsx,.xls,.csv" multiple hidden>
               </div>
-              <p class="legend-note">For data from several centres, or follow-up visits kept in a separate file. The first sheet of the other file is used.</p>
+              <p class="legend-note">For data from several centres, or follow-up visits kept in a separate file. The first sheet of each file is used; several files can be chosen at once. Merging by ID lists the IDs found on only one side.</p><div id="mergeReport"></div>
             </div>
           </div>
         </details>

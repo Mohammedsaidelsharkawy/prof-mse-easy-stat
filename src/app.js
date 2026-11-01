@@ -515,11 +515,10 @@
   $('#mergeMode').onchange = e => { $('#mergeKeyBox').style.display = e.target.value === 'cols' ? '' : 'none'; };
   $('#mergeBtn').onclick = () => $('#mergeFile').click();
   $('#mergeFile').onchange = async e => {
-    const f = e.target.files[0]; e.target.value = ''; if (!f || !state.data) return;
-    try {
-      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
-      mergeSheet(wb.Sheets[wb.SheetNames[0]], f.name);
-    } catch (err) { console.error(err); toast('Could not read the other file: ' + err.message); }
+    // several files can be chosen: each is merged in turn (e.g. one file per centre, or per visit)
+    const fs2 = [...e.target.files]; e.target.value = ''; if (!fs2.length || !state.data) return; state.mergeReports = [];
+    for (const f of fs2) { try { const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); mergeSheet(wb.Sheets[wb.SheetNames[0]], f.name); } catch (err) { console.error(err); toast(`Could not read ${f.name}: ${err.message}`); } }
+    renderMergeReport();
   };
   // every sheet one under another, matched by column name, with the sheet's name in a new first column
   $('#stackSheets').onclick = () => {
@@ -540,7 +539,14 @@
     });
     renderPrep(); toast(`${added} rows from ${names.length - 1} other sheet${names.length > 2 ? 's' : ''} stacked, with their sheet name in “${col}”`);
   };
-  $('#mergeSheetGo').onclick = () => { const n = $('#mergeSheet').value; if (state.wb && state.wb.Sheets[n]) mergeSheet(state.wb.Sheets[n], `sheet ${n}`); };
+  $('#mergeSheetGo').onclick = () => { const n = $('#mergeSheet').value; state.mergeReports = []; if (state.wb && state.wb.Sheets[n]) mergeSheet(state.wb.Sheets[n], `sheet ${n}`); renderMergeReport(); };
+  // which IDs matched: those found only in this sheet or only in the other file (merge by ID)
+  function renderMergeReport() { const box = $('#mergeReport'), R2 = (state.mergeReports || []); if (!box) return; if (!R2.length) { box.innerHTML = ''; return; }
+    const list = a => a.length ? esc(a.slice(0, 30).join(', ')) + (a.length > 30 ? ` … (+${a.length - 30})` : '') : '<span class="legend-note">none</span>';
+    box.innerHTML = R2.map(x => `<div class="gcard" style="margin-top:6px"><b>${esc(x.src)}</b> — matched by ${esc(x.key)}<div><b>${x.onlyHere.length}</b> ID${x.onlyHere.length === 1 ? '' : 's'} only in this sheet: ${list(x.onlyHere)}</div><div><b>${x.onlyOther.length}</b> only in the other file: ${list(x.onlyOther)}</div>${x.dupOther ? `<div style="color:var(--bad)">⚠ ${x.dupOther} repeated ID${x.dupOther > 1 ? 's' : ''} in the other file (the last one was used)</div>` : ''}</div>`).join('')
+      + '<button class="btn ghost small" type="button" id="mergeRepDl">⬇ Unmatched IDs (Excel)</button>';
+    $('#mergeRepDl').onclick = () => { const wb = XLSX.utils.book_new(), aoa = [['File', 'ID', 'Found only in']]; R2.forEach(x => { x.onlyHere.forEach(i => aoa.push([x.src, i, 'this sheet'])); x.onlyOther.forEach(i => aoa.push([x.src, i, 'the other file'])); });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Unmatched'); XLSX.writeFile(wb, `${(state.file || 'data').replace(/\.[^.]+$/, '')} - unmatched IDs.xlsx`); }; }
   function mergeSheet(ws, src) {
     {
       const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: false });
@@ -561,7 +567,8 @@
       } else {
         const key = $('#mergeKey').value, okey = oh.includes(key) ? key : oh[0];
         const byId = new Map(orows.map(o => [String(o[okey] ?? '').trim(), o]));
-        let matched = 0;
+        let matched = 0; const here = new Set(rows.map(r => String(r[key] ?? '').trim()).filter(Boolean)), dupO = orows.length - byId.size;
+        (state.mergeReports = state.mergeReports || []).push({ src, key, onlyHere: [...here].filter(x => !byId.has(x)), onlyOther: [...byId.keys()].filter(x => x && !here.has(x)), dupOther: dupO });
         editSheet(() => {
           const names = oh.filter(h => h !== okey).map(h => { let n = h, k = 2; while (headers.includes(n) || added.includes(n)) n = `${h}_${k++}`; added.push(n); return [h, n]; });
           headers.push(...names.map(x => x[1]));
@@ -5490,5 +5497,6 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   window.EasyStat = state; // for debugging
   // what the interface layer (ux.js) may use
   window.EasyUI = { state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
-    renderAdvanced, renderVariables, renderOptions, effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange };
+    renderAdvanced, renderVariables, renderOptions, effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
+    addColumn, parseDate, isMissing, renderPrep, longSheet, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();
