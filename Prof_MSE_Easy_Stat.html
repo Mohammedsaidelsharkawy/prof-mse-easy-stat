@@ -24929,14 +24929,35 @@ const Analysis = (() => {
     if (y.length < X[0].length + 10) return null;
     const m = S.lmmRandomIntercept(y, X, sid); if (!m) return null; used.add('lmmAdv');
     const ix = (s0, n) => Array.from({ length: n }, (_, q) => s0 + q), Gi = ix(1, k - 1), Ti = ix(k, T - 1), Ii = ix(k + T - 1, (k - 1) * (T - 1)), Ci = ix(k + T - 1 + (k - 1) * (T - 1), cov.reduce((n, e) => n + e.terms.length, 0));
-    const W = [['Study group', m.wald(Gi)], ['Time', m.wald(Ti)], ['Group × time', k > 1 ? m.wald(Ii) : null]].filter(x => x[1]);
+    // with the interaction in the model, the group term compares the groups at the first time point and the time term is the change in the first group
+    const tLab = c => c.label || cfg.tpLabels[c.tp] || c.tp, tps = v.cols.map(tLab), inter = k > 1;
+    const W = [[inter ? `Study group (at ${tps[0]})` : 'Study group', m.wald(Gi)], [inter ? `Time (in ${gl[0]})` : 'Time', m.wald(Ti)], ['Group × time', inter ? m.wald(Ii) : null]].filter(x => x[1] && x[1].df > 0);
     const trows = W.map(([n, w]) => [{ t: [n], b: true }, { t: [`χ²(${w.df}) = ${fmt(w.chi, 2)}`] }, { t: [fmtP(w.p, alpha)] }]);
-    const cl = cov.flatMap(e => e.terms.map(t => t.label));
-    Ci.forEach((j, q) => { const B = m.beta[j], se = m.se[j], z = B / se, p = 2 * jStat.normal.cdf(-Math.abs(z), 0, 1); trows.push([{ t: [`${cl[q]} (B = ${fmt(B, d)}, 95% CI ${fmt(B - S.ZC() * se, d)} to ${fmt(B + S.ZC() * se, d)})`], b: true }, { t: [`z = ${fmt(z, 2)}`] }, { t: [fmtP(p, alpha)] }]); });
-    const wi = W.find(x => x[0] === 'Group × time');
+    const cl = cov.flatMap(e => e.terms.map(t => t.label)), lab = lowerFirst(plain(v.label)), us = unitSuffix(unitOfVar(v)), Un = x => `${x}${us}`;
+    const cterms = Ci.map((j, q) => { const B = m.beta[j], se = m.se[j], z = B / se; return { label: cl[q], B, lo: B - S.ZC() * se, hi: B + S.ZC() * se, z, p: 2 * jStat.normal.cdf(-Math.abs(z), 0, 1) }; });
+    cterms.forEach(c => { trows.push([{ t: [`${c.label} (B = ${fmt(c.B, d)}, 95% CI ${fmt(c.lo, d)} to ${fmt(c.hi, d)})`], b: true }, { t: [`z = ${fmt(c.z, 2)}`] }, { t: [fmtP(c.p, alpha)] }]); });
+    // model-based (adjusted) means of each group at each time, at the mean of the covariates
+    const cm = Ci.map(j => S.mean(X.map(r => r[j])));
+    const est = (g, t) => { const gd = Array.from({ length: k - 1 }, (_, q) => +(g === q + 1)), td = Array.from({ length: T - 1 }, (_, q) => +(t === q + 1)), x = [1, ...gd, ...td, ...gd.flatMap(z => td.map(tt => z * tt)), ...cm];
+      const mu = x.reduce((s2, v2, j) => s2 + v2 * m.beta[j], 0), se = Math.sqrt(Math.max(0, x.reduce((s2, v2, a2) => s2 + v2 * x.reduce((s3, w2, b2) => s3 + m.cov[a2][b2] * w2, 0), 0))); return { mu, lo: mu - S.ZC() * se, hi: mu + S.ZC() * se }; };
+    const first = Array.from({ length: k }, (_, g) => est(g, 0)), last = Array.from({ length: k }, (_, g) => est(g, T - 1)), where = g => k > 1 ? gl[g] : 'the studied patients';
+    // "fell from 61.7 to 41.2 in A and from 64.5 to 52.0 in B": the verb once when every group moves the same way
+    const dir = g => { const dl = last[g].mu - first[g].mu; return Math.abs(dl) < 1e-9 ? 'stayed at' : dl < 0 ? 'fell from' : 'rose from'; }, same = Array.from({ length: k }, (_, g) => dir(g)).every((x, _, arr) => x === arr[0]);
+    const course = g => `${!same || g === 0 ? dir(g) + ' ' : dir(g) === 'stayed at' ? 'at ' : 'from '}${Un(fmt(first[g].mu, d))}${dir(g) === 'stayed at' ? '' : ` to ${Un(fmt(last[g].mu, d))}`} in ${where(g)}`;
+    const wG = W.find(x => x[0].startsWith('Study group')), wT = W.find(x => x[0].startsWith('Time')), wi = W.find(x => x[0] === 'Group × time'), adj = cl.length ? ` after adjustment for ${listJoin(cov.map(e => lowerFirst(plain(e.label))))}` : '';
+    const sent = [];
+    sent.push(`From ${lowerFirst(tps[0])} to ${lowerFirst(tps[T - 1])}, the adjusted mean ${lab} ${listJoin(Array.from({ length: k }, (_, g) => course(g)))}.`);
+    if (wi) {
+      sent.push(wi[1].p <= alpha ? `The change over time differed significantly between the groups${adj} (group × time χ²(${wi[1].df}) = ${fmt(wi[1].chi, 2)}, P value ${pTxt(wi[1].p)}).` : `The change over time did not differ significantly between the groups${adj} (group × time χ²(${wi[1].df}) = ${fmt(wi[1].chi, 2)}, P value ${pTxt(wi[1].p)}).`);
+      if (wG) sent.push(`At ${lowerFirst(tps[0])}, the groups ${wG[1].p <= alpha ? 'differed significantly' : 'were comparable'} (P value ${pTxt(wG[1].p)})${T > 1 && wT ? `, and ${lab} changed ${wT[1].p <= alpha ? 'significantly' : 'insignificantly'} over time in ${gl[0]} (P value ${pTxt(wT[1].p)})` : ''}.`);
+    } else if (wT) sent.push(`${cap(lab)} changed ${wT[1].p <= alpha ? 'significantly' : 'insignificantly'} over time${adj} (χ²(${wT[1].df}) = ${fmt(wT[1].chi, 2)}, P value ${pTxt(wT[1].p)}).`);
+    const sigC = cterms.filter(c => c.p <= alpha), nsC = cterms.filter(c => c.p > alpha);
+    if (sigC.length) sent.push(`${cap(listJoin(sigC.map(c => `${lowerFirst(plain(c.label))} (B = ${fmt(c.B, d)}, 95% CI ${fmt(c.lo, d)} to ${fmt(c.hi, d)}, P value ${pTxt(c.p)})`)))} ${sigC.length > 1 ? 'were' : 'was'} independently associated with ${lab}.`);
+    if (nsC.length && (a.commentDetail === 'detailed' || !sigC.length)) sent.push(`${cap(listJoin(nsC.map(c => lowerFirst(plain(c.label)))))} ${nsC.length > 1 ? 'were' : 'was'} not significantly associated with ${lab}.`);
+    if (a.commentDetail === 'detailed') sent.push(`${fmt(100 * m.icc, 0)}% of the variation in ${lab} was between patients (ICC = ${fmt(m.icc, 2)}), which the random intercept accounts for.`);
     return { kind: 'lmmAdv', title: `Linear mixed model of ${lowerFirst(plain(v.label))}${cl.length ? ` adjusted for ${listJoin(cov.map(e => lowerFirst(plain(e.label))))}` : ''}`, head: ['Effect', 'Test', 'P value'], rows: trows,
-      footnote: `Random intercept per patient (REML; ${m.nSubj} patients, ${m.nObs} measurements; ICC = ${fmt(m.icc, 2)}); time as categories; Wald tests.`,
-      comment: wi ? `The change in ${lowerFirst(plain(v.label))} over time ${wi[1].p <= alpha ? 'differed significantly' : 'did not differ significantly'} between the groups${cl.length ? ' after adjustment' : ''} (group × time P value ${pTxt(wi[1].p)}).` : '', figures: [], meta: { m } };
+      footnote: `Random intercept per patient (REML; ${m.nSubj} patients, ${m.nObs} measurements; ICC = ${fmt(m.icc, 2)}); time as categories; Wald tests${inter ? `; with the group × time term, “study group” compares the groups at ${tps[0]} and “time” is the change in ${gl[0]}` : ''}; adjusted means at the mean of the covariates.`,
+      comment: sent.join(' '), figures: [], meta: { m } };
   }
 
   const ROC_CUT = {
