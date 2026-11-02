@@ -4448,6 +4448,8 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     syncEdits(); state.result.narrativeEdited = false; renderReport();
   });
 
+  // what the report was run from: the setup and the data (the ⬇ Word button re-runs it only when these changed)
+  const runKey = () => state.cfg && state.data ? JSON.stringify([state.cfg, state.data.headers, state.data.rows]) : '';
   function runAnalysis() {
     busy(true);
     renderFormatBar();
@@ -4512,7 +4514,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
           const cv = Charts.consort(flowStyled(cfg.consort), gl, pal);
           res.consort = { url: cv.toDataURL('image/png'), w: cv.width, h: cv.height };
         }
-        state.result = res;
+        state.result = res; state.runKey = runKey();
         if (state.pendingEdits) { applyEdits(res, state.pendingEdits); state.pendingEdits = null; }
         renderReport();
       } catch (err) { console.error(err); $('#report').innerHTML = `<p style="color:var(--bad)"><b>Analysis failed:</b> ${esc(err.message)}</p>`; }
@@ -5723,5 +5725,5 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   // what the interface layer (ux.js) may use
   window.EasyUI = { REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
     renderAdvanced, renderVariables, renderOptions, effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
-    addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
+    addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();

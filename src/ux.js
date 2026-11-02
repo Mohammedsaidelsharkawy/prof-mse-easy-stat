@@ -33,10 +33,18 @@
     mb.onclick = e => { e.stopPropagation(); document.querySelectorAll('.ux-pop.open').forEach(p => p.classList.remove('open')); const o = menu.classList.toggle('open'); mb.setAttribute('aria-expanded', String(o)); };
     menu.addEventListener('click', e => { if (e.target.closest('.btn') && !e.target.closest('label')) close(); });
     document.addEventListener('click', e => { if (!more.contains(e.target)) close(); }); document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); }); })();
-  // the Word report from any step: the report is run first when needed (step 12), then downloaded
-  async function downloadWord() { const st = S(); if (!st.data) { U.toast('Load data first'); return; }
-    if (!st.result || st.step !== 12) { U.go(12); const t0 = Date.now(); while (!(st.result && !$('#busy').classList.contains('show')) && Date.now() - t0 < 180000) await new Promise(r => setTimeout(r, 250)); }
-    if (!st.result) { U.toast('The report could not be run'); return; } const b = $('#btnDocx'); if (b && !b.disabled) b.click(); }
+  // the Word report from any step, without leaving it: the settings of this step are read, the report is run in the background, then downloaded
+  let wordBusy = false;
+  const idle = async () => { const t0 = Date.now(); await new Promise(r => setTimeout(r, 30)); while ($('#busy').classList.contains('show') && Date.now() - t0 < 180000) await new Promise(r => setTimeout(r, 200)); };
+  async function downloadWord() { const st = S(); if (!st.data) { U.toast('Load data first'); return; } if (wordBusy) return; wordBusy = true;
+    try {
+      const b = $('#btnDocx'); if (!b || b.disabled) return;
+      // from another step: the report as it is (with the text edited in its preview) when nothing changed since it was run, else run again first
+      if (st.step !== U.REPORT_STEP) { U.readUiIntoCfg();
+        if (!st.result || st.runKey !== U.runKey()) { const had = !!st.result; U.runAnalysis(); await idle(); if (had) U.toast('Settings or data changed since the last report — run again for the Word file'); } }
+      if (!st.result) { U.toast('The report could not be run'); return; }
+      await b.onclick(); await idle();
+    } finally { wordBusy = false; } }
   document.addEventListener('keydown', e => { if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'w') { e.preventDefault(); downloadWord(); } });
   const live = el('div', 'ux-sr'); live.setAttribute('aria-live', 'polite'); live.id = 'uxLive'; document.body.appendChild(live);
 
