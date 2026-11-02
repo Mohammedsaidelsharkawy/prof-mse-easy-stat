@@ -51,8 +51,10 @@
   /* ---------- 34. message history (every toast) ---------- */
   const msgs = []; const toastEl = $('#toast');
   if (toastEl) { toastEl.setAttribute('role', 'status'); new MutationObserver(() => { const t = toastEl.textContent.trim(); if (t && (!msgs.length || msgs[0].t !== t || Date.now() - msgs[0].at > 1500)) { msgs.unshift({ t, at: Date.now() }); if (msgs.length > 50) msgs.pop(); $('#uxBellN').textContent = msgs.length; live.textContent = t; } }).observe(toastEl, { childList: true, characterData: true, subtree: true }); }
+  let lastDown = null; // the element last pressed: the opener of a panel, so pressing it again closes the panel
   const panel = (id, title, html) => { $$('.ux-pop.open').forEach(x => { if (x.id !== id) x.classList.remove('open'); }); let p = document.getElementById(id); if (!p) { p = el('div', 'ux-pop'); p.id = id; document.body.appendChild(p); }
-    p.innerHTML = `<div class="ux-pop-h"><b>${title}</b><span class="spacer"></span><button class="btn ghost small" data-uxclose type="button" aria-label="Close">✕</button></div><div class="ux-pop-b">${html}</div>`; p.classList.add('open'); p.querySelector('[data-uxclose]').onclick = () => p.classList.remove('open'); return p; };
+    const toggledOff = p._off && Date.now() - p._off < 600; p._off = 0; p._opener = lastDown && lastDown.closest ? lastDown.closest('button,.btn,[role="button"]') : null;
+    p.innerHTML = `<div class="ux-pop-h"><b>${title}</b><span class="spacer"></span><button class="btn ghost small" data-uxclose type="button" aria-label="Close">✕</button></div><div class="ux-pop-b">${html}</div>`; if (!toggledOff) p.classList.add('open'); p.querySelector('[data-uxclose]').onclick = () => p.classList.remove('open'); return p; };
   $('#uxBell').onclick = () => panel('uxMsgs', 'Recent messages', msgs.length ? `<ul class="ux-list">${msgs.map(m => `<li><span class="legend-note">${new Date(m.at).toLocaleTimeString()}</span> ${esc(m.t)}</li>`).join('')}</ul>` : '<p class="legend-note">No messages yet.</p>');
 
   /* ---------- 36. autosave indicator ---------- */
@@ -163,6 +165,18 @@
     list.onclick = e => { const li = e.target.closest('[data-pi]'); if (!li) return; pick(shown[+li.dataset.pi], e.shiftKey); };
   }
   $('#uxPal').onclick = openPalette;
+  /* ---------- popups close when clicking outside them: floating panels, the Columns picker, and dialog windows (a click on the dimmed backdrop) ---------- */
+  let downOut = null;
+  document.addEventListener('pointerdown', e => { const t = e.target;
+    // a panel stays open while its own opener is pressed (the opener toggles it)
+    lastDown = window.__uxDown = t;
+    $$('.ux-pop.open').forEach(p => { if (p.contains(t)) return; if (p._opener && p._opener.contains(t)) p._off = Date.now(); p.classList.remove('open'); });
+    $$('details.colpick[open]').forEach(d => { if (!d.contains(t)) d.open = false; });
+    // dialogs: remember a press on the backdrop, close on its release there (dragging a selection out of a dialog does not close it)
+    const d = t.tagName === 'DIALOG' && t.open ? t : null, r = d && d.getBoundingClientRect();
+    downOut = d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) ? d : null; }, true);
+  document.addEventListener('pointerup', e => { const d = downOut; downOut = null; if (!d || e.target !== d || !d.open) return; const r = d.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close(); }, true);
   document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); } if (e.key === 'Escape') $$('.ux-pop.open').forEach(p => p.classList.remove('open')); }, true);
 
   /* ---------- 1. guided tour (offered once, never blocking) ---------- */

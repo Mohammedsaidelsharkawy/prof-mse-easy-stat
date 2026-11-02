@@ -5,7 +5,8 @@
   const S = () => U.state, $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)], esc = U.esc;
   const ls = { get: (k, d) => { try { const v = localStorage.getItem('tools.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem('tools.' + k, JSON.stringify(v)); } catch (e) { /* blocked */ } } };
   const panel = (id, title, html, wide) => { $$('.ux-pop.open').forEach(x => { if (x.id !== id) x.classList.remove('open'); }); let p = document.getElementById(id); if (!p) { p = document.createElement('div'); p.className = 'ux-pop'; p.id = id; document.body.appendChild(p); }
-    p.classList.toggle('ux-center', !!wide); p.innerHTML = `<div class="ux-pop-h"><b>${title}</b><span class="spacer"></span><button class="btn ghost small" data-uxclose type="button" aria-label="Close">✕</button></div><div class="ux-pop-b">${html}</div>`; p.classList.add('open'); p.querySelector('[data-uxclose]').onclick = () => p.classList.remove('open'); return p; };
+    const toggledOff = p._off && Date.now() - p._off < 600; p._off = 0; const dn = window.__uxDown; p._opener = dn && dn.closest ? dn.closest('button,.btn,[role="button"]') : null;
+    p.classList.toggle('ux-center', !!wide); p.innerHTML = `<div class="ux-pop-h"><b>${title}</b><span class="spacer"></span><button class="btn ghost small" data-uxclose type="button" aria-label="Close">✕</button></div><div class="ux-pop-b">${html}</div>`; if (!toggledOff) p.classList.add('open'); p.querySelector('[data-uxclose]').onclick = () => p.classList.remove('open'); return p; };
   const cellText = c => typeof c === 'object' && c ? (c.t || []).join(' ') : String(c ?? '');
   const words = t => (String(t || '').trim().match(/\S+/g) || []).length;
 
