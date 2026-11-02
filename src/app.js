@@ -1239,13 +1239,51 @@
     return out;
   }
   const varBadges = v => [v.locked ? ' 🔒' : '', v.test ? ' test' : '', v.unit ? ' u' : '', v.valueLabels ? ' vl' : '', v.ordinal ? ' ord' : '', v.transform ? ' tf' : '', v.outRule ? ' out' : '', v.impute ? ' imp' : '', v.refLo || v.refHi ? ' ref' : '', v.memo ? ' ℹ' : ''].join('');
+  /* ---------- value labels of a categorical variable (⚙ More): every value of the sheet with its count and a label, a live preview of the report's categories ---------- */
+  let VL = [];   // [{ v: value in the sheet, n, lab }]
+  function vlOpen(v) {
+    const cnt = new Map(); v.cols.forEach(c => state.data.rows.forEach(r => { const x = r[c.col]; if (isMissing(x)) return; const k = String(x).trim(); cnt.set(k, (cnt.get(k) || 0) + 1); }));
+    const map = Analysis.parseValueLabels(v.valueLabels || ''), order = [...(v.levels || []).map(String), ...[...cnt.keys()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))];
+    VL = [...new Set([...order, ...Object.keys(map)])].filter(k => cnt.has(k) || map[k] !== undefined).map(k => ({ v: k, n: cnt.get(k) || 0, lab: map[k] !== undefined ? String(map[k]) : '' }));
+    vlDraw(); }
+  const vlText = () => VL.filter(x => x.lab.trim() && x.lab.trim() !== x.v).map(x => `${x.v}=${x.lab.trim()}`).join(', ');
+  function vlPreview() {
+    const groups = new Map(); VL.forEach(x => { if (!x.n) return; const name = x.lab.trim() || x.v; groups.set(name, (groups.get(name) || 0) + x.n); });
+    const merged = VL.filter(x => x.n).length - groups.size;
+    $('#vdVlPrev').innerHTML = `<b>In the report:</b> ${[...groups].map(([k, n]) => `<span class="chip">${esc(k)} <span class="legend-note">${n}</span></span>`).join(' ')}${merged > 0 ? ` <span class="legend-note">· ${merged} categor${merged === 1 ? 'y' : 'ies'} merged</span>` : ''}`;
+    $('#vdVl').value = vlText(); }
+  function vlDraw() {
+    $('#vdVlTbl').innerHTML = `<thead><tr><th>Value in the sheet</th><th>Rows</th><th>Label in the report</th><th></th></tr></thead><tbody>${VL.map((x, i) =>
+      `<tr${x.n ? '' : ' class="vl-absent" title="Not in the sheet (kept for other files)"'}><td class="mono">${esc(x.v)}</td><td>${x.n || '—'}</td><td><input type="text" data-vli="${i}" value="${esc(x.lab)}" placeholder="${esc(x.v)}"></td><td><button type="button" class="btn ghost small" data-vlx="${i}" title="Clear this label">✕</button></td></tr>`).join('')}</tbody>`;
+    // suggestions from the values: 0/1 → No/Yes, 1/2 → Male/Female (for sex), M/F → Male/Female
+    const vs = VL.filter(x => x.n).map(x => x.v.toLowerCase()).sort().join('|'), sexy = /sex|gender/i.test(vdVar ? vdVar.label + ' ' + vdVar.cols.map(c => c.col).join(' ') : '');
+    const sug = [];
+    if (vs === '0|1') sug.push(['0=No, 1=Yes', { 0: 'No', 1: 'Yes' }]);
+    if (vs === '1|2' && sexy) sug.push(['1=Male, 2=Female', { 1: 'Male', 2: 'Female' }], ['1=Female, 2=Male', { 1: 'Female', 2: 'Male' }]);
+    if (vs === '1|2' && !sexy) sug.push(['1=Yes, 2=No', { 1: 'Yes', 2: 'No' }]);
+    if (vs === 'f|m') sug.push(['F=Female, M=Male', { f: 'Female', m: 'Male' }]);
+    if (VL.some(x => /^[a-z]/.test(x.v))) sug.push(['Capitalise', null]);
+    $('#vdVlSug').innerHTML = sug.map(([t], i) => `<button type="button" class="btn ghost small" data-vlsug="${i}">${esc(t)}</button>`).join('') + (VL.some(x => x.lab) ? '<button type="button" class="btn ghost small" data-vlsug="clear">Clear all</button>' : '');
+    $('#vdVlSug').dataset.sug = JSON.stringify(sug.map(x => x[1]));
+    vlPreview(); }
+  $('#vdVlTbl').addEventListener('input', e => { const i = e.target.dataset.vli; if (i === undefined) return; VL[+i].lab = e.target.value; vlPreview(); });
+  $('#vdVlTbl').addEventListener('click', e => { const b = e.target.closest('[data-vlx]'); if (!b) return; VL[+b.dataset.vlx].lab = ''; vlDraw(); });
+  $('#vdVlSug').addEventListener('click', e => { const b = e.target.closest('[data-vlsug]'); if (!b) return; const k = b.dataset.vlsug;
+    if (k === 'clear') VL.forEach(x => { x.lab = ''; });
+    else { const m = JSON.parse($('#vdVlSug').dataset.sug || '[]')[+k];
+      VL.forEach(x => { if (m) { const t = m[x.v.toLowerCase()]; if (t !== undefined) x.lab = t; } else if (/^[a-z]/.test(x.v) && !x.lab) x.lab = x.v.charAt(0).toUpperCase() + x.v.slice(1).toLowerCase(); }); }
+    vlDraw(); });
+  $('#vdVlAdd').onclick = () => { const k = prompt('Value (code) that is not in the sheet, e.g. 3:'); if (!k || !k.trim()) return; if (!VL.some(x => x.v === k.trim())) VL.push({ v: k.trim(), n: 0, lab: '' }); vlDraw(); };
+  // the same labels as text (paste from a codebook): typing here rebuilds the table
+  $('#vdVl').addEventListener('input', () => { const m = Analysis.parseValueLabels($('#vdVl').value);
+    VL.forEach(x => { x.lab = m[x.v] !== undefined ? String(m[x.v]) : ''; }); Object.keys(m).forEach(k => { if (!VL.some(x => x.v === k)) VL.push({ v: k, n: 0, lab: String(m[k]) }); });
+    const keep = $('#vdVl').value; vlDraw(); $('#vdVl').value = keep; });
   // the settings window of one variable
   let vdVar = null;
   function openVarDlg(id) {
     readUiIntoCfg();
     const v = state.cfg.variables.find(x => x.id === id); if (!v) return; vdVar = v;
-    $('#vdTitle').textContent = v.label; $('#vdVl').value = v.valueLabels || ''; $('#vdVl').dataset.orig = v.valueLabels || ''; $('#vdVlBox').style.display = v.type === 'categorical' ? '' : 'none';
-    $('#vdVl').placeholder = (v.levels || []).slice(0, 3).map(l => `${l}=…`).join(', ') || 'e.g. 1=Male, 2=Female'; $('#vdUnit').value = v.unit || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
+    $('#vdTitle').textContent = v.label; $('#vdVlBox').style.display = v.type === 'categorical' ? '' : 'none'; if (v.type === 'categorical') vlOpen(v); $('#vdUnit').value = v.unit || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
     $('#vdTf').value = v.transform || ''; $('#vdTf').disabled = v.type !== 'numeric'; $('#vdWinP').value = v.winsorP || '1'; $('#vdWinBox').style.display = v.transform === 'winsor' ? '' : 'none';
     $('#vdOut').value = v.outRule || ''; $('#vdOut').disabled = v.type !== 'numeric'; $('#vdOutLo').value = v.outLo ?? ''; $('#vdOutHi').value = v.outHi ?? ''; $('#vdOutLim').style.display = v.outRule === 'limits' ? '' : 'none';
     $('#vdImp').value = v.impute || ''; [...$('#vdImp').options].forEach(o => { o.disabled = o.value && (o.value === 'mode') !== (v.type === 'categorical'); });
@@ -1262,8 +1300,7 @@
     $('#vdShow').innerHTML = lv.map(l => `<option ${l === lv[0] ? 'selected' : ''}>${esc(l)}</option>`).join('');
     // merging categories: each category gets a new name; categories with the same new name become one (written as value labels)
     const vl = Analysis.parseValueLabels(v.valueLabels || '');
-    $('#vdMerge').innerHTML = v.type === 'categorical' && v.kind === 'single' ? `<label class="f">Merge or rename categories (the sheet keeps its values) — give several categories the same new name to merge them</label>
-      <table class="t"><tbody>${lv.map(l => `<tr><td class="mono">${esc(l)}</td><td>→</td><td><input type="text" data-vdm="${esc(l)}" value="${esc(vl[l] ?? '')}" placeholder="${esc(l)}"></td></tr>`).join('')}</tbody></table>` : '';
+    $('#vdMerge').innerHTML = ''; // renaming and merging are done in the value labels table above
     const num = state.data.headers.filter(h => columnInfo(state.data.rows, h).numeric && !v.cols.some(c => c.col === h) && h !== state.cfg.groupCol);
     $('#vdCov').innerHTML = num.map(h => `<option ${/base|pre|before|age/i.test(h) && v.cols.some(c => tokens(c.col)[0] === tokens(h)[0]) ? 'selected' : ''}>${esc(h)}</option>`).join('');
     $('#vdAdjBox').style.display = v.type === 'numeric' && v.kind === 'single' && !state.cfg.noGroups ? '' : 'none';
@@ -1338,10 +1375,7 @@
     set('impute', $('#vdImp').value); set('refLo', v.type === 'numeric' ? $('#vdRefLo').value : ''); set('refHi', v.type === 'numeric' ? $('#vdRefHi').value : ''); set('locked', $('#vdLock').checked);
     set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('rowNote', $('#vdRowNote').value.trim()); set('test', $('#vdTest').value); set('noSecond', v.type === 'numeric' && $('#vdNoSecond').checked); set('mcid', v.type === 'numeric' ? $('#vdMcid').value.trim() : '');
     if (v.type === 'categorical' && $('#vdShowBox').style.display !== 'none') { const first = $('#vdShow').value, lv = v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct; v.levels = [first, ...lv.filter(l => l !== first)]; }
-    const m = [...document.querySelectorAll('[data-vdm]')].filter(el => el.value.trim()).map(el => `${el.dataset.vdm}=${el.value.trim()}`);
-    if (document.querySelector('[data-vdm]')) v.valueLabels = m.join(', ');
-    // value labels typed in the box win over the merge list
-    if (v.type === 'categorical' && $('#vdVl').value.trim() !== ($('#vdVl').dataset.orig || '')) { const t = $('#vdVl').value.trim(); if (t) v.valueLabels = t; else delete v.valueLabels; }
+    if (v.type === 'categorical') { const t = vlText(); if (t) v.valueLabels = t; else delete v.valueLabels; }
     $('#varDlg').close(); renderVariables(); toast(`${v.label}: settings saved`);
   };
   $('#vdAdj').onclick = () => {
@@ -1915,7 +1949,12 @@
     return { id: 'v' + pos, kind: 'single', pos, cols: [{ col: h }], label: labelFrom(tokens(h)), type, dist: 'auto', table,
       levels: type === 'categorical' ? defaultLevels(inf.distinct) : [], note: '', include: true };
   }
+  // sex: male first (Male / Female, M / F, Men / Women, Boy / Girl)
+  const MALE = /^(m|male|males|man|men|boy|boys)$/i, FEMALE = /^(f|female|females|woman|women|girl|girls)$/i;
+  const maleFirst = list => list.length >= 2 && list.some(x => MALE.test(String(x).trim())) && list.some(x => FEMALE.test(String(x).trim())) && list.every(x => MALE.test(String(x).trim()) || FEMALE.test(String(x).trim()))
+    ? [...list].sort((a, b) => (MALE.test(String(a).trim()) ? 0 : 1) - (MALE.test(String(b).trim()) ? 0 : 1)) : null;
   function defaultLevels(distinct) {
+    const mf = maleFirst(distinct); if (mf) return mf;
     const pos = distinct.filter(v => Analysis.POSITIVE.test(v));
     if (distinct.length === 2 && pos.length === 1) return [pos[0], distinct.find(v => v !== pos[0])];
     const nums = distinct.every(v => isFinite(+v));
@@ -1936,7 +1975,7 @@
   function setGroups(cfg) {
     const seen = [];
     state.data.rows.forEach(r => { const g = Analysis.groupOf(cfg, r); if (g !== null && !seen.includes(g)) seen.push(g); });
-    cfg.groupOrder = seen;
+    cfg.groupOrder = maleFirst(seen) || seen;
     cfg.groupLabels = Object.fromEntries(seen.map(g => [g, groupName(g)]));
     cfg.groupInclude = Object.fromEntries(seen.map(g => [g, true]));
     cfg.consort = null;

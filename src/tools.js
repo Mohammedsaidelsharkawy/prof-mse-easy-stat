@@ -63,7 +63,7 @@
     $('#tplImp').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); ls.set('templates', { ...ls.get('templates', {}), ...(j.templates || {}) }); templates(); U.toast('Templates imported'); } catch (err) { U.toast('Not a templates file'); } }; }
 
   /* ---------- 35. help centre ---------- */
-  const GUIDE = [
+  const GUIDE = window.EasyToolsGuide = [
     ['Independent t-test', 'Compares the means of a numeric variable between two groups.', 'Roughly normal data in each group (Shapiro-Wilk, histogram); Welch’s version when the variances differ.', 'Age was higher in A than B (58.2 ± 7.1 vs 54.9 ± 8.0 years, P = 0.03).'],
     ['Mann-Whitney U test', 'Compares two groups when the numeric data are skewed or ordinal.', 'Independent observations; compares the distributions (often reported with medians and IQR).', 'CRP was higher in A (median 120, IQR 80–160 mg/L) than in B (P = 0.01).'],
     ['One-way ANOVA', 'Compares the means of three or more groups.', 'Normal data and similar variances (Levene); post hoc tests (Tukey) show which groups differ.', 'BMI differed between the three groups (F(2, 117) = 4.3, P = 0.02).'],

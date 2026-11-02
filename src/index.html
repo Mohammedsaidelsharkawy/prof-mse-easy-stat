@@ -42,6 +42,7 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 @media (max-width:1480px){.top-actions > .btn:not(.ux-word) .tl,.top-actions > label.btn .tl{display:none}.top-actions{gap:6px}}
 @media (max-width:640px){.brand h1{font-size:17px}.logo{width:40px;height:40px}}
 .brand{flex-shrink:0}
+.vl-tbl td,.vl-tbl th{padding:3px 8px}.vl-tbl input{padding:3px 6px}.vl-tbl tr.vl-absent td{color:var(--muted);font-style:italic}.vl-prev{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;align-items:center}
 #varsTbl .unit-th{width:72px}#varsTbl .unit-in{width:64px;min-width:0;padding-left:6px;padding-right:6px}
 .ap-pick{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg2,#F7F4FB)}
 .ap-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 14px;max-height:260px;overflow:auto}
@@ -280,7 +281,7 @@ footer b{color:var(--purple)}
 .ux-pop.open{display:block}.ux-pop.ux-center{left:50%;right:auto;transform:translateX(-50%);top:110px;width:min(640px,calc(100vw - 32px))}
 .ux-pop-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card)}.ux-pop-b{padding:10px 14px}
 .ux-list{list-style:none;margin:0;padding:0}.ux-list li{padding:6px 4px;border-bottom:1px solid var(--line)}
-.ux-pl li{cursor:pointer;border-radius:8px}.ux-pl li.on,.ux-pl li:hover{background:var(--lav)}
+.ux-pl li{cursor:pointer;border-radius:8px}.ux-pl li mark{background:#FFE58A;color:inherit;border-radius:2px;padding:0 1px}.ux-pwhere{font-size:11px;color:var(--muted);margin:1px 0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ux-pval{font-size:11px;color:var(--purple,#7B2FBE);margin-left:6px}.ux-pkinds{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}.ux-pkinds .chip{cursor:pointer;border:1px solid var(--line);background:transparent}.ux-pkinds .chip.on{background:var(--navy,#1C1648);color:#fff}.ux-pl li.on,.ux-pl li:hover{background:var(--lav)}
 .ux-flash{outline:3px solid #E8590C!important;outline-offset:3px;transition:outline-color 1.4s}
 .ux-tour-hl{position:fixed;border:3px solid #E8590C;border-radius:12px;box-shadow:0 0 0 9999px rgba(20,17,34,.45);z-index:70;pointer-events:none}
 .ux-tour-card{position:fixed;width:340px;background:var(--card);color:var(--ink);border-radius:14px;padding:14px;z-index:71;box-shadow:0 12px 40px rgba(0,0,0,.3)}
@@ -1598,7 +1599,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
   <form method="dialog">
     <h3 id="vdTitle">Variable</h3>
     <div class="fx-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:10px 0">
-      <div id="vdVlBox" style="grid-column:1/-1"><label class="f">Value labels — labels for coded values, e.g. 1=Male, 2=Female (the report shows the labels; the sheet keeps its codes)</label><input type="text" id="vdVl"></div>
+      <div id="vdVlBox" style="grid-column:1/-1"><label class="f">Value labels — the label of each value in the report (the sheet keeps its values); give several values the same label to merge them</label>
+        <div class="tbl-wrap" style="max-height:220px"><table class="t vl-tbl" id="vdVlTbl"></table></div>
+        <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center"><span id="vdVlSug" class="row" style="gap:6px"></span><button type="button" class="btn ghost small" id="vdVlAdd">+ Value not in the sheet</button></div>
+        <div id="vdVlPrev" class="vl-prev"></div>
+        <details style="margin-top:4px"><summary class="legend-note">As text (paste from a codebook)</summary><input type="text" id="vdVl" placeholder="e.g. 1=Male, 2=Female"></details></div>
       <div><label class="f">Unit (added to the label)</label><input type="text" id="vdUnit" placeholder="e.g. mg/dL"></div>
       <div><label class="f">Decimal places</label><select id="vdDec"><option value="">As in step 5</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
       <div><label class="f">Role</label><select id="vdRole"><option value="">—</option><option value="baseline">Baseline characteristic (“comparable”)</option><option value="outcome">Outcome</option><option value="primary">Primary outcome (first in its table)</option><option value="secondary">Secondary outcome</option><option value="safety">Safety outcome</option></select></div>

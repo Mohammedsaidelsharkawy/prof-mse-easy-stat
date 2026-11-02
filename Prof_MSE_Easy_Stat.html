@@ -42,6 +42,7 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 @media (max-width:1480px){.top-actions > .btn:not(.ux-word) .tl,.top-actions > label.btn .tl{display:none}.top-actions{gap:6px}}
 @media (max-width:640px){.brand h1{font-size:17px}.logo{width:40px;height:40px}}
 .brand{flex-shrink:0}
+.vl-tbl td,.vl-tbl th{padding:3px 8px}.vl-tbl input{padding:3px 6px}.vl-tbl tr.vl-absent td{color:var(--muted);font-style:italic}.vl-prev{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;align-items:center}
 #varsTbl .unit-th{width:72px}#varsTbl .unit-in{width:64px;min-width:0;padding-left:6px;padding-right:6px}
 .ap-pick{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg2,#F7F4FB)}
 .ap-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 14px;max-height:260px;overflow:auto}
@@ -280,7 +281,7 @@ footer b{color:var(--purple)}
 .ux-pop.open{display:block}.ux-pop.ux-center{left:50%;right:auto;transform:translateX(-50%);top:110px;width:min(640px,calc(100vw - 32px))}
 .ux-pop-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card)}.ux-pop-b{padding:10px 14px}
 .ux-list{list-style:none;margin:0;padding:0}.ux-list li{padding:6px 4px;border-bottom:1px solid var(--line)}
-.ux-pl li{cursor:pointer;border-radius:8px}.ux-pl li.on,.ux-pl li:hover{background:var(--lav)}
+.ux-pl li{cursor:pointer;border-radius:8px}.ux-pl li mark{background:#FFE58A;color:inherit;border-radius:2px;padding:0 1px}.ux-pwhere{font-size:11px;color:var(--muted);margin:1px 0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ux-pval{font-size:11px;color:var(--purple,#7B2FBE);margin-left:6px}.ux-pkinds{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}.ux-pkinds .chip{cursor:pointer;border:1px solid var(--line);background:transparent}.ux-pkinds .chip.on{background:var(--navy,#1C1648);color:#fff}.ux-pl li.on,.ux-pl li:hover{background:var(--lav)}
 .ux-flash{outline:3px solid #E8590C!important;outline-offset:3px;transition:outline-color 1.4s}
 .ux-tour-hl{position:fixed;border:3px solid #E8590C;border-radius:12px;box-shadow:0 0 0 9999px rgba(20,17,34,.45);z-index:70;pointer-events:none}
 .ux-tour-card{position:fixed;width:340px;background:var(--card);color:var(--ink);border-radius:14px;padding:14px;z-index:71;box-shadow:0 12px 40px rgba(0,0,0,.3)}
@@ -1598,7 +1599,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
   <form method="dialog">
     <h3 id="vdTitle">Variable</h3>
     <div class="fx-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:10px 0">
-      <div id="vdVlBox" style="grid-column:1/-1"><label class="f">Value labels — labels for coded values, e.g. 1=Male, 2=Female (the report shows the labels; the sheet keeps its codes)</label><input type="text" id="vdVl"></div>
+      <div id="vdVlBox" style="grid-column:1/-1"><label class="f">Value labels — the label of each value in the report (the sheet keeps its values); give several values the same label to merge them</label>
+        <div class="tbl-wrap" style="max-height:220px"><table class="t vl-tbl" id="vdVlTbl"></table></div>
+        <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center"><span id="vdVlSug" class="row" style="gap:6px"></span><button type="button" class="btn ghost small" id="vdVlAdd">+ Value not in the sheet</button></div>
+        <div id="vdVlPrev" class="vl-prev"></div>
+        <details style="margin-top:4px"><summary class="legend-note">As text (paste from a codebook)</summary><input type="text" id="vdVl" placeholder="e.g. 1=Male, 2=Female"></details></div>
       <div><label class="f">Unit (added to the label)</label><input type="text" id="vdUnit" placeholder="e.g. mg/dL"></div>
       <div><label class="f">Decimal places</label><select id="vdDec"><option value="">As in step 5</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
       <div><label class="f">Role</label><select id="vdRole"><option value="">—</option><option value="baseline">Baseline characteristic (“comparable”)</option><option value="outcome">Outcome</option><option value="primary">Primary outcome (first in its table)</option><option value="secondary">Secondary outcome</option><option value="safety">Safety outcome</option></select></div>
@@ -32816,13 +32821,51 @@ if (typeof module !== 'undefined') module.exports = Sav;
     return out;
   }
   const varBadges = v => [v.locked ? ' 🔒' : '', v.test ? ' test' : '', v.unit ? ' u' : '', v.valueLabels ? ' vl' : '', v.ordinal ? ' ord' : '', v.transform ? ' tf' : '', v.outRule ? ' out' : '', v.impute ? ' imp' : '', v.refLo || v.refHi ? ' ref' : '', v.memo ? ' ℹ' : ''].join('');
+  /* ---------- value labels of a categorical variable (⚙ More): every value of the sheet with its count and a label, a live preview of the report's categories ---------- */
+  let VL = [];   // [{ v: value in the sheet, n, lab }]
+  function vlOpen(v) {
+    const cnt = new Map(); v.cols.forEach(c => state.data.rows.forEach(r => { const x = r[c.col]; if (isMissing(x)) return; const k = String(x).trim(); cnt.set(k, (cnt.get(k) || 0) + 1); }));
+    const map = Analysis.parseValueLabels(v.valueLabels || ''), order = [...(v.levels || []).map(String), ...[...cnt.keys()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))];
+    VL = [...new Set([...order, ...Object.keys(map)])].filter(k => cnt.has(k) || map[k] !== undefined).map(k => ({ v: k, n: cnt.get(k) || 0, lab: map[k] !== undefined ? String(map[k]) : '' }));
+    vlDraw(); }
+  const vlText = () => VL.filter(x => x.lab.trim() && x.lab.trim() !== x.v).map(x => `${x.v}=${x.lab.trim()}`).join(', ');
+  function vlPreview() {
+    const groups = new Map(); VL.forEach(x => { if (!x.n) return; const name = x.lab.trim() || x.v; groups.set(name, (groups.get(name) || 0) + x.n); });
+    const merged = VL.filter(x => x.n).length - groups.size;
+    $('#vdVlPrev').innerHTML = `<b>In the report:</b> ${[...groups].map(([k, n]) => `<span class="chip">${esc(k)} <span class="legend-note">${n}</span></span>`).join(' ')}${merged > 0 ? ` <span class="legend-note">· ${merged} categor${merged === 1 ? 'y' : 'ies'} merged</span>` : ''}`;
+    $('#vdVl').value = vlText(); }
+  function vlDraw() {
+    $('#vdVlTbl').innerHTML = `<thead><tr><th>Value in the sheet</th><th>Rows</th><th>Label in the report</th><th></th></tr></thead><tbody>${VL.map((x, i) =>
+      `<tr${x.n ? '' : ' class="vl-absent" title="Not in the sheet (kept for other files)"'}><td class="mono">${esc(x.v)}</td><td>${x.n || '—'}</td><td><input type="text" data-vli="${i}" value="${esc(x.lab)}" placeholder="${esc(x.v)}"></td><td><button type="button" class="btn ghost small" data-vlx="${i}" title="Clear this label">✕</button></td></tr>`).join('')}</tbody>`;
+    // suggestions from the values: 0/1 → No/Yes, 1/2 → Male/Female (for sex), M/F → Male/Female
+    const vs = VL.filter(x => x.n).map(x => x.v.toLowerCase()).sort().join('|'), sexy = /sex|gender/i.test(vdVar ? vdVar.label + ' ' + vdVar.cols.map(c => c.col).join(' ') : '');
+    const sug = [];
+    if (vs === '0|1') sug.push(['0=No, 1=Yes', { 0: 'No', 1: 'Yes' }]);
+    if (vs === '1|2' && sexy) sug.push(['1=Male, 2=Female', { 1: 'Male', 2: 'Female' }], ['1=Female, 2=Male', { 1: 'Female', 2: 'Male' }]);
+    if (vs === '1|2' && !sexy) sug.push(['1=Yes, 2=No', { 1: 'Yes', 2: 'No' }]);
+    if (vs === 'f|m') sug.push(['F=Female, M=Male', { f: 'Female', m: 'Male' }]);
+    if (VL.some(x => /^[a-z]/.test(x.v))) sug.push(['Capitalise', null]);
+    $('#vdVlSug').innerHTML = sug.map(([t], i) => `<button type="button" class="btn ghost small" data-vlsug="${i}">${esc(t)}</button>`).join('') + (VL.some(x => x.lab) ? '<button type="button" class="btn ghost small" data-vlsug="clear">Clear all</button>' : '');
+    $('#vdVlSug').dataset.sug = JSON.stringify(sug.map(x => x[1]));
+    vlPreview(); }
+  $('#vdVlTbl').addEventListener('input', e => { const i = e.target.dataset.vli; if (i === undefined) return; VL[+i].lab = e.target.value; vlPreview(); });
+  $('#vdVlTbl').addEventListener('click', e => { const b = e.target.closest('[data-vlx]'); if (!b) return; VL[+b.dataset.vlx].lab = ''; vlDraw(); });
+  $('#vdVlSug').addEventListener('click', e => { const b = e.target.closest('[data-vlsug]'); if (!b) return; const k = b.dataset.vlsug;
+    if (k === 'clear') VL.forEach(x => { x.lab = ''; });
+    else { const m = JSON.parse($('#vdVlSug').dataset.sug || '[]')[+k];
+      VL.forEach(x => { if (m) { const t = m[x.v.toLowerCase()]; if (t !== undefined) x.lab = t; } else if (/^[a-z]/.test(x.v) && !x.lab) x.lab = x.v.charAt(0).toUpperCase() + x.v.slice(1).toLowerCase(); }); }
+    vlDraw(); });
+  $('#vdVlAdd').onclick = () => { const k = prompt('Value (code) that is not in the sheet, e.g. 3:'); if (!k || !k.trim()) return; if (!VL.some(x => x.v === k.trim())) VL.push({ v: k.trim(), n: 0, lab: '' }); vlDraw(); };
+  // the same labels as text (paste from a codebook): typing here rebuilds the table
+  $('#vdVl').addEventListener('input', () => { const m = Analysis.parseValueLabels($('#vdVl').value);
+    VL.forEach(x => { x.lab = m[x.v] !== undefined ? String(m[x.v]) : ''; }); Object.keys(m).forEach(k => { if (!VL.some(x => x.v === k)) VL.push({ v: k, n: 0, lab: String(m[k]) }); });
+    const keep = $('#vdVl').value; vlDraw(); $('#vdVl').value = keep; });
   // the settings window of one variable
   let vdVar = null;
   function openVarDlg(id) {
     readUiIntoCfg();
     const v = state.cfg.variables.find(x => x.id === id); if (!v) return; vdVar = v;
-    $('#vdTitle').textContent = v.label; $('#vdVl').value = v.valueLabels || ''; $('#vdVl').dataset.orig = v.valueLabels || ''; $('#vdVlBox').style.display = v.type === 'categorical' ? '' : 'none';
-    $('#vdVl').placeholder = (v.levels || []).slice(0, 3).map(l => `${l}=…`).join(', ') || 'e.g. 1=Male, 2=Female'; $('#vdUnit').value = v.unit || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
+    $('#vdTitle').textContent = v.label; $('#vdVlBox').style.display = v.type === 'categorical' ? '' : 'none'; if (v.type === 'categorical') vlOpen(v); $('#vdUnit').value = v.unit || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
     $('#vdTf').value = v.transform || ''; $('#vdTf').disabled = v.type !== 'numeric'; $('#vdWinP').value = v.winsorP || '1'; $('#vdWinBox').style.display = v.transform === 'winsor' ? '' : 'none';
     $('#vdOut').value = v.outRule || ''; $('#vdOut').disabled = v.type !== 'numeric'; $('#vdOutLo').value = v.outLo ?? ''; $('#vdOutHi').value = v.outHi ?? ''; $('#vdOutLim').style.display = v.outRule === 'limits' ? '' : 'none';
     $('#vdImp').value = v.impute || ''; [...$('#vdImp').options].forEach(o => { o.disabled = o.value && (o.value === 'mode') !== (v.type === 'categorical'); });
@@ -32839,8 +32882,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     $('#vdShow').innerHTML = lv.map(l => `<option ${l === lv[0] ? 'selected' : ''}>${esc(l)}</option>`).join('');
     // merging categories: each category gets a new name; categories with the same new name become one (written as value labels)
     const vl = Analysis.parseValueLabels(v.valueLabels || '');
-    $('#vdMerge').innerHTML = v.type === 'categorical' && v.kind === 'single' ? `<label class="f">Merge or rename categories (the sheet keeps its values) — give several categories the same new name to merge them</label>
-      <table class="t"><tbody>${lv.map(l => `<tr><td class="mono">${esc(l)}</td><td>→</td><td><input type="text" data-vdm="${esc(l)}" value="${esc(vl[l] ?? '')}" placeholder="${esc(l)}"></td></tr>`).join('')}</tbody></table>` : '';
+    $('#vdMerge').innerHTML = ''; // renaming and merging are done in the value labels table above
     const num = state.data.headers.filter(h => columnInfo(state.data.rows, h).numeric && !v.cols.some(c => c.col === h) && h !== state.cfg.groupCol);
     $('#vdCov').innerHTML = num.map(h => `<option ${/base|pre|before|age/i.test(h) && v.cols.some(c => tokens(c.col)[0] === tokens(h)[0]) ? 'selected' : ''}>${esc(h)}</option>`).join('');
     $('#vdAdjBox').style.display = v.type === 'numeric' && v.kind === 'single' && !state.cfg.noGroups ? '' : 'none';
@@ -32915,10 +32957,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     set('impute', $('#vdImp').value); set('refLo', v.type === 'numeric' ? $('#vdRefLo').value : ''); set('refHi', v.type === 'numeric' ? $('#vdRefHi').value : ''); set('locked', $('#vdLock').checked);
     set('labelAr', $('#vdAr').value.trim()); set('memo', $('#vdMemo').value.trim()); set('rowNote', $('#vdRowNote').value.trim()); set('test', $('#vdTest').value); set('noSecond', v.type === 'numeric' && $('#vdNoSecond').checked); set('mcid', v.type === 'numeric' ? $('#vdMcid').value.trim() : '');
     if (v.type === 'categorical' && $('#vdShowBox').style.display !== 'none') { const first = $('#vdShow').value, lv = v.levels.length ? v.levels : columnInfo(state.data.rows, v.cols[0].col).distinct; v.levels = [first, ...lv.filter(l => l !== first)]; }
-    const m = [...document.querySelectorAll('[data-vdm]')].filter(el => el.value.trim()).map(el => `${el.dataset.vdm}=${el.value.trim()}`);
-    if (document.querySelector('[data-vdm]')) v.valueLabels = m.join(', ');
-    // value labels typed in the box win over the merge list
-    if (v.type === 'categorical' && $('#vdVl').value.trim() !== ($('#vdVl').dataset.orig || '')) { const t = $('#vdVl').value.trim(); if (t) v.valueLabels = t; else delete v.valueLabels; }
+    if (v.type === 'categorical') { const t = vlText(); if (t) v.valueLabels = t; else delete v.valueLabels; }
     $('#varDlg').close(); renderVariables(); toast(`${v.label}: settings saved`);
   };
   $('#vdAdj').onclick = () => {
@@ -33492,7 +33531,12 @@ if (typeof module !== 'undefined') module.exports = Sav;
     return { id: 'v' + pos, kind: 'single', pos, cols: [{ col: h }], label: labelFrom(tokens(h)), type, dist: 'auto', table,
       levels: type === 'categorical' ? defaultLevels(inf.distinct) : [], note: '', include: true };
   }
+  // sex: male first (Male / Female, M / F, Men / Women, Boy / Girl)
+  const MALE = /^(m|male|males|man|men|boy|boys)$/i, FEMALE = /^(f|female|females|woman|women|girl|girls)$/i;
+  const maleFirst = list => list.length >= 2 && list.some(x => MALE.test(String(x).trim())) && list.some(x => FEMALE.test(String(x).trim())) && list.every(x => MALE.test(String(x).trim()) || FEMALE.test(String(x).trim()))
+    ? [...list].sort((a, b) => (MALE.test(String(a).trim()) ? 0 : 1) - (MALE.test(String(b).trim()) ? 0 : 1)) : null;
   function defaultLevels(distinct) {
+    const mf = maleFirst(distinct); if (mf) return mf;
     const pos = distinct.filter(v => Analysis.POSITIVE.test(v));
     if (distinct.length === 2 && pos.length === 1) return [pos[0], distinct.find(v => v !== pos[0])];
     const nums = distinct.every(v => isFinite(+v));
@@ -33513,7 +33557,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   function setGroups(cfg) {
     const seen = [];
     state.data.rows.forEach(r => { const g = Analysis.groupOf(cfg, r); if (g !== null && !seen.includes(g)) seen.push(g); });
-    cfg.groupOrder = seen;
+    cfg.groupOrder = maleFirst(seen) || seen;
     cfg.groupLabels = Object.fromEntries(seen.map(g => [g, groupName(g)]));
     cfg.groupInclude = Object.fromEntries(seen.map(g => [g, true]));
     cfg.consort = null;
@@ -37459,24 +37503,90 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const nameIcons = root => (root || document).querySelectorAll('button:not([aria-label]),.btn:not([aria-label])').forEach(b => { const t = b.textContent.trim(); if (!/[A-Za-z]{2}/.test(t) && b.title) b.setAttribute('aria-label', b.title); });
   nameIcons(); new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) nameIcons(n); }))).observe(document.body, { childList: true, subtree: true });
 
-  /* ---------- 7, 13, 48. command palette: steps, buttons, settings and analyses ---------- */
+  /* ---------- 7, 13, 48. Find (Ctrl+K): steps, actions, settings, variables, columns, report tables and figures, examples, statistics guide, changed settings ---------- */
+  // words people type for the same thing
+  const SYN = { word: 'docx', docx: 'word', excel: 'xlsx', xlsx: 'excel', km: 'kaplan', kaplan: 'km survival', sd: 'standard deviation', iqr: 'interquartile', chi: 'chi-square', ttest: 't-test', 't-test': 'ttest',
+    pdf: 'print', margin: 'margins', font: 'typeface', anova: 'analysis of variance', roc: 'auc curve', cox: 'hazard', or: 'odds ratio', ci: 'confidence interval', na: 'missing', missing: 'blank na', flow: 'consort flowchart', consort: 'flowchart',
+    png: 'figures images', jpg: 'figures images', ppt: 'powerpoint', pptx: 'powerpoint', dark: 'theme', light: 'theme', undo: 'undo', label: 'labels', labels: 'value labels', unit: 'units', page: 'page setup paper' };
+  const KINDS = { '>': 'Action', '@': 'Setting', '#': 'Variable', '!': 'Changed', '?': 'Guide', ':': 'Report' };
+  const headOf = node => { const pnl = node.closest('.panel'); if (!pnl) return ''; let h = null; const all = [...pnl.querySelectorAll('h2,h3,summary')];
+    all.forEach(x => { if (x.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) h = x; }); return h ? h.textContent.replace(/\s+/g, ' ').replace(/^\d+ · /, '').trim().slice(0, 48) : ''; };
+  const ctlOf = l => { const c = l.closest('label.check') || l.parentNode; return c ? c.querySelector('input,select,textarea') : null; };
+  const valueOf = el => !el ? '' : el.type === 'checkbox' ? (el.checked ? '✓ on' : '○ off') : el.tagName === 'SELECT' ? (el.selectedOptions[0] ? el.selectedOptions[0].textContent.trim().slice(0, 40) : '') : String(el.value || '').slice(0, 30);
   function paletteItems() {
-    const out = U.STEPS.map(([l, s], i) => ({ kind: 'Step', label: `${i + 1} · ${l} — ${s}`, run: () => U.go(i + 1) }));
+    const st = S(), out = U.STEPS.map(([l, s], i) => ({ kind: 'Step', label: `${i + 1} · ${l} — ${s}`, where: '', run: () => U.go(i + 1) }));
     $$('main .panel button, main .panel [data-advadd], header button').forEach(b => { const t = (b.textContent || '').replace(/\s+/g, ' ').trim(), lab = t.length > 1 ? t : b.title; if (!lab || b.closest('.ux-pop')) return;
-      out.push({ kind: 'Action', label: lab + (b.title && t.length > 1 && b.title !== t ? ` — ${b.title}` : ''), node: b, run: () => goTo(stepOf(b), () => { flash(b); if (!b.disabled) b.click(); }) }); });
-    $$('main .panel label.f, main .panel label.check span').forEach(l => { const t = l.textContent.replace(/\s+/g, ' ').trim(); if (t.length < 3 || t.length > 120) return;
-      out.push({ kind: 'Setting', label: t, node: l, run: () => goTo(stepOf(l), () => { const c = l.closest('label.check') || l.parentNode; const d = c.closest('details'); if (d) d.open = true; flash(c); const inp = c.querySelector('input,select,textarea'); if (inp) inp.focus(); }) }); });
-    const fav = ls.get('fav', []); out.forEach(o => { o.fav = fav.some(f => o.label.startsWith(f)); });
+      out.push({ kind: 'Action', label: lab + (b.title && t.length > 1 && b.title !== t ? ` — ${b.title}` : ''), where: stepOf(b) ? `Step ${stepOf(b)}` : 'Top bar', node: b, run: () => goTo(stepOf(b), () => { flash(b); if (!b.disabled) b.click(); }) }); });
+    $$('main .panel label.f, main .panel label.check span').forEach(l => { const t = l.textContent.replace(/\s+/g, ' ').trim(); if (t.length < 3 || t.length > 160) return; const ctl = ctlOf(l), n = stepOf(l);
+      out.push({ kind: 'Setting', label: t, where: n ? `Step ${n}${headOf(l) ? ' · ' + headOf(l) : ''}` : '', node: l, ctl, toggle: ctl && ctl.type === 'checkbox',
+        run: () => goTo(n, () => { const c = l.closest('label.check') || l.parentNode; const d = c.closest('details'); if (d) d.open = true; flash(c); const inp = c.querySelector('input,select,textarea'); if (inp) inp.focus(); }) }); });
+    if (st.cfg) {
+      // variables (step 2) and the columns of the sheet (step 1)
+      st.cfg.variables.forEach(v => out.push({ kind: 'Variable', label: `${v.label}${v.include ? '' : ' (not analysed)'}`, where: `Step 2 · ${v.cols.map(c => c.col).slice(0, 3).join(', ')}${v.cols.length > 3 ? ' …' : ''} · ${v.kind === 'repeated' ? 'repeated' : v.type}`,
+        run: () => goTo(2, () => { const tr = document.querySelector(`#varsTbl tr[data-vid="${v.id}"]`); if (tr) { tr.style.display = ''; flash(tr); const i = tr.querySelector('[data-k="label"]'); if (i) i.focus(); } }) }));
+      (st.data ? st.data.headers : []).forEach(h => out.push({ kind: 'Column', label: h, where: 'Step 1 · data sheet', run: () => goTo(1, () => { const q = $('#gridSearch'); if (q) { q.value = h; q.dispatchEvent(new Event('input', { bubbles: true })); flash(q); } }) }));
+      // settings changed from their defaults
+      const def = U.defaultOptions ? U.defaultOptions() : {}, o = st.cfg.options;
+      Object.entries(U.OPTION_FIELDS || {}).forEach(([k, [id]]) => { const el = document.getElementById(id); if (!el || def[k] === undefined || JSON.stringify(o[k]) === JSON.stringify(def[k])) return;
+        const lab = (el.closest('label.check') ? el.closest('label.check').textContent : (el.parentNode.querySelector('label.f') || {}).textContent || id).replace(/\s+/g, ' ').trim().slice(0, 100);
+        out.push({ kind: 'Changed', label: lab, where: `Step ${stepOf(el)} · now ${valueOf(el)}`, run: () => goTo(stepOf(el), () => { const d = el.closest('details'); if (d) d.open = true; flash(el.closest('label.check') || el.parentNode); el.focus(); }) }); });
+    }
+    // tables and figures of the report
+    if (st.result) st.result.sections.forEach((s, i) => { if (!s.title) return; out.push({ kind: 'Report', label: s.title, where: `Step ${U.REPORT_STEP} · ${s.kind}${s.figures && s.figures.length ? ` · ${s.figures.length} figure${s.figures.length > 1 ? 's' : ''}` : ''}`,
+      run: () => goTo(U.REPORT_STEP, () => { const t = document.querySelector(`[data-ttl="${i}"]`); flash(t ? t.closest('.report-sec') || t : null); }) }); });
+    // examples and the statistics guide
+    (typeof Examples !== 'undefined' ? Examples.LIST : []).forEach(ex => out.push({ kind: 'Example', label: ex.name, where: 'Open this example data set', run: () => goTo(1, () => { const b = document.querySelector(`[data-exopen="${ex.id}"]`); if (b) b.click(); }) }));
+    (window.EasyToolsGuide || []).forEach(g => out.push({ kind: 'Guide', label: g[0], where: g[1], info: g, run: () => showGuide(g) }));
+    { const seen = new Set(); for (let k = out.length - 1; k >= 0; k--) { const key = out[k].kind + '|' + out[k].label; if (out[k].kind === 'Action' && seen.has(key)) out.splice(k, 1); else seen.add(key); } }
+    const fav = ls.get('fav', []); out.forEach(o2 => { o2.fav = fav.some(f => o2.label.startsWith(f)); o2.key = o2.kind + '|' + o2.label; });
     return out;
   }
+  function showGuide(g) { panel('uxGuideP', g[0], `<p>${esc(g[1])}</p>${g[2] ? `<p><b>Check:</b> ${esc(g[2])}</p>` : ''}${g[3] ? `<p><b>Example:</b> <i>${esc(g[3])}</i></p>` : ''}`).classList.add('ux-center'); }
+  // ranking: whole words and word starts first, then substrings, then letters in order (typos and abbreviations)
+  // edit distance (for typos), cut off early
+  const lev = (a, b, max) => { if (Math.abs(a.length - b.length) > max) return max + 1; let prev = Array.from({ length: b.length + 1 }, (_, k) => k);
+    for (let x = 1; x <= a.length; x++) { const cur = [x]; let low = x; for (let y = 1; y <= b.length; y++) { cur[y] = Math.min(prev[y] + 1, cur[y - 1] + 1, prev[y - 1] + (a[x - 1] === b[y - 1] ? 0 : 1)); low = Math.min(low, cur[y]); } if (low > max) return max + 1; prev = cur; }
+    return prev[b.length]; };
+  const esc2 = a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // ranking: whole words first, then word starts, substrings, the place, and words with a typo
+  function score(o, words) { const L = (o.label + ' ' + (o.where || '')).toLowerCase(), lab = o.label.toLowerCase(), toks = lab.split(/[^a-z0-9²³µ-]+/).filter(Boolean); let sc = 0;
+    for (const w of words) { const alts = [w, ...(SYN[w] ? SYN[w].split(' ') : [])]; let best = 0;
+      for (const a of alts) { const e = esc2(a), whole = new RegExp(`(^|[^a-z0-9])${e}($|[^a-z0-9])`), start = new RegExp(`(^|[^a-z0-9])${e}`);
+        let v = whole.test(lab) ? 7 : lab.startsWith(a) ? 5.5 : start.test(lab) ? 5 : lab.includes(a) ? 4 : whole.test(L) ? 3.2 : start.test(L) ? 3 : L.includes(a) ? 2 : 0;
+        if (!v && a.length >= 4) { const max = a.length >= 7 ? 2 : 1; if (toks.some(t => lev(a, t, max) <= max || (t.length > a.length && lev(a, t.slice(0, a.length), max) <= max))) v = 1.5; }
+        best = Math.max(best, a === w ? v : v * 0.8); }
+      if (!best) return 0; sc += best; }
+    return sc + (o.fav ? 2 : 0) + ({ Step: 0.5, Action: 0.3, Variable: 0.2 }[o.kind] || 0); }
+  const hlWords = (text, words) => { let h = esc(text); words.filter(w => w.length > 1).forEach(w => { h = h.replace(new RegExp(`(${esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'), '<mark>$1</mark>'); }); return h; };
   function openPalette() {
-    const items = paletteItems(), p = panel('uxPalP', 'Find an action or setting', `<input type="search" id="uxPq" placeholder="Type, e.g. kaplan, decimals, export word…" style="width:100%"><ul class="ux-list ux-pl" id="uxPl"></ul><p class="legend-note">↑ ↓ to choose, Enter to go, Esc to close.</p>`);
-    p.classList.add('ux-center'); const q = $('#uxPq'), list = $('#uxPl'); let sel = 0, shown = [];
-    const draw = () => { const t = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean); shown = items.filter(o => t.every(w => o.label.toLowerCase().includes(w))).sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0)).slice(0, 40); sel = Math.min(sel, shown.length - 1);
-      list.innerHTML = shown.map((o, i) => `<li class="${i === sel ? 'on' : ''}" data-pi="${i}"><span class="chip">${o.kind}</span> ${o.fav ? '★ ' : ''}${esc(o.label)}</li>`).join('') || '<li class="legend-note">Nothing found.</li>'; };
+    const items = paletteItems(), recent = ls.get('palRecent', []), kinds = ['All', 'Action', 'Setting', 'Variable', 'Report', 'Changed', 'Guide', 'Example'];
+    const p = panel('uxPalP', 'Find an action or setting', `<input type="search" id="uxPq" placeholder="Type, e.g. kaplan, decimals, export word, BMI…" style="width:100%" autocomplete="off">
+      <div class="ux-pkinds" id="uxPk">${kinds.map((k, i) => `<button type="button" class="chip ${i ? '' : 'on'}" data-pk="${k}">${k}</button>`).join('')}</div>
+      <ul class="ux-list ux-pl" id="uxPl"></ul>
+      <p class="legend-note">↑ ↓ choose · Enter go · Shift+Enter switch a tick-box setting on/off here · Tab next filter · Esc close. Prefixes: &gt; actions, @ settings, # variables, : report, ! changed settings, ? guide.</p>`);
+    p.classList.add('ux-center'); const q = $('#uxPq'), list = $('#uxPl'); let sel = 0, shown = [], kind = 'All';
+    const draw = () => { let raw = q.value.trim(), k = kind; if (KINDS[raw[0]]) { k = KINDS[raw[0]]; raw = raw.slice(1).trim(); }
+      const words = raw.toLowerCase().split(/\s+/).filter(Boolean), pool = items.filter(o => k === 'All' || o.kind === k);
+      if (!words.length) { const rec = recent.map(key => pool.find(o => o.key === key)).filter(Boolean); shown = [...rec.map(o => ({ ...o, rec: true })), ...(k === 'All' ? pool.filter(o => o.kind === 'Step' || o.fav) : pool).filter(o => !recent.includes(o.key))].slice(0, 50); }
+      else shown = pool.map(o => ({ o, s: score(o, words) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 50).map(x => x.o);
+      sel = Math.max(0, Math.min(sel, shown.length - 1));
+      list.innerHTML = shown.map((o, i) => `<li class="${i === sel ? 'on' : ''}" data-pi="${i}"><span class="chip">${o.kind}</span> ${o.rec ? '🕘 ' : ''}${o.fav ? '★ ' : ''}${hlWords(o.label, words)}${o.ctl ? ` <span class="ux-pval">${esc(valueOf(o.ctl))}</span>` : ''}${o.where ? `<div class="ux-pwhere">${hlWords(o.where, words)}</div>` : ''}</li>`).join('')
+        || '<li class="legend-note">Nothing found — try fewer letters, or another filter.</li>';
+      const on = list.querySelector('li.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+      $$('#uxPk [data-pk]').forEach(b => b.classList.toggle('on', b.dataset.pk === k)); };
+    const pick = (o, shift) => { if (!o) return; ls.set('palRecent', [o.key, ...recent.filter(x => x !== o.key)].slice(0, 8));
+      if (shift && o.toggle && o.ctl) { o.ctl.checked = !o.ctl.checked; o.ctl.dispatchEvent(new Event('change', { bubbles: true })); o.ctl.dispatchEvent(new Event('input', { bubbles: true }));
+        // the setting itself (controls of a step that is not open are not read back)
+        const st = S(), fk = Object.entries(U.OPTION_FIELDS || {}).find(([k, [id]]) => id === o.ctl.id);
+        if (st.cfg && fk) st.cfg.options[fk[0]] = o.ctl.checked; if (st.cfg && o.ctl.dataset.rx) { st.cfg.report = st.cfg.report || {}; st.cfg.report[o.ctl.dataset.rx] = o.ctl.checked; }
+        U.toast(`${o.label.slice(0, 60)}: ${o.ctl.checked ? 'on' : 'off'}`); draw(); return; }
+      p.classList.remove('open'); o.run(); };
     q.oninput = () => { sel = 0; draw(); }; draw(); q.focus();
-    q.onkeydown = e => { if (e.key === 'ArrowDown') { sel = Math.min(shown.length - 1, sel + 1); draw(); e.preventDefault(); } else if (e.key === 'ArrowUp') { sel = Math.max(0, sel - 1); draw(); e.preventDefault(); } else if (e.key === 'Enter' && shown[sel]) { p.classList.remove('open'); shown[sel].run(); } else if (e.key === 'Escape') p.classList.remove('open'); };
-    list.onclick = e => { const li = e.target.closest('[data-pi]'); if (!li) return; p.classList.remove('open'); shown[+li.dataset.pi].run(); };
+    $('#uxPk').onclick = e => { const b = e.target.closest('[data-pk]'); if (!b) return; kind = b.dataset.pk; if (KINDS[q.value.trim()[0]]) q.value = q.value.trim().slice(1); sel = 0; draw(); q.focus(); };
+    q.onkeydown = e => { if (e.key === 'ArrowDown') { sel = Math.min(shown.length - 1, sel + 1); draw(); e.preventDefault(); } else if (e.key === 'ArrowUp') { sel = Math.max(0, sel - 1); draw(); e.preventDefault(); }
+      else if (e.key === 'Enter') { e.preventDefault(); pick(shown[sel], e.shiftKey); } else if (e.key === 'Tab') { e.preventDefault(); kind = kinds[(kinds.indexOf(kind) + (e.shiftKey ? kinds.length - 1 : 1)) % kinds.length]; sel = 0; draw(); }
+      else if (e.key === 'Escape') p.classList.remove('open'); };
+    list.onclick = e => { const li = e.target.closest('[data-pi]'); if (!li) return; pick(shown[+li.dataset.pi], e.shiftKey); };
   }
   $('#uxPal').onclick = openPalette;
   document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); } if (e.key === 'Escape') $$('.ux-pop.open').forEach(p => p.classList.remove('open')); }, true);
@@ -37971,7 +38081,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     $('#tplImp').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); ls.set('templates', { ...ls.get('templates', {}), ...(j.templates || {}) }); templates(); U.toast('Templates imported'); } catch (err) { U.toast('Not a templates file'); } }; }
 
   /* ---------- 35. help centre ---------- */
-  const GUIDE = [
+  const GUIDE = window.EasyToolsGuide = [
     ['Independent t-test', 'Compares the means of a numeric variable between two groups.', 'Roughly normal data in each group (Shapiro-Wilk, histogram); Welch’s version when the variances differ.', 'Age was higher in A than B (58.2 ± 7.1 vs 54.9 ± 8.0 years, P = 0.03).'],
     ['Mann-Whitney U test', 'Compares two groups when the numeric data are skewed or ordinal.', 'Independent observations; compares the distributions (often reported with medians and IQR).', 'CRP was higher in A (median 120, IQR 80–160 mg/L) than in B (P = 0.01).'],
     ['One-way ANOVA', 'Compares the means of three or more groups.', 'Normal data and similar variances (Levene); post hoc tests (Tukey) show which groups differ.', 'BMI differed between the three groups (F(2, 117) = 4.3, P = 0.02).'],

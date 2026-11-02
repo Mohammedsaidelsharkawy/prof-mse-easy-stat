@@ -77,24 +77,90 @@
   const nameIcons = root => (root || document).querySelectorAll('button:not([aria-label]),.btn:not([aria-label])').forEach(b => { const t = b.textContent.trim(); if (!/[A-Za-z]{2}/.test(t) && b.title) b.setAttribute('aria-label', b.title); });
   nameIcons(); new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) nameIcons(n); }))).observe(document.body, { childList: true, subtree: true });
 
-  /* ---------- 7, 13, 48. command palette: steps, buttons, settings and analyses ---------- */
+  /* ---------- 7, 13, 48. Find (Ctrl+K): steps, actions, settings, variables, columns, report tables and figures, examples, statistics guide, changed settings ---------- */
+  // words people type for the same thing
+  const SYN = { word: 'docx', docx: 'word', excel: 'xlsx', xlsx: 'excel', km: 'kaplan', kaplan: 'km survival', sd: 'standard deviation', iqr: 'interquartile', chi: 'chi-square', ttest: 't-test', 't-test': 'ttest',
+    pdf: 'print', margin: 'margins', font: 'typeface', anova: 'analysis of variance', roc: 'auc curve', cox: 'hazard', or: 'odds ratio', ci: 'confidence interval', na: 'missing', missing: 'blank na', flow: 'consort flowchart', consort: 'flowchart',
+    png: 'figures images', jpg: 'figures images', ppt: 'powerpoint', pptx: 'powerpoint', dark: 'theme', light: 'theme', undo: 'undo', label: 'labels', labels: 'value labels', unit: 'units', page: 'page setup paper' };
+  const KINDS = { '>': 'Action', '@': 'Setting', '#': 'Variable', '!': 'Changed', '?': 'Guide', ':': 'Report' };
+  const headOf = node => { const pnl = node.closest('.panel'); if (!pnl) return ''; let h = null; const all = [...pnl.querySelectorAll('h2,h3,summary')];
+    all.forEach(x => { if (x.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) h = x; }); return h ? h.textContent.replace(/\s+/g, ' ').replace(/^\d+ · /, '').trim().slice(0, 48) : ''; };
+  const ctlOf = l => { const c = l.closest('label.check') || l.parentNode; return c ? c.querySelector('input,select,textarea') : null; };
+  const valueOf = el => !el ? '' : el.type === 'checkbox' ? (el.checked ? '✓ on' : '○ off') : el.tagName === 'SELECT' ? (el.selectedOptions[0] ? el.selectedOptions[0].textContent.trim().slice(0, 40) : '') : String(el.value || '').slice(0, 30);
   function paletteItems() {
-    const out = U.STEPS.map(([l, s], i) => ({ kind: 'Step', label: `${i + 1} · ${l} — ${s}`, run: () => U.go(i + 1) }));
+    const st = S(), out = U.STEPS.map(([l, s], i) => ({ kind: 'Step', label: `${i + 1} · ${l} — ${s}`, where: '', run: () => U.go(i + 1) }));
     $$('main .panel button, main .panel [data-advadd], header button').forEach(b => { const t = (b.textContent || '').replace(/\s+/g, ' ').trim(), lab = t.length > 1 ? t : b.title; if (!lab || b.closest('.ux-pop')) return;
-      out.push({ kind: 'Action', label: lab + (b.title && t.length > 1 && b.title !== t ? ` — ${b.title}` : ''), node: b, run: () => goTo(stepOf(b), () => { flash(b); if (!b.disabled) b.click(); }) }); });
-    $$('main .panel label.f, main .panel label.check span').forEach(l => { const t = l.textContent.replace(/\s+/g, ' ').trim(); if (t.length < 3 || t.length > 120) return;
-      out.push({ kind: 'Setting', label: t, node: l, run: () => goTo(stepOf(l), () => { const c = l.closest('label.check') || l.parentNode; const d = c.closest('details'); if (d) d.open = true; flash(c); const inp = c.querySelector('input,select,textarea'); if (inp) inp.focus(); }) }); });
-    const fav = ls.get('fav', []); out.forEach(o => { o.fav = fav.some(f => o.label.startsWith(f)); });
+      out.push({ kind: 'Action', label: lab + (b.title && t.length > 1 && b.title !== t ? ` — ${b.title}` : ''), where: stepOf(b) ? `Step ${stepOf(b)}` : 'Top bar', node: b, run: () => goTo(stepOf(b), () => { flash(b); if (!b.disabled) b.click(); }) }); });
+    $$('main .panel label.f, main .panel label.check span').forEach(l => { const t = l.textContent.replace(/\s+/g, ' ').trim(); if (t.length < 3 || t.length > 160) return; const ctl = ctlOf(l), n = stepOf(l);
+      out.push({ kind: 'Setting', label: t, where: n ? `Step ${n}${headOf(l) ? ' · ' + headOf(l) : ''}` : '', node: l, ctl, toggle: ctl && ctl.type === 'checkbox',
+        run: () => goTo(n, () => { const c = l.closest('label.check') || l.parentNode; const d = c.closest('details'); if (d) d.open = true; flash(c); const inp = c.querySelector('input,select,textarea'); if (inp) inp.focus(); }) }); });
+    if (st.cfg) {
+      // variables (step 2) and the columns of the sheet (step 1)
+      st.cfg.variables.forEach(v => out.push({ kind: 'Variable', label: `${v.label}${v.include ? '' : ' (not analysed)'}`, where: `Step 2 · ${v.cols.map(c => c.col).slice(0, 3).join(', ')}${v.cols.length > 3 ? ' …' : ''} · ${v.kind === 'repeated' ? 'repeated' : v.type}`,
+        run: () => goTo(2, () => { const tr = document.querySelector(`#varsTbl tr[data-vid="${v.id}"]`); if (tr) { tr.style.display = ''; flash(tr); const i = tr.querySelector('[data-k="label"]'); if (i) i.focus(); } }) }));
+      (st.data ? st.data.headers : []).forEach(h => out.push({ kind: 'Column', label: h, where: 'Step 1 · data sheet', run: () => goTo(1, () => { const q = $('#gridSearch'); if (q) { q.value = h; q.dispatchEvent(new Event('input', { bubbles: true })); flash(q); } }) }));
+      // settings changed from their defaults
+      const def = U.defaultOptions ? U.defaultOptions() : {}, o = st.cfg.options;
+      Object.entries(U.OPTION_FIELDS || {}).forEach(([k, [id]]) => { const el = document.getElementById(id); if (!el || def[k] === undefined || JSON.stringify(o[k]) === JSON.stringify(def[k])) return;
+        const lab = (el.closest('label.check') ? el.closest('label.check').textContent : (el.parentNode.querySelector('label.f') || {}).textContent || id).replace(/\s+/g, ' ').trim().slice(0, 100);
+        out.push({ kind: 'Changed', label: lab, where: `Step ${stepOf(el)} · now ${valueOf(el)}`, run: () => goTo(stepOf(el), () => { const d = el.closest('details'); if (d) d.open = true; flash(el.closest('label.check') || el.parentNode); el.focus(); }) }); });
+    }
+    // tables and figures of the report
+    if (st.result) st.result.sections.forEach((s, i) => { if (!s.title) return; out.push({ kind: 'Report', label: s.title, where: `Step ${U.REPORT_STEP} · ${s.kind}${s.figures && s.figures.length ? ` · ${s.figures.length} figure${s.figures.length > 1 ? 's' : ''}` : ''}`,
+      run: () => goTo(U.REPORT_STEP, () => { const t = document.querySelector(`[data-ttl="${i}"]`); flash(t ? t.closest('.report-sec') || t : null); }) }); });
+    // examples and the statistics guide
+    (typeof Examples !== 'undefined' ? Examples.LIST : []).forEach(ex => out.push({ kind: 'Example', label: ex.name, where: 'Open this example data set', run: () => goTo(1, () => { const b = document.querySelector(`[data-exopen="${ex.id}"]`); if (b) b.click(); }) }));
+    (window.EasyToolsGuide || []).forEach(g => out.push({ kind: 'Guide', label: g[0], where: g[1], info: g, run: () => showGuide(g) }));
+    { const seen = new Set(); for (let k = out.length - 1; k >= 0; k--) { const key = out[k].kind + '|' + out[k].label; if (out[k].kind === 'Action' && seen.has(key)) out.splice(k, 1); else seen.add(key); } }
+    const fav = ls.get('fav', []); out.forEach(o2 => { o2.fav = fav.some(f => o2.label.startsWith(f)); o2.key = o2.kind + '|' + o2.label; });
     return out;
   }
+  function showGuide(g) { panel('uxGuideP', g[0], `<p>${esc(g[1])}</p>${g[2] ? `<p><b>Check:</b> ${esc(g[2])}</p>` : ''}${g[3] ? `<p><b>Example:</b> <i>${esc(g[3])}</i></p>` : ''}`).classList.add('ux-center'); }
+  // ranking: whole words and word starts first, then substrings, then letters in order (typos and abbreviations)
+  // edit distance (for typos), cut off early
+  const lev = (a, b, max) => { if (Math.abs(a.length - b.length) > max) return max + 1; let prev = Array.from({ length: b.length + 1 }, (_, k) => k);
+    for (let x = 1; x <= a.length; x++) { const cur = [x]; let low = x; for (let y = 1; y <= b.length; y++) { cur[y] = Math.min(prev[y] + 1, cur[y - 1] + 1, prev[y - 1] + (a[x - 1] === b[y - 1] ? 0 : 1)); low = Math.min(low, cur[y]); } if (low > max) return max + 1; prev = cur; }
+    return prev[b.length]; };
+  const esc2 = a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // ranking: whole words first, then word starts, substrings, the place, and words with a typo
+  function score(o, words) { const L = (o.label + ' ' + (o.where || '')).toLowerCase(), lab = o.label.toLowerCase(), toks = lab.split(/[^a-z0-9²³µ-]+/).filter(Boolean); let sc = 0;
+    for (const w of words) { const alts = [w, ...(SYN[w] ? SYN[w].split(' ') : [])]; let best = 0;
+      for (const a of alts) { const e = esc2(a), whole = new RegExp(`(^|[^a-z0-9])${e}($|[^a-z0-9])`), start = new RegExp(`(^|[^a-z0-9])${e}`);
+        let v = whole.test(lab) ? 7 : lab.startsWith(a) ? 5.5 : start.test(lab) ? 5 : lab.includes(a) ? 4 : whole.test(L) ? 3.2 : start.test(L) ? 3 : L.includes(a) ? 2 : 0;
+        if (!v && a.length >= 4) { const max = a.length >= 7 ? 2 : 1; if (toks.some(t => lev(a, t, max) <= max || (t.length > a.length && lev(a, t.slice(0, a.length), max) <= max))) v = 1.5; }
+        best = Math.max(best, a === w ? v : v * 0.8); }
+      if (!best) return 0; sc += best; }
+    return sc + (o.fav ? 2 : 0) + ({ Step: 0.5, Action: 0.3, Variable: 0.2 }[o.kind] || 0); }
+  const hlWords = (text, words) => { let h = esc(text); words.filter(w => w.length > 1).forEach(w => { h = h.replace(new RegExp(`(${esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'), '<mark>$1</mark>'); }); return h; };
   function openPalette() {
-    const items = paletteItems(), p = panel('uxPalP', 'Find an action or setting', `<input type="search" id="uxPq" placeholder="Type, e.g. kaplan, decimals, export word…" style="width:100%"><ul class="ux-list ux-pl" id="uxPl"></ul><p class="legend-note">↑ ↓ to choose, Enter to go, Esc to close.</p>`);
-    p.classList.add('ux-center'); const q = $('#uxPq'), list = $('#uxPl'); let sel = 0, shown = [];
-    const draw = () => { const t = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean); shown = items.filter(o => t.every(w => o.label.toLowerCase().includes(w))).sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0)).slice(0, 40); sel = Math.min(sel, shown.length - 1);
-      list.innerHTML = shown.map((o, i) => `<li class="${i === sel ? 'on' : ''}" data-pi="${i}"><span class="chip">${o.kind}</span> ${o.fav ? '★ ' : ''}${esc(o.label)}</li>`).join('') || '<li class="legend-note">Nothing found.</li>'; };
+    const items = paletteItems(), recent = ls.get('palRecent', []), kinds = ['All', 'Action', 'Setting', 'Variable', 'Report', 'Changed', 'Guide', 'Example'];
+    const p = panel('uxPalP', 'Find an action or setting', `<input type="search" id="uxPq" placeholder="Type, e.g. kaplan, decimals, export word, BMI…" style="width:100%" autocomplete="off">
+      <div class="ux-pkinds" id="uxPk">${kinds.map((k, i) => `<button type="button" class="chip ${i ? '' : 'on'}" data-pk="${k}">${k}</button>`).join('')}</div>
+      <ul class="ux-list ux-pl" id="uxPl"></ul>
+      <p class="legend-note">↑ ↓ choose · Enter go · Shift+Enter switch a tick-box setting on/off here · Tab next filter · Esc close. Prefixes: &gt; actions, @ settings, # variables, : report, ! changed settings, ? guide.</p>`);
+    p.classList.add('ux-center'); const q = $('#uxPq'), list = $('#uxPl'); let sel = 0, shown = [], kind = 'All';
+    const draw = () => { let raw = q.value.trim(), k = kind; if (KINDS[raw[0]]) { k = KINDS[raw[0]]; raw = raw.slice(1).trim(); }
+      const words = raw.toLowerCase().split(/\s+/).filter(Boolean), pool = items.filter(o => k === 'All' || o.kind === k);
+      if (!words.length) { const rec = recent.map(key => pool.find(o => o.key === key)).filter(Boolean); shown = [...rec.map(o => ({ ...o, rec: true })), ...(k === 'All' ? pool.filter(o => o.kind === 'Step' || o.fav) : pool).filter(o => !recent.includes(o.key))].slice(0, 50); }
+      else shown = pool.map(o => ({ o, s: score(o, words) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 50).map(x => x.o);
+      sel = Math.max(0, Math.min(sel, shown.length - 1));
+      list.innerHTML = shown.map((o, i) => `<li class="${i === sel ? 'on' : ''}" data-pi="${i}"><span class="chip">${o.kind}</span> ${o.rec ? '🕘 ' : ''}${o.fav ? '★ ' : ''}${hlWords(o.label, words)}${o.ctl ? ` <span class="ux-pval">${esc(valueOf(o.ctl))}</span>` : ''}${o.where ? `<div class="ux-pwhere">${hlWords(o.where, words)}</div>` : ''}</li>`).join('')
+        || '<li class="legend-note">Nothing found — try fewer letters, or another filter.</li>';
+      const on = list.querySelector('li.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+      $$('#uxPk [data-pk]').forEach(b => b.classList.toggle('on', b.dataset.pk === k)); };
+    const pick = (o, shift) => { if (!o) return; ls.set('palRecent', [o.key, ...recent.filter(x => x !== o.key)].slice(0, 8));
+      if (shift && o.toggle && o.ctl) { o.ctl.checked = !o.ctl.checked; o.ctl.dispatchEvent(new Event('change', { bubbles: true })); o.ctl.dispatchEvent(new Event('input', { bubbles: true }));
+        // the setting itself (controls of a step that is not open are not read back)
+        const st = S(), fk = Object.entries(U.OPTION_FIELDS || {}).find(([k, [id]]) => id === o.ctl.id);
+        if (st.cfg && fk) st.cfg.options[fk[0]] = o.ctl.checked; if (st.cfg && o.ctl.dataset.rx) { st.cfg.report = st.cfg.report || {}; st.cfg.report[o.ctl.dataset.rx] = o.ctl.checked; }
+        U.toast(`${o.label.slice(0, 60)}: ${o.ctl.checked ? 'on' : 'off'}`); draw(); return; }
+      p.classList.remove('open'); o.run(); };
     q.oninput = () => { sel = 0; draw(); }; draw(); q.focus();
-    q.onkeydown = e => { if (e.key === 'ArrowDown') { sel = Math.min(shown.length - 1, sel + 1); draw(); e.preventDefault(); } else if (e.key === 'ArrowUp') { sel = Math.max(0, sel - 1); draw(); e.preventDefault(); } else if (e.key === 'Enter' && shown[sel]) { p.classList.remove('open'); shown[sel].run(); } else if (e.key === 'Escape') p.classList.remove('open'); };
-    list.onclick = e => { const li = e.target.closest('[data-pi]'); if (!li) return; p.classList.remove('open'); shown[+li.dataset.pi].run(); };
+    $('#uxPk').onclick = e => { const b = e.target.closest('[data-pk]'); if (!b) return; kind = b.dataset.pk; if (KINDS[q.value.trim()[0]]) q.value = q.value.trim().slice(1); sel = 0; draw(); q.focus(); };
+    q.onkeydown = e => { if (e.key === 'ArrowDown') { sel = Math.min(shown.length - 1, sel + 1); draw(); e.preventDefault(); } else if (e.key === 'ArrowUp') { sel = Math.max(0, sel - 1); draw(); e.preventDefault(); }
+      else if (e.key === 'Enter') { e.preventDefault(); pick(shown[sel], e.shiftKey); } else if (e.key === 'Tab') { e.preventDefault(); kind = kinds[(kinds.indexOf(kind) + (e.shiftKey ? kinds.length - 1 : 1)) % kinds.length]; sel = 0; draw(); }
+      else if (e.key === 'Escape') p.classList.remove('open'); };
+    list.onclick = e => { const li = e.target.closest('[data-pi]'); if (!li) return; pick(shown[+li.dataset.pi], e.shiftKey); };
   }
   $('#uxPal').onclick = openPalette;
   document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); } if (e.key === 'Escape') $$('.ux-pop.open').forEach(p => p.classList.remove('open')); }, true);
