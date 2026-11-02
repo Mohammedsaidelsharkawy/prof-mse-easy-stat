@@ -316,7 +316,9 @@ const Report = (() => {
     if (!opts.bare && (model.consort || model.sections.length)) children.push(H1('Results', brand));
     let fig = opts.figStart || 1, tab = opts.tabStart || 1; // numbering may continue from an earlier chapter or paper
     if (model.consort) {
-      if (model.intro) { children.push(para(model.intro)); arAfter(model.intro); }
+      // the flowchart paragraph points at the flowchart figure (a cross-reference field with automatic numbers)
+      const flowRef = t => /\b(Figure|Fig\.)\s*\d/.test(t) ? t : t.replace(/\s*([.!?]?)\s*$/, (m, p) => ` (Figure ${pre}${fig})${p || '.'}`);
+      if (model.intro) { children.push(para(flowRef(model.intro))); arAfter(model.intro); }
       const fl = figLabel(pre + fig++, opts.captionStyle), ft = model.flowCaption || 'CONSORT flowchart of the enrolled patients';
       listFigs.push(`${fl} ${ft}`);
       if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, Math.min(opts.paper ? 470 : 600, Math.floor(PAGE_W / 15)), true, ft));

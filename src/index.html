@@ -42,6 +42,11 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 @media (max-width:1480px){.top-actions > .btn:not(.ux-word) .tl,.top-actions > label.btn .tl{display:none}.top-actions{gap:6px}}
 @media (max-width:640px){.brand h1{font-size:17px}.logo{width:40px;height:40px}}
 .brand{flex-shrink:0}
+.ap-pick{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg2,#F7F4FB)}
+.ap-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 14px;max-height:260px;overflow:auto}
+.ap-list h5{grid-column:1/-1;margin:6px 0 2px;font-size:12px;color:var(--muted)}.ap-list label{display:flex;gap:6px;align-items:flex-start;font-size:13px;margin:0}
+.ap-list .ap-sub{margin-left:22px;font-size:12px;color:var(--muted)}
+
 .pg-wrap{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px;align-items:start}
 .pg-side{position:sticky;top:90px}.pg-prev-wrap{display:flex;justify-content:center;padding:12px;background:var(--bg2,#F3F0F8);border-radius:10px}
 #pgPreview .pg-page{position:relative;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18);border:1px solid #d6d6d6;overflow:hidden}
@@ -936,7 +941,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div>
           <label class="check"><input type="checkbox" id="optRmAncova"><span><b>ANCOVA at each later timepoint</b> — the groups compared after adjusting for the baseline (reference) value</span></label>
           <label class="check"><input type="checkbox" id="optRmSphReport"><span><b>Sphericity report</b> — Mauchly's test with the Greenhouse-Geisser and Huynh-Feldt ε in the footnote (3+ timepoints)</span></label>
-          <label class="check"><input type="checkbox" id="optRmEachGroup"><span><b>Each group separately too</b> — after the comparison of the groups, a table of the change over time within each group (one-group repeated-measures test and pairwise comparisons)</span></label>
+          <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><label class="check" style="margin:0"><input type="checkbox" id="optRmEachGroup"><span><b>Each group separately too</b> — a table of the change over time within each group (one-group repeated-measures test and pairwise comparisons)</span></label>
+            <select id="optRmEachPlace" style="width:auto" title="Where the tables of each group go"><option value="after" selected>after the comparison of the groups</option><option value="before">before the comparison of the groups</option></select></div>
           <label class="check"><input type="checkbox" id="optRmProfile"><span><b>Profile analysis</b> — parallelism (MANOVA, Wilks' Λ), levels and flatness (Hotelling's T²)</span></label>
           <label class="check"><input type="checkbox" id="optRmIndividual"><span><b>Individual patient lines</b> on line charts of repeated measures (spaghetti plot)</span></label>
         </div>
@@ -1493,9 +1499,14 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="check" style="margin-top:22px" title="Table and figure numbers are Word fields (SEQ), and every “Table 3” or “Figure 2” in the text is a cross-reference to them: after moving or deleting a table, select all (Ctrl+A) and press F9 to renumber"><input type="checkbox" data-rx="autoNum"><span><b>Automatic numbers and cross-references</b> (Word fields)</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="altText"><span><b>Alternative text</b> of the figures (screen readers)</span></label></div>
           <div><label class="f">Master sheet at the end</label><select data-rx="appSheet"><option value="">None</option><option value="analysed">Columns of the analysed variables</option><option value="all">Every column</option><option value="chosen">Chosen columns →</option></select></div>
-          <div><label class="f">Chosen columns (comma-separated)</label><input type="text" data-rx="appSheetCols" placeholder="e.g. ID, Age_years, CRP_mg_L"></div>
           <div><label class="f">Rows of the master sheet</label><input type="number" min="0" data-rx="appSheetRows" placeholder="all"></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="appSheetAllRows"><span>Every row (also patients outside the studied groups)</span></label></div>
+          <div id="apPick" class="ap-pick" style="grid-column:1/-1;display:none"><input type="hidden" data-rx="appSheetCols">
+            <div class="row" style="gap:6px;align-items:center;margin-bottom:6px"><b>Columns of the master sheet</b><span class="legend-note" id="apCount"></span><span class="spacer"></span>
+              <button class="btn ghost small" type="button" data-apset="analysed">Analysed variables</button><button class="btn ghost small" type="button" data-apset="all">All</button><button class="btn ghost small" type="button" data-apset="none">None</button>
+              <input type="text" id="apFind" placeholder="Search…" style="width:160px"></div>
+            <div id="apList" class="ap-list"></div>
+            <p class="legend-note" style="margin:4px 0 0">ID and group always come first. Ticking a repeated measure ticks all its timepoints.</p></div>
           <div><label class="f">Declaration (thesis front matter)</label><textarea data-rx="frontDecl" style="min-height:40px" placeholder="e.g. I declare that this thesis is my own work…"></textarea></div>
           <div><label class="f">Dedication</label><textarea data-rx="frontDed" style="min-height:40px"></textarea></div>
           <div><label class="f">Acknowledgements</label><textarea data-rx="frontAck" style="min-height:40px"></textarea></div>

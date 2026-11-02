@@ -3611,7 +3611,7 @@ const Analysis = (() => {
           (sub ? sub.sections : []).filter(sec => sec.kind === 'repeated').forEach(sec => { const inG = t => String(t || '').replace(/\s+of the studied (patients|groups)/g, '').replace(/\s+in the studied patients/g, '');
             extra.push({ ...sec, title: `${inG(sec.title)} in ${gl[gi]}`, comment: sec.comment ? `In ${gl[gi]}, ` + (/^[A-Z][a-z]/.test(sec.comment) && !/^[A-Z][a-z]+\s*\(/.test(sec.comment) && !sec.comment.startsWith(v.label) ? sec.comment.charAt(0).toLowerCase() + sec.comment.slice(1) : sec.comment) : sec.comment,
               figures: (sec.figures || []).map(f => ({ ...f, caption: `${inG(f.caption)} in ${gl[gi]}` })), eachGroup: gl[gi] }); }); });
-        sections.splice(at + 1, 0, ...extra); });
+        sections.splice(opts.rmEachPlace === 'before' ? at : at + 1, 0, ...extra); });
     }
     // raw data under each table of numeric results: one row per patient, then the mean and SD (or median and IQR) of each column and its P value from the table
     if (opts.rawData && !cfg._sub) {
@@ -4247,5 +4247,5 @@ const Analysis = (() => {
     return r;
   }
   const run2 = (data, cfg) => polish(figExtras(relabelCI(run(data, cfg), cfg.options.confLevel), cfg), cfg.options), explore2 = (data, cfg, xo) => relabelCI(explore(data, cfg, xo), cfg.options.confLevel);
-  return { run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();
