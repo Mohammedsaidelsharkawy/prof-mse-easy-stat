@@ -414,7 +414,7 @@ const Report = (() => {
 
     // appendix: codebook, test plan, every result table (prepared by the app), the reporting checklist, and the references of the methods
     const plainTbl = t => table(t.head, t.rows.map(r => r.map(c => typeof c === 'object' && c !== null ? c : { t: [String(c ?? '')] })), brand, opts.tableStyle, { ...opts.tableLook, size: 9 });
-    if (opts.appendix && opts.appendix.length) { children.push(new Paragraph({ children: [new (D().PageBreak)()] }), heading('Appendix', brand));
+    if (opts.appendix && opts.appendix.length) { if (!opts.appendixOnly) children.push(new Paragraph({ children: [new (D().PageBreak)()] }), heading('Appendix', brand));
       opts.appendix.forEach(t => { children.push(subheading(t.title, brand)); children.push(plainTbl(t)); if (t.note) children.push(para(t.note, { size: 18, line: 240, after: 160, before: 60 })); }); }
     if (opts.refs && opts.refs.length) { children.push(heading('References', brand)); opts.refs.forEach((r, i) => children.push(para(`${i + 1}. ${r}`, { line: 276, after: 80, align: AlignmentType.LEFT }))); }
     if (opts.listTF && (listTabs.length || listFigs.length)) {
