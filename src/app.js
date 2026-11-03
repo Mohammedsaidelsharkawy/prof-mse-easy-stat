@@ -111,7 +111,7 @@
     if (n === 1) renderMessyTasks();
     if (n === 3) renderTimepoints();
     if ((n >= 4 && n <= 8) || n === 11) renderOptions();
-    if (n === 7) { renderFigureTable(); renderFigDesign(); }
+    if (n === 7) { renderFigureTable(); renderFigDesign(); renderCombFigs(); }
     if (n === 4) renderTestPlan();
     if (n === 6) renderCommentPreview();
     if (n === 5) { renderTableTools(); renderTablePreview(); }
@@ -2546,6 +2546,50 @@
       let n = 0; state.cfg.variables.forEach(v => { if (v.include && chartKind(v) === kind) { v.chart = k; n++; } });
       e.target.value = ''; renderFigureTable(); toast(`${n} ${kind} variable${n === 1 ? '' : 's'}: ${CHART_TYPES[kind].find(x => x[0] === k)[1]}`); };
   });
+  /* ---------- step 7: combined figures (several categorical items in one chart) ---------- */
+  const cfCats = () => state.cfg.variables.filter(v => v.type === 'categorical' && v.kind === 'single' && v.cols.length === 1);
+  const isYesNo = v => (v.levels || []).length === 2 && (v.levels || []).some(l => Analysis.POSITIVE.test(String(l).trim()));
+  function renderCombFigs() {
+    if (!state.cfg || !$('#cfList')) return; const list = state.cfg.combFigs = state.cfg.combFigs || [], vars = cfCats();
+    $('#cfList').innerHTML = list.length ? list.map((cf, i) => `<div class="cf-item" data-cf="${i}">
+        <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:220px"><label class="f">Caption (optional)</label><input type="text" data-cfk="title" value="${esc(cf.title || '')}" placeholder="e.g. Co-morbidities of the studied groups"></div>
+          <div><label class="f">Category shown</label><input type="text" data-cfk="level" value="${esc(cf.level || '')}" placeholder="Yes (first category)" style="width:150px"></div>
+          <div><label class="f">Chart</label><select data-cfk="type" style="width:auto"><option value="bar" ${cf.type !== 'hbar' ? 'selected' : ''}>Bars</option><option value="hbar" ${cf.type === 'hbar' ? 'selected' : ''}>Horizontal bars</option></select></div>
+          <div><label class="f">Order of the items</label><select data-cfk="sort" style="width:auto"><option value="">As ticked</option><option value="desc" ${cf.sort === 'desc' ? 'selected' : ''}>Most frequent first</option><option value="asc" ${cf.sort === 'asc' ? 'selected' : ''}>Least frequent first</option></select></div>
+          <div><label class="f">Y-axis title</label><input type="text" data-cfk="yLabel" value="${esc(cf.yLabel || '')}" placeholder="% of patients" style="width:140px"></div>
+        </div>
+        <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:6px;align-items:center">
+          <label class="check" style="margin:0"><input type="checkbox" data-cfk="stars" ${cf.stars !== false ? 'checked' : ''}><span>* on significant items</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-cfk="labels" ${cf.labels !== false ? 'checked' : ''}><span>Values on the bars</span></label>
+          <label class="check" style="margin:0"><input type="checkbox" data-cfk="hide" ${cf.hide !== false ? 'checked' : ''}><span>Leave out the items' own figures</span></label>
+          <span class="spacer"></span><span class="legend-note">${(cf.items || []).length} items</span>
+          <button class="btn ghost small" type="button" data-cfyn="${i}" title="Tick every yes/no variable">Tick yes/no variables</button><button class="btn ghost small" type="button" data-cfnone="${i}">None</button>
+          <button class="btn ghost small" type="button" data-cfprev="${i}">👁 Preview</button><button class="btn ghost small" type="button" data-cfdel="${i}" title="Remove this combined figure">✕</button></div>
+        <div class="cf-items">${vars.map(v => `<label title="${esc(v.cols[0].col)} · ${esc((v.levels || []).join(' / '))}"><input type="checkbox" data-cfv="${esc(v.id)}" ${(cf.items || []).includes(v.id) ? 'checked' : ''}><span>${esc(v.label)}${v.include ? '' : ' <span class="legend-note">· not analysed</span>'}</span></label>`).join('') || '<span class="legend-note">No categorical variables.</span>'}</div>
+        <div class="cf-prev" id="cfPrev${i}"></div></div>`).join('')
+      : '<p class="legend-note" style="margin:6px 0 0">None yet. “+ Combined figure”, then tick the items (at least two).</p>';
+  }
+  function cfPreview(i) {
+    const cf = state.cfg.combFigs[i], box = $('#cfPrev' + i); if (!cf || !box) return;
+    if ((cf.items || []).length < 2) { box.innerHTML = '<span class="legend-note">Tick at least two items.</span>'; return; }
+    try { readUiIntoCfg(); const o = effOptions(), cfg = { ...state.cfg, options: { ...o, figures: 'all' }, combFigs: [cf], advanced: [], consort: null, variables: state.cfg.variables.map(v => ({ ...v, include: v.include || cf.items.includes(v.id) })) };
+      const res = Analysis.run(state.data, cfg), f = res.sections.flatMap(s => s.figures || []).find(x => x.comb);
+      if (!f) { box.innerHTML = '<span class="legend-note">No figure — check the items.</span>'; return; }
+      const url = Charts.draw(f.spec, chartPalette(o), chartStyle(o)).toDataURL('image/png');
+      box.innerHTML = `<div class="legend-note" style="margin:6px 0 4px"><b>${esc(f.caption)}</b>${f.note ? ' — ' + esc(f.note) : ''}</div><img src="${url}" alt="${esc(f.caption)}">`;
+    } catch (err) { console.error(err); box.innerHTML = `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; } }
+  $('#cfAdd').onclick = () => { if (!state.cfg) return; const list = state.cfg.combFigs = state.cfg.combFigs || [];
+    list.push({ id: 'cf' + Date.now().toString(36), title: '', items: [], level: '', type: 'bar', sort: '', stars: true, labels: true, hide: true }); renderCombFigs(); };
+  $('#cfList').addEventListener('input', e => { const box = e.target.closest('[data-cf]'); if (!box) return; const cf = state.cfg.combFigs[+box.dataset.cf], t = e.target;
+    if (t.dataset.cfv !== undefined) { cf.items = (cf.items || []).filter(x => x !== t.dataset.cfv); if (t.checked) cf.items.push(t.dataset.cfv); box.querySelector('.legend-note').textContent = `${cf.items.length} items`; return; }
+    const k = t.dataset.cfk; if (!k) return; cf[k] = t.type === 'checkbox' ? t.checked : t.value; });
+  $('#cfList').addEventListener('change', e => { const box = e.target.closest('[data-cf]'); if (box && e.target.dataset.cfv === undefined && e.target.type !== 'text') cfPreview(+box.dataset.cf); });
+  $('#cfList').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !state.cfg) return; const L = state.cfg.combFigs;
+    if (b.dataset.cfdel !== undefined) { L.splice(+b.dataset.cfdel, 1); renderCombFigs(); }
+    else if (b.dataset.cfprev !== undefined) cfPreview(+b.dataset.cfprev);
+    else if (b.dataset.cfyn !== undefined) { const cf = L[+b.dataset.cfyn]; cf.items = cfCats().filter(v => isYesNo(v) && v.include).map(v => v.id); renderCombFigs(); cfPreview(+b.dataset.cfyn); }
+    else if (b.dataset.cfnone !== undefined) { L[+b.dataset.cfnone].items = []; renderCombFigs(); } });
   function renderFigureTable() {
     [['#fbNum', 'numeric'], ['#fbCat', 'categorical'], ['#fbRep', 'repeated']].forEach(([id, kind]) => { $(id).innerHTML = `<option value="">${kind}…</option>` + CHART_TYPES[kind].map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); });
     const vars = state.cfg.variables.filter(v => v.include);

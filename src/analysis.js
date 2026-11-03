@@ -3601,6 +3601,34 @@ const Analysis = (() => {
       }
     }
 
+    // combined figures: several categorical items (e.g. co-morbidities: HTN, DM, IHD) in one chart — the % with the chosen category of each item, per group
+    (cfg.combFigs || []).forEach(cf => {
+      const items = (cf.items || []).map(id => cfg.variables.find(v => v.id === id)).filter(v => v && v.type === 'categorical' && v.cols && v.cols.length === 1 && data.headers.includes(v.cols[0].col));
+      if (items.length < 2) return;
+      const want = String(cf.level || '').trim().toLowerCase();
+      const resOf = id => { for (const sec of sections) { const r = sec.meta && (sec.meta.res || []).find(x => x.v && x.v.id === id && x.cat); if (r) return r; } return null; };
+      let rows = items.map(v => { const vals = byGroup.map(rs => rs.map(r => toCat(r[v.cols[0].col])).filter(x => x !== null));
+        const all = [...new Set(vals.flat())], lv = (v.levels && v.levels.length ? v.levels.map(String) : all);
+        const level = (want && [...lv, ...all].find(l => String(l).toLowerCase() === want)) || lv.find(l => all.includes(l)) || all[0];
+        const n = vals.map(x => x.filter(y => y === level).length), pct = vals.map((x, gi) => x.length ? 100 * n[gi] / x.length : 0), r0 = resOf(v.id);
+        return { v, label: plain(v.label), level, n, N: vals.map(x => x.length), pct, tot: vals.flat().length ? 100 * n.reduce((a2, b2) => a2 + b2, 0) / vals.flat().length : 0, p: r0 && r0.cat ? r0.cat.p : NaN }; });
+      if (cf.sort === 'desc') rows = rows.sort((x, y) => y.tot - x.tot); else if (cf.sort === 'asc') rows = rows.sort((x, y) => x.tot - y.tot);
+      const stars = cf.stars !== false && k > 1, anySig = rows.some(r => r.p <= alpha), levels = [...new Set(rows.map(r => r.level))];
+      const cats = rows.map(r => r.label + (stars && r.p <= alpha ? (FMT.sig || '*') : ''));
+      const series = k > 1 ? gl.map((g, gi) => ({ name: withN([g], [gN[gi]])[0], values: rows.map(r => +r.pct[gi].toFixed(2)) })) : [{ name: gl[0] || 'Patients', values: rows.map(r => +r.pct[0].toFixed(2)) }];
+      const what = levels.length === 1 && !/^(yes|y|present|positive|1|true)$/i.test(levels[0]) ? ` (${levels[0]})` : '';
+      const fig = { sig: anySig || k === 1, vid: 'cf_' + (cf.id || items.map(v => v.id).join('_')), comb: true,
+        caption: cf.title || `${listJoin(rows.map(r => lowerFirst(r.label)).map((t, i) => i ? t : t.charAt(0).toUpperCase() + t.slice(1)))}${what} of the studied ${k > 1 ? 'groups' : 'patients'}`,
+        note: stars && anySig ? `${FMT.sig || '*'} significant difference between the groups (P ≤ ${alpha}).` : '',
+        spec: cf.type === 'hbar' ? { type: 'hbar', percent: true, categories: cats, yLabel: cf.yLabel || '% of patients', series }
+          : { type: 'bar', percent: true, labels: cf.labels !== false, categories: cats, yLabel: cf.yLabel || '% of patients', series } };
+      // the figure goes with the table of its first item; the items' own figures are left out (unless asked to keep them)
+      const ids = new Set(items.map(v => v.id)), home = sections.find(sec => (sec.meta && ((sec.meta.res || []).some(x => x.v && ids.has(x.v.id)) || (sec.meta.rawVars || []).some(x => ids.has(x)))) || (sec.figures || []).some(f => ids.has(f.vid))) || sections[sections.length - 1];
+      if (!home) return;
+      const at = (home.figures || []).findIndex(f => ids.has(f.vid));
+      if (cf.hide !== false) sections.forEach(sec => { if (sec.figures) sec.figures = sec.figures.filter(f => !ids.has(f.vid)); });
+      home.figures = home.figures || []; home.figures.splice(at < 0 ? home.figures.length : Math.min(at, home.figures.length), 0, fig);
+    });
     // repeated measures: also each study group on its own (the change over time within the group), right after the comparison of the groups
     if (opts.rmEachGroup && k > 1 && !cfg._sub) {
       cfg.variables.filter(v => v.include && v.kind === 'repeated').forEach(v => {
