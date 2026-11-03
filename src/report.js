@@ -163,7 +163,7 @@ const Report = (() => {
         const name = (Array.isArray(h.t) ? h.t[0] : h.t) || '';
         // very wide tables (e.g. ROC) need roomier label and P value columns
         const wide = nCols > 7;
-        weights.push(i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : isP(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
+        weights.push(h.w ? +h.w : i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : isP(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
       }
     });
     // widths fitted to the content: the longest text of each column (rows that fill every column)

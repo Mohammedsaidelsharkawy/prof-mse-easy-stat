@@ -945,6 +945,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optRmSphReport"><span><b>Sphericity report</b> — Mauchly's test with the Greenhouse-Geisser and Huynh-Feldt ε in the footnote (3+ timepoints)</span></label>
           <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><label class="check" style="margin:0"><input type="checkbox" id="optRmEachGroup"><span><b>Each group separately too</b> — a table of the change over time within each group (one-group repeated-measures test and pairwise comparisons)</span></label>
             <select id="optRmEachPlace" style="width:auto" title="Where the tables of each group go"><option value="after" selected>after the comparison of the groups</option><option value="before">before the comparison of the groups</option></select></div>
+          <div class="row" style="gap:10px;align-items:center;margin:6px 0"><label class="f" style="margin:0">Timepoints in the repeated-measures tables (also each group separately)</label>
+            <select id="optRmLayout" style="width:auto"><option value="rows" selected>As rows (one row per timepoint)</option><option value="cols">As columns (one column per timepoint, a row per group)</option></select></div>
           <label class="check"><input type="checkbox" id="optRmProfile"><span><b>Profile analysis</b> — parallelism (MANOVA, Wilks' Λ), levels and flatness (Hotelling's T²)</span></label>
           <label class="check"><input type="checkbox" id="optRmIndividual"><span><b>Individual patient lines</b> on line charts of repeated measures (spaghetti plot)</span></label>
         </div>

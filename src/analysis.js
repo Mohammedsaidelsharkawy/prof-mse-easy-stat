@@ -4272,5 +4272,29 @@ const Analysis = (() => {
     return r;
   }
   const run2 = (data, cfg) => polish(figExtras(relabelCI(run(data, cfg), cfg.options.confLevel), cfg), cfg.options), explore2 = (data, cfg, xo) => relabelCI(explore(data, cfg, xo), cfg.options.confLevel);
-  return { unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  // repeated-measures tables with the timepoints as columns: each group (or the group's value, its change and P) becomes a row;
+  // "P (within group)" becomes a last column, "P (time vs first)" a row per group, and an overall test a row across the timepoints
+  function timepointsAsColumns(s) {
+    if (!s || s.kind !== 'repeated' || s.tpCols) return s;
+    const txt = c => [].concat(c && c.t !== undefined ? c.t : c ?? '').join(' ').trim();
+    const H = s.head.map(h => typeof h === 'string' ? { t: h } : { ...h }), W = H.length;
+    if (H.some(h => (h.span || 1) > 1)) return s;
+    const data = [], extra = [];
+    for (const r of s.rows) { if (!extra.length && r.length === W && r.every(c => !(c.span > 1) && !(c.rs > 1))) data.push(r); else extra.push(r); }
+    if (data.length < 2 || extra.some(r => r.some(c => c.rs > 1))) return s;
+    const n = data.length, longest = Math.max(...H.slice(1).map(h => txt(h).length)), head = [{ ...H[0], w: Math.min(2.4, Math.max(1.2, longest / 14)) }, ...data.map(r => ({ t: r[0].t, b: r[0].b }))], rows = [];
+    for (let j = 1; j < W; j++) rows.push([{ t: [].concat(H[j].t), b: true, left: true }, ...data.map(r => ({ ...r[j], rs: undefined, span: undefined }))]);
+    let within = null; const vs = [], tail = [];
+    extra.forEach(r => { const lab = txt(r[0]), cells = r.slice(1).filter(c => !(c.span > 1 && !txt(c))), m = /^P \((.+) vs (.+)\)$/.exec(lab);
+      if (/^P \(within group\)$/i.test(lab)) within = cells;
+      else if (m) vs.push({ tp: m[1], ref: m[2], cells });
+      else tail.push([{ ...r[0], left: true }, { ...(r[1] || { t: [''] }), span: n }]); });
+    const k = within ? within.length : vs.length ? vs[0].cells.length : 0, gName = i => txt(H[i + 1]).replace(/\s*\(n\s*=\s*\d+\)\s*$/, '');
+    if (k) { const ref = vs.length ? vs[0].ref : txt(data[0][0]);
+      const pRows = vs.length ? [...Array(k)].map((_, i) => [{ t: [`P vs ${ref} (${gName(i)})`], left: true }, ...data.map(r => { const hit = vs.find(v => v.tp === txt(r[0])); return hit ? hit.cells[i] || { t: ['—'] } : { t: [txt(r[0]) === ref ? '—' : ''] }; })]) : [];
+      rows.splice(k, 0, ...pRows); }
+    if (within) { head.push({ t: 'P (within group)' }); rows.forEach((row, i) => row.push(i < k ? within[i] : { t: [''] })); tail.forEach(row => { row[1] = { ...row[1], span: n + 1 }; }); }
+    return { ...s, head, rows: [...rows, ...tail], tpCols: true };
+  }
+  return { timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();
