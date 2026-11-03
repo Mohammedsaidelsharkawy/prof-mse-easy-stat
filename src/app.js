@@ -2546,49 +2546,60 @@
       let n = 0; state.cfg.variables.forEach(v => { if (v.include && chartKind(v) === kind) { v.chart = k; n++; } });
       e.target.value = ''; renderFigureTable(); toast(`${n} ${kind} variable${n === 1 ? '' : 's'}: ${CHART_TYPES[kind].find(x => x[0] === k)[1]}`); };
   });
-  /* ---------- step 7: combined figures (several categorical items in one chart) ---------- */
-  const cfCats = () => state.cfg.variables.filter(v => v.type === 'categorical' && v.kind === 'single' && v.cols.length === 1);
+  /* ---------- step 7: combined figures (several categorical or numeric items in one chart), with a live preview ---------- */
+  const cfVars = cf => state.cfg.variables.filter(v => v.type === (cf.kind === 'num' ? 'numeric' : 'categorical') && v.kind === 'single' && v.cols.length === 1)
+    .sort((a, b) => (cf.listOrder === 'sheet' ? state.data.headers.indexOf(a.cols[0].col) - state.data.headers.indexOf(b.cols[0].col) : 0));
   const isYesNo = v => (v.levels || []).length === 2 && (v.levels || []).some(l => Analysis.POSITIVE.test(String(l).trim()));
   function renderCombFigs() {
-    if (!state.cfg || !$('#cfList')) return; const list = state.cfg.combFigs = state.cfg.combFigs || [], vars = cfCats();
-    $('#cfList').innerHTML = list.length ? list.map((cf, i) => `<div class="cf-item" data-cf="${i}">
+    if (!state.cfg || !$('#cfList')) return; const list = state.cfg.combFigs = state.cfg.combFigs || [];
+    $('#cfList').innerHTML = list.length ? list.map((cf, i) => { const num = cf.kind === 'num', vars = cfVars(cf); return `<div class="cf-item" data-cf="${i}">
         <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
-          <div style="flex:1;min-width:220px"><label class="f">Caption (optional)</label><input type="text" data-cfk="title" value="${esc(cf.title || '')}" placeholder="e.g. Co-morbidities of the studied groups"></div>
-          <div><label class="f">Category shown</label><input type="text" data-cfk="level" value="${esc(cf.level || '')}" placeholder="Yes (first category)" style="width:150px"></div>
+          <div><label class="f">Items</label><select data-cfk="kind" style="width:auto"><option value="cat" ${!num ? 'selected' : ''}>Categorical (%)</option><option value="num" ${num ? 'selected' : ''}>Numeric (mean / median)</option></select></div>
+          <div style="flex:1;min-width:220px"><label class="f">Caption (optional)</label><input type="text" data-cfk="title" value="${esc(cf.title || '')}" placeholder="${num ? 'e.g. Age, weight and height of the studied groups' : 'e.g. Co-morbidities of the studied groups'}"></div>
+          ${num ? `<div><label class="f">Bars show</label><select data-cfk="stat" style="width:auto"><option value="mean" ${cf.stat !== 'median' ? 'selected' : ''}>Mean (error bar as in the figure options)</option><option value="median" ${cf.stat === 'median' ? 'selected' : ''}>Median (IQR)</option></select></div>`
+            : `<div><label class="f">Categories shown</label><select data-cfk="catMode" style="width:auto"><option value="first" ${!cf.catMode || cf.catMode === 'first' ? 'selected' : ''}>One per item (Yes / first)</option><option value="all" ${cf.catMode === 'all' ? 'selected' : ''}>All categories (e.g. Male and Female)</option><option value="list" ${cf.catMode === 'list' ? 'selected' : ''}>The categories named →</option></select></div>
+          <div><label class="f">Category name(s)</label><input type="text" data-cfk="level" value="${esc(cf.level || '')}" placeholder="${cf.catMode === 'list' ? 'e.g. Male, Female' : 'Yes (first category)'}" style="width:150px"></div>`}
           <div><label class="f">Chart</label><select data-cfk="type" style="width:auto"><option value="bar" ${cf.type !== 'hbar' ? 'selected' : ''}>Bars</option><option value="hbar" ${cf.type === 'hbar' ? 'selected' : ''}>Horizontal bars</option></select></div>
-          <div><label class="f">Order of the items</label><select data-cfk="sort" style="width:auto"><option value="">As ticked</option><option value="desc" ${cf.sort === 'desc' ? 'selected' : ''}>Most frequent first</option><option value="asc" ${cf.sort === 'asc' ? 'selected' : ''}>Least frequent first</option></select></div>
-          <div><label class="f">Y-axis title</label><input type="text" data-cfk="yLabel" value="${esc(cf.yLabel || '')}" placeholder="% of patients" style="width:140px"></div>
+          <div><label class="f">Order of the items</label><select data-cfk="sort" style="width:auto"><option value="">As ticked</option><option value="master" ${cf.sort === 'master' ? 'selected' : ''}>As in the master sheet</option><option value="desc" ${cf.sort === 'desc' ? 'selected' : ''}>${num ? 'Largest' : 'Most frequent'} first</option><option value="asc" ${cf.sort === 'asc' ? 'selected' : ''}>${num ? 'Smallest' : 'Least frequent'} first</option></select></div>
+          <div><label class="f">Y-axis title</label><input type="text" data-cfk="yLabel" value="${esc(cf.yLabel || '')}" placeholder="${num ? (cf.stat === 'median' ? 'Median' : 'Mean') : '% of patients'}" style="width:140px"></div>
         </div>
         <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:6px;align-items:center">
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="stars" ${cf.stars !== false ? 'checked' : ''}><span>* on significant items</span></label>
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="labels" ${cf.labels !== false ? 'checked' : ''}><span>Values on the bars</span></label>
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="hide" ${cf.hide !== false ? 'checked' : ''}><span>Leave out the items' own figures</span></label>
-          <span class="spacer"></span><span class="legend-note">${(cf.items || []).length} items</span>
-          <button class="btn ghost small" type="button" data-cfyn="${i}" title="Tick every yes/no variable">Tick yes/no variables</button><button class="btn ghost small" type="button" data-cfnone="${i}">None</button>
-          <button class="btn ghost small" type="button" data-cfprev="${i}">👁 Preview</button><button class="btn ghost small" type="button" data-cfdel="${i}" title="Remove this combined figure">✕</button></div>
-        <div class="cf-items">${vars.map(v => `<label title="${esc(v.cols[0].col)} · ${esc((v.levels || []).join(' / '))}"><input type="checkbox" data-cfv="${esc(v.id)}" ${(cf.items || []).includes(v.id) ? 'checked' : ''}><span>${esc(v.label)}${v.include ? '' : ' <span class="legend-note">· not analysed</span>'}</span></label>`).join('') || '<span class="legend-note">No categorical variables.</span>'}</div>
-        <div class="cf-prev" id="cfPrev${i}"></div></div>`).join('')
+          <span class="spacer"></span><span class="legend-note" data-cfn>${(cf.items || []).length} items</span>
+          ${num ? '' : `<button class="btn ghost small" type="button" data-cfyn="${i}" title="Tick every yes/no variable">Tick yes/no variables</button>`}<button class="btn ghost small" type="button" data-cfall="${i}">All</button><button class="btn ghost small" type="button" data-cfnone="${i}">None</button>
+          <button class="btn ghost small" type="button" data-cfdel="${i}" title="Remove this combined figure">✕</button></div>
+        <div class="row" style="gap:6px;align-items:center;margin-top:4px"><span class="legend-note">List:</span><select data-cfk="listOrder" style="width:auto"><option value="">as in step 2</option><option value="sheet" ${cf.listOrder === 'sheet' ? 'selected' : ''}>as in the master sheet</option></select></div>
+        <div class="cf-items">${vars.map(v => `<label title="${esc(v.cols[0].col)}${num ? '' : ' · ' + esc((v.levels || []).join(' / '))}"><input type="checkbox" data-cfv="${esc(v.id)}" ${(cf.items || []).includes(v.id) ? 'checked' : ''}><span>${esc(v.label)}${v.include ? '' : ' <span class="legend-note">· not analysed</span>'}</span></label>`).join('') || `<span class="legend-note">No ${num ? 'numeric' : 'categorical'} variables.</span>`}</div>
+        <div class="cf-prev" id="cfPrev${i}"></div></div>`; }).join('')
       : '<p class="legend-note" style="margin:6px 0 0">None yet. “+ Combined figure”, then tick the items (at least two).</p>';
+    list.forEach((cf, i) => cfPreview(i));
   }
-  function cfPreview(i) {
+  const cfTimers = {};
+  function cfPreview(i, later) {
+    if (later) { clearTimeout(cfTimers[i]); cfTimers[i] = setTimeout(() => cfPreview(i), 250); return; }
     const cf = state.cfg.combFigs[i], box = $('#cfPrev' + i); if (!cf || !box) return;
-    if ((cf.items || []).length < 2) { box.innerHTML = '<span class="legend-note">Tick at least two items.</span>'; return; }
+    const enough = (cf.items || []).length >= 2 || ((cf.items || []).length === 1 && cf.kind !== 'num' && cf.catMode && cf.catMode !== 'first');
+    if (!enough) { box.innerHTML = '<span class="legend-note">Tick at least two items (or one item with all its categories).</span>'; return; }
     try { readUiIntoCfg(); const o = effOptions(), cfg = { ...state.cfg, options: { ...o, figures: 'all' }, combFigs: [cf], advanced: [], consort: null, variables: state.cfg.variables.map(v => ({ ...v, include: v.include || cf.items.includes(v.id) })) };
       const res = Analysis.run(state.data, cfg), f = res.sections.flatMap(s => s.figures || []).find(x => x.comb);
       if (!f) { box.innerHTML = '<span class="legend-note">No figure — check the items.</span>'; return; }
       const url = Charts.draw(f.spec, chartPalette(o), chartStyle(o)).toDataURL('image/png');
       box.innerHTML = `<div class="legend-note" style="margin:6px 0 4px"><b>${esc(f.caption)}</b>${f.note ? ' — ' + esc(f.note) : ''}</div><img src="${url}" alt="${esc(f.caption)}">`;
     } catch (err) { console.error(err); box.innerHTML = `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; } }
-  $('#cfAdd').onclick = () => { if (!state.cfg) return; const list = state.cfg.combFigs = state.cfg.combFigs || [];
-    list.push({ id: 'cf' + Date.now().toString(36), title: '', items: [], level: '', type: 'bar', sort: '', stars: true, labels: true, hide: true }); renderCombFigs(); };
-  $('#cfList').addEventListener('input', e => { const box = e.target.closest('[data-cf]'); if (!box) return; const cf = state.cfg.combFigs[+box.dataset.cf], t = e.target;
-    if (t.dataset.cfv !== undefined) { cf.items = (cf.items || []).filter(x => x !== t.dataset.cfv); if (t.checked) cf.items.push(t.dataset.cfv); box.querySelector('.legend-note').textContent = `${cf.items.length} items`; return; }
-    const k = t.dataset.cfk; if (!k) return; cf[k] = t.type === 'checkbox' ? t.checked : t.value; });
-  $('#cfList').addEventListener('change', e => { const box = e.target.closest('[data-cf]'); if (box && e.target.dataset.cfv === undefined && e.target.type !== 'text') cfPreview(+box.dataset.cf); });
+  $('#cfAdd').onclick = () => { if (!state.cfg) return; readUiIntoCfg(); const list = state.cfg.combFigs = state.cfg.combFigs || [];
+    list.push({ id: 'cf' + Date.now().toString(36), kind: 'cat', title: '', items: [], level: '', catMode: 'first', type: 'bar', sort: '', stars: true, labels: true, hide: true }); renderCombFigs(); };
+  // every change redraws the preview: ticks and lists at once, typing after a short pause
+  $('#cfList').addEventListener('input', e => { const box = e.target.closest('[data-cf]'); if (!box) return; const i = +box.dataset.cf, cf = state.cfg.combFigs[i], t = e.target;
+    if (t.dataset.cfv !== undefined) { cf.items = (cf.items || []).filter(x => x !== t.dataset.cfv); if (t.checked) cf.items.push(t.dataset.cfv); box.querySelector('[data-cfn]').textContent = `${cf.items.length} items`; cfPreview(i); return; }
+    const k = t.dataset.cfk; if (!k) return; cf[k] = t.type === 'checkbox' ? t.checked : t.value;
+    if (k === 'kind') { cf.items = []; renderCombFigs(); return; } if (k === 'catMode' || k === 'stat' || k === 'listOrder') { renderCombFigs(); return; }
+    cfPreview(i, t.type === 'text'); });
   $('#cfList').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !state.cfg) return; const L = state.cfg.combFigs;
     if (b.dataset.cfdel !== undefined) { L.splice(+b.dataset.cfdel, 1); renderCombFigs(); }
-    else if (b.dataset.cfprev !== undefined) cfPreview(+b.dataset.cfprev);
-    else if (b.dataset.cfyn !== undefined) { const cf = L[+b.dataset.cfyn]; cf.items = cfCats().filter(v => isYesNo(v) && v.include).map(v => v.id); renderCombFigs(); cfPreview(+b.dataset.cfyn); }
+    else if (b.dataset.cfyn !== undefined) { const cf = L[+b.dataset.cfyn]; cf.items = cfVars(cf).filter(v => isYesNo(v) && v.include).map(v => v.id); renderCombFigs(); }
+    else if (b.dataset.cfall !== undefined) { const cf = L[+b.dataset.cfall]; cf.items = cfVars(cf).filter(v => v.include).map(v => v.id); renderCombFigs(); }
     else if (b.dataset.cfnone !== undefined) { L[+b.dataset.cfnone].items = []; renderCombFigs(); } });
   function renderFigureTable() {
     [['#fbNum', 'numeric'], ['#fbCat', 'categorical'], ['#fbRep', 'repeated']].forEach(([id, kind]) => { $(id).innerHTML = `<option value="">${kind}…</option>` + CHART_TYPES[kind].map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); });
@@ -4121,7 +4132,7 @@
   };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: false, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, appFull: false, thesisPage: '', citeText: '', autoNum: true, appSheet: '', appSheetCols: '', appSheetRows: '', appSheetAllRows: false, appSheetByGroup: false, appSheetOut: 'in', appSheetFmt: 'docx', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
+  const DEFAULT_REPORT = { bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: true, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, appFull: false, thesisPage: '', citeText: '', autoNum: true, appSheet: '', appSheetCols: '', appSheetRows: '', appSheetAllRows: false, appSheetByGroup: false, appSheetOut: 'in', appSheetFmt: 'docx', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
   // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
   const JOURNAL_STYLES = {
     none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
