@@ -111,7 +111,7 @@
     if (n === 1) renderMessyTasks();
     if (n === 3) renderTimepoints();
     if ((n >= 4 && n <= 8) || n === 11) renderOptions();
-    if (n === 7) { renderFigureTable(); renderFigDesign(); renderCombFigs(); }
+    if (n === 7) { renderFigureTable(); renderFigDesign(); renderCombFigs(); renderPanelFigs(); }
     if (n === 4) renderTestPlan();
     if (n === 6) renderCommentPreview();
     if (n === 5) { renderTableTools(); renderTablePreview(); }
@@ -2029,7 +2029,7 @@
       cfg.variables.map(v => `<tr data-vid="${v.id}" draggable="true">
         <td class="vdrag"><span class="grip" title="Drag to reorder">⋮⋮</span><input type="checkbox" data-vsel="${v.id}" ${state.varSel && state.varSel.has(v.id) ? 'checked' : ''} title="Select for the bulk actions"></td>
         <td><input type="checkbox" data-k="include" ${v.include ? 'checked' : ''}></td>
-        ${(() => { const sp = splitUnit(v); return `<td><input type="text" data-k="label" value="${esc(sp.base)}"></td><td>${v.type === 'numeric' ? `<input type="text" data-k="unit" data-usrc="${sp.src}" value="${esc(sp.unit)}" placeholder="—" class="unit-in">` : '<span class="legend-note">—</span>'}</td>`; })()}
+        ${(() => { const sp = splitUnit(v); return `<td><input type="text" data-k="label" value="${esc(sp.base)}">${v.group ? `<span class="chip info vgrp" title="Item group (Group / Ungroup in the bar above)">${esc(v.group)}</span>` : ''}</td><td>${v.type === 'numeric' ? `<input type="text" data-k="unit" data-usrc="${sp.src}" value="${esc(sp.unit)}" placeholder="—" class="unit-in">` : '<span class="legend-note">—</span>'}</td>`; })()}
         <td class="mono" title="${esc(v.cols.map(c => c.col).join('\n'))}">${v.kind === 'repeated' ? `<span class="chip info">repeated × ${v.cols.length}</span><div class="tpchks">${v.cols.map((c, i) =>
           `<label title="${esc(c.col)}"><input type="checkbox" data-vtp="${i}" ${c.include !== false ? 'checked' : ''}>${esc(c.label || cfg.tpLabels[c.tp] || c.tp)}</label>`).join('')}</div>` : esc(v.cols[0].col)}</td>
         <td>${v.kind === 'repeated' ? `<select data-k="split" title="Analyse the timepoints together, or each as its own variable"><option value="">repeated measure</option><option value="1" ${v.split ? 'selected' : ''}>separate variables</option></select>` : `<select data-k="type"><option value="numeric" ${v.type === 'numeric' ? 'selected' : ''}>numeric</option><option value="categorical" ${v.type === 'categorical' ? 'selected' : ''}>categorical</option></select>`}</td>
@@ -2039,7 +2039,7 @@
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
         <td style="white-space:nowrap"><button class="btn ghost small" data-vgear="${v.id}" type="button" title="More: value labels, unit, decimals, role, ordinal, transformation, Arabic label, merging categories, adjusted comparison">⚙${varBadges(v)}</button>${(warn[v.id] || []).map(w => `<span class="chip warn" title="${esc(w[1])}">${w[0]}</span>`).join('')}</td>
       </tr>`).join('')}</tbody>`;
-    renderRepeated(); filterVars(); renderSubgroup();
+    renderRepeated(); filterVars(); renderSubgroup(); renderGroupsBar();
   }
   function filterVars() {
     const q = ($('#varSearch').value || '').trim().toLowerCase(), trs = [...document.querySelectorAll('#varsTbl tr[data-vid]')];
@@ -2546,61 +2546,173 @@
       let n = 0; state.cfg.variables.forEach(v => { if (v.include && chartKind(v) === kind) { v.chart = k; n++; } });
       e.target.value = ''; renderFigureTable(); toast(`${n} ${kind} variable${n === 1 ? '' : 's'}: ${CHART_TYPES[kind].find(x => x[0] === k)[1]}`); };
   });
-  /* ---------- step 7: combined figures (several categorical or numeric items in one chart), with a live preview ---------- */
+  /* ---------- item groups (step 2): items under one name (e.g. Co-morbidities: DM, HTN, COPD), with a heading row in the tables and a combined figure ---------- */
+  const groupsOf = () => { const m = new Map(); (state.cfg ? state.cfg.variables : []).forEach(v => { if (v.group) { if (!m.has(v.group)) m.set(v.group, []); m.get(v.group).push(v); } }); return m; };
+  // every group has its own combined figure (made and kept up to date here; its settings stay editable in step 7)
+  function syncGroupFigs() {
+    const cfg = state.cfg; if (!cfg) return; const L = cfg.combFigs = cfg.combFigs || [], groups = groupsOf(), on = cfg.groupFigs !== false;
+    for (let i = L.length - 1; i >= 0; i--) if (L[i].auto && (!on || !groups.has(L[i].group))) L.splice(i, 1);
+    if (!on) return;
+    groups.forEach((vs, name) => { const num = vs.filter(v => v.type === 'numeric').length > vs.length / 2, items = vs.filter(v => v.kind === 'single' && v.cols.length === 1 && v.type === (num ? 'numeric' : 'categorical')).map(v => v.id);
+      let cf = L.find(x => x.auto && x.group === name);
+      if (!cf) { cf = { id: 'g' + Date.now().toString(36) + L.length, auto: true, group: name, groupName: name, kind: num ? 'num' : 'cat', title: '', items, layout: 'group', type: 'bar', sort: '', stars: true, labels: true, hide: true, axes: 'panels', chart: 'asVar', place: 'home' }; L.push(cf); }
+      else { cf.items = items; cf.groupName = name; cf.kind = num ? 'num' : 'cat'; } });
+  }
+  function renderGroupsBar() {
+    const box = $('#varGroupsBar'); if (!box || !state.cfg) return; const g = groupsOf(), cfg = state.cfg;
+    $('#vsGroupList').innerHTML = [...g.keys()].map(n => `<option value="${esc(n)}">`).join('');
+    box.style.display = g.size ? '' : 'none';
+    box.innerHTML = `<b>Item groups:</b> ${[...g].map(([n, vs]) => `<span class="chip info vgrp-chip">${esc(n)} <span class="legend-note">(${vs.length}: ${esc(vs.map(v => v.label).slice(0, 4).join(', '))}${vs.length > 4 ? ' …' : ''})</span> <button class="btn ghost small" type="button" data-grren="${esc(n)}" title="Rename the group">✎</button><button class="btn ghost small" type="button" data-grdel="${esc(n)}" title="Ungroup these items">✕</button></span>`).join(' ')}
+      <label class="check" style="margin:0 0 0 10px"><input type="checkbox" id="grpHead" ${cfg.groupHeadings !== false ? 'checked' : ''}><span>Heading rows in the tables</span></label>
+      <label class="check" style="margin:0"><input type="checkbox" id="grpFig" ${cfg.groupFigs !== false ? 'checked' : ''}><span>A combined figure for each group (step 7)</span></label>`;
+  }
+  $('#vsGroupGo').onclick = () => { readUiIntoCfg(); const name = $('#vsGroup').value.trim(), vs = selVars(); if (!name) { toast('Type the name of the group, e.g. Co-morbidities'); return; } if (!vs.length) return;
+    const all = [...vs, ...state.cfg.variables.filter(v => v.group === name && !vs.includes(v))], types = new Set(all.map(v => v.type));
+    if (types.size > 1) { toast('A group holds categorical items or numeric items, not both'); return; }
+    vs.forEach(v => { v.group = name; }); syncGroupFigs(); renderVariables(); toast(`${vs.length} item${vs.length > 1 ? 's' : ''} grouped as “${name}”`); };
+  $('#vsUngroupGo').onclick = () => { readUiIntoCfg(); const vs = selVars(); vs.forEach(v => { delete v.group; }); syncGroupFigs(); renderVariables(); toast(`${vs.length} item${vs.length > 1 ? 's' : ''} ungrouped`); };
+  $('#varGroupsBar').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !state.cfg) return; readUiIntoCfg();
+    if (b.dataset.grdel !== undefined) { const n = b.dataset.grdel; state.cfg.variables.forEach(v => { if (v.group === n) delete v.group; }); syncGroupFigs(); renderVariables(); toast(`“${n}” ungrouped`); }
+    if (b.dataset.grren !== undefined) { const n = b.dataset.grren, nn = (prompt('New name of the group:', n) || '').trim(); if (!nn || nn === n) return;
+      state.cfg.variables.forEach(v => { if (v.group === n) v.group = nn; }); (state.cfg.combFigs || []).forEach(cf => { if (cf.auto && cf.group === n) { cf.group = nn; cf.groupName = nn; } }); syncGroupFigs(); renderVariables(); toast(`Renamed to “${nn}”`); } });
+  $('#varGroupsBar').addEventListener('change', e => { if (!state.cfg) return; if (e.target.id === 'grpHead') state.cfg.groupHeadings = e.target.checked; if (e.target.id === 'grpFig') { state.cfg.groupFigs = e.target.checked; syncGroupFigs(); } });
+
+  /* ---------- step 7: combined figures (several categorical or numeric items in one chart), with a live preview, copy, export and placement ---------- */
   const cfVars = cf => state.cfg.variables.filter(v => v.type === (cf.kind === 'num' ? 'numeric' : 'categorical') && v.kind === 'single' && v.cols.length === 1)
     .sort((a, b) => (cf.listOrder === 'sheet' ? state.data.headers.indexOf(a.cols[0].col) - state.data.headers.indexOf(b.cols[0].col) : 0));
   const isYesNo = v => (v.levels || []).length === 2 && (v.levels || []).some(l => Analysis.POSITIVE.test(String(l).trim()));
+  const sel2 = (k, cur, opts2, attrs = '') => `<select data-cfk="${k}" style="width:auto" ${attrs}>${opts2.map(([v, l]) => `<option value="${esc(v)}" ${String(cur ?? '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  // where a figure goes: after the table of its first item, after / before a chosen table, at the end of the results, or in the appendix
+  const placeSel = (cur, home) => { const T = state.figTables || []; return `<select data-cfk="place" style="width:auto;max-width:280px">${[[home ? 'home' : 'end', home ? 'After the table of its first item' : 'At the end of the results'], ...(home ? [['end', 'At the end of the results']] : []), ['appendix', 'In the appendix']].map(([v, l]) => `<option value="${v}" ${(cur || (home ? 'home' : 'end')) === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}
+    ${T.length ? `<optgroup label="After the table">${T.map(t => `<option value="after:${esc(t)}" ${cur === 'after:' + t ? 'selected' : ''}>after: ${esc(t.slice(0, 70))}</option>`).join('')}</optgroup><optgroup label="Before the table">${T.map(t => `<option value="before:${esc(t)}" ${cur === 'before:' + t ? 'selected' : ''}>before: ${esc(t.slice(0, 70))}</option>`).join('')}</optgroup>` : ''}</select>`; };
+  const figTools = (kind, i) => `<span class="row" style="gap:4px"><button class="btn ghost small" type="button" data-${kind}copy="${i}" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button><button class="btn ghost small" type="button" data-${kind}exp="${i}" title="PNG, JPG or TIFF at up to 1200 dpi, colour or greyscale">⬇ PNG · JPG · TIFF</button><button class="btn ghost small" type="button" data-${kind}ppt="${i}">⬇ PowerPoint</button><button class="btn ghost small" type="button" data-${kind}pdf="${i}">⬇ PDF</button></span>`;
   function renderCombFigs() {
-    if (!state.cfg || !$('#cfList')) return; const list = state.cfg.combFigs = state.cfg.combFigs || [];
-    $('#cfList').innerHTML = list.length ? list.map((cf, i) => { const num = cf.kind === 'num', vars = cfVars(cf); return `<div class="cf-item" data-cf="${i}">
+    if (!state.cfg || !$('#cfList')) return; syncGroupFigs(); const list = state.cfg.combFigs = state.cfg.combFigs || [];
+    $('#cfList').innerHTML = list.length ? list.map((cf, i) => { const num = cf.kind === 'num', vars = cfVars(cf), byG = cf.layout === 'group', ticked = (cf.items || []).map(id => vars.find(v => v.id === id)).filter(Boolean);
+      const catRows = !num && ticked.length ? `<div class="cf-cats"><span class="legend-note">Categories of each item:</span>${ticked.map(v => { const lv = (v.levels || []).map(String), cur = (cf.itemCats || {})[v.id] || '';
+          return `<label class="cf-cat"><span>${esc(v.label)}</span><select data-cfcat="${esc(v.id)}" style="width:auto"><option value="" ${!cur ? 'selected' : ''}>Auto (${isYesNo(v) ? 'Yes only' : 'all'})</option><option value="all" ${cur === 'all' ? 'selected' : ''}>All categories</option><option value="first" ${cur === 'first' ? 'selected' : ''}>Only the first (${esc(lv[0] || '—')})</option>${lv.slice(1).map(l => `<option value="${esc(l)}" ${cur === l ? 'selected' : ''}>Only ${esc(l)}</option>`).join('')}</select></label>`; }).join('')}</div>` : '';
+      return `<div class="cf-item" data-cf="${i}">
+        ${cf.auto ? `<div class="legend-note" style="margin-bottom:4px">🔗 Item group <b>${esc(cf.group)}</b> (step 2) — its items follow the group</div>` : ''}
         <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
-          <div><label class="f">Items</label><select data-cfk="kind" style="width:auto"><option value="cat" ${!num ? 'selected' : ''}>Categorical (%)</option><option value="num" ${num ? 'selected' : ''}>Numeric (mean / median)</option></select></div>
-          <div style="flex:1;min-width:220px"><label class="f">Caption (optional)</label><input type="text" data-cfk="title" value="${esc(cf.title || '')}" placeholder="${num ? 'e.g. Age, weight and height of the studied groups' : 'e.g. Co-morbidities of the studied groups'}"></div>
-          ${num ? `<div><label class="f">Bars show</label><select data-cfk="stat" style="width:auto"><option value="mean" ${cf.stat !== 'median' ? 'selected' : ''}>Mean (error bar as in the figure options)</option><option value="median" ${cf.stat === 'median' ? 'selected' : ''}>Median (IQR)</option></select></div>`
-            : `<div><label class="f">Categories shown</label><select data-cfk="catMode" style="width:auto"><option value="first" ${!cf.catMode || cf.catMode === 'first' ? 'selected' : ''}>One per item (Yes / first)</option><option value="all" ${cf.catMode === 'all' ? 'selected' : ''}>All categories (e.g. Male and Female)</option><option value="list" ${cf.catMode === 'list' ? 'selected' : ''}>The categories named →</option></select></div>
-          <div><label class="f">Category name(s)</label><input type="text" data-cfk="level" value="${esc(cf.level || '')}" placeholder="${cf.catMode === 'list' ? 'e.g. Male, Female' : 'Yes (first category)'}" style="width:150px"></div>`}
-          <div><label class="f">Chart</label><select data-cfk="type" style="width:auto"><option value="bar" ${cf.type !== 'hbar' ? 'selected' : ''}>Bars</option><option value="hbar" ${cf.type === 'hbar' ? 'selected' : ''}>Horizontal bars</option></select></div>
-          <div><label class="f">Order of the items</label><select data-cfk="sort" style="width:auto"><option value="">As ticked</option><option value="master" ${cf.sort === 'master' ? 'selected' : ''}>As in the master sheet</option><option value="desc" ${cf.sort === 'desc' ? 'selected' : ''}>${num ? 'Largest' : 'Most frequent'} first</option><option value="asc" ${cf.sort === 'asc' ? 'selected' : ''}>${num ? 'Smallest' : 'Least frequent'} first</option></select></div>
-          <div><label class="f">Y-axis title</label><input type="text" data-cfk="yLabel" value="${esc(cf.yLabel || '')}" placeholder="${num ? (cf.stat === 'median' ? 'Median' : 'Mean') : '% of patients'}" style="width:140px"></div>
+          <div><label class="f">Items</label>${sel2('kind', num ? 'num' : 'cat', [['cat', 'Categorical (%)'], ['num', 'Numeric']], cf.auto ? 'disabled' : '')}</div>
+          <div style="flex:1;min-width:200px"><label class="f">Caption (optional)</label><input type="text" data-cfk="title" value="${esc(cf.title || '')}" placeholder="${esc(cf.groupName ? cf.groupName + ' of the studied groups' : num ? 'e.g. Age, weight and height of the studied groups' : 'e.g. Co-morbidities of the studied groups')}"></div>
+          ${num ? `<div><label class="f">Chart</label>${sel2('chart', cf.chart || 'asVar', [['asVar', 'As in Figures by variable'], ['bar', 'Bar'], ['box', 'Box plot'], ['violin', 'Violin'], ['rain', 'Raincloud'], ['dot', 'Dot plot (every patient)'], ['dotci', 'Dots + mean 95% CI'], ['meanci', 'Mean with 95% CI']])}</div>
+              <div><label class="f">Bars show</label>${sel2('stat', cf.stat || '', [['', 'Mean or median (as the data)'], ['mean', 'Mean (error bar of the figure options)'], ['median', 'Median (IQR)']])}</div>
+              <div><label class="f">Axes</label>${sel2('axes', cf.axes || 'panels', [['panels', 'One panel per item (own axis)'], ['shared', 'One shared axis']])}</div>
+              <div><label class="f">Panels per row</label>${sel2('cols', String(cf.cols || ''), [['', 'Auto'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']])}</div>`
+            : `<div><label class="f">Bars grouped by</label>${sel2('layout', byG ? 'group' : 'item', [['group', 'Study group (category names under the bars)'], ['item', 'Item (a bar per study group)']])}</div>
+              ${byG ? '' : `<div><label class="f">Chart</label>${sel2('type', cf.type === 'hbar' ? 'hbar' : 'bar', [['bar', 'Bars'], ['hbar', 'Horizontal bars']])}</div>`}`}
+          <div><label class="f">Order of the items</label>${sel2('sort', cf.sort || '', [['', 'As ticked'], ['master', 'As in the master sheet'], ['desc', num ? 'Largest first' : 'Most frequent first'], ['asc', num ? 'Smallest first' : 'Least frequent first']])}</div>
+          <div><label class="f">Y-axis title</label><input type="text" data-cfk="yLabel" value="${esc(cf.yLabel || '')}" placeholder="${num ? 'the item' : '% of patients'}" style="width:130px"></div>
+          <div><label class="f">Place in the report</label>${placeSel(cf.place, true)}</div>
         </div>
         <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:6px;align-items:center">
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="stars" ${cf.stars !== false ? 'checked' : ''}><span>* on significant items</span></label>
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="labels" ${cf.labels !== false ? 'checked' : ''}><span>Values on the bars</span></label>
+          ${num ? `<label class="check" style="margin:0"><input type="checkbox" data-cfk="letters" ${cf.letters ? 'checked' : ''}><span>Panel letters A, B …</span></label>` : ''}
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="hide" ${cf.hide !== false ? 'checked' : ''}><span>Leave out the items' own figures</span></label>
           <span class="spacer"></span><span class="legend-note" data-cfn>${(cf.items || []).length} items</span>
-          ${num ? '' : `<button class="btn ghost small" type="button" data-cfyn="${i}" title="Tick every yes/no variable">Tick yes/no variables</button>`}<button class="btn ghost small" type="button" data-cfall="${i}">All</button><button class="btn ghost small" type="button" data-cfnone="${i}">None</button>
-          <button class="btn ghost small" type="button" data-cfdel="${i}" title="Remove this combined figure">✕</button></div>
-        <div class="row" style="gap:6px;align-items:center;margin-top:4px"><span class="legend-note">List:</span><select data-cfk="listOrder" style="width:auto"><option value="">as in step 2</option><option value="sheet" ${cf.listOrder === 'sheet' ? 'selected' : ''}>as in the master sheet</option></select></div>
-        <div class="cf-items">${vars.map(v => `<label title="${esc(v.cols[0].col)}${num ? '' : ' · ' + esc((v.levels || []).join(' / '))}"><input type="checkbox" data-cfv="${esc(v.id)}" ${(cf.items || []).includes(v.id) ? 'checked' : ''}><span>${esc(v.label)}${v.include ? '' : ' <span class="legend-note">· not analysed</span>'}</span></label>`).join('') || `<span class="legend-note">No ${num ? 'numeric' : 'categorical'} variables.</span>`}</div>
+          ${cf.auto ? '' : `${num ? '' : `<button class="btn ghost small" type="button" data-cfyn="${i}" title="Tick every yes/no variable">Tick yes/no variables</button>`}<button class="btn ghost small" type="button" data-cfall="${i}">All</button><button class="btn ghost small" type="button" data-cfnone="${i}">None</button>`}
+          <button class="btn ghost small" type="button" data-cfdel="${i}" title="${cf.auto ? 'Remove (switch the automatic figures off in step 2 to keep it removed)' : 'Remove this combined figure'}">✕</button></div>
+        ${cf.auto ? '' : `<div class="row" style="gap:6px;align-items:center;margin-top:4px"><span class="legend-note">List:</span>${sel2('listOrder', cf.listOrder || '', [['', 'as in step 2'], ['sheet', 'as in the master sheet']])}</div>
+        <div class="cf-items">${vars.map(v => `<label title="${esc(v.cols[0].col)}${num ? '' : ' · ' + esc((v.levels || []).join(' / '))}"><input type="checkbox" data-cfv="${esc(v.id)}" ${(cf.items || []).includes(v.id) ? 'checked' : ''}><span>${esc(v.label)}${v.include ? '' : ' <span class="legend-note">· not analysed</span>'}</span></label>`).join('') || `<span class="legend-note">No ${num ? 'numeric' : 'categorical'} variables.</span>`}</div>`}
+        ${catRows}
+        <div class="row" style="gap:6px;margin-top:6px">${figTools('cf', i)}</div>
         <div class="cf-prev" id="cfPrev${i}"></div></div>`; }).join('')
-      : '<p class="legend-note" style="margin:6px 0 0">None yet. “+ Combined figure”, then tick the items (at least two).</p>';
+      : '<p class="legend-note" style="margin:6px 0 0">None yet. “+ Combined figure”, then tick the items — or group items in step 2 (e.g. Co-morbidities) to get one automatically.</p>';
     list.forEach((cf, i) => cfPreview(i));
   }
-  const cfTimers = {};
+  const cfTimers = {}; state.cfFigs = {};
+  // a background run of the analysis for the step 7 tools (the tables for placement, the figures to combine)
+  function bgRun(extra) { readUiIntoCfg(); const o = effOptions(); const res = Analysis.run(state.data, { ...state.cfg, options: { ...o, figures: 'all' }, ...(extra || {}) }); state.figTables = res.sections.map(s => s.title).filter(Boolean); return { res, o }; }
   function cfPreview(i, later) {
     if (later) { clearTimeout(cfTimers[i]); cfTimers[i] = setTimeout(() => cfPreview(i), 250); return; }
     const cf = state.cfg.combFigs[i], box = $('#cfPrev' + i); if (!cf || !box) return;
-    const enough = (cf.items || []).length >= 2 || ((cf.items || []).length === 1 && cf.kind !== 'num' && cf.catMode && cf.catMode !== 'first');
-    if (!enough) { box.innerHTML = '<span class="legend-note">Tick at least two items (or one item with all its categories).</span>'; return; }
-    try { readUiIntoCfg(); const o = effOptions(), cfg = { ...state.cfg, options: { ...o, figures: 'all' }, combFigs: [cf], advanced: [], consort: null, variables: state.cfg.variables.map(v => ({ ...v, include: v.include || cf.items.includes(v.id) })) };
-      const res = Analysis.run(state.data, cfg), f = res.sections.flatMap(s => s.figures || []).find(x => x.comb);
-      if (!f) { box.innerHTML = '<span class="legend-note">No figure — check the items.</span>'; return; }
-      const url = Charts.draw(f.spec, chartPalette(o), chartStyle(o)).toDataURL('image/png');
+    const n = (cf.items || []).length, enough = cf.kind === 'num' ? n >= 2 : n >= 1;
+    if (!enough) { box.innerHTML = `<span class="legend-note">Tick ${cf.kind === 'num' ? 'at least two items' : 'one or more items'}.</span>`; state.cfFigs[i] = null; return; }
+    try { const { res, o } = bgRun({ combFigs: [{ ...cf, place: 'home' }], advanced: [], consort: null, variables: state.cfg.variables.map(v => ({ ...v, include: v.include || cf.items.includes(v.id) })) });
+      const f = res.sections.flatMap(s => s.figures || []).find(x => x.comb);
+      if (!f) { box.innerHTML = '<span class="legend-note">No figure — check the items.</span>'; state.cfFigs[i] = null; return; }
+      const c = Charts.draw(f.spec, chartPalette(o), chartStyle(o)), url = c.toDataURL('image/png'); state.cfFigs[i] = { ...f, url, w: c.width, h: c.height };
       box.innerHTML = `<div class="legend-note" style="margin:6px 0 4px"><b>${esc(f.caption)}</b>${f.note ? ' — ' + esc(f.note) : ''}</div><img src="${url}" alt="${esc(f.caption)}">`;
     } catch (err) { console.error(err); box.innerHTML = `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; } }
   $('#cfAdd').onclick = () => { if (!state.cfg) return; readUiIntoCfg(); const list = state.cfg.combFigs = state.cfg.combFigs || [];
-    list.push({ id: 'cf' + Date.now().toString(36), kind: 'cat', title: '', items: [], level: '', catMode: 'first', type: 'bar', sort: '', stars: true, labels: true, hide: true }); renderCombFigs(); };
+    list.push({ id: 'cf' + Date.now().toString(36), kind: 'cat', title: '', items: [], layout: 'group', type: 'bar', sort: '', stars: true, labels: true, hide: true, axes: 'panels', chart: 'asVar', place: 'home' }); renderCombFigs(); };
   // every change redraws the preview: ticks and lists at once, typing after a short pause
   $('#cfList').addEventListener('input', e => { const box = e.target.closest('[data-cf]'); if (!box) return; const i = +box.dataset.cf, cf = state.cfg.combFigs[i], t = e.target;
-    if (t.dataset.cfv !== undefined) { cf.items = (cf.items || []).filter(x => x !== t.dataset.cfv); if (t.checked) cf.items.push(t.dataset.cfv); box.querySelector('[data-cfn]').textContent = `${cf.items.length} items`; cfPreview(i); return; }
+    if (t.dataset.cfv !== undefined) { cf.items = (cf.items || []).filter(x => x !== t.dataset.cfv); if (t.checked) cf.items.push(t.dataset.cfv); renderCombFigs(); return; }
+    if (t.dataset.cfcat !== undefined) { cf.itemCats = { ...(cf.itemCats || {}), [t.dataset.cfcat]: t.value }; if (!t.value) delete cf.itemCats[t.dataset.cfcat]; cfPreview(i); return; }
     const k = t.dataset.cfk; if (!k) return; cf[k] = t.type === 'checkbox' ? t.checked : t.value;
-    if (k === 'kind') { cf.items = []; renderCombFigs(); return; } if (k === 'catMode' || k === 'stat' || k === 'listOrder') { renderCombFigs(); return; }
+    if (k === 'kind') { cf.items = []; cf.itemCats = {}; renderCombFigs(); return; } if (['layout', 'listOrder', 'chart', 'axes'].includes(k)) { renderCombFigs(); return; }
     cfPreview(i, t.type === 'text'); });
+  // copy and export a figure of step 7 (a combined figure or a panel composite)
+  const figOf = (kind, i) => kind === 'cf' ? state.cfFigs[i] : state.pfFigs[i];
+  async function figAction(kind, act, i) { const f = figOf(kind, i); if (!f) { toast('Nothing to export yet — tick the items first'); return; } const o = effOptions(), name = f.caption.slice(0, 90);
+    if (act === 'copy') return copyImage(f.url);
+    if (act === 'exp') return openFigExport([{ ...chartItem(f, name, o), ...(f.spec.type === 'panels' ? { svg: null } : {}) }]);
+    if (act === 'ppt') { saveUrl(URL.createObjectURL(buildPptx([{ url: f.url, w: f.w, h: f.h, caption: f.caption }], name)), `${baseName()} - ${safeName(name)}.pptx`); toast('PowerPoint slide saved'); return; }
+    if (act === 'pdf') { busy(true); try { await figsPdf([{ url: f.url, w: f.w, h: f.h, caption: f.caption }], `${baseName()} - ${safeName(name)}.pdf`); } finally { busy(false); } } }
+  document.addEventListener('click', e => { const b = e.target.closest('[data-cfcopy],[data-cfexp],[data-cfppt],[data-cfpdf],[data-pfcopy],[data-pfexp],[data-pfppt],[data-pfpdf]'); if (!b) return;
+    const k = Object.keys(b.dataset).find(x => /^(cf|pf)(copy|exp|ppt|pdf)$/.test(x)), m = /^(cf|pf)(copy|exp|ppt|pdf)$/.exec(k); figAction(m[1], m[2], +b.dataset[k]); });
   $('#cfList').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !state.cfg) return; const L = state.cfg.combFigs;
-    if (b.dataset.cfdel !== undefined) { L.splice(+b.dataset.cfdel, 1); renderCombFigs(); }
+    if (b.dataset.cfdel !== undefined) { const cf = L[+b.dataset.cfdel]; if (cf.auto) { state.cfg.groupFigs = false; } L.splice(+b.dataset.cfdel, 1); renderCombFigs(); if (cf.auto) toast('Removed; the automatic group figures are switched off (step 2)'); }
     else if (b.dataset.cfyn !== undefined) { const cf = L[+b.dataset.cfyn]; cf.items = cfVars(cf).filter(v => isYesNo(v) && v.include).map(v => v.id); renderCombFigs(); }
     else if (b.dataset.cfall !== undefined) { const cf = L[+b.dataset.cfall]; cf.items = cfVars(cf).filter(v => v.include).map(v => v.id); renderCombFigs(); }
     else if (b.dataset.cfnone !== undefined) { L[+b.dataset.cfnone].items = []; renderCombFigs(); } });
+
+  /* ---------- step 7: combine figures — chosen figures of the report as panels A, B, C … in one figure (moved here from the report step) ---------- */
+  state.pfFigs = {};
+  function renderPanelFigs() {
+    if (!state.cfg || !$('#pfList')) return; const list = state.cfg.panelFigs = state.cfg.panelFigs || [];
+    let figs = []; try { const { res } = bgRun(); figs = res.sections.flatMap(s => s.figures || []).filter(f => !f.panelFig).map(f => f.caption); } catch (err) { console.error(err); }
+    state.pfSource = figs;
+    $('#pfList').innerHTML = list.length ? list.map((pf, i) => `<div class="cf-item" data-pf="${i}">
+        <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:220px"><label class="f">Caption (optional)</label><input type="text" data-pfk="caption" value="${esc(pf.caption || '')}" placeholder="Combined figure: (A) …; (B) …"></div>
+          <div><label class="f">Panels per row</label><select data-pfk="cols" style="width:auto">${['2', '3', '1', '4'].map(c => `<option ${String(pf.cols || 2) === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+          <div><label class="f">Place in the report</label>${placeSel(pf.place, false).replace(/data-cfk=/g, 'data-pfk=')}</div>
+          <label class="check" style="margin:0 0 6px"><input type="checkbox" data-pfk="hide" ${pf.hide ? 'checked' : ''}><span>Leave out the figures it combines</span></label>
+          <button class="btn ghost small" type="button" data-pfdel="${i}" style="margin-bottom:4px">✕</button></div>
+        <div class="legend-note" style="margin-top:4px">Tick the figures in the order of the panels (A, B, C …): ${(pf.keys || []).length} ticked.</div>
+        <div class="cf-items" style="grid-template-columns:1fr">${figs.map(c => { const k = (pf.keys || []).indexOf(c); return `<label><input type="checkbox" data-pfv="${esc(c)}" ${k >= 0 ? 'checked' : ''}><span>${k >= 0 ? `<b>${String.fromCharCode(65 + k)}</b> · ` : ''}${esc(c)}</span></label>`; }).join('') || '<span class="legend-note">No figures yet.</span>'}</div>
+        <div class="row" style="gap:6px;margin-top:6px">${figTools('pf', i)}</div>
+        <div class="cf-prev" id="pfPrev${i}"></div></div>`).join('')
+      : '<p class="legend-note" style="margin:6px 0 0">None yet. “+ Panel figure”, then tick the figures in the order of the panels.</p>';
+    list.forEach((pf, i) => pfPreview(i));
+  }
+  function pfPreview(i) {
+    const pf = state.cfg.panelFigs[i], box = $('#pfPrev' + i); if (!pf || !box) return;
+    if ((pf.keys || []).length < 2) { box.innerHTML = '<span class="legend-note">Tick at least two figures.</span>'; state.pfFigs[i] = null; return; }
+    try { const { res, o } = bgRun({ panelFigs: [] }), all = res.sections.flatMap(s => s.figures || []);
+      // the source figures as drawn in the report (with each variable's own figure settings)
+      const src = pf.keys.map(k => all.find(f => f.caption === k)).filter(Boolean).map(f => { const g = { ...f, spec: { ...f.spec } }; figVarProps(g); return g; });
+      const f = panelFigure(pf, src); if (!f) { box.innerHTML = '<span class="legend-note">The ticked figures are not in the report.</span>'; return; }
+      const c = Charts.draw(f.spec, chartPalette(o), chartStyle(o)), url = c.toDataURL('image/png'); state.pfFigs[i] = { ...f, url, w: c.width, h: c.height };
+      box.innerHTML = `<div class="legend-note" style="margin:6px 0 4px"><b>${esc(f.caption)}</b></div><img src="${url}" alt="">`;
+    } catch (err) { console.error(err); box.innerHTML = `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; } }
+  const panelFigure = (pf, src) => src.length < 2 ? null : { comb: true, panelFig: true, place: pf.place || 'end', sig: true, vid: 'pf_' + pf.id, note: '',
+    caption: pf.caption || `Combined figure: ${src.map((f, k) => `(${String.fromCharCode(65 + k)}) ${f.caption}`).join('; ')}`,
+    spec: { type: 'panels', cols: +pf.cols || 2, letters: true, panels: src.map(f => ({ ...f.spec, title: null })) }, srcKeys: src.map(f => f.caption), hideSrc: !!pf.hide };
+  $('#pfAdd').onclick = () => { if (!state.cfg) return; (state.cfg.panelFigs = state.cfg.panelFigs || []).push({ id: 'pf' + Date.now().toString(36), caption: '', cols: 2, keys: [], place: 'end', hide: false }); renderPanelFigs(); };
+  $('#pfList').addEventListener('input', e => { const box = e.target.closest('[data-pf]'); if (!box) return; const i = +box.dataset.pf, pf = state.cfg.panelFigs[i], t = e.target;
+    if (t.dataset.pfv !== undefined) { pf.keys = (pf.keys || []).filter(x => x !== t.dataset.pfv); if (t.checked) pf.keys.push(t.dataset.pfv); renderPanelFigs(); return; }
+    const k = t.dataset.pfk; if (!k) return; pf[k] = t.type === 'checkbox' ? t.checked : t.value; if (t.type === 'text') { clearTimeout(cfTimers['p' + i]); cfTimers['p' + i] = setTimeout(() => pfPreview(i), 250); } else pfPreview(i); });
+  $('#pfList').addEventListener('click', e => { const b = e.target.closest('[data-pfdel]'); if (!b) return; state.cfg.panelFigs.splice(+b.dataset.pfdel, 1); renderPanelFigs(); });
+
+  // after the analysis: the panel figures, then every figure that has its own place (after / before a table, at the end, in the appendix)
+  function placeFigures(res, opts) {
+    (state.cfg.panelFigs || []).forEach(pf => { const all = res.sections.flatMap(s => s.figures || []), src = (pf.keys || []).map(k => all.find(f => f.key === k)).filter(Boolean), f = panelFigure(pf, src);
+      if (!f) return; f.key = f.caption; renderFigure(f, opts); res.sections[res.sections.length - 1].figures.push(f);
+      if (f.hideSrc) { const hide = new Set(src); res.sections.forEach(s => { s.figures = s.figures.filter(x => !hide.has(x)); }); } });
+    const moving = []; res.sections.forEach(s => { s.figures = s.figures.filter(f => { if (f.place && f.place !== 'home') { moving.push(f); return false; } return true; }); });
+    const figSec = f => ({ kind: 'figonly', figOnly: true, title: f.caption, key: 'fig:' + f.caption, head: [], rows: [], footnote: '', comment: '', figures: [f], meta: {} });
+    res.appendixFigs = [];
+    moving.forEach(f => { const [where, ...rest] = f.place.split(':'), t = rest.join(':'), idx = res.sections.findIndex(s => !s.figOnly && s.title === t);
+      if (where === 'after' && idx >= 0) res.sections[idx].figures.push(f);
+      else if (where === 'before' && idx >= 0) res.sections.splice(idx, 0, figSec(f));
+      else if (where === 'appendix') res.appendixFigs.push(f);
+      else res.sections.push(figSec(f)); });
+  }
   function renderFigureTable() {
     [['#fbNum', 'numeric'], ['#fbCat', 'categorical'], ['#fbRep', 'repeated']].forEach(([id, kind]) => { $(id).innerHTML = `<option value="">${kind}…</option>` + CHART_TYPES[kind].map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); });
     const vars = state.cfg.variables.filter(v => v.include);
@@ -3618,7 +3730,7 @@
     const pcolOn = pcol && sym;
     const body = rows.map((r, ri) => {
       const first = cover === 0; if (first) { if (!(r[0] && r[0].ind)) band++; cover = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); } else cover--;
-      return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td data-rc="${ri}:${ci}" ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${(o.firstColLeft && first && ci === 0) || c.ind || c.left ? 'left' : ''}"${pcolOn && (c.t || []).length === 1 && sigRe.test(String(c.t[0])) ? ` style="color:${pcol}"` : ''}>${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
+      return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td data-rc="${ri}:${ci}" ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${c.sub && ci === 0 ? 'sub' : ''} ${c.grp ? 'grp' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${(o.firstColLeft && first && ci === 0) || c.ind || c.left ? 'left' : ''}"${pcolOn && (c.t || []).length === 1 && sigRe.test(String(c.t[0])) ? ` style="color:${pcol}"` : ''}>${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
     }).join('');
     return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.tableFont && o.tableFont !== 'same' ? o.tableFont : o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
   }
@@ -4627,6 +4739,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   // what the report was run from: the setup and the data (the ⬇ Word button re-runs it only when these changed)
   const runKey = () => state.cfg && state.data ? JSON.stringify([state.cfg, state.data.headers, state.data.rows]) : '';
   function runAnalysis() {
+    syncGroupFigs();
     busy(true);
     renderFormatBar();
     setTimeout(() => {
@@ -4680,8 +4793,8 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         // the automatic texts, before any edit in step 11 (the review copy shows the edits as tracked changes)
         res.auto = { methods: res.methods || '', sections: res.sections.map(s => ({ title: s.title, comment: s.comment || '' })) }; state.rephraseBase = {}; state.rephraseK = {};
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
-          f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options);
-          f.note = cfg.options.figNotes ? figNote(f.spec, cfg.options) : '';
+          f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options); const own = f.comb ? f.note || '' : '';
+          f.note = [own, cfg.options.figNotes ? figNote(f.spec, cfg.options) : ''].filter(Boolean).join(' ');
           if (cfg.options.midDot) f.note = dot(f.note);
         }); });
         const pal = chartPalette(cfg.options);
@@ -4691,6 +4804,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
           res.consort = { url: cv.toDataURL('image/png'), w: cv.width, h: cv.height };
         }
         if (cfg.options.rmLayout === 'cols') res.sections = res.sections.map(Analysis.timepointsAsColumns);
+        placeFigures(res, cfg.options); state.figTables = res.sections.filter(s => !s.figOnly).map(s => s.title).filter(Boolean);
         state.result = res; state.runKey = runKey();
         if (state.pendingEdits) { applyEdits(res, state.pendingEdits); state.pendingEdits = null; }
         renderReport();
@@ -4804,7 +4918,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     const f0 = +rep.figStart || 1, figNum = new Map(); let n = consortOn ? f0 + 1 : f0;
     order.forEach(f => figNum.set(f, pre + n++));
     const tabNum = new Map(); let t = +rep.tabStart || 1;
-    r.sections.forEach(s => { if (!isOut(exKey.table(s))) tabNum.set(s, pre + t++); });
+    r.sections.forEach(s => { if (!s.figOnly && !isOut(exKey.table(s))) tabNum.set(s, pre + t++); });
     return { o, rep, paper, pre, kept, order, figNum, tabNum, consortNum: pre + f0, consortOn };
   }
   // the paper's Results narrative: significant findings per table, each citing its table and figure
@@ -4865,6 +4979,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
       return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption">${note} <button class="btn ghost small" data-copyfig="${si}:${fi}" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button></figcaption>${exBox(fk, 'Figure')}</figure>`;
     };
     r.sections.forEach((s, i) => {
+      if (s.figOnly) { if (!atEnd) html += `<div class="report-sec"><div class="legend-note">Figure placed here (step 7)</div><div class="figs">${s.figures.map(figHtml).join('')}</div></div>`; return; }
       const tk = exKey.table(s), tOut = isOut(tk), place = s.place && o.commentPlace !== 'none' ? s.place : o.commentPlace || 'after';
       const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}" spellcheck="true" lang="en">${esc(s.comment)}</textarea>
         <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><button class="btn ghost small" data-sents="${i}" type="button" title="Keep or drop single sentences">✂ Sentences</button><button class="btn ghost small" data-srcs="${i}" type="button" title="Point at a number to see its cell in the table">🔗 Sources</button><button class="btn ghost small" data-rephrase="${i}" type="button" title="Another wording of the same comment (click again for more)">↻ Rephrase</button><button class="btn ghost small" data-revnote="${i}" type="button" title="A reviewer's or supervisor's comment on this section (a Word comment in the review copy)">💬 ${(state.cfg.revNotes || {})[s.key || s.title] ? 'Comment ✓' : 'Comment'}</button><span class="legend-note">${words(s.comment)} words · readability ${flesch(s.comment)}</span></div><div class="explain" data-explainbox="${i}"></div><div data-sentbox="${i}"></div>
@@ -4881,6 +4996,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
       if (sorted.length) html += `<div class="report-sec"><h3>Figures</h3><div class="figs">${sorted.map(figHtml).join('')}</div></div>`;
     }
     [['subSummary', 'Subgroup summary'], ['discussion', 'Discussion points'], ['limitations', 'Statistical limitations'], ['conclusion', 'Conclusion']].forEach(([k2, h2]) => { if (r[k2]) html += `<div class="report-sec"><h3>${h2}</h3><textarea data-extra="${k2}">${esc(r[k2])}</textarea></div>`; });
+    if ((r.appendixFigs || []).length) html += `<div class="report-sec"><h3>Appendix figures</h3><div class="figs">${r.appendixFigs.map((f, k) => `<figure><img src="${f.url}" alt=""><figcaption>Figure A${k + 1}: ${esc(f.caption)}</figcaption></figure>`).join('')}</div></div>`;
     if (r.abbrev) html += `<div class="report-sec"><h3>Abbreviations</h3><p class="legend-note" style="font-size:13px">${esc(r.abbrev)}</p></div>`;
     if (r.summary) html += `<div class="report-sec${off('summary')}"><div class="row"><h3>Summary of key findings</h3><span class="spacer"></span>${exBox('summary', 'Include')}</div><textarea id="edSummary">${esc(r.summary)}</textarea></div>`;
     $('#report').innerHTML = html;
@@ -5255,7 +5371,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const b64bytes = url => Uint8Array.from(atob(url.split(',')[1]), ch => ch.charCodeAt(0));
   function exportedFigures() { syncEdits(); const r = exportModel(state.result), plan = exportPlan(state.result), out = [];
     r.sections.forEach(s => s.figures.forEach(f => { if (f.url) out.push({ url: f.url, w: f.w, h: f.h, caption: `Figure ${plan.figNum.get(state.result.sections.flatMap(x => x.figures).find(g => g.key === f.key)) || out.length + 1}: ${f.caption}` }); }));
-    (state.combos || []).forEach(cb => { if (cb.url) out.push({ url: cb.url, w: cb.w, h: cb.h, caption: cb.caption }); }); return out; }
+    (state.combos || []).forEach(cb => { if (cb.url) out.push({ url: cb.url, w: cb.w, h: cb.h, caption: cb.caption }); });
+    (state.result.appendixFigs || []).forEach((f, k) => { if (f.url) out.push({ url: f.url, w: f.w, h: f.h, caption: `Figure A${k + 1}: ${f.caption}` }); }); return out; }
   function buildPptx(figs, title) {
     const NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
     const SW = 12192000, SH = 6858000, z = XLSX.CFB.utils.cfb_new(), add = (p, t) => XLSX.CFB.utils.cfb_add(z, p, typeof t === 'string' ? new TextEncoder().encode(t) : t), rel = (id, type, target) => `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`;
@@ -5280,26 +5397,16 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   $('#btnPptx').onclick = () => { if (!state.result) return; const figs = exportedFigures(); if (!figs.length) { toast('No figure is selected for export'); return; }
     saveUrl(URL.createObjectURL(buildPptx(figs, state.cfg.study.title || 'Figures')), `${baseName()} - Figures.pptx`); toast(`${figs.length} slide${figs.length > 1 ? 's' : ''} saved`); };
   $('#btnFigPdf').onclick = async () => { if (!state.result) return; const figs = exportedFigures(); if (!figs.length) { toast('No figure is selected for export'); return; } busy(true);
-    try { const load = u => new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = u; }), pages = [];
+    try { await figsPdf(figs, `${baseName()} - Figures.pdf`); } catch (e) { toast('Failed: ' + e.message); } busy(false); };
+  async function figsPdf(figs, fileName) {
+    { const load = u => new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = u; }), pages = [];
       for (const f of figs) { const im = await load(f.url), W = 1240, Hh = 1754, m = 90, c = document.createElement('canvas'); c.width = W; c.height = Hh; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, W, Hh);
         x.fillStyle = '#1C1648'; x.font = '700 26px Calibri, Arial, sans-serif'; const words = f.caption.split(' '); let line = '', yy = m + 10; words.forEach(wd => { if (x.measureText(line + wd).width > W - 2 * m) { x.fillText(line, m, yy); line = ''; yy += 34; } line += wd + ' '; }); x.fillText(line, m, yy);
         const sc = Math.min((W - 2 * m) / im.width, (Hh - yy - 2 * m) / im.height); x.drawImage(im, m, yy + 30, im.width * sc, im.height * sc);
         pages.push({ w: W, h: Hh, bytes: b64bytes(c.toDataURL('image/jpeg', 0.92)) }); }
-      saveUrl(URL.createObjectURL(pdfFromJpegs(pages, 'Figures')), `${baseName()} - Figures.pdf`); toast(`${pages.length} figure page${pages.length > 1 ? 's' : ''} saved`); } catch (e) { toast('Failed: ' + e.message); } busy(false); };
+      saveUrl(URL.createObjectURL(pdfFromJpegs(pages, 'Figures')), fileName); toast(`${pages.length} figure page${pages.length > 1 ? 's' : ''} saved`); } }
   // combined figures: chosen figures in a grid with panel letters, added to the exports
-  $('#btnCombo').onclick = () => { if (!state.result) return; syncEdits(); const figs = state.result.sections.flatMap(s => s.figures).filter(f => f.url);
-    let box = $('#comboBox'); if (!box) { box = document.createElement('div'); box.id = 'comboBox'; box.className = 'report-sec'; $('#report').prepend(box); } else if (box.innerHTML) { box.innerHTML = ''; return; }
-    box.innerHTML = `<h3>Combine figures</h3><p class="legend-note">Tick the figures in the order of the panels (A, B, C …). The combined figure is added to the PowerPoint and PDF exports and to Word at the end of the results.</p><div class="predlist" style="max-height:220px;overflow:auto">${figs.map((f, i) => `<label><input type="checkbox" data-cmb="${i}"> ${esc(f.caption)}</label>`).join('')}</div>
-      <div class="row" style="gap:8px;margin-top:8px"><div><label class="f">Panels per row</label><select id="cmbCols" style="width:auto"><option>2</option><option>3</option><option>1</option></select></div><div style="flex:1"><label class="f">Caption</label><input type="text" id="cmbCap" placeholder="e.g. Outcomes of the studied groups: (A) … (B) …" style="width:100%"></div><button class="btn primary small" id="cmbGo" type="button" style="align-self:flex-end">Add combined figure</button></div><div id="cmbList" class="legend-note" style="margin-top:6px">${(state.combos || []).map((c, i) => `${i + 1}. ${esc(c.caption)} <a href="#" data-cmbdel="${i}">remove</a>`).join('<br>')}</div>`;
-    const order = []; box.onchange = e => { const k = e.target.dataset.cmb; if (k === undefined) return; const i = order.indexOf(+k); if (e.target.checked) order.push(+k); else if (i >= 0) order.splice(i, 1); };
-    box.onclick = async e => { const del = e.target.closest('[data-cmbdel]'); if (del) { e.preventDefault(); state.combos.splice(+del.dataset.cmbdel, 1); box.innerHTML = ''; $('#btnCombo').click(); return; }
-      if (!e.target.closest('#cmbGo')) return; if (order.length < 2) { toast('Tick at least two figures'); return; }
-      const load = u => new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = u; }), ims = await Promise.all(order.map(i => load(figs[i].url))), cols = Math.min(+$('#cmbCols').value, ims.length), Wd = Math.max(...ims.map(i => i.width)), rowsN = Math.ceil(ims.length / cols);
-      const hs = ims.map(i => i.height * Wd / i.width), rowH = Array.from({ length: rowsN }, (_, k) => Math.max(...hs.slice(k * cols, k * cols + cols))), c = document.createElement('canvas'); c.width = Wd * cols; c.height = rowH.reduce((a, b) => a + b, 0); const x = c.getContext('2d');
-      x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); let y0 = 0;
-      ims.forEach((im, i) => { const col = i % cols, row = Math.floor(i / cols); if (col === 0 && i) y0 += rowH[row - 1]; x.drawImage(im, col * Wd, y0, Wd, hs[i]); x.fillStyle = '#111'; x.font = `800 ${Math.round(Wd / 18)}px Arial, sans-serif`; x.textBaseline = 'top'; x.fillText(String.fromCharCode(65 + i), col * Wd + Wd * 0.015, y0 + Wd * 0.01); });
-      state.combos = [...(state.combos || []), { url: c.toDataURL('image/png'), w: c.width, h: c.height, caption: $('#cmbCap').value.trim() || `Combined figure: ${order.map((i, k) => `(${String.fromCharCode(65 + k)}) ${figs[i].caption}`).join('; ')}` }];
-      box.innerHTML = ''; $('#btnCombo').click(); toast('Combined figure added'); }; };
+  $('#btnCombo').onclick = () => { go(7); setTimeout(() => { const b = $('#pfBox'); if (b) { b.scrollIntoView({ behavior: 'smooth', block: 'start' }); b.classList.add('ux-flash'); setTimeout(() => b.classList.remove('ux-flash'), 1500); } }, 120); };
   // colour-blind check: the palette as seen with protanopia, deuteranopia and tritanopia (Machado et al. 2009), with the smallest colour difference
   $('#cbCheck').onclick = () => { readUiIntoCfg(); const o = state.cfg.options, pal = Charts.PALETTES[chartPalette(o)] || o.customColors || [], n = Math.max(2, Math.min(pal.length, activeGroups().length || 3)), cols = pal.slice(0, n);
     const M = { Protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]], Deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]], Tritanopia: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.303900]] };
@@ -5396,7 +5503,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     return {
       ...r, methods: isOut('methods') ? '' : r.methods, consort: isOut('consort') ? null : r.consort, summary: isOut('summary') ? '' : r.summary,
       narrative: plan.paper ? r.narrative : '', abstract: plan.paper && plan.rep.abstract ? r.abstract : '',
-      sections: r.sections.map(s => ({ ...s, tableOn: !isOut(exKey.table(s)), figures: s.figures.filter(f => plan.kept.has(f)) }))
+      sections: r.sections.map(s => ({ ...s, tableOn: !s.figOnly && !isOut(exKey.table(s)), figures: s.figures.filter(f => plan.kept.has(f)) }))
         .filter(s => s.tableOn || s.figures.length)
     };
   }
@@ -5409,6 +5516,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       ar: rp.bilingual ? arApi() : null,
       template: !!state.wordTemplate, tplPage: state.wordTemplate && state.wordTemplate.page,
       refs: rp.refs && r0 ? METHOD_REFS.filter(([re]) => re.test(r0.methods || '')).map(x => x[1]) : null, appendix: r0 ? appendixTables(r0, plan0) : [],
+      appendixFigs: r0 ? (r0.appendixFigs || []).filter(f => f.url).map(f => ({ url: f.url, w: f.w, h: f.h, caption: f.caption, note: f.note })) : [],
       autoNum: !!rp.autoNum, altText: !!rp.altText, front: [['Declaration', rp.frontDecl], ['Dedication', rp.frontDed], ['Acknowledgements', rp.frontAck]].filter(x => String(x[1] || '').trim()) };
     return { ...extras, numberPrefix: rp.format === 'thesis' && rp.chapter ? rp.chapter + '.' : '', sectionHeads: rp.format === 'thesis' && rp.sectionHeads, paper: rp.format === 'paper',
         tableNewPage: rp.format === 'thesis' ? !!rp.newPage : rp.format === 'paper' ? false : !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: pageOptions(o, rp), listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), footerText: String(o.footerText || '').trim(), tableLook: { autoFit: !!o.autoFit, width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figWidthCm: o.figWidthCm, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,

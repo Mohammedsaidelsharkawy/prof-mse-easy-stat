@@ -198,11 +198,11 @@ const Report = (() => {
         verticalAlign: VerticalAlign.CENTER, borders: apa ? apaBorders(isHead, isLast) : gridBorders,
         margins: { top: padV, bottom: padV, left: padH, right: padH },
         shading: isHead && !apa ? (headFill ? { type: ShadingType.CLEAR, color: 'auto', fill: headFill } : undefined) : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : band ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F2F2F2' } : undefined,
-        children: lines.map(l => STYLED ? (() => { const al = dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left ? AlignmentType.LEFT : null, csz = cell.small ? sz - 3 : sz;
-            return new Paragraph({ style: 'TableText', ...(al ? { alignment: al } : {}), ...(dec ? { tabStops: [{ type: D().TabStopType.DECIMAL, position: Math.max(200, Math.round(w / 2 - padH)) }] } : {}),
+        children: lines.map(l => STYLED ? (() => { const al = dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left || cell.sub ? AlignmentType.LEFT : null, csz = cell.small ? sz - 3 : sz;
+            return new Paragraph({ style: 'TableText', ...(al ? { alignment: al } : {}), ...(cell.sub && colIdx === 0 ? { indent: { left: 240 } } : {}), ...(dec ? { tabStops: [{ type: D().TabStopType.DECIMAL, position: Math.max(200, Math.round(w / 2 - padH)) }] } : {}),
               children: runs((dec ? '\t' : '') + String(l), { styled: true, bold: isHead || cell.b, size: csz === TT_SZ ? undefined : csz,
                 color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : PCOL && sigRe && !isHead && sigRe.test(String(l)) ? PCOL : undefined }) }); })() : new Paragraph({
-          alignment: dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 },
+          alignment: dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left || cell.sub ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 }, ...(cell.sub && colIdx === 0 ? { indent: { left: 240 } } : {}),
           ...(dec ? { tabStops: [{ type: D().TabStopType.DECIMAL, position: Math.max(200, Math.round(w / 2 - padH)) }] } : {}),
           children: runs((dec ? '\t' : '') + String(l), { bold: isHead || cell.b, size: cell.small ? sz - 3 : sz, font: look.font,
             color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : PCOL && sigRe && !isHead && sigRe.test(String(l)) ? PCOL : undefined })
@@ -414,8 +414,12 @@ const Report = (() => {
 
     // appendix: codebook, test plan, every result table (prepared by the app), the reporting checklist, and the references of the methods
     const plainTbl = t => table(t.head, t.rows.map(r => r.map(c => typeof c === 'object' && c !== null ? c : { t: [String(c ?? '')] })), brand, opts.tableStyle, { ...opts.tableLook, size: 9 });
-    if (opts.appendix && opts.appendix.length) { if (!opts.appendixOnly) children.push(new Paragraph({ children: [new (D().PageBreak)()] }), heading('Appendix', brand));
-      opts.appendix.forEach(t => { children.push(subheading(t.title, brand)); children.push(plainTbl(t)); if (t.note) children.push(para(t.note, { size: 18, line: 240, after: 160, before: 60 })); }); }
+    const apFigs = opts.appendixFigs || [];
+    if ((opts.appendix && opts.appendix.length) || apFigs.length) { if (!opts.appendixOnly) children.push(new Paragraph({ children: [new (D().PageBreak)()] }), heading('Appendix', brand));
+      (opts.appendix || []).forEach(t => { children.push(subheading(t.title, brand)); children.push(plainTbl(t)); if (t.note) children.push(para(t.note, { size: 18, line: 240, after: 160, before: 60 })); });
+      // figures placed in the appendix (step 7): Figure A1, A2 …
+      apFigs.forEach((f, i) => { const lab = `Figure A${i + 1}${opts.captionStyle === 'period' ? '.' : opts.captionStyle === 'apa' ? '' : ':'}`;
+        children.push(image(f.url, f.w, f.h, Math.min(FIG_W.full[0], Math.floor(PAGE_W / 15)), true, f.caption), caption(`${lab} ${f.caption}`, f.note ? { note: f.note, noteSize: 20 } : {})); }); }
     if (opts.refs && opts.refs.length) { children.push(heading('References', brand)); opts.refs.forEach((r, i) => children.push(para(`${i + 1}. ${r}`, { line: 276, after: 80, align: AlignmentType.LEFT }))); }
     if (opts.listTF && (listTabs.length || listFigs.length)) {
       const lst = [];

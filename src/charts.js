@@ -302,7 +302,22 @@ const Charts = (() => {
   // points of the last chart with their values (logical coordinates), for hover values in the preview
   let HITS = [];
   const hit = (x, y, t) => HITS.push({ x, y, t });
+  // several charts in one figure: a grid of panels (each with its own title), optionally lettered A, B, C …; sharedY gives every panel the same y range
+  function drawPanels(spec, paletteName, style) {
+    if (VECTOR) throw new Error('panels have no vector version');
+    let ps = spec.panels || [];
+    if (spec.sharedY) { const rng = ps.map(p => { const v = []; (p.series || []).forEach(sr => { (sr.values || []).forEach((x, i) => { if (isFinite(x)) { v.push(x); if (sr.err && isFinite(sr.err[i])) v.push(x + sr.err[i]); if (sr.hi && isFinite(sr.hi[i])) v.push(sr.hi[i]); if (sr.lo && isFinite(sr.lo[i])) v.push(sr.lo[i]); } }); (sr.data || []).forEach(a => a.forEach(x => { if (isFinite(x)) v.push(x); })); }); return v; }).flat();
+      if (rng.length) { const lo = Math.min(0, ...rng), hi = Math.max(...rng); ps = ps.map(p => ({ ...p, yMin: lo, yMax: hi + (hi - lo) * 0.08 })); } }
+    const subs = ps.map(p => draw(p, paletteName, style)); if (!subs.length) return makeCanvas(10, 10);
+    const cols = Math.max(1, Math.min(+spec.cols || 2, subs.length)), Wd = Math.max(...subs.map(c => c.width)), hs = subs.map(c => c.height * Wd / c.width), rowsN = Math.ceil(subs.length / cols);
+    const rowH = Array.from({ length: rowsN }, (_, k) => Math.max(...hs.slice(k * cols, k * cols + cols))), c = makeCanvas(Wd * cols, rowH.reduce((a, b) => a + b, 0)), x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); let y0 = 0;
+    subs.forEach((im, i) => { const col = i % cols, row = Math.floor(i / cols); if (col === 0 && i) y0 += rowH[row - 1]; x.drawImage(im, col * Wd, y0, Wd, hs[i]);
+      if (spec.letters !== false && subs.length > 1) { x.fillStyle = '#111'; x.font = `800 ${Math.round(Wd / 20)}px Arial, sans-serif`; x.textBaseline = 'top'; x.textAlign = 'left'; x.fillText(String.fromCharCode(65 + i), col * Wd + Wd * 0.015, y0 + Wd * 0.012); } });
+    HITS = []; return c;
+  }
   function draw(spec, paletteName = 'brand', style = {}) {
+    if (spec && spec.type === 'panels') return drawPanels(spec, paletteName, style);
     FONT = FONTS[style.font] || FONTS.sans;
     TICKS = { fewer: 4, more: 10 }[style.ticks] || 6;
     HITS = [];
@@ -387,11 +402,13 @@ const Charts = (() => {
     const catStars = letters ? spec.letters : (spec.sigCat || []).map(p => stars(p, spec.alpha));
 
     const perGroup = !!spec.perGroup && spec.series.length === 1, shapes = st.series === 'shapes';
-    const legendItems = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: spec.type === 'box' && i === 2 }));
+    // two levels of labels: each bar's own name under it (e.g. Male, Female) and the category (e.g. the study group) below — no legend needed
+    const twoLev = spec.type === 'bar' && !!spec.barNames && !perGroup && spec.series.length > 1;
+    const legendItems = perGroup || twoLev ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: spec.type === 'box' && i === 2 }));
     if (spec.type === 'stacked') spec = { ...spec, percent: true, series: spec.series.map(s => ({ ...s })) };
     const lm = legendMetrics(ctx, legendItems, st, ts);
     const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0);
-    const T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    const T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (twoLev ? 56 * ts : 0) + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
     const pw = W - L - R, ph = H - T - B;
 
     // y range
@@ -468,9 +485,16 @@ const Charts = (() => {
       return spec.widths.map(w => { const ww = avail * w / tot, o = { x, w: ww, c: x + ww / 2 }; x += ww + gap; return o; }); })() : null;
     const xAt = ci => mos ? mos[ci].c : xv ? L + cw / 2 + (xv[ci] - xv[0]) / ((xv[nc - 1] - xv[0]) || 1) * (pw - cw) : L + cw * (ci + 0.5);
     ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.font = F(700, 26 * AX); ctx.fillStyle = '#333';
+    let nameH = 0;
+    if (twoLev) { const gw0 = cw * widthOf(st, 0.78), bw0 = gw0 / ns; ctx.font = F(600, 21 * AX); ctx.fillStyle = '#444';
+      nameH = (Math.max(1, ...spec.series.map(sr => measureLines(ctx, sr.name, bw0 - 4))) * 25 + 14) * ts;
+      spec.categories.forEach((_, ci) => spec.series.forEach((sr, si) => wrapText(ctx, sr.name, L + cw * ci + (cw - gw0) / 2 + bw0 * si + bw0 / 2, T + ph + 10, bw0 - 4, 25 * ts)));
+      ctx.font = F(700, 26 * AX); ctx.fillStyle = '#333';
+      // a thin bracket under each block of bars, above its name
+      ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; spec.categories.forEach((_, ci) => { const a = L + cw * ci + (cw - gw0) / 2 + 4, b = a + gw0 - 8, yy = T + ph + nameH + 4; ctx.beginPath(); ctx.moveTo(a, yy - 6); ctx.lineTo(a, yy); ctx.lineTo(b, yy); ctx.lineTo(b, yy - 6); ctx.stroke(); }); }
     const catLines = Math.max(1, ...spec.categories.map(cat => measureLines(ctx, cat, cw - 10)));
-    spec.categories.forEach((cat, i) => wrapText(ctx, cat, xAt(i), T + ph + 16, cw - 10, 30 * ts));
-    if (spec.xLabel) { ctx.font = F(700, 26 * TL); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + (catLines * 30 + 24) * ts); }
+    spec.categories.forEach((cat, i) => wrapText(ctx, cat, xAt(i), T + ph + 16 + nameH, cw - 10, 30 * ts));
+    if (spec.xLabel) { ctx.font = F(700, 26 * TL); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + nameH + (catLines * 30 + 24) * ts); }
 
     // error bars: both directions with caps (default), without caps, or upward only from the mean (mid)
     const errBar = (x, a, b, w, mid, color) => {

@@ -3601,47 +3601,89 @@ const Analysis = (() => {
       }
     }
 
-    // combined figures: several items in one chart, per group — categorical items (e.g. co-morbidities HTN, DM, IHD): the % with one, several or all
-    // of their categories; numeric items (e.g. age, weight, height): the mean with its error bar, or the median with its IQR
+    // item groups (step 2, e.g. Co-morbidities: DM, HTN, COPD): in each table, the items of a group together under a heading row, indented
+    if (cfg.groupHeadings !== false) sections.forEach(sec => {
+      if (sec.kind !== 'single' || !sec.rows.length) return;
+      const txt = c => [].concat(c && c.t !== undefined ? c.t : c ?? '').join(' ').trim(), W = sec.head.reduce((a, h) => a + ((typeof h === 'object' && h.span) || 1), 0);
+      const grpOf = new Map(cfg.variables.filter(v => v.group).map(v => [v.label, v.group]));
+      if (!grpOf.size) return;
+      const blocks = []; let left = 0;
+      sec.rows.forEach(r => { if (left > 0) { blocks[blocks.length - 1].rows.push(r); left--; return; } const lab = txt(r[0]); blocks.push({ g: grpOf.get(lab) || null, rows: [r] }); left = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); });
+      const cnt = {}; blocks.forEach(b => { if (b.g) cnt[b.g] = (cnt[b.g] || 0) + 1; });
+      const out = [], done = new Set();
+      blocks.forEach(b => { if (!b.g || cnt[b.g] < 2) { out.push(...b.rows); return; } if (done.has(b.g)) return; done.add(b.g);
+        out.push([{ t: [b.g], b: true, span: W, left: true, grp: true }]);
+        blocks.filter(x => x.g === b.g).forEach(x => x.rows.forEach((r, ri) => out.push(ri === 0 ? [{ ...r[0], sub: true }, ...r.slice(1)] : r))); });
+      if (done.size) sec.rows = out;
+    });
+    // combined figures: several items in one chart, per group — categorical items (e.g. co-morbidities HTN, DM, IHD): the % of one or all categories of each item,
+    // bars grouped by study group (each bar named under it) or by item; numeric items (e.g. age, weight, height): the charts of "Figures by variable", one panel per item or on one axis
     (cfg.combFigs || []).forEach(cf => {
       const num = cf.kind === 'num', items = (cf.items || []).map(id => cfg.variables.find(v => v.id === id))
         .filter(v => v && v.type === (num ? 'numeric' : 'categorical') && v.cols && v.cols.length === 1 && data.headers.includes(v.cols[0].col));
-      if (items.length < 2 && !(items.length === 1 && !num && cf.catMode && cf.catMode !== 'first')) return;
+      if (!items.length || (items.length < 2 && num)) return;
       const resOf = id => { for (const sec of sections) { const r = sec.meta && (sec.meta.res || []).find(x => x.v && x.v.id === id && (num ? x.num : x.cat)); if (r) return r; } return null; };
       const pOf = v => { const r0 = resOf(v.id); return r0 ? (num ? r0.num : r0.cat).p : NaN; };
-      const pos = v => data.headers.indexOf(v.cols[0].col), med = num && cf.stat === 'median';
-      let rows = [];
-      if (num) items.forEach(v => { const vals = byGroup.map(rs => rs.map(r => toNum(r[v.cols[0].col])).filter(isFinite)), ds = vals.map(x => S.describe(x)), all = S.describe(vals.flat());
-        rows.push({ v, label: v.label, ds, tot: med ? all.median : all.mean, p: pOf(v), pos: pos(v) }); });
-      else items.forEach(v => { const vals = byGroup.map(rs => rs.map(r => toCat(r[v.cols[0].col])).filter(x => x !== null)), all = [...new Set(vals.flat())];
-        const lv = [...(v.levels && v.levels.length ? v.levels.map(String) : []), ...all.filter(x => !(v.levels || []).map(String).includes(x))].filter(l => all.includes(l));
-        const want = String(cf.level || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
-        const shown = cf.catMode === 'all' ? lv : cf.catMode === 'list' && want.length ? lv.filter(l => want.includes(String(l).toLowerCase())) : [(want.length && lv.find(l => want.includes(String(l).toLowerCase()))) || lv[0]].filter(Boolean);
-        const several = shown.length > 1 || cf.catMode === 'all' || (cf.catMode === 'list' && want.length > 0);
-        shown.forEach((level, li) => { const n = vals.map(x => x.filter(y => y === level).length), pct = vals.map((x, gi) => x.length ? 100 * n[gi] / x.length : 0);
-          rows.push({ v, label: several ? (items.length > 1 ? `${plain(v.label)}: ${level}` : String(level)) : plain(v.label), level, pct, tot: vals.flat().length ? 100 * n.reduce((a2, b2) => a2 + b2, 0) / vals.flat().length : 0, p: li === 0 ? pOf(v) : NaN, pos: pos(v) + li / 100 }); }); });
-      if (!rows.length) return;
-      if (cf.sort === 'desc') rows.sort((x, y) => y.tot - x.tot); else if (cf.sort === 'asc') rows.sort((x, y) => x.tot - y.tot); else if (cf.sort === 'master') rows.sort((x, y) => x.pos - y.pos);
-      const stars = cf.stars !== false && k > 1, anySig = rows.some(r => r.p <= alpha), sym = FMT.sig || '*';
-      const cats = rows.map(r => r.label + (stars && r.p <= alpha ? sym : ''));
-      const gname = gi => k > 1 ? withN([gl[gi]], [gN[gi]])[0] : (gl[0] || 'Patients');
-      const series = [...Array(Math.max(1, k))].map((_, gi) => num
-        ? (med ? { name: gname(gi), values: rows.map(r => r.ds[gi].median ?? NaN), lo: rows.map(r => r.ds[gi].q1), hi: rows.map(r => r.ds[gi].q3) }
-          : { name: gname(gi), values: rows.map(r => r.ds[gi].mean ?? NaN), err: rows.map(r => r.ds[gi].n ? errOf(r.ds[gi]) : null) })
-        : { name: gname(gi), values: rows.map(r => +r.pct[gi].toFixed(2)) });
-      const levels = [...new Set(rows.map(r => r.level))], what = !num && levels.length === 1 && !/^(yes|y|present|positive|1|true)$/i.test(levels[0]) ? ` (${levels[0]})` : '';
+      const pos = v => data.headers.indexOf(v.cols[0].col), stars = cf.stars !== false && k > 1, sym = FMT.sig || '*', gname = gi => k > 1 ? withN([gl[gi]], [gN[gi]])[0] : (gl[0] || 'Patients');
+      const yesLike = l => /^(yes|y|present|positive|pos|1|true)$/i.test(String(l).trim());
+      const order = list => { if (cf.sort === 'desc') list.sort((x, y) => y.tot - x.tot); else if (cf.sort === 'asc') list.sort((x, y) => x.tot - y.tot); else if (cf.sort === 'master') list.sort((x, y) => x.pos - y.pos); return list; };
+      let fig;
+      if (!num) {
+        let rows = [];
+        items.forEach(v => { const vals = byGroup.map(rs => rs.map(r => toCat(r[v.cols[0].col])).filter(x => x !== null)), all = [...new Set(vals.flat())];
+          const lv = [...(v.levels && v.levels.length ? v.levels.map(String) : []), ...all.filter(x => !(v.levels || []).map(String).includes(x))].filter(l => all.includes(l));
+          const yn = lv.length === 2 && lv.some(yesLike), legacy = cf.catMode === 'all' ? 'all' : cf.catMode === 'list' ? 'list' : '';
+          let mode = (cf.itemCats || {})[v.id] || legacy || (yn ? 'first' : 'all');
+          const want = String(cf.level || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+          const shown = mode === 'all' ? lv : mode === 'first' ? lv.slice(0, 1) : mode === 'list' ? lv.filter(l => want.includes(String(l).toLowerCase())) : lv.filter(l => l === mode);
+          (shown.length ? shown : lv.slice(0, 1)).forEach((level, li) => { const n = vals.map(x => x.filter(y => y === level).length), pct = vals.map((x, gi) => x.length ? 100 * n[gi] / x.length : 0);
+            rows.push({ v, level, many: shown.length > 1, pct, tot: vals.flat().length ? 100 * n.reduce((a2, b2) => a2 + b2, 0) / vals.flat().length : 0, p: li === 0 ? pOf(v) : NaN, pos: pos(v) + li / 100 }); }); });
+        if (!rows.length) return;
+        order(rows);
+        // the name of each bar: the item (one Yes-like category), the category (several categories of one item, when no other item has it), else "item: category"
+        const lvCount = {}; rows.forEach(r => { lvCount[r.level] = (lvCount[r.level] || 0) + 1; });
+        const generic = l => /^(yes|no|y|n|true|false|positive|negative|pos|neg|present|absent|0|1)$/i.test(String(l).trim());
+        rows.forEach(r => { r.label = !r.many && yesLike(r.level) ? plain(r.v.label) : r.many && !generic(r.level) && (items.length === 1 || lvCount[r.level] === 1) ? String(r.level) : `${plain(r.v.label)}: ${r.level}`;
+          if (stars && r.p <= alpha) r.label += sym; });
+        const byG = cf.layout === 'group';
+        const spec = byG ? { type: 'bar', percent: true, barNames: true, labels: cf.labels !== false, categories: [...Array(Math.max(1, k))].map((_, gi) => gname(gi)), yLabel: cf.yLabel || '% of patients', series: rows.map(r => ({ name: r.label, values: r.pct.map(x => +x.toFixed(2)) })) }
+          : { type: cf.type === 'hbar' ? 'hbar' : 'bar', percent: true, labels: cf.labels !== false, categories: rows.map(r => r.label), yLabel: cf.yLabel || '% of patients', series: [...Array(Math.max(1, k))].map((_, gi) => ({ name: gname(gi), values: rows.map(r => +r.pct[gi].toFixed(2)) })) };
+        if (byG && cf.type === 'hbar') spec.type = 'bar'; // the two-level labels are drawn on vertical bars
+        const levels = [...new Set(rows.map(r => r.level))], what = levels.length === 1 && !yesLike(levels[0]) ? ` (${levels[0]})` : '';
+        fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what };
+      } else {
+        let rows = items.map(v => { const gv = byGroup.map(rs => rs.map(r => toNum(r[v.cols[0].col])).filter(isFinite)), ds = gv.map(x => S.describe(x)), all = S.describe(gv.flat()), r0 = resOf(v.id);
+          return { v, gv, ds, tot: all.mean, p: pOf(v), param: r0 && r0.num ? r0.num.param !== false : true, pos: pos(v) }; });
+        order(rows);
+        const cats = [...Array(Math.max(1, k))].map((_, gi) => gname(gi));
+        const sigOf = r => opts.sigMarks && k === 2 && r.p <= alpha ? { sig: [{ i: 0, j: 1, p: r.p }], alpha } : {};
+        const chartOf = r => { const c = cf.chart && cf.chart !== 'asVar' ? cf.chart : (r.v.chart && r.v.chart !== 'auto' ? r.v.chart : (r.param && opts.chartStyle !== 'box' ? 'bar' : 'box')); return c === 'hist' || c === 'none' ? 'box' : c; };
+        const panel = r => { const ct = chartOf(r), lab = r.v.ylabel || r.v.label, base = { perGroup: true, categories: cats, yLabel: lab, title: plain(r.v.label) + (stars && r.p <= alpha ? sym : ''), ...sigOf(r) };
+          if (ct === 'violin' || ct === 'rain') return { ...base, type: 'violin', ...(ct === 'rain' ? { rain: true } : {}), points: opts.points, series: [{ name: r.v.label, data: r.gv }] };
+          if (ct === 'dotci') return { ...base, type: 'dot', ci: true, series: [{ name: r.v.label, data: r.gv }] };
+          if (ct === 'dot') return { ...base, type: 'dot', median: !r.param, series: [{ name: r.v.label, data: r.gv }] };
+          if (ct === 'meanci') return { ...base, type: 'line', noLine: true, errKind: 'ci', series: [{ name: r.v.label, values: r.ds.map(x => x.mean), err: r.ds.map(ciHalf) }] };
+          if (ct === 'box') return { ...base, type: 'box', points: opts.points, series: [{ name: r.v.label, data: r.gv }] };
+          const med = cf.stat === 'median' || (cf.stat !== 'mean' && !r.param && (!cf.chart || cf.chart === 'asVar'));
+          return { ...base, type: 'bar', ...(cf.labels !== false ? { labels: true, labelDec: d } : {}), series: [{ name: r.v.label, values: r.ds.map(x => med ? x.median : x.mean), ...(med ? { lo: r.ds.map(x => x.q1), hi: r.ds.map(x => x.q3) } : { err: r.ds.map(x => x.n ? errOf(x) : null) }) }] }; };
+        const allBar = rows.every(r => chartOf(r) === 'bar'), med = cf.stat === 'median';
+        let spec;
+        if (cf.axes === 'shared' && allBar) spec = { type: cf.type === 'hbar' ? 'hbar' : 'bar', labels: cf.labels !== false, labelDec: d, categories: rows.map(r => plain(r.v.label) + (stars && r.p <= alpha ? sym : '')), yLabel: cf.yLabel || (med ? 'Median' : 'Mean'),
+          series: cats.map((g, gi) => med ? { name: g, values: rows.map(r => r.ds[gi].median ?? NaN), lo: rows.map(r => r.ds[gi].q1), hi: rows.map(r => r.ds[gi].q3) } : { name: g, values: rows.map(r => r.ds[gi].mean ?? NaN), err: rows.map(r => r.ds[gi].n ? errOf(r.ds[gi]) : null) }) };
+        else spec = { type: 'panels', cols: +cf.cols || Math.min(3, rows.length), letters: cf.letters === true, sharedY: cf.axes === 'shared', panels: rows.map(panel) };
+        const kinds = [...new Set(rows.map(chartOf))], how = kinds.length === 1 ? { bar: med ? ' (bars show the median; error bars show the IQR)' : allBar && rows.every(r => r.param || cf.stat === 'mean') ? ` (bars show the mean; error bars show ${{ sem: 'the SEM', ci: 'the 95% CI' }[opts.errorBar] || '±1 SD'})` : '', box: ' (box plots)', violin: ' (violin plots)', rain: ' (raincloud plots)', dot: ' (every patient)', dotci: ' (every patient, mean with 95% CI)', meanci: ' (mean with 95% CI)' }[kinds[0]] || '' : '';
+        fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what: '', how };
+      }
       const capList = listJoin(items.map(v => lowerFirst(plain(v.label))).map((t, i2) => i2 ? t : t.charAt(0).toUpperCase() + t.slice(1)));
-      const how = num ? (med ? ' (bars show the median; error bars show the IQR)' : ` (bars show the mean; error bars show ${{ sem: 'the SEM', ci: 'the 95% CI' }[opts.errorBar] || '±1 SD'})`) : '';
-      const fig = { sig: anySig || k === 1, vid: 'cf_' + (cf.id || items.map(v => v.id).join('_')), comb: true,
-        caption: (cf.title || `${capList}${what} of the studied ${k > 1 ? 'groups' : 'patients'}`) + how,
-        note: stars && anySig ? `${sym} significant difference between the groups (P ≤ ${alpha}).` : '',
-        spec: { type: cf.type === 'hbar' ? 'hbar' : 'bar', ...(num ? {} : { percent: true }), labels: cf.labels !== false, ...(num ? { labelDec: d } : {}), categories: cats, yLabel: cf.yLabel || (num ? (med ? 'Median' : 'Mean') : '% of patients'), series } };
-      // the figure goes with the table of its first item; the items' own figures are left out (unless asked to keep them)
+      const out = { sig: fig.anySig || k === 1, vid: 'cf_' + (cf.id || items.map(v => v.id).join('_')), comb: true, place: cf.place || 'home',
+        caption: (cf.title || `${cf.groupName || capList}${fig.what} of the studied ${k > 1 ? 'groups' : 'patients'}`) + (fig.how || ''),
+        note: stars && fig.anySig ? `${sym} significant difference between the groups (P ≤ ${alpha}).` : '', spec: fig.spec };
+      // the figure goes with the table of its first item (other places are set by the app); the items' own figures are left out (unless asked to keep them)
       const ids = new Set(items.map(v => v.id)), home = sections.find(sec => (sec.meta && ((sec.meta.res || []).some(x => x.v && ids.has(x.v.id)) || (sec.meta.rawVars || []).some(x => ids.has(x)))) || (sec.figures || []).some(f => ids.has(f.vid))) || sections[sections.length - 1];
       if (!home) return;
       const at = (home.figures || []).findIndex(f => ids.has(f.vid));
       if (cf.hide !== false) sections.forEach(sec => { if (sec.figures) sec.figures = sec.figures.filter(f => !ids.has(f.vid)); });
-      home.figures = home.figures || []; home.figures.splice(at < 0 ? home.figures.length : Math.min(at, home.figures.length), 0, fig);
+      home.figures = home.figures || []; home.figures.splice(at < 0 ? home.figures.length : Math.min(at, home.figures.length), 0, out);
     });
     // repeated measures: also each study group on its own (the change over time within the group), right after the comparison of the groups
     if (opts.rmEachGroup && k > 1 && !cfg._sub) {

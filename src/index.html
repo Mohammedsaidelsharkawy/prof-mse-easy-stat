@@ -42,6 +42,8 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 @media (max-width:1480px){.top-actions > .btn:not(.ux-word) .tl,.top-actions > label.btn .tl{display:none}.top-actions{gap:6px}}
 @media (max-width:640px){.brand h1{font-size:17px}.logo{width:40px;height:40px}}
 .brand{flex-shrink:0}
+.cf-cats{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(123,47,190,.05)}.cf-cat{display:flex;gap:6px;align-items:center;font-size:13px;margin:0}.vgrp-chip{display:inline-flex;gap:4px;align-items:center}.vgrp{margin-left:4px;font-size:11px}.ux-flash{outline:3px solid #FFC94D;outline-offset:3px;transition:outline .3s}
+.rt td.sub{padding-left:22px!important;text-align:left}.rt td.grp{text-align:left;font-weight:700;background:rgba(123,47,190,.06)}
 .cf-item{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px}.cf-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px 12px;max-height:180px;overflow:auto;margin:6px 0}.cf-items label{display:flex;gap:6px;font-size:13px;margin:0}.cf-prev img{max-width:100%;max-height:260px;border:1px solid var(--line);border-radius:6px;background:#fff}
 .vl-tbl td,.vl-tbl th{padding:3px 8px}.vl-tbl input{padding:3px 6px}.vl-tbl tr.vl-absent td{color:var(--muted);font-style:italic}.vl-prev{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;align-items:center}
 #varsTbl .unit-th{width:72px}#varsTbl .unit-in{width:64px;min-width:0;padding-left:6px;padding-right:6px}
@@ -774,11 +776,13 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" type="button" data-vbulk="d:auto">Auto</button><button class="btn ghost small" type="button" data-vbulk="d:param">Parametric</button><button class="btn ghost small" type="button" data-vbulk="d:nonparam">Non-parametric</button>
         <span class="legend-note" style="margin-left:10px">Labels:</span><button class="btn ghost small" type="button" data-vlabel="sentence" title="Age (years), Body mass index">Sentence case</button><button class="btn ghost small" type="button" data-vlabel="title" title="Age (Years), Body Mass Index">Title Case</button><button class="btn ghost small" type="button" data-vlabel="cols" title="Labels made again from the column names">From column names</button></div>
       <div class="row" style="gap:8px;margin-bottom:8px"><input type="search" id="varSearch" placeholder="Find a variable…" style="max-width:260px"><label class="check" style="margin:0"><input type="checkbox" id="varOnlyInc"><span>Only included</span></label><span class="legend-note" id="varCount"></span><span class="spacer"></span><button class="btn ghost small" id="btnCodebook" type="button" title="Every column with its label, role, type, levels, value labels, missing values and range — for the thesis appendix">⬇ Codebook (Excel)</button></div>
+      <div class="row" id="varGroupsBar" style="gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center;display:none"></div>
       <div class="row" id="varSelBar" style="gap:6px;margin-bottom:8px;flex-wrap:wrap;display:none"><b id="varSelN"></b>
         <span class="legend-note">Table</span><input type="text" id="vsTable" placeholder="table name" style="width:200px"><button class="btn ghost small" id="vsTableGo" type="button">Set</button>
         <span class="legend-note">Type</span><select id="vsType" style="width:auto"><option value="">—</option><option value="numeric">numeric</option><option value="categorical">categorical</option></select>
         <span class="legend-note">Arrange categories</span><select id="vsLevels" style="width:auto"><option value="">—</option><option value="az">A → Z</option><option value="za">Z → A</option><option value="num">1 → 9</option><option value="freq">Most frequent first</option><option value="rare">Least frequent first</option><option value="smart">Severity / scale order</option><option value="sheet">As in the sheet</option><option value="rev">Reverse</option><option value="default">Default</option></select>
         <span class="legend-note">Copy the settings of</span><select id="vsFrom" style="width:auto"></select><button class="btn ghost small" id="vsCopyGo" type="button" title="Distribution, table, decimals, unit, role, ordinal and transformation">Copy</button>
+        <span class="legend-note">Group as</span><input type="text" id="vsGroup" list="vsGroupList" placeholder="e.g. Co-morbidities" style="width:170px"><datalist id="vsGroupList"></datalist><button class="btn ghost small" id="vsGroupGo" type="button" title="Put the ticked items under one name: a heading row in the tables and a combined figure">Group</button><button class="btn ghost small" id="vsUngroupGo" type="button">Ungroup</button>
         <button class="btn ghost small" id="vsClear" type="button">Clear selection</button></div>
       <div class="tbl-wrap"><table class="t" id="varsTbl"></table></div>
       <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
@@ -1251,6 +1255,10 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="card cf-card" id="cfBox" style="margin:14px 0">
         <div class="row" style="gap:8px;align-items:center"><h3 style="margin:0">Combined figures</h3><span class="legend-note">several items in one chart, e.g. co-morbidities (HTN, DM, IHD …) — the % with “Yes” (or the category you choose) of each item, per group</span><span class="spacer"></span><button class="btn ghost small" type="button" id="cfAdd">+ Combined figure</button></div>
         <div id="cfList"></div>
+      </div>
+      <div class="card cf-card" id="pfBox" style="margin:14px 0">
+        <div class="row" style="gap:8px;align-items:center"><h3 style="margin:0">Combine figures</h3><span class="legend-note">figures of the report side by side as panels A, B, C … in one figure (moved here from the report step)</span><span class="spacer"></span><button class="btn ghost small" type="button" id="pfAdd">+ Panel figure</button></div>
+        <div id="pfList"></div>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="6">← Back</button><button class="btn ghost small" data-reset="7" type="button" title="Every option of this step back to its default">↺ Defaults for this step</button><button class="btn primary" data-go="8">Next: Advanced analyses →</button></div>
