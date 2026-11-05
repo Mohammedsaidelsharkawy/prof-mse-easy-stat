@@ -42,6 +42,12 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 @media (max-width:1480px){.top-actions > .btn:not(.ux-word) .tl,.top-actions > label.btn .tl{display:none}.top-actions{gap:6px}}
 @media (max-width:640px){.brand h1{font-size:17px}.logo{width:40px;height:40px}}
 .brand{flex-shrink:0}
+.roles-box{margin:6px 0;border:1px solid var(--line);border-radius:10px;padding:6px 10px}.roles-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:8px}
+.roles-col{border:1px dashed var(--line);border-radius:8px;padding:6px;min-height:70px;background:var(--bg2,#F7F4FB)}.roles-col.over{outline:2px solid #FFC94D}.roles-col h5{margin:0 0 4px;font-size:12px}
+.role-chip{display:inline-block;margin:2px;padding:2px 8px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:12px;cursor:grab}
+#p2.setup-locked #varsTbl,#p2.setup-locked #groupsTbl,#p2.setup-locked #varSelBar,#p2.setup-locked .roles-board{pointer-events:none;opacity:.6}
+.dgrid td.edited{box-shadow:inset 0 0 0 2px #F0A500}.dgrid tr.rchk td.rn{background:#E6F4EA}.rchk-btn{border:0;background:none;cursor:pointer;font-size:14px;padding:0 3px}
+.chg-list{max-height:180px;overflow:auto;font-size:12px;margin:4px 0 0}
 .cf-cats{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(123,47,190,.05)}.cf-cat{display:flex;gap:6px;align-items:center;font-size:13px;margin:0}.vgrp-chip{display:inline-flex;gap:4px;align-items:center}.vgrp{margin-left:4px;font-size:11px}.ux-flash{outline:3px solid #FFC94D;outline-offset:3px;transition:outline .3s}
 .rt td.sub{padding-left:22px!important;text-align:left}.rt td.grp{text-align:left;font-weight:700;background:rgba(123,47,190,.06)}
 .cf-item{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px}.cf-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px 12px;max-height:180px;overflow:auto;margin:6px 0}.cf-items label{display:flex;gap:6px;font-size:13px;margin:0}.cf-prev img{max-width:100%;max-height:260px;border:1px solid var(--line);border-radius:6px;background:#fff}
@@ -486,11 +492,12 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" id="btnPaste" type="button" title="Copy the cells in Excel (with the header row) and paste them here">📋 Paste from Excel</button>
         <span class="row" style="gap:4px;display:inline-flex;align-items:center"><select id="demoDesign" style="width:auto" title="The design of the demo data"><option value="rct2">Two-group RCT</option><option value="rct3">Three-group trial</option><option value="cohort">Cohort with follow-up</option><option value="one">One group, before / after</option><option value="diag">Diagnostic study</option><option value="ni">Non-inferiority trial</option></select><input type="number" id="demoN" value="40" min="5" max="2000" style="width:70px" title="Patients per group"><button class="btn ghost small" id="demoGo" type="button" title="Made-up data in the chosen design, to learn the app or test a plan">🎲 Demo data</button></span>
         <button class="btn ghost small" id="btnTemplate" type="button" title="An empty Excel sheet laid out the way the app reads it, with a guide">⬇ Blank template</button>
+        <button class="btn ghost small" id="btnWatchOpen" type="button" title="Open a file and keep watching it: when it is saved again, the data are reloaded with the same setup and the changes are listed (Chrome / Edge)">👁 Open and watch…</button>
         <span class="legend-note">Copy your cells in Excel, Google Sheets or SPSS and paste them, or start from a template.</span>
       </div>
       <div id="sheetBox" style="display:none;margin-top:16px">
         <div class="grid g3">
-          <div><label class="f">File</label><div id="fileName" class="mono"></div></div>
+          <div><label class="f">File</label><div id="fileName" class="mono"></div><div class="row" style="gap:4px;margin-top:4px"><button class="btn ghost small" id="btnReload" type="button" title="Read the file again (after editing it in Excel) — the setup of steps 2–12 is kept and the changes are listed">🔄 Reload</button><label class="check" style="margin:0" title="Reload by itself when the file is saved (files opened with “Open and watch”)"><input type="checkbox" id="watchOn"><span>Watch</span></label><button class="btn ghost small" id="btnEntryForm" type="button" title="An Excel data-entry sheet with drop-down lists and allowed ranges from the current variables, and a guide sheet">⬇ Data-entry sheet</button></div><div id="reloadInfo" class="legend-note"></div></div>
           <div><label class="f">Sheet</label><select id="sheetSel"></select></div>
           <div><label class="f">Rows / columns</label><div id="dims" class="mono"></div></div>
         </div>
@@ -583,6 +590,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
                 <div id="mergeKeyBox" style="display:none"><label class="f">ID column</label><select id="mergeKey" style="width:auto"></select></div>
                 <div id="mergeSheetBox" style="display:none"><label class="f">From a sheet of this file</label><select id="mergeSheet" style="width:auto"></select></div>
                 <button class="btn ghost small" id="mergeSheetGo" type="button" style="margin-bottom:6px;display:none">Add from sheet</button>
+                <button class="btn ghost small" id="visitSheets" type="button" style="margin-bottom:6px;display:none" title="One sheet per visit (e.g. Baseline, Month 3, Month 6): matched by ID into one row per patient, with the visits as repeated measures">⇶ Sheets as visits</button>
                 <button class="btn ghost small" id="stackSheets" type="button" style="margin-bottom:6px;display:none" title="Every sheet of this file one under another (e.g. one sheet per centre), with a column naming the sheet">Stack all sheets</button>
                 <button class="btn ghost small" id="mergeBtn" type="button" style="margin-bottom:6px">Choose file…</button>
                 <input type="file" id="mergeFile" accept=".xlsx,.xls,.csv" multiple hidden>
@@ -597,6 +605,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
             <input type="search" id="gridSearch" placeholder="Search…" style="max-width:220px">
             <label class="f" style="margin:0">Rows per page</label>
             <select id="gridPer" style="width:auto"><option>10</option><option>25</option><option>50</option><option>100</option><option value="all">All</option></select>
+            <label class="check" style="margin:0" title="Tick a row's ☐ once you have checked it against the source (case report form); the cells you edit are kept with who and when"><input type="checkbox" id="gridOnlyUnchecked"><span>Only rows not checked yet</span></label>
             <label class="check" style="margin:0"><input type="checkbox" id="gridOnlyMissing"><span>Only rows with missing values</span></label>
             <label class="check" style="margin:0"><input type="checkbox" id="gridHl" checked><span>Highlight missing</span></label>
             <label class="check" style="margin:0"><input type="checkbox" id="gridSummary"><span>Column summary</span></label>
@@ -761,7 +770,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <h2>2 · Groups</h2>
       <p class="hint">Choose the column that defines the study groups, or analyse all patients as one group. Labels are used in tables, figures and comments.</p>
       <div class="grid g3"><div><label class="f">Study design</label><select id="groupMode"><option value="groups">Compare groups (a group column)</option><option value="one">One group — all patients together</option></select></div>
-        <div id="groupColBox"><label class="f">Group column</label><select id="groupCol"></select></div></div>
+        <div id="groupColBox"><label class="f">Group column</label><select id="groupCol"></select><div class="row" style="gap:4px;margin-top:4px"><select id="groupCombo" style="width:auto" title="A second column: each combination becomes a group (e.g. treatment × sex)"></select><button class="btn ghost small" id="groupComboGo" type="button">× Combine</button></div></div></div>
       <p class="legend-note">One group: tables describe all patients; repeated measures are compared over time within the same patients (paired t-test / Wilcoxon, repeated-measures ANOVA / Friedman).</p>
       <div class="tbl-wrap" style="margin-top:12px"><table class="t" id="groupsTbl"></table></div>
       <p class="legend-note">Use ↑/↓ to set the column order of groups in tables.</p>
@@ -776,6 +785,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" type="button" data-vbulk="d:auto">Auto</button><button class="btn ghost small" type="button" data-vbulk="d:param">Parametric</button><button class="btn ghost small" type="button" data-vbulk="d:nonparam">Non-parametric</button>
         <span class="legend-note" style="margin-left:10px">Labels:</span><button class="btn ghost small" type="button" data-vlabel="sentence" title="Age (years), Body mass index">Sentence case</button><button class="btn ghost small" type="button" data-vlabel="title" title="Age (Years), Body Mass Index">Title Case</button><button class="btn ghost small" type="button" data-vlabel="cols" title="Labels made again from the column names">From column names</button></div>
       <div class="row" style="gap:8px;margin-bottom:8px"><input type="search" id="varSearch" placeholder="Find a variable…" style="max-width:260px"><label class="check" style="margin:0"><input type="checkbox" id="varOnlyInc"><span>Only included</span></label><span class="legend-note" id="varCount"></span><span class="spacer"></span><button class="btn ghost small" id="btnCodebook" type="button" title="Every column with its label, role, type, levels, value labels, missing values and range — for the thesis appendix">⬇ Codebook (Excel)</button></div>
+      <details class="roles-box" id="rolesBox"><summary><b>🎭 Roles at a glance</b> <span class="legend-note">drag the variables between baseline characteristics and outcomes</span></summary><div id="rolesBoard" class="roles-board"></div></details>
+      <div class="row" id="lockBar" style="gap:8px;align-items:center;margin:6px 0"><button class="btn ghost small" id="btnLock" type="button" title="Freeze the labels, units, groups, tables and order: new data files with the same columns keep them">🔒 Lock the setup</button><span class="legend-note" id="lockInfo"></span></div>
       <div class="row" id="varGroupsBar" style="gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center;display:none"></div>
       <div class="row" id="varSelBar" style="gap:6px;margin-bottom:8px;flex-wrap:wrap;display:none"><b id="varSelN"></b>
         <span class="legend-note">Table</span><input type="text" id="vsTable" placeholder="table name" style="width:200px"><button class="btn ghost small" id="vsTableGo" type="button">Set</button>
@@ -1629,6 +1640,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div><label class="f">Test between the groups</label><select id="vdTest"></select></div>
       <div><label class="f">Arabic label (optional)</label><input type="text" id="vdAr" dir="rtl"></div>
       <div id="vdShowBox"><label class="f">Row shows (two categories)</label><select id="vdShow"></select></div>
+      <div style="grid-column:1/-1"><label class="f">Definition (for the methods: “… was defined as …”)</label><input type="text" id="vdDef" placeholder="e.g. BP ≥ 140/90 mmHg or antihypertensive treatment"></div>
       <div><label class="f">Minimal clinically important difference (two groups)</label><input type="number" step="any" id="vdMcid" placeholder="e.g. 10"></div>
       <div><label class="f">Outliers (numeric)</label><select id="vdOut"><option value="">Keep them</option><option value="iqr15">Exclude beyond 1.5 × IQR</option><option value="iqr3">Exclude beyond 3 × IQR</option><option value="z3">Exclude beyond 3 SD</option><option value="limits">Exclude outside my limits</option></select></div>
       <div id="vdOutLim"><label class="f">Limits (low – high)</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="number" step="any" id="vdOutLo" placeholder="low"><input type="number" step="any" id="vdOutHi" placeholder="high"></div></div>

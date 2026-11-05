@@ -379,9 +379,12 @@
     state.sheet = name;
     state.data = { headers, rows };
     state.undo = []; state.redo = []; state.grid.page = 0; state.grid.sort = null;
-    const prevCfg = state.pendingCfg;
+    let prevCfg = state.pendingCfg;
+    // a locked setup (step 2) is used again for a new file with the same columns
+    if (!prevCfg) { try { const L = JSON.parse(localStorage.getItem('easystat.lockedSetup') || 'null'); if (L && L.setupLocked) { const cols = new Set(L.variables.flatMap(v => v.cols.map(c => c.col))), hit = headers.filter(x => cols.has(x)).length; if (hit >= 0.8 * cols.size) { prevCfg = L; setTimeout(() => toast('The locked setup was used for this file (step 2 · unlock to change it)'), 700); } } } catch (e) { /* none */ } }
     state.cfg = detect(state.data);
     if (prevCfg) applySavedCfg(prevCfg);
+    if (prevCfg && prevCfg.setupLocked) state.cfg.setupLocked = true;
     if (state.savMeta) applySavMeta(state.cfg, state.savMeta);
     renderGrid();
     $('#to2').disabled = false;
@@ -389,6 +392,80 @@
     toast(`Loaded ${rows.length} patients · ${state.cfg.variables.length} variables detected`);
   }
   $('#to2').onclick = () => go(2);
+
+  /* ---------- reload or watch the data file: the setup is kept and the changes since the last reading are listed ---------- */
+  let watchHandle = null, watchTimer = null, watchStamp = 0;
+  const rowKey = (r, i) => { const id = state.cfg && state.cfg.idCols && state.cfg.idCols[0]; return id && !isMissing(r[id]) ? `${id}=${r[id]}` : `row ${i + 1}`; };
+  function dataChanges(before, after) {
+    const A = new Map(before.rows.map((r, i) => [rowKey(r, i), r])), B = new Map(after.rows.map((r, i) => [rowKey(r, i), r])), cells = [];
+    const added = [...B.keys()].filter(k => !A.has(k)), removed = [...A.keys()].filter(k => !B.has(k));
+    B.forEach((r, k) => { const o = A.get(k); if (!o) return; after.headers.forEach(h => { if (!before.headers.includes(h)) return; const a = o[h], b = r[h]; if (String(a ?? '') !== String(b ?? '')) cells.push(`${k} · ${h}: ${a ?? '(blank)'} → ${b ?? '(blank)'}`); }); });
+    return { added, removed, cells, newCols: after.headers.filter(h => !before.headers.includes(h)), goneCols: before.headers.filter(h => !after.headers.includes(h)) };
+  }
+  async function reloadFrom(file) {
+    if (!state.data) return; const before = { headers: [...state.data.headers], rows: state.data.rows.map(r => ({ ...r })) }, sheet = state.sheet;
+    state.pendingCfg = JSON.parse(JSON.stringify(state.cfg)); const hdr = state.hdr;
+    await loadFile(file); if (state.wb && state.wb.SheetNames.includes(sheet) && state.sheet !== sheet) { state.hdr = hdr; $('#sheetSel').value = sheet; selectSheet(sheet); }
+    state.pendingCfg = null;
+    const c = dataChanges(before, state.data), n = c.added.length + c.removed.length + c.cells.length + c.newCols.length + c.goneCols.length;
+    $('#reloadInfo').innerHTML = `<b>Reloaded ${new Date().toLocaleTimeString()}</b> — ${n ? [c.added.length && `${c.added.length} row${c.added.length > 1 ? 's' : ''} added`, c.removed.length && `${c.removed.length} removed`, c.cells.length && `${c.cells.length} cell${c.cells.length > 1 ? 's' : ''} changed`, c.newCols.length && `new columns: ${c.newCols.join(', ')}`, c.goneCols.length && `columns gone: ${c.goneCols.join(', ')}`].filter(Boolean).join(' · ') : 'no change'}
+      ${n ? `<ul class="chg-list">${[...c.added.map(k => `<li>+ ${esc(k)}</li>`), ...c.removed.map(k => `<li>− ${esc(k)}</li>`), ...c.cells.slice(0, 200).map(t => `<li>${esc(t)}</li>`)].join('')}${c.cells.length > 200 ? `<li>… ${c.cells.length - 200} more</li>` : ''}</ul>` : ''}`;
+    (state.cleanLog = state.cleanLog || []).push({ time: new Date().toLocaleString(), what: `Reloaded the file: ${c.added.length} rows added, ${c.removed.length} removed, ${c.cells.length} cells changed` });
+    toast(n ? `File reloaded: ${c.added.length} added, ${c.removed.length} removed, ${c.cells.length} cells changed — setup kept` : 'File reloaded: no change');
+    if (state.step === U_REPORT) runAnalysis();
+  }
+  const U_REPORT = 12;
+  $('#btnWatchOpen').onclick = async () => {
+    if (!window.showOpenFilePicker) { toast('Watching a file needs Chrome or Edge — use 🔄 Reload after saving the file instead'); return; }
+    try { const [hd] = await window.showOpenFilePicker({ types: [{ description: 'Data', accept: { 'application/octet-stream': ['.xlsx', '.xls', '.csv', '.txt', '.tsv', '.sav', '.zsav', '.dta'] } }] });
+      watchHandle = hd; const f = await hd.getFile(); watchStamp = f.lastModified; await loadFile(f); $('#watchOn').checked = true; startWatch(); toast(`Watching ${f.name}: saved changes are loaded by themselves`); } catch (e) { /* cancelled */ } };
+  function startWatch() { clearInterval(watchTimer); if (!watchHandle || !$('#watchOn').checked) return;
+    watchTimer = setInterval(async () => { try { const f = await watchHandle.getFile(); if (f.lastModified !== watchStamp) { watchStamp = f.lastModified; await reloadFrom(f); } } catch (e) { clearInterval(watchTimer); } }, 3000); }
+  $('#watchOn').onchange = () => { if ($('#watchOn').checked && !watchHandle) { $('#watchOn').checked = false; toast('Open the file with “👁 Open and watch…” to watch it'); return; } startWatch(); };
+  $('#btnReload').onclick = async () => { if (!state.data) return;
+    if (watchHandle) { const f = await watchHandle.getFile(); watchStamp = f.lastModified; return reloadFrom(f); }
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.csv,.txt,.tsv,.sav,.zsav,.dta'; inp.onchange = () => { if (inp.files[0]) reloadFrom(inp.files[0]); }; inp.click(); };
+
+  /* ---------- an Excel data-entry sheet from the variables: drop-down lists, allowed ranges and a guide ---------- */
+  $('#btnEntryForm').onclick = () => {
+    if (!state.cfg) return; readUiIntoCfg(); const cfg = state.cfg, H2 = state.data.headers, info = {};
+    cfg.variables.forEach(v => v.cols.forEach(c => { info[c.col] = v; }));
+    const ws = XLSX.utils.aoa_to_sheet([H2]); ws['!cols'] = H2.map(h => ({ wch: Math.min(30, Math.max(10, h.length + 2)) }));
+    const guide = [['Column', 'Label', 'Type', 'Allowed values', 'Unit', 'Definition']];
+    const dv = []; const L = i => XLSX.utils.encode_col(i);
+    H2.forEach((h, i) => { const v = info[h], isGroup = h === cfg.groupCol;
+      const lv = isGroup ? cfg.groupOrder : v && v.type === 'categorical' ? (v.levels || []).map(String) : null;
+      const nums = state.data.rows.map(r => Analysis.toNum(r[h])).filter(isFinite), num = !lv && v && v.type === 'numeric' && nums.length;
+      const lo = num ? (v.refLo !== undefined && v.refLo !== '' ? +v.refLo : Math.min(...nums)) : null, hi = num ? (v.refHi !== undefined && v.refHi !== '' ? +v.refHi : Math.max(...nums)) : null;
+      const span = num ? hi - lo : 0, lo2 = num ? +(lo - span * 0.5).toPrecision(4) : null, hi2 = num ? +(hi + span * 0.5).toPrecision(4) : null;
+      if (lv && lv.length && lv.join(',').length < 250) dv.push(`<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${L(i)}2:${L(i)}2000"><formula1>"${lv.map(x => String(x).replace(/"/g, '""').replace(/&/g, '&amp;').replace(/</g, '&lt;')).join(',')}"</formula1></dataValidation>`);
+      if (num && isFinite(lo2) && isFinite(hi2)) dv.push(`<dataValidation type="decimal" allowBlank="1" showErrorMessage="1" errorTitle="Out of range" error="Allowed: ${lo2} to ${hi2}" sqref="${L(i)}2:${L(i)}2000"><formula1>${lo2}</formula1><formula2>${hi2}</formula2></dataValidation>`);
+      guide.push([h, v ? v.label : isGroup ? 'Study group' : '', isGroup ? 'group' : v ? v.type : '', lv ? lv.join(' / ') : num ? `${lo2} to ${hi2}` : '', v && v.unit || '', v && v.definition || '']); });
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Data entry'); const g = XLSX.utils.aoa_to_sheet(guide); g['!cols'] = [{ wch: 22 }, { wch: 26 }, { wch: 12 }, { wch: 40 }, { wch: 10 }, { wch: 40 }]; XLSX.utils.book_append_sheet(wb, g, 'Guide');
+    // the drop-down lists and ranges are written into the sheet's XML (SheetJS does not write them)
+    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), z = XLSX.CFB.read(new Uint8Array(out), { type: 'array' }), e = z.FileIndex[z.FullPaths.indexOf('Root Entry/xl/worksheets/sheet1.xml')];
+    if (e && dv.length) { let x = new TextDecoder().decode(e.content); const tag = `<dataValidations count="${dv.length}">${dv.join('')}</dataValidations>`;
+      x = /<pageMargins/.test(x) ? x.replace(/<pageMargins/, tag + '<pageMargins') : x.replace('</worksheet>', tag + '</worksheet>'); const u = new TextEncoder().encode(x); e.content = u; e.size = u.length; }
+    saveUrl(URL.createObjectURL(new Blob([XLSX.CFB.write(z, { fileType: 'zip', type: 'array', compression: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })), `${baseName()} - data entry sheet.xlsx`);
+    toast(`Data-entry sheet saved: ${dv.length} columns with drop-down lists or allowed ranges, and a guide sheet`); };
+
+  /* ---------- one sheet per visit: matched by ID into one row per patient (columns of the later sheets get the sheet's name) ---------- */
+  $('#visitSheets').onclick = () => {
+    if (!state.wb) return; const names = state.wb.SheetNames; if (names.length < 2) return;
+    const read = n => { const aoa = XLSX.utils.sheet_to_json(state.wb.Sheets[n], { header: 1, defval: null, raw: true, blankrows: false }); if (aoa.length < 2) return null; const hd = aoa[0].map((x, i) => x === null || x === '' ? `Column_${i + 1}` : String(x).trim()); return { n, hd, rows: aoa.slice(1).filter(r => r.some(v => !isMissing(v))).map(r => Object.fromEntries(hd.map((x, i) => [x, r[i] ?? null]))) }; };
+    const sheets = names.map(read).filter(Boolean); if (sheets.length < 2) { toast('Fewer than two sheets with data'); return; }
+    const common = sheets[0].hd.filter(x => sheets.every(sh => sh.hd.includes(x))), idGuess = common.find(x => /^(id|patient.?id|code|record|mrn|subject|no\.?)$/i.test(x)) || common[0];
+    const id = prompt(`Column that identifies each patient on every sheet (${common.join(', ')}):`, idGuess); if (!id || !common.includes(id)) { if (id) toast(`“${id}” is not on every sheet`); return; }
+    const tag = n => String(n).trim().replace(/\s+/g, '').replace(/[^\w.-]/g, ''), keep = new Set([id]); // "Month 3" → Month3, read as a timepoint
+    // columns that change between visits get the visit's name; columns found on one sheet only stay as they are
+    const per = sheets.flatMap(sh => sh.hd).reduce((m, x) => (m[x] = (m[x] || 0) + 1, m), {});
+    const headers = [id], byId = new Map();
+    sheets.forEach(sh => { sh.hd.forEach(x => { if (x === id) return; const name = per[x] > 1 ? `${x}_${tag(sh.n)}` : x; if (!headers.includes(name)) headers.push(name); });
+      sh.rows.forEach(r => { const k = String(r[id] ?? '').trim(); if (!k) return; if (!byId.has(k)) byId.set(k, { [id]: r[id] }); const o = byId.get(k); sh.hd.forEach(x => { if (x === id) return; o[per[x] > 1 ? `${x}_${tag(sh.n)}` : x] = r[x]; }); }); });
+    const aoa = [headers, ...[...byId.values()].map(o => headers.map(x => o[x] ?? null))], wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Visits'); const file = state.file;
+    openWorkbook(wb, `${file} (visits)`); toast(`${sheets.length} sheets as visits: ${byId.size} patients, ${headers.length - 1} columns — repeated measures detected in step 2`); };
+
 
   /* ---------- data grid: preview options, editing and rearranging the sheet ---------- */
   state.grid = { page: 0, per: 10, q: '', onlyMissing: false, hlMissing: true, summary: false, edit: false, sort: null, density: 'normal', hidden: [], types: true, wrap: false, freeze: false, stripes: true, outliers: false };
@@ -416,7 +493,8 @@
       if (f.vals) return f.vals.includes(isMissing(v) ? '(blank)' : String(v).trim());
       const n = Analysis.toNum(v); return isFinite(n) && (f.min === '' || f.min == null || n >= +f.min) && (f.max === '' || f.max == null || n <= +f.max); });
     const only = g.rowsOnly ? new Set(g.rowsOnly.rows) : null;
-    const idx = rows.map((_, i) => i).filter(i => (!only || only.has(i)) && cfPass(i) && (!q || headers.some(h => String(rows[i][h] ?? '').toLowerCase().includes(q))) && (!g.onlyMissing || headers.some(h => isMissing(rows[i][h]))));
+    const chk = (state.cfg && state.cfg.rowChecks) || {};
+    const idx = rows.map((_, i) => i).filter(i => (!g.onlyUnchecked || !chk[rowKey(rows[i], i)]) && (!only || only.has(i)) && cfPass(i) && (!q || headers.some(h => String(rows[i][h] ?? '').toLowerCase().includes(q))) && (!g.onlyMissing || headers.some(h => isMissing(rows[i][h]))));
     const per = g.per === 'all' ? Math.max(1, idx.length) : +g.per, pages = Math.max(1, Math.ceil(idx.length / per));
     g.page = Math.min(g.page, pages - 1);
     const shown = idx.slice(g.page * per, g.page * per + per), cfg = state.cfg;
@@ -434,8 +512,9 @@
       const info = columnInfo(rows, h), miss = rows.length - info.n, nums = rows.map(r => Analysis.toNum(r[h])).filter(isFinite);
       const desc = info.numeric && nums.length ? `num · ${Analysis.fmt(Math.min(...nums), 2)}–${Analysis.fmt(Math.max(...nums), 2)}` : `text · ${info.distinct.length} values`;
       return `<td class="${fz(ci)}">${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
-    const body = shown.map(i => `<tr><td class="rn">${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
-      headers.map((h, ci) => `<td class="${cc(h, ci)}${g.hlMissing && isMissing(rows[i][h]) ? ' miss' : ''}${isOut(h, rows[i][h]) ? ' gout' : ''}" title="${esc(rows[i][h] ?? '')}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`).join('')}</tr>`).join('');
+    const edited = new Map(); ((state.cfg && state.cfg.cellLog) || []).forEach(e => edited.set(e.key + '|' + e.col, e));
+    const body = shown.map(i => `<tr class="${chk[rowKey(rows[i], i)] ? 'rchk' : ''}"><td class="rn"><button class="rchk-btn" type="button" data-rchk="${i}" title="${chk[rowKey(rows[i], i)] ? `Checked by ${esc(chk[rowKey(rows[i], i)].who)} on ${esc(chk[rowKey(rows[i], i)].at)} — click to undo` : 'Mark this row as checked against the source'}">${chk[rowKey(rows[i], i)] ? '☑' : '☐'}</button>${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
+      headers.map((h, ci) => { const ed = edited.get(rowKey(rows[i], i) + '|' + h); return `<td class="${cc(h, ci)}${g.hlMissing && isMissing(rows[i][h]) ? ' miss' : ''}${isOut(h, rows[i][h]) ? ' gout' : ''}${ed ? ' edited' : ''}" title="${ed ? esc(`Edited by ${ed.who} on ${ed.at}: ${ed.old ?? '(blank)'} → ${ed.now ?? '(blank)'}`) : esc(rows[i][h] ?? '')}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`; }).join('')}</tr>`).join('');
     $('#preview').innerHTML = `<thead><tr><th class="rn">#</th>${head}</tr></thead><tbody>${summary}${body || `<tr><td colspan="${headers.length + 1}" class="legend-note">No rows match.</td></tr>`}</tbody>`;
     const rn = tbl.querySelector('th.rn'); if (rn) tbl.style.setProperty('--rnw', rn.getBoundingClientRect().width + 'px');
     let left = rn ? rn.getBoundingClientRect().width : 40; for (let k = 0; k < nF; k++) { tbl.style.setProperty(`--fz${k}`, left + 'px'); const th = tbl.querySelector(`thead th.fz${k}`); left += th ? th.getBoundingClientRect().width : 0; }
@@ -472,7 +551,7 @@
     const others = state.wb ? state.wb.SheetNames.filter(n => n !== state.sheet) : [];
     $('#mergeSheet').innerHTML = others.map(n => `<option>${esc(n)}</option>`).join('');
     $('#mergeSheetBox').style.display = $('#mergeSheetGo').style.display = others.length ? '' : 'none';
-    $('#stackSheets').style.display = others.length ? '' : 'none';
+    $('#stackSheets').style.display = others.length ? '' : 'none'; $('#visitSheets').style.display = others.length ? '' : 'none';
     renderFilters(); renderStep1Tools();
   }
   const filterNote = (cfg, n, kept) => { const sm = cfg.sample && cfg.sample.on, c = (cfg.rowFilter || []).length;
@@ -614,6 +693,12 @@
     logChange(what ? `${what} — ${describeChange(before, state.data)}` : describeChange(before, state.data));
     renderGrid(); renderStepper();
   }
+  $('#groupComboGo').onclick = () => { const cfg = state.cfg, b = $('#groupCombo').value; if (!cfg || !b || !cfg.groupCol) { toast('Choose the second column'); return; } readUiIntoCfg();
+    const a = cfg.groupCol, name = `${a}_x_${b}`.replace(/\s+/g, '_');
+    editSheet(() => { if (!state.data.headers.includes(name)) { state.data.headers.splice(state.data.headers.indexOf(a) + 1, 0, name); }
+      state.data.rows.forEach(r => { r[name] = isMissing(r[a]) || isMissing(r[b]) ? null : `${String(r[a]).trim()} · ${String(r[b]).trim()}`; }); });
+    cfg.groupCol = name; cfg.variables.forEach(v => { if (v.cols[0].col === name) v.include = false; }); setGroups(cfg); renderVariables();
+    toast(`Groups: every combination of ${a} and ${b} (${cfg.groupOrder.length} groups)`); };
   function refreshGroups() {
     const cfg = state.cfg; if (!cfg) return;
     const cur = []; state.data.rows.forEach(r => { const g = Analysis.groupOf(cfg, r); if (g !== null && !cur.includes(g)) cur.push(g); });
@@ -686,7 +771,11 @@
       });
     });
   }
+  // who is working (for the checks and edits of the rows): asked once, kept in this browser
+  function whoAmI() { let w = ''; try { w = localStorage.getItem('easystat.who') || ''; } catch (e) { /* none */ } if (!w) { w = (prompt('Your name or initials (kept with the rows you check and the cells you edit):', '') || '').trim() || 'me'; try { localStorage.setItem('easystat.who', w); } catch (e) { /* none */ } } return w; }
   $('#gridWrap').addEventListener('click', e => {
+    const rc = e.target.closest('[data-rchk]'); if (rc && state.cfg) { e.stopPropagation(); const i = +rc.dataset.rchk, k = rowKey(state.data.rows[i], i), C = state.cfg.rowChecks = state.cfg.rowChecks || {};
+      if (C[k]) delete C[k]; else C[k] = { who: whoAmI(), at: new Date().toLocaleString() }; renderGrid(); const n = Object.keys(C).length; toast(`${n} of ${state.data.rows.length} rows checked`); return; }
     const b = e.target.closest('button,[data-hsort]'); if (!b || !state.data) return;
     const g = state.grid, d = b.dataset;
     if (b.id === 'gridPrev') { g.page--; renderGrid(); }
@@ -734,6 +823,8 @@
     if ((old ?? null) === v || String(old ?? '') === String(v ?? '')) return;
     // update only this cell (a full redraw here would swallow a click on a button)
     pushUndo();
+    if (state.cfg) { const L = state.cfg.cellLog = state.cfg.cellLog || [], key = rowKey(state.data.rows[i], i), prev = L.find(e => e.key === key && e.col === col);
+      if (prev) { prev.now = v; prev.at = new Date().toLocaleString(); prev.who = whoAmI(); } else L.push({ key, col, old, now: v, at: new Date().toLocaleString(), who: whoAmI() }); td.classList.add('edited'); }
     state.data.rows[i][col] = v;
     if (state.cfg && col === state.cfg.groupCol) refreshGroups();
     td.textContent = v ?? '';
@@ -755,6 +846,7 @@
     if (t.dataset.hname !== undefined) return renameColumn(t.dataset.hname, t.value);
     if (t.id === 'gridPer') { g.per = t.value; g.page = 0; }
     else if (t.id === 'gridOnlyMissing') { g.onlyMissing = t.checked; g.page = 0; }
+    else if (t.id === 'gridOnlyUnchecked') { g.onlyUnchecked = t.checked; g.page = 0; }
     else if (t.id === 'gridHl') g.hlMissing = t.checked;
     else if (t.id === 'gridSummary') g.summary = t.checked;
     else if (t.id === 'gridDensity') g.density = t.value;
@@ -1283,7 +1375,7 @@
   function openVarDlg(id) {
     readUiIntoCfg();
     const v = state.cfg.variables.find(x => x.id === id); if (!v) return; vdVar = v;
-    $('#vdTitle').textContent = v.label; $('#vdVlBox').style.display = v.type === 'categorical' ? '' : 'none'; if (v.type === 'categorical') vlOpen(v); $('#vdUnit').value = v.unit || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
+    $('#vdTitle').textContent = v.label; $('#vdVlBox').style.display = v.type === 'categorical' ? '' : 'none'; if (v.type === 'categorical') vlOpen(v); $('#vdUnit').value = v.unit || ''; $('#vdDef').value = v.definition || ''; $('#vdDec').value = v.dec ?? ''; $('#vdRole').value = v.role || '';
     $('#vdTf').value = v.transform || ''; $('#vdTf').disabled = v.type !== 'numeric'; $('#vdWinP').value = v.winsorP || '1'; $('#vdWinBox').style.display = v.transform === 'winsor' ? '' : 'none';
     $('#vdOut').value = v.outRule || ''; $('#vdOut').disabled = v.type !== 'numeric'; $('#vdOutLo').value = v.outLo ?? ''; $('#vdOutHi').value = v.outHi ?? ''; $('#vdOutLim').style.display = v.outRule === 'limits' ? '' : 'none';
     $('#vdImp').value = v.impute || ''; [...$('#vdImp').options].forEach(o => { o.disabled = o.value && (o.value === 'mode') !== (v.type === 'categorical'); });
@@ -1369,7 +1461,7 @@
   $('#vdSave').onclick = () => {
     const v = vdVar; if (!v) return;
     const set = (k, val) => { if (val === '' || val === false || val === null) delete v[k]; else v[k] = val; };
-    set('unit', $('#vdUnit').value.trim()); set('dec', $('#vdDec').value); set('role', $('#vdRole').value); set('transform', v.type === 'numeric' ? $('#vdTf').value : '');
+    set('unit', $('#vdUnit').value.trim()); set('definition', $('#vdDef').value.trim()); set('dec', $('#vdDec').value); set('role', $('#vdRole').value); set('transform', v.type === 'numeric' ? $('#vdTf').value : '');
     set('ordinal', v.type === 'categorical' && $('#vdOrd').checked); set('ordTest', $('#vdOrd').checked ? $('#vdOrdTest').value : '');
     set('winsorP', v.transform === 'winsor' || $('#vdTf').value === 'winsor' ? $('#vdWinP').value : ''); set('outRule', v.type === 'numeric' ? $('#vdOut').value : ''); set('outLo', $('#vdOut').value === 'limits' ? $('#vdOutLo').value : ''); set('outHi', $('#vdOut').value === 'limits' ? $('#vdOutHi').value : '');
     set('impute', $('#vdImp').value); set('refLo', v.type === 'numeric' ? $('#vdRefLo').value : ''); set('refHi', v.type === 'numeric' ? $('#vdRefHi').value : ''); set('locked', $('#vdLock').checked);
@@ -1995,6 +2087,7 @@
     renderCalcForm();
     const cfg = state.cfg, { headers } = state.data;
     $('#groupCol').innerHTML = headers.map(h => `<option ${h === cfg.groupCol ? 'selected' : ''}>${esc(h)}</option>`).join('');
+    $('#groupCombo').innerHTML = '<option value="">× another column…</option>' + headers.filter(h => h !== cfg.groupCol && (n => n >= 2 && n <= 8)(columnInfo(state.data.rows, h).distinct.length)).map(h => `<option>${esc(h)}</option>`).join('');
     // study design: compare the groups of a column, or analyse every patient as one group
     $('#groupMode').value = cfg.noGroups ? 'one' : 'groups';
     $('#groupColBox').style.display = cfg.noGroups ? 'none' : '';
@@ -2039,7 +2132,7 @@
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
         <td style="white-space:nowrap"><button class="btn ghost small" data-vgear="${v.id}" type="button" title="More: value labels, unit, decimals, role, ordinal, transformation, Arabic label, merging categories, adjusted comparison">⚙${varBadges(v)}</button>${(warn[v.id] || []).map(w => `<span class="chip warn" title="${esc(w[1])}">${w[0]}</span>`).join('')}</td>
       </tr>`).join('')}</tbody>`;
-    renderRepeated(); filterVars(); renderSubgroup(); renderGroupsBar();
+    renderRepeated(); filterVars(); renderSubgroup(); renderGroupsBar(); renderRoles(); renderLock();
   }
   function filterVars() {
     const q = ($('#varSearch').value || '').trim().toLowerCase(), trs = [...document.querySelectorAll('#varsTbl tr[data-vid]')];
@@ -2294,7 +2387,9 @@
     cha2ds2: 'CHA₂DS₂-VASc score', childpugh: 'Child-Pugh score and class', charlson: 'Charlson comorbidity index'
   };
   // cut-off presets for "Categories from cut-offs"
-  const CUT_PRESETS = { bmi: ['18.5, 25, 30', 'Underweight, Normal, Overweight, Obese'], bmiAsia: ['18.5, 23, 27.5', 'Underweight, Normal, Overweight, Obese'], bmiObese: ['18.5, 25, 30, 35, 40', 'Underweight, Normal, Overweight, Obesity I, Obesity II, Obesity III'],
+  const CUT_PRESETS = { dbp: ['80, 90', 'Normal, Stage 1, Stage 2'], glucose: ['100, 126', 'Normal, Impaired fasting glucose, Diabetes'], ldl: ['100, 130, 160, 190', 'Optimal, Near optimal, Borderline high, High, Very high'],
+    hb: ['8, 11, 12', 'Severe anaemia, Moderate anaemia, Mild anaemia, Normal'], spo2: ['90, 94', 'Severe hypoxaemia, Hypoxaemia, Normal'], vas: ['1, 4, 7', 'No pain, Mild, Moderate, Severe'], gcs: ['9, 13', 'Severe, Moderate, Mild'],
+    hr: ['60, 100', 'Bradycardia, Normal, Tachycardia'], temp: ['37.5, 38.3', 'Normal, Low-grade fever, Fever'], crp: ['10, 100', 'Normal, Raised, Very high'], bmi: ['18.5, 25, 30', 'Underweight, Normal, Overweight, Obese'], bmiAsia: ['18.5, 23, 27.5', 'Underweight, Normal, Overweight, Obese'], bmiObese: ['18.5, 25, 30, 35, 40', 'Underweight, Normal, Overweight, Obesity I, Obesity II, Obesity III'],
     age3: ['40, 60', '< 40 years, 40-59 years, ≥ 60 years'], age10: ['30, 40, 50, 60, 70', '< 30, 30-39, 40-49, 50-59, 60-69, ≥ 70'], ageEld: ['65, 75, 85', '< 65, 65-74, 75-84, ≥ 85'],
     egfr: ['15, 30, 45, 60, 90', 'G5, G4, G3b, G3a, G2, G1'], bp: ['120, 130, 140', 'Normal, Elevated, Stage 1, Stage 2'], a1c: ['5.7, 6.5', 'Normal, Prediabetes, Diabetes'] };
   const isYes = x => !isMissing(x) && (Analysis.POSITIVE.test(String(x).trim()) || /^(present|positive|true)$/i.test(String(x).trim()));
@@ -2319,9 +2414,10 @@
     const all = state.data.headers, sa = (k, label) => sel(k, label, all);
     const femGuess = col => { const d = col ? columnInfo(state.data.rows, col).distinct : []; return d.find(x => /^(f|female|woman|women|girl)$/i.test(x)) || d.find(x => /fem|wom/i.test(x)) || ''; };
     const fem = (k = 'fem', col = calc.c) => `<div><label class="f">Female value</label><input type="text" data-calc="${k}" value="${esc(calc[k] ?? femGuess(col))}" placeholder="e.g. Female"></div>`;
-    if (t === 'cat') f += `<div><label class="f">Preset</label><select data-calc="preset"><option value="">— cut-offs of my own —</option>${[['bmi', 'BMI — WHO'], ['bmiObese', 'BMI — WHO with obesity classes'], ['bmiAsia', 'BMI — Asian'], ['age3', 'Age: < 40, 40-59, ≥ 60'], ['age10', 'Age by decade'], ['ageEld', 'Age: older adults (65, 75, 85)'], ['egfr', 'eGFR — KDIGO G1-G5'], ['bp', 'Systolic BP — ACC/AHA'], ['a1c', 'HbA1c — ADA']].map(([k, l]) => `<option value="${k}" ${calc.preset === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
+    if (t === 'cat') f += `<div><label class="f">Preset</label><select data-calc="preset"><option value="">— cut-offs of my own —</option>${[['bmi', 'BMI — WHO'], ['bmiObese', 'BMI — WHO with obesity classes'], ['bmiAsia', 'BMI — Asian'], ['age3', 'Age: < 40, 40-59, ≥ 60'], ['age10', 'Age by decade'], ['ageEld', 'Age: older adults (65, 75, 85)'], ['egfr', 'eGFR — KDIGO G1-G5'], ['bp', 'Systolic BP — ACC/AHA'], ['dbp', 'Diastolic BP — ACC/AHA'], ['a1c', 'HbA1c — ADA'], ['glucose', 'Fasting glucose (mg/dL) — ADA'], ['ldl', 'LDL cholesterol (mg/dL) — NCEP'], ['hb', 'Haemoglobin (g/dL) — WHO anaemia'], ['spo2', 'SpO₂ (%)'], ['vas', 'Pain 0–10 (none, mild, moderate, severe)'], ['gcs', 'Glasgow coma scale'], ['hr', 'Heart rate (bpm)'], ['temp', 'Temperature (°C)'], ['crp', 'CRP (mg/L)']].map(([k, l]) => `<option value="${k}" ${calc.preset === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
     if (t === 'likert') f += `<div style="grid-column:span 3"><label class="f">Items — tick the reverse-coded ones in the second box</label><div class="predlist">${nums.map(h => `<label><input type="checkbox" data-calccol="${esc(h)}" ${(calc.cols || []).includes(h) ? 'checked' : ''}>${esc(h)} <span class="legend-note" title="Reverse-coded">↺</span><input type="checkbox" data-calcrev="${esc(h)}" ${(calc.rev || []).includes(h) ? 'checked' : ''}></label>`).join('')}</div></div>`
       + `<div><label class="f">Scale from – to</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="number" data-calc="smin" value="${esc(calc.smin ?? 1)}" style="width:60px"><input type="number" data-calc="smax" value="${esc(calc.smax ?? 5)}" style="width:60px"></div></div>`
+      + `<div><label class="check" style="margin-top:22px"><input type="checkbox" data-calc="alphaAdd" ${calc.alphaAdd !== false ? 'checked' : ''}><span>Add Cronbach's α of the items (step 8)</span></label></div>`
       + `<div><label class="f">Score</label><select data-calc="how"><option value="sum" ${calc.how !== 'mean' ? 'selected' : ''}>Sum of the items</option><option value="mean" ${calc.how === 'mean' ? 'selected' : ''}>Mean of the items</option></select></div>`
       + `<div><label class="f">Patients with missing items</label><select data-calc="miss"><option value="none" ${calc.miss !== 'half' ? 'selected' : ''}>No score</option><option value="half" ${calc.miss === 'half' ? 'selected' : ''}>Scored when at least half the items are answered (mean × number of items)</option></select></div>`
       + `<div style="grid-column:span 3"><label class="f">Subscales (optional) — name: items</label><input type="text" data-calc="subs" value="${esc(calc.subs || '')}" placeholder="e.g. Physical: Q1, Q2, Q3; Mental: Q4, Q5, Q6"></div>`;
@@ -2500,6 +2596,9 @@
         if (!cfg.variables.some(x => x.cols.some(c => c.col === it.name))) cfg.variables.push(v);
       }
       cfg.computed = [...(cfg.computed || []), { names: plan.items.map(i => i.name), desc: plan.desc, calc: JSON.parse(JSON.stringify(calc)) }];
+      // a questionnaire score: the reliability of its items (Cronbach's alpha) is added to step 8
+      if (calc.type === 'likert' && calc.alphaAdd !== false && (calc.cols || []).length >= 2 && !(cfg.advanced || []).some(a => a.type === 'cronbach' && (a.predictors || []).join('|') === calc.cols.join('|'))) {
+        cfg.advanced = [...(cfg.advanced || []), { type: 'cronbach', include: true, predictors: [...calc.cols], title: `Reliability of ${plan.items[0].name.replace(/_/g, ' ')} (Cronbach's alpha)`, split: false }]; setTimeout(() => toast("Cronbach's alpha of the items added to step 8"), 600); }
       syncPositions(); // the variables follow the new column order
     });
   }
@@ -2510,7 +2609,12 @@
     else if (e.target.dataset.calcw !== undefined) { calc.w = { ...(calc.w || {}), [e.target.dataset.calcw]: +e.target.value }; }
     else if (k === 'preset') { calc.preset = e.target.value; if (CUT_PRESETS[calc.preset]) { [calc.cuts, calc.labels] = CUT_PRESETS[calc.preset]; } renderCalcForm(); return; }
     else if (k === 'c' && !calc.fem) { calc.c = e.target.value; renderCalcForm(); return; }
-    else if (k) { calc[k] = e.target.value; if (k === 'type' || k === 'a') { if (k === 'type') calc.name = ''; renderCalcForm(); return; } }
+    else if (k === 'alphaAdd') calc.alphaAdd = e.target.checked;
+    else if (k) { calc[k] = e.target.value;
+      // a column whose name says what it is gets its clinical cut-offs by itself (BMI, age, eGFR, BP, glucose …)
+      if (k === 'a' && calc.type === 'cat' && !calc.preset) { const n = String(calc.a || '').toLowerCase(), auto = [[/bmi/, 'bmi'], [/\bage/, 'age3'], [/egfr|gfr/, 'egfr'], [/sbp|systolic/, 'bp'], [/dbp|diastolic/, 'dbp'], [/a1c|hba1c/, 'a1c'], [/glucose|fbs|fpg/, 'glucose'], [/ldl/, 'ldl'], [/\bhb\b|haemoglobin|hemoglobin/, 'hb'], [/spo2|sat/, 'spo2'], [/vas|pain|nrs/, 'vas'], [/gcs|glasgow/, 'gcs'], [/heart.?rate|\bhr\b|pulse/, 'hr'], [/temp/, 'temp'], [/crp/, 'crp']].find(([re]) => re.test(n.replace(/_/g, ' ')));
+        if (auto && CUT_PRESETS[auto[1]]) { calc.preset = auto[1]; [calc.cuts, calc.labels] = CUT_PRESETS[auto[1]]; } }
+      if (k === 'type' || k === 'a') { if (k === 'type') calc.name = ''; renderCalcForm(); return; } }
     calcPreview();
   });
   $('#calcAdd').onclick = () => {
@@ -2549,6 +2653,22 @@
   /* ---------- item groups (step 2): items under one name (e.g. Co-morbidities: DM, HTN, COPD), with a heading row in the tables and a combined figure ---------- */
   const groupsOf = () => { const m = new Map(); (state.cfg ? state.cfg.variables : []).forEach(v => { if (v.group) { if (!m.has(v.group)) m.set(v.group, []); m.get(v.group).push(v); } }); return m; };
   // every group has its own combined figure (made and kept up to date here; its settings stay editable in step 7)
+  const ROLES = [['', 'No role'], ['baseline', 'Baseline characteristics'], ['primary', 'Primary outcome'], ['secondary', 'Secondary outcomes'], ['outcome', 'Other outcomes'], ['safety', 'Safety outcomes']];
+  function renderRoles() {
+    const box = $('#rolesBoard'); if (!box || !state.cfg) return; const vs = state.cfg.variables.filter(v => v.include);
+    box.innerHTML = ROLES.map(([k, l]) => { const list = vs.filter(v => (v.role || '') === k); return `<div class="roles-col" data-role="${k}"><h5>${esc(l)} <span class="legend-note">(${list.length})</span></h5>${list.map(v => `<span class="role-chip" draggable="true" data-rvid="${esc(v.id)}" title="${esc(v.cols.map(c => c.col).join(', '))}">${esc(v.label)}</span>`).join('')}</div>`; }).join('');
+  }
+  let roleDrag = null;
+  $('#rolesBoard').addEventListener('dragstart', e => { const c = e.target.closest('[data-rvid]'); if (c) { roleDrag = c.dataset.rvid; e.dataTransfer.effectAllowed = 'move'; } });
+  $('#rolesBoard').addEventListener('dragover', e => { const col = e.target.closest('.roles-col'); if (col && roleDrag) { e.preventDefault(); document.querySelectorAll('.roles-col.over').forEach(x => x.classList.remove('over')); col.classList.add('over'); } });
+  $('#rolesBoard').addEventListener('drop', e => { const col = e.target.closest('.roles-col'); if (!col || !roleDrag || !state.cfg) return; e.preventDefault(); readUiIntoCfg();
+    const v = state.cfg.variables.find(x => x.id === roleDrag); roleDrag = null; if (!v) return; if (col.dataset.role) v.role = col.dataset.role; else delete v.role; renderVariables(); $('#rolesBox').open = true; toast(`${v.label}: ${ROLES.find(r => r[0] === (v.role || ''))[1]}`); });
+  $('#rolesBoard').addEventListener('dragend', () => { roleDrag = null; document.querySelectorAll('.roles-col.over').forEach(x => x.classList.remove('over')); });
+  function renderLock() { const on = !!(state.cfg && state.cfg.setupLocked); $('#p2').classList.toggle('setup-locked', on); $('#btnLock').textContent = on ? '🔓 Unlock the setup' : '🔒 Lock the setup';
+    $('#lockInfo').textContent = on ? 'Locked: labels, units, groups, tables and order are frozen, and a new file with the same columns uses this setup.' : ''; }
+  $('#btnLock').onclick = () => { if (!state.cfg) return; readUiIntoCfg(); state.cfg.setupLocked = !state.cfg.setupLocked;
+    try { if (state.cfg.setupLocked) localStorage.setItem('easystat.lockedSetup', JSON.stringify(state.cfg)); else localStorage.removeItem('easystat.lockedSetup'); } catch (e) { /* not kept */ }
+    renderVariables(); toast(state.cfg.setupLocked ? 'Setup locked — new data files with the same columns will use it' : 'Setup unlocked'); };
   function syncGroupFigs() {
     const cfg = state.cfg; if (!cfg) return; const L = cfg.combFigs = cfg.combFigs || [], groups = groupsOf(), on = cfg.groupFigs !== false;
     for (let i = L.length - 1; i >= 0; i--) if (L[i].auto && (!on || !groups.has(L[i].group))) L.splice(i, 1);
@@ -4850,6 +4970,8 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
           res.consort = { url: cv.toDataURL('image/png'), w: cv.width, h: cv.height };
         }
         if (cfg.options.rmLayout === 'cols') res.sections = res.sections.map(Analysis.timepointsAsColumns);
+        { const defs = state.cfg.variables.filter(v => v.include && v.definition).map(v => { const d0 = v.definition.trim().replace(/\.$/, ''); return /\bdefined\b/i.test(d0) ? d0 + '.' : `${v.label.replace(/\s*\([^)]*\)\s*$/, '')} was defined as ${/^[A-Z][a-z]+\b/.test(d0) ? d0.charAt(0).toLowerCase() + d0.slice(1) : d0}.`; });
+          if (defs.length && res.methods) res.methods = `${res.methods.trim()} Definitions: ${defs.join(' ')}`; }
         placeFigures(res, cfg.options); state.figTables = res.sections.filter(s => !s.figOnly).map(s => s.title).filter(Boolean);
         state.result = res; state.runKey = runKey();
         if (state.pendingEdits) { applyEdits(res, state.pendingEdits); state.pendingEdits = null; }
