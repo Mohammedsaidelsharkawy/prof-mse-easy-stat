@@ -308,7 +308,8 @@ const Charts = (() => {
     let ps = spec.panels || [];
     if (spec.sharedY) { const rng = ps.map(p => { const v = []; (p.series || []).forEach(sr => { (sr.values || []).forEach((x, i) => { if (isFinite(x)) { v.push(x); if (sr.err && isFinite(sr.err[i])) v.push(x + sr.err[i]); if (sr.hi && isFinite(sr.hi[i])) v.push(sr.hi[i]); if (sr.lo && isFinite(sr.lo[i])) v.push(sr.lo[i]); } }); (sr.data || []).forEach(a => a.forEach(x => { if (isFinite(x)) v.push(x); })); }); return v; }).flat();
       if (rng.length) { const lo = Math.min(0, ...rng), hi = Math.max(...rng); ps = ps.map(p => ({ ...p, yMin: lo, yMax: hi + (hi - lo) * 0.08 })); } }
-    const subs = ps.map(p => draw(p, paletteName, style)); if (!subs.length) return makeCanvas(10, 10);
+    // legends: on every panel, on the first only (shared), or none; equal heights: every panel drawn with the same shape
+    const subs = ps.map((p, i) => draw(spec.legend === 'none' || (spec.legend === 'first' && i > 0) ? { ...p, legend: false } : p, paletteName, spec.equal ? { ...style, aspect: spec.equal } : style)); if (!subs.length) return makeCanvas(10, 10);
     const cols = Math.max(1, Math.min(+spec.cols || 2, subs.length)), Wd = Math.max(...subs.map(c => c.width)), hs = subs.map(c => c.height * Wd / c.width), rowsN = Math.ceil(subs.length / cols);
     const rowH = Array.from({ length: rowsN }, (_, k) => Math.max(...hs.slice(k * cols, k * cols + cols))), c = makeCanvas(Wd * cols, rowH.reduce((a, b) => a + b, 0)), x = c.getContext('2d');
     x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); let y0 = 0;
@@ -374,6 +375,7 @@ const Charts = (() => {
   function drawChart(spec, paletteName = 'brand', style = {}) {
     const st = { ...DEFAULT_STYLE, ...style };
     if (spec.type === 'heat') return heatChart(spec, paletteName, st);
+    if (spec.type === 'pheat') return pctHeatChart(spec, paletteName, st);
     if (spec.type === 'waterfall') return waterfallChart(spec, paletteName, st);
     if (spec.type === 'swimmer') return swimmerChart(spec, paletteName, st);
     if (spec.logY && ['line', 'box', 'dot', 'violin'].includes(spec.type)) spec = logSpec(spec);
@@ -710,6 +712,26 @@ const Charts = (() => {
   }
 
   /* ---------- correlation heat map: r of every pair, blue (negative) – white – the palette's first colour (positive), stars for significance ---------- */
+  // a heat map of percentages: items (rows) × study groups (columns), each cell shaded by its % and labelled with it
+  function pctHeatChart(spec, paletteName, st) {
+    const pal = palette(paletteName), { c, ctx, W, H, ts, F } = setup(st), R0 = spec.rowLabels || [], C0 = spec.colLabels || [];
+    ctx.font = F(700, 24); const labW = Math.min(W * 0.38, Math.max(60, ...R0.map(l => ctx.measureText(l).width)) + 24), keyW = 110, headH = 70;
+    const L = labW + 16, T = 20 + headH, cw = (W - L - keyW - 40) / Math.max(1, C0.length), ch = Math.min(80, (H - T - 30) / Math.max(1, R0.length));
+    const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), base = hex(pal[0]), col = v => { const t = Math.max(0, Math.min(1, v / 100)); return `rgb(${base.map(x => Math.round(255 + (x - 255) * t)).join(',')})`; };
+    R0.forEach((rl, i) => C0.forEach((cl, j) => { const v = (spec.values[i] || [])[j], x = L + j * cw, y = T + i * ch;
+      ctx.fillStyle = isFinite(v) ? col(v) : '#F2F2F2'; ctx.fillRect(x, y, cw, ch); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x, y, cw, ch);
+      if (isFinite(v)) { ctx.fillStyle = v > 55 ? '#fff' : '#222'; ctx.font = F(700, Math.min(26, ch * 0.4)); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${+v.toFixed(1)}%`, x + cw / 2, y + ch / 2); hit(x + cw / 2, y + ch / 2, `${rl} · ${cl}: ${+v.toFixed(1)}%`); } }));
+    ctx.fillStyle = '#333'; ctx.font = F(700, 24); ctx.textBaseline = 'middle';
+    R0.forEach((l, i) => { ctx.textAlign = 'right'; ctx.fillText(l, L - 10, T + (i + 0.5) * ch); });
+    C0.forEach((l, j) => { ctx.textAlign = 'center'; wrapText(ctx, l, L + (j + 0.5) * cw, 22, cw - 10, 26 * ts); });
+    const kx = L + C0.length * cw + 30, kh = Math.min(R0.length * ch, 300), ky = T;
+    for (let q = 0; q < 100; q++) { ctx.fillStyle = col(100 - q); ctx.fillRect(kx, ky + kh * q / 100, 26, kh / 100 + 1); }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; ctx.strokeRect(kx, ky, 26, kh); ctx.fillStyle = '#333'; ctx.font = F(600, 20); ctx.textAlign = 'left';
+    [['100%', ky], ['50%', ky + kh / 2], ['0%', ky + kh]].forEach(([t, yy]) => ctx.fillText(t, kx + 32, yy));
+    // no empty space under a short list of items
+    const usedH = T + Math.max(R0.length * ch, kh) + 30; if (VECTOR || usedH >= H - 4) return c;
+    const k2 = c.height / H, out = makeCanvas(c.width, Math.ceil(usedH * k2)), x2 = out.getContext('2d'); x2.drawImage(c, 0, 0); return out;
+  }
   function heatChart(spec, paletteName, st) {
     const pal = palette(paletteName), { c, ctx, W, H, ts, F } = setup({ ...st, aspect: st.aspect === 'wide' ? 'square' : st.aspect });
     const n = spec.labels.length; ctx.font = F(700, 24);

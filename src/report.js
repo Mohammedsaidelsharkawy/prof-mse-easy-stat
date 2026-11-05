@@ -333,6 +333,8 @@ const Report = (() => {
     const textPx = PAGE_W / 15, pct = /^pct(\d+)$/.exec(opts.figWidth || ''), cm = opts.figWidth === 'cm' && +opts.figWidthCm > 0 ? +opts.figWidthCm / 2.54 * 96 : 0;
     let [w1, w2] = opts.twoCol ? [270, 135] : pct ? [textPx * +pct[1] / 100, (textPx - 20) / 2 * Math.min(1, +pct[1] / 100 * 1.05)] : cm ? [cm, Math.min(cm, (textPx - 20) / 2)] : FIG_W[opts.figWidth] || FIG_W.full;
     w1 = Math.round(Math.min(w1, textPx)); w2 = Math.round(Math.min(w2, (textPx - 20) / 2));
+    // a figure may have its own width in cm (combined and panel figures of step 7)
+    const fw = f => f.widthCm > 0 ? Math.round(Math.min(textPx, f.widthCm / 2.54 * 96)) : w1;
     const placeFigures = list => {
       const apa = opts.captionStyle === 'apa';
       const figs = list.filter(f => f.url).map(f => { const num = figLabel(pre + fig++, opts.captionStyle); listFigs.push(`${num} ${f.caption}`); return { ...f, apa, num, label: `${num} ${f.caption}` }; });
@@ -340,13 +342,13 @@ const Report = (() => {
       else for (const f of figs) {
         // APA places the number and title above the figure and the explanation below it as a note
         if (apa) {
-          children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, w1, true, f.caption));
+          children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, fw(f), true, f.caption));
           if (f.note) children.push(para('Note. ' + f.note, { size: 20, line: 240, after: 200, align: AlignmentType.LEFT }));
         } else if (opts.capAbove) {
-          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}), image(f.url, f.w, f.h, w1, false, f.caption));
+          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}), image(f.url, f.w, f.h, fw(f), false, f.caption));
           children.push(para('', { after: 120, line: 240 }));
         } else {
-          children.push(image(f.url, f.w, f.h, w1, true, f.caption));
+          children.push(image(f.url, f.w, f.h, fw(f), true, f.caption));
           children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}));
         }
         if (AR) children.push(arPara(`الشكل ${String(f.num).replace(/^\D+/, '').replace(/[:.]$/, '')}: ${AR.caption(f.caption)}${f.note ? ' ' + AR.caption(f.note) : ''}`, { bold: true, center: true, size: 22, line: 276, after: 200 }));

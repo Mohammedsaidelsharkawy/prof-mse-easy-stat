@@ -2324,6 +2324,7 @@ const Analysis = (() => {
   function explore(data, cfg, xo = {}) {
     S.setConf((+cfg.options.confLevel || 95) / 100);
     [data, cfg] = withValueLabels(data, cfg);
+    [data, cfg] = withItemGroups(data, cfg);
     TP_TIME = cfg.tpTime || {};
     const opts = cfg.options, alpha = opts.alpha, d = xo.dec !== undefined && xo.dec !== '' ? +xo.dec : opts.decimals;
     setRO(opts);
@@ -2489,7 +2490,7 @@ const Analysis = (() => {
         }
         const mats = byGroup.map(rs => rs.map(r => v.cols.map(c => toNum(r[c.col]))).filter(a => a.every(isFinite)));
         let wSig = false;
-        if (T >= 3) { const mc = S.mauchly(mats.filter(m => m.length)); if (mc) it.sph = mc; }
+        if (T >= 3 && mats.some(m => m.length)) { const mc = S.mauchly(mats.filter(m => m.length)); if (mc) it.sph = mc; } // numeric repeated measures only
         const within = mats.map((Y, g) => {
           if (Y.length < 3) return [gl[g], String(Y.length), '—', '—', '—'];
           const col = j => Y.map(r => r[j]);
@@ -2648,6 +2649,45 @@ const Analysis = (() => {
   }
 
   /* ---------- main ---------- */
+  // item groups (step 2): the items of a group in one table, sorted by frequency, rare items folded into "Other …",
+  // and two derived rows: "Any <item>" (yes when any yes/no item is yes) and "Number of <items>" per patient
+  const singularOf = name => { const l = String(name).trim(), w = /^[A-Z]{2,}/.test(l) ? l : l.charAt(0).toLowerCase() + l.slice(1); return w.replace(/ies$/i, 'y').replace(/([^s])s$/i, '$1'); };
+  const lowerName = name => { const l = String(name).trim(); return /^[A-Z]{2,}/.test(l) ? l : l.charAt(0).toLowerCase() + l.slice(1); };
+  const yesLevelOf = v => { const lv = (v.levels || []).map(String); const y = lv.find(l => POSITIVE.test(l.trim())); return v.type === 'categorical' && lv.length === 2 && y !== undefined ? y : null; };
+  function withItemGroups(data, cfg) {
+    const names = [...new Set((cfg.variables || []).filter(v => v.group && v.include !== false).map(v => v.group))];
+    if (!names.length) return [data, cfg];
+    let rows = data.rows; const headers = [...data.headers], vars = cfg.variables.map(v => ({ ...v })), groupItems = {};
+    const pctYes = v => { const y = yesLevelOf(v); if (y === null) return -1; const vals = rows.map(r => toCat(r[v.cols[0].col])).filter(x => x !== null); return vals.length ? 100 * vals.filter(x => x === y).length / vals.length : 0; };
+    names.forEach(name => {
+      const items = vars.filter(v => v.group === name && v.include !== false && v.kind === 'single' && v.cols.length === 1); if (!items.length) return;
+      const first = items[0];
+      if (cfg.groupSameTable !== false) items.forEach(v => { v.table = first.table; });
+      // most frequent first: the items take each other's places in the list of variables
+      if (cfg.groupSort === 'freq' && items.every(v => yesLevelOf(v) !== null)) { const slots = items.map(v => vars.indexOf(v)).sort((a, b) => a - b), sorted = [...items].sort((a, b) => pctYes(b) - pctYes(a)); slots.forEach((k2, i) => { vars[k2] = sorted[i]; }); }
+      let kept = vars.filter(v => items.includes(v));
+      // rare items (below the chosen %) as one "Other …" item
+      const thr = +cfg.groupOther, yn0 = kept.filter(v => yesLevelOf(v) !== null);
+      if (thr > 0 && yn0.length >= 3) { const rare = yn0.filter(v => pctYes(v) < thr);
+        if (rare.length >= 2) { const col = `__other_${name}`;
+          rows = rows.map(r => { const vals = rare.map(v => toCat(r[v.cols[0].col])); return { ...r, [col]: vals.every(x => x === null) ? null : vals.some((x, i) => x === yesLevelOf(rare[i])) ? 'Yes' : 'No' }; }); headers.push(col);
+          rare.forEach(v => { v.include = false; });
+          const at = Math.max(...kept.filter(v => !rare.includes(v)).map(v => vars.indexOf(v)));
+          vars.splice(at + 1, 0, { id: col, kind: 'single', cols: [{ col }], label: `Other ${lowerName(name)} (${rare.map(v => plain(v.label)).join(', ')})`, type: 'categorical', dist: 'auto', table: first.table, levels: ['Yes', 'No'], include: true, pos: first.pos, group: name, chart: 'none', note: '', derived: 'other' });
+          kept = vars.filter(v => v.group === name && v.include !== false && v.kind === 'single'); } }
+      groupItems[name] = kept.map(v => v.id);
+      // any item, and the number of items per patient (yes/no items)
+      const yn = kept.filter(v => yesLevelOf(v) !== null);
+      if (yn.length >= 2 && (cfg.groupAny !== false || cfg.groupCount !== false)) {
+        const aCol = `__any_${name}`, nCol = `__n_${name}`, last = Math.max(...kept.map(v => vars.indexOf(v)));
+        rows = rows.map(r => { const vals = yn.map(v => toCat(r[v.cols[0].col])), miss = vals.every(x => x === null), n = vals.filter((x, i) => x === yesLevelOf(yn[i])).length; return { ...r, [aCol]: miss ? null : n > 0 ? 'Yes' : 'No', [nCol]: miss ? null : n }; });
+        headers.push(aCol, nCol); const add = [];
+        if (cfg.groupAny !== false) add.push({ id: aCol, kind: 'single', cols: [{ col: aCol }], label: `Any ${singularOf(name)}`, type: 'categorical', dist: 'auto', table: first.table, levels: ['Yes', 'No'], include: true, pos: first.pos, group: name, chart: 'none', note: '', derived: 'any' });
+        if (cfg.groupCount !== false) add.push({ id: nCol, kind: 'single', cols: [{ col: nCol }], label: `Number of ${lowerName(name)}`, type: 'numeric', dist: 'nonparam', table: first.table, levels: [], include: true, pos: first.pos, group: name, chart: 'none', note: '', derived: 'count' });
+        vars.splice(last + 1, 0, ...add); }
+    });
+    return [{ ...data, rows, headers }, { ...cfg, variables: vars, __groupItems: groupItems }];
+  }
   function run(data, cfg) {
     // false discovery rate: run once to collect the P values, then again with the adjusted ones
     if (cfg.options.fdr && !cfg.__fdr) {
@@ -2657,6 +2697,7 @@ const Analysis = (() => {
     }
     S.setConf((+cfg.options.confLevel || 95) / 100);
     [data, cfg] = withValueLabels(data, cfg);
+    [data, cfg] = withItemGroups(data, cfg);
     TP_TIME = cfg.tpTime || {};
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
     setRO(opts); UNITS_ON = opts.unitsInText !== false;
@@ -3604,7 +3645,20 @@ const Analysis = (() => {
     // combined figures: several items in one chart, per group — categorical items (e.g. co-morbidities HTN, DM, IHD): the % of one or all categories of each item,
     // bars grouped by study group (each bar named under it) or by item; numeric items (e.g. age, weight, height): the charts of "Figures by variable", one panel per item or on one axis
     (cfg.combFigs || []).forEach(cf => {
-      const num = cf.kind === 'num', items = (cf.items || []).map(id => cfg.variables.find(v => v.id === id))
+      if (cf.kind === 'rep') { // repeated yes/no items (e.g. symptoms at each visit): the % with Yes at each timepoint, a bar per item
+        const reps = (cf.items || []).map(id => cfg.variables.find(v => v.id === id)).filter(v => v && v.kind === 'repeated' && v.type === 'categorical'); if (!reps.length) return;
+        const gname0 = gi => k > 1 ? withN([gl[gi]], [gN[gi]])[0] : (gl[0] || 'Patients'), tpl = cfg.tpLabels || {}, tps = [...new Set(reps.flatMap(v => v.cols.filter(c => c.include !== false && data.headers.includes(c.col)).map(c => c.tp)))].filter(t => (cfg.tpInclude || {})[t] !== false);
+        const tpOrder = (cfg.tpOrder || []).filter(t => tps.includes(t)), T = tpOrder.length ? [...tpOrder, ...tps.filter(t => !tpOrder.includes(t))] : tps;
+        const lvOf = v => { const vals = [...new Set(v.cols.flatMap(c => data.rows.map(r => toCat(r[c.col])).filter(x => x !== null)))], lv = (v.levels || []).map(String).filter(l => vals.includes(l)); return (String(cf.level || '').trim() && vals.find(x => x.toLowerCase() === String(cf.level).trim().toLowerCase())) || lv.find(l => POSITIVE.test(l)) || lv[0] || vals.find(l => POSITIVE.test(l)) || vals[0]; };
+        const chartFor = (rs, title) => ({ type: 'bar', percent: true, labels: cf.labels !== false, ...(title ? { title } : {}), categories: T.map(t => tpl[t] || t), yLabel: cf.yLabel || '% of patients',
+          series: reps.map(v => { const y = lvOf(v); return { name: plain(v.label), values: T.map(t => { const c = v.cols.find(x => x.tp === t); if (!c) return NaN; const vals = rs.map(r => toCat(r[c.col])).filter(x => x !== null); return vals.length ? +(100 * vals.filter(x => x === y).length / vals.length).toFixed(2) : NaN; }) }; }) });
+        const spec = k > 1 ? { type: 'panels', cols: +cf.cols || Math.min(2, k), letters: cf.letters === true, sharedY: true, panels: byGroup.map((rs, gi) => chartFor(rs, gname0(gi))) } : chartFor(byGroup[0] || rows, null);
+        const ids = new Set(reps.map(v => v.id)), home = sections.find(sec => sec.vid && ids.has(sec.vid)) || sections[sections.length - 1]; if (!home) return;
+        if (cf.hide === true) sections.forEach(sec => { if (sec.figures) sec.figures = sec.figures.filter(f => !ids.has(f.vid)); });
+        home.figures = home.figures || []; home.figures.push({ sig: true, vid: 'cf_' + cf.id, comb: true, place: cf.place || 'home', widthCm: +cf.widthCm || undefined, note: '',
+          caption: cf.title || `${cf.groupName || listJoin(reps.map(v => lowerFirst(plain(v.label))).map((t, i2) => i2 ? t : t.charAt(0).toUpperCase() + t.slice(1)))} over time${k > 1 ? ' in the studied groups' : ''}`, spec });
+        return; }
+      const num = cf.kind === 'num', items = (cf.auto && cfg.__groupItems && cfg.__groupItems[cf.group] ? cfg.__groupItems[cf.group] : (cf.items || [])).map(id => cfg.variables.find(v => v.id === id))
         .filter(v => v && v.type === (num ? 'numeric' : 'categorical') && v.cols && v.cols.length === 1 && data.headers.includes(v.cols[0].col));
       if (!items.length || (items.length < 2 && num)) return;
       const resOf = id => { for (const sec of sections) { const r = sec.meta && (sec.meta.res || []).find(x => x.v && x.v.id === id && (num ? x.num : x.cat)); if (r) return r; } return null; };
@@ -3622,7 +3676,7 @@ const Analysis = (() => {
           const want = String(cf.level || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
           const shown = mode === 'all' ? lv : mode === 'first' ? lv.slice(0, 1) : mode === 'list' ? lv.filter(l => want.includes(String(l).toLowerCase())) : lv.filter(l => l === mode);
           (shown.length ? shown : lv.slice(0, 1)).forEach((level, li) => { const n = vals.map(x => x.filter(y => y === level).length), pct = vals.map((x, gi) => x.length ? 100 * n[gi] / x.length : 0);
-            rows.push({ v, level, many: shown.length > 1, pct, tot: vals.flat().length ? 100 * n.reduce((a2, b2) => a2 + b2, 0) / vals.flat().length : 0, p: li === 0 ? pOf(v) : NaN, pos: pos(v) + li / 100 }); }); });
+            rows.push({ v, level, many: shown.length > 1, pct, n, N: vals.map(x => x.length), tot: vals.flat().length ? 100 * n.reduce((a2, b2) => a2 + b2, 0) / vals.flat().length : 0, p: li === 0 ? pOf(v) : NaN, pos: pos(v) + li / 100 }); }); });
         if (!rows.length) return;
         // the items are ordered as units, each keeping its categories together
         { const units = []; rows.forEach(r => { let u = units.find(x => x.v === r.v); if (!u) { u = { v: r.v, rows: [], pos: r.pos, tot: r.tot }; units.push(u); } u.rows.push(r); }); order(units); rows = units.flatMap(u => u.rows); }
@@ -3636,6 +3690,26 @@ const Analysis = (() => {
         const spec = byG ? { type: 'bar', percent: true, barNames: true, barBlocks: bk, labels: cf.labels !== false, categories: [...Array(Math.max(1, k))].map((_, gi) => gname(gi)), yLabel: cf.yLabel || '% of patients', series: rows.map(r => ({ name: r.label, values: r.pct.map(x => +x.toFixed(2)) })) }
           : { type: cf.type === 'hbar' ? 'hbar' : 'bar', percent: true, labels: cf.labels !== false, catBlocks: bk, categories: rows.map(r => r.label), yLabel: cf.yLabel || '% of patients', series: [...Array(Math.max(1, k))].map((_, gi) => ({ name: gname(gi), values: rows.map(r => +r.pct[gi].toFixed(2)) })) };
         if (byG && cf.type === 'hbar') spec.type = 'bar'; // the two-level labels are drawn on vertical bars
+        const ct = cf.ctype || 'bars', gnames = [...Array(Math.max(1, k))].map((_, gi) => gname(gi)), flat = r => r.many ? `${plain(r.v.label)}: ${r.level}` : r.label;
+        if (ct === 'heat') Object.assign(spec, { type: 'pheat', rowLabels: rows.map(flat), colLabels: gnames, values: rows.map(r => r.pct.map(x => +x.toFixed(1))), barNames: false, catBlocks: [], barBlocks: [] });
+        if (ct === 'dots') Object.keys(spec).forEach(key => delete spec[key]), Object.assign(spec, { type: 'line', noLine: true, percent: true, labels: cf.labels !== false, categories: rows.map(flat), yLabel: cf.yLabel || '% of patients', series: gnames.map((g, gi) => ({ name: g, values: rows.map(r => +r.pct[gi].toFixed(2)) })) });
+        if (ct === 'stacked') { const sp = items.map(v => { const lv = (v.levels || []).map(String), vals = byGroup.map(rs => rs.map(r => toCat(r[v.cols[0].col])).filter(x => x !== null)), L2 = [...lv, ...[...new Set(vals.flat())].filter(x => !lv.includes(x))];
+            return { type: 'stacked', title: items.length > 1 ? plain(v.label) : null, categories: gnames, yLabel: cf.yLabel || '% of patients', series: L2.map(l => ({ name: l, values: vals.map(x => x.length ? +(100 * x.filter(y => y === l).length / x.length).toFixed(2) : 0) })) }; });
+          Object.keys(spec).forEach(key => delete spec[key]); Object.assign(spec, sp.length === 1 ? sp[0] : { type: 'panels', cols: +cf.cols || Math.min(3, sp.length), letters: cf.letters === true, panels: sp }); }
+        if (ct === 'upset') { // which items occur together: each combination of the yes/no items (top 12), % of each group
+          const yn = items.filter(v => (v.levels || []).length === 2 && (v.levels || []).some(l => yesLike(l))), y = v => (v.levels || []).find(l => yesLike(l));
+          const key = r => { const on = yn.filter(v => toCat(r[v.cols[0].col]) === y(v)).map(v => plain(v.label)); return on.length ? on.join(' + ') : 'None'; };
+          const cnt = byGroup.map(rs => { const m = {}; rs.forEach(r => { if (yn.every(v => toCat(r[v.cols[0].col]) === null)) return; const kk = key(r); m[kk] = (m[kk] || 0) + 1; }); return m; });
+          const tot = {}; cnt.forEach(m => Object.entries(m).forEach(([kk, n2]) => { tot[kk] = (tot[kk] || 0) + n2; }));
+          const combos = Object.keys(tot).sort((a, b) => tot[b] - tot[a]).slice(0, 12), Ns = cnt.map(m => Object.values(m).reduce((a, b) => a + b, 0));
+          Object.keys(spec).forEach(key2 => delete spec[key2]); Object.assign(spec, { type: 'hbar', percent: true, labels: cf.labels !== false, categories: combos, yLabel: cf.yLabel || '% of patients', series: gnames.map((g, gi) => ({ name: g, values: combos.map(c => Ns[gi] ? +(100 * (cnt[gi][c] || 0) / Ns[gi]).toFixed(2) : 0) })) }); }
+        if (ct === 'forest' && k === 2) { // the relative risk (or odds ratio) of each item, the second group against the first
+          const eff = cf.effect === 'or' ? 'OR' : 'RR', z = jStat.normal.inv(S.QU(), 0, 1);
+          const fr = rows.map(r => { let [a, b] = [r.n[1], r.n[0]], [n1, n0] = [r.N[1], r.N[0]]; let est, se;
+            if (eff === 'RR') { if (!a || !b) { a += 0.5; b += 0.5; n1 += 1; n0 += 1; } est = (a / n1) / (b / n0); se = Math.sqrt(1 / a - 1 / n1 + 1 / b - 1 / n0); }
+            else { let c = n1 - a, d2 = n0 - b; if (!a || !b || !c || !d2) { a += 0.5; b += 0.5; c += 0.5; d2 += 0.5; } est = (a * d2) / (b * c); se = Math.sqrt(1 / a + 1 / b + 1 / c + 1 / d2); }
+            const lo = Math.exp(Math.log(est) - z * se), hi = Math.exp(Math.log(est) + z * se); return { label: flat(r).replace(new RegExp(`\\${sym}$`), ''), est, lo, hi, p: r.p, text: `${fmt(est, 2)} (${fmt(lo, 2)} to ${fmt(hi, 2)})` }; });
+          Object.keys(spec).forEach(key2 => delete spec[key2]); Object.assign(spec, { type: 'forest', log: true, ref: 1, alpha, xLabel: `${eff} (${gl[1]} vs ${gl[0]}, 95% CI), log scale`, valHead: `${eff} (95% CI)`, rows: fr }); }
         const levels = [...new Set(rows.map(r => r.level))], what = levels.length === 1 && !yesLike(levels[0]) ? ` (${levels[0]})` : '';
         fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what };
       } else {
@@ -3662,7 +3736,7 @@ const Analysis = (() => {
         fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what: '', how };
       }
       const capList = listJoin(items.map(v => lowerFirst(plain(v.label))).map((t, i2) => i2 ? t : t.charAt(0).toUpperCase() + t.slice(1)));
-      const out = { sig: fig.anySig || k === 1, vid: 'cf_' + (cf.id || items.map(v => v.id).join('_')), comb: true, place: cf.place || 'home',
+      const out = { sig: fig.anySig || k === 1, vid: 'cf_' + (cf.id || items.map(v => v.id).join('_')), comb: true, place: cf.place || 'home', widthCm: +cf.widthCm || undefined,
         caption: (cf.title || `${cf.groupName || capList}${fig.what} of the studied ${k > 1 ? 'groups' : 'patients'}`) + (fig.how || ''),
         note: stars && fig.anySig ? `${sym} significant difference between the groups (P ≤ ${alpha}).` : '', spec: fig.spec };
       // the figure goes with the table of its first item (other places are set by the app); the items' own figures are left out (unless asked to keep them)
@@ -3759,6 +3833,18 @@ const Analysis = (() => {
       if (opts.boldSig) boldSigP(sec, opts.pHead || 'P value', alpha);
       if (opts.shadeSig) shadeSigRows(sec, opts.pHead || 'P value', alpha);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
+    });
+    // one sentence for each item group of a table: its most frequent item and the items that differ between the groups
+    if (cfg.groupComment !== false) sections.forEach(sec => {
+      if (sec.kind !== 'single' || !sec.meta || !(sec.meta.res || sec.meta.rawVars)) return;
+      const inSec = new Set([...(sec.meta.res || []).map(r => r.v && r.v.id), ...(sec.meta.rawVars || [])]), byName = {};
+      cfg.variables.filter(v => v.group && !v.derived && v.include !== false && inSec.has(v.id) && yesLevelOf(v) !== null).forEach(v => { (byName[v.group] = byName[v.group] || []).push(v); });
+      const add = Object.entries(byName).filter(([, vs]) => vs.length >= 2).map(([name, vs]) => {
+        const pc = vs.map(v => { const vals = rows.map(r => toCat(r[v.cols[0].col])).filter(x => x !== null); return { v, p: vals.length ? 100 * vals.filter(x => x === yesLevelOf(v)).length / vals.length : 0 }; }).sort((a, b) => b.p - a.p);
+        const sig = k > 1 ? vs.filter(v => { const r = (sec.meta.res || []).find(x => x.v && x.v.id === v.id); return r && r.cat && r.cat.p <= alpha; }) : [];
+        const one = singularOf(name), top = pc[0];
+        return `The most frequent ${one} was ${lowerFirst(plain(top.v.label))} (${fmt(top.p, 1)}%)${k > 1 ? (sig.length ? `; ${listJoin(sig.map(v => lowerFirst(plain(v.label))))} differed significantly between the groups` : `; no ${one} differed significantly between the groups`) : ''}.`; });
+      if (add.length) sec.comment = [sec.comment, ...add].filter(Boolean).join(' ');
     });
     // item groups (step 2, e.g. Co-morbidities: HTN, DM, COPD): in each table the items of a group come together, the group's name in the first column
     // (one cell over all its rows) and each item in the second column; an item with several rows (categories, or mean and range) gets "item: row"
