@@ -5405,8 +5405,6 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
         const sc = Math.min((W - 2 * m) / im.width, (Hh - yy - 2 * m) / im.height); x.drawImage(im, m, yy + 30, im.width * sc, im.height * sc);
         pages.push({ w: W, h: Hh, bytes: b64bytes(c.toDataURL('image/jpeg', 0.92)) }); }
       saveUrl(URL.createObjectURL(pdfFromJpegs(pages, 'Figures')), fileName); toast(`${pages.length} figure page${pages.length > 1 ? 's' : ''} saved`); } }
-  // combined figures: chosen figures in a grid with panel letters, added to the exports
-  $('#btnCombo').onclick = () => { go(7); setTimeout(() => { const b = $('#pfBox'); if (b) { b.scrollIntoView({ behavior: 'smooth', block: 'start' }); b.classList.add('ux-flash'); setTimeout(() => b.classList.remove('ux-flash'), 1500); } }, 120); };
   // colour-blind check: the palette as seen with protanopia, deuteranopia and tritanopia (Machado et al. 2009), with the smallest colour difference
   $('#cbCheck').onclick = () => { readUiIntoCfg(); const o = state.cfg.options, pal = Charts.PALETTES[chartPalette(o)] || o.customColors || [], n = Math.max(2, Math.min(pal.length, activeGroups().length || 3)), cols = pal.slice(0, n);
     const M = { Protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]], Deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]], Tritanopia: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.303900]] };

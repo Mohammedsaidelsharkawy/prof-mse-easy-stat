@@ -3601,21 +3601,6 @@ const Analysis = (() => {
       }
     }
 
-    // item groups (step 2, e.g. Co-morbidities: DM, HTN, COPD): in each table, the items of a group together under a heading row, indented
-    if (cfg.groupHeadings !== false) sections.forEach(sec => {
-      if (sec.kind !== 'single' || !sec.rows.length) return;
-      const txt = c => [].concat(c && c.t !== undefined ? c.t : c ?? '').join(' ').trim(), W = sec.head.reduce((a, h) => a + ((typeof h === 'object' && h.span) || 1), 0);
-      const grpOf = new Map(cfg.variables.filter(v => v.group).map(v => [v.label, v.group]));
-      if (!grpOf.size) return;
-      const blocks = []; let left = 0;
-      sec.rows.forEach(r => { if (left > 0) { blocks[blocks.length - 1].rows.push(r); left--; return; } const lab = txt(r[0]); blocks.push({ g: grpOf.get(lab) || null, rows: [r] }); left = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); });
-      const cnt = {}; blocks.forEach(b => { if (b.g) cnt[b.g] = (cnt[b.g] || 0) + 1; });
-      const out = [], done = new Set();
-      blocks.forEach(b => { if (!b.g || cnt[b.g] < 2) { out.push(...b.rows); return; } if (done.has(b.g)) return; done.add(b.g);
-        out.push([{ t: [b.g], b: true, span: W, left: true, grp: true }]);
-        blocks.filter(x => x.g === b.g).forEach(x => x.rows.forEach((r, ri) => out.push(ri === 0 ? [{ ...r[0], sub: true }, ...r.slice(1)] : r))); });
-      if (done.size) sec.rows = out;
-    });
     // combined figures: several items in one chart, per group — categorical items (e.g. co-morbidities HTN, DM, IHD): the % of one or all categories of each item,
     // bars grouped by study group (each bar named under it) or by item; numeric items (e.g. age, weight, height): the charts of "Figures by variable", one panel per item or on one axis
     (cfg.combFigs || []).forEach(cf => {
@@ -3639,15 +3624,17 @@ const Analysis = (() => {
           (shown.length ? shown : lv.slice(0, 1)).forEach((level, li) => { const n = vals.map(x => x.filter(y => y === level).length), pct = vals.map((x, gi) => x.length ? 100 * n[gi] / x.length : 0);
             rows.push({ v, level, many: shown.length > 1, pct, tot: vals.flat().length ? 100 * n.reduce((a2, b2) => a2 + b2, 0) / vals.flat().length : 0, p: li === 0 ? pOf(v) : NaN, pos: pos(v) + li / 100 }); }); });
         if (!rows.length) return;
-        order(rows);
-        // the name of each bar: the item (one Yes-like category), the category (several categories of one item, when no other item has it), else "item: category"
-        const lvCount = {}; rows.forEach(r => { lvCount[r.level] = (lvCount[r.level] || 0) + 1; });
-        const generic = l => /^(yes|no|y|n|true|false|positive|negative|pos|neg|present|absent|0|1)$/i.test(String(l).trim());
-        rows.forEach(r => { r.label = !r.many && yesLike(r.level) ? plain(r.v.label) : r.many && !generic(r.level) && (items.length === 1 || lvCount[r.level] === 1) ? String(r.level) : `${plain(r.v.label)}: ${r.level}`;
-          if (stars && r.p <= alpha) r.label += sym; });
-        const byG = cf.layout === 'group';
-        const spec = byG ? { type: 'bar', percent: true, barNames: true, labels: cf.labels !== false, categories: [...Array(Math.max(1, k))].map((_, gi) => gname(gi)), yLabel: cf.yLabel || '% of patients', series: rows.map(r => ({ name: r.label, values: r.pct.map(x => +x.toFixed(2)) })) }
-          : { type: cf.type === 'hbar' ? 'hbar' : 'bar', percent: true, labels: cf.labels !== false, categories: rows.map(r => r.label), yLabel: cf.yLabel || '% of patients', series: [...Array(Math.max(1, k))].map((_, gi) => ({ name: gname(gi), values: rows.map(r => +r.pct[gi].toFixed(2)) })) };
+        // the items are ordered as units, each keeping its categories together
+        { const units = []; rows.forEach(r => { let u = units.find(x => x.v === r.v); if (!u) { u = { v: r.v, rows: [], pos: r.pos, tot: r.tot }; units.push(u); } u.rows.push(r); }); order(units); rows = units.flatMap(u => u.rows); }
+        const byG = cf.layout === 'group', blocksOn = byG || cf.type !== 'hbar';
+        // the name of each bar: the item for one Yes-like category, "item: category" for one other category; an item with two or more categories
+        // shows each category under its bar and the item's name under a bracket below them (on horizontal bars: "item: category")
+        rows.forEach(r => { const star = stars && r.p <= alpha ? sym : '';
+          r.label = r.many ? (blocksOn ? String(r.level) : `${plain(r.v.label)}: ${r.level}`) : (yesLike(r.level) ? plain(r.v.label) : `${plain(r.v.label)}: ${r.level}`) + star; });
+        const blocks = []; if (blocksOn) rows.forEach((r, ri) => { if (!r.many) return; const b = blocks[blocks.length - 1]; if (b && b.v === r.v) b.to = ri; else blocks.push({ v: r.v, from: ri, to: ri, label: plain(r.v.label) + (stars && rows.find(x => x.v === r.v).p <= alpha ? sym : '') }); });
+        const bk = blocks.map(({ label, from, to }) => ({ label, from, to }));
+        const spec = byG ? { type: 'bar', percent: true, barNames: true, barBlocks: bk, labels: cf.labels !== false, categories: [...Array(Math.max(1, k))].map((_, gi) => gname(gi)), yLabel: cf.yLabel || '% of patients', series: rows.map(r => ({ name: r.label, values: r.pct.map(x => +x.toFixed(2)) })) }
+          : { type: cf.type === 'hbar' ? 'hbar' : 'bar', percent: true, labels: cf.labels !== false, catBlocks: bk, categories: rows.map(r => r.label), yLabel: cf.yLabel || '% of patients', series: [...Array(Math.max(1, k))].map((_, gi) => ({ name: gname(gi), values: rows.map(r => +r.pct[gi].toFixed(2)) })) };
         if (byG && cf.type === 'hbar') spec.type = 'bar'; // the two-level labels are drawn on vertical bars
         const levels = [...new Set(rows.map(r => r.level))], what = levels.length === 1 && !yesLike(levels[0]) ? ` (${levels[0]})` : '';
         fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what };
@@ -3772,6 +3759,30 @@ const Analysis = (() => {
       if (opts.boldSig) boldSigP(sec, opts.pHead || 'P value', alpha);
       if (opts.shadeSig) shadeSigRows(sec, opts.pHead || 'P value', alpha);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
+    });
+    // item groups (step 2, e.g. Co-morbidities: HTN, DM, COPD): in each table the items of a group come together, the group's name in the first column
+    // (one cell over all its rows) and each item in the second column; an item with several rows (categories, or mean and range) gets "item: row"
+    if (cfg.groupHeadings !== false) sections.forEach(sec => {
+      if (sec.kind !== 'single' || !sec.rows.length || !sec.head.length) return;
+      const grpOf = new Map(cfg.variables.filter(v => v.group).map(v => [v.label, v.group])); if (!grpOf.size) return;
+      const txt = c => [].concat(c && c.t !== undefined ? c.t : c ?? '').join(' ').trim();
+      const blocks = []; let left = 0;
+      sec.rows.forEach(r => { if (left > 0) { blocks[blocks.length - 1].rows.push(r); left--; return; } blocks.push({ g: grpOf.get(txt(r[0])) || null, rows: [r] }); left = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); });
+      const cnt = {}; blocks.forEach(b => { if (b.g) cnt[b.g] = (cnt[b.g] || 0) + 1; });
+      if (!Object.values(cnt).some(n => n >= 2)) return;
+      // two label columns are needed (the group, then the item): a table with one gets a second
+      const h0 = typeof sec.head[0] === 'object' ? sec.head[0] : { t: sec.head[0] }, L = h0.span || 1;
+      if (L === 1) { sec.head = [{ ...h0, span: 2 }, ...sec.head.slice(1)]; blocks.forEach(b => b.rows.forEach((r, ri) => { if (ri === 0) r[0] = { ...r[0], span: (r[0].span || 1) + 1 }; })); }
+      // the rows of one item, with the item in the second column
+      const itemRows = b => { const r0 = b.rows[0], c0 = r0[0], lab = txt(c0);
+        if ((c0.span || 1) >= 2 && b.rows.length === 1) return [[{ ...c0, span: 1, rs: undefined, left: true }, ...r0.slice(1)]];
+        return b.rows.map((r, ri) => { const cat = ri === 0 ? r[1] : r[0], rest = ri === 0 ? r.slice(2) : r.slice(1);
+          return [{ ...cat, t: [`${lab}: ${txt(cat)}`], b: c0.b, rs: undefined, span: undefined, left: true }, ...rest]; }); };
+      const out = [], done = new Set();
+      blocks.forEach(b => { if (!b.g || cnt[b.g] < 2) { out.push(...b.rows); return; } if (done.has(b.g)) return; done.add(b.g);
+        const rows = blocks.filter(x => x.g === b.g).flatMap(itemRows);
+        rows[0] = [{ t: [b.g], b: true, rs: rows.length, grp: true, left: true }, ...rows[0]]; out.push(...rows); });
+      sec.rows = out;
     });
     return { sections, used, groups: gl, gN, k, methods: (opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };

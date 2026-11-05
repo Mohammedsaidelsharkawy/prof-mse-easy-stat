@@ -408,7 +408,9 @@ const Charts = (() => {
     if (spec.type === 'stacked') spec = { ...spec, percent: true, series: spec.series.map(s => ({ ...s })) };
     const lm = legendMetrics(ctx, legendItems, st, ts);
     const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0);
-    const T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (twoLev ? 56 * ts : 0) + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    // blocks: an item's categories (e.g. Male and Female) with the item's name (Sex) under a bracket below them — over categories (catBlocks) or over the named bars (barBlocks)
+    const catBlocks = spec.type === 'bar' && !twoLev ? (spec.catBlocks || []).filter(b => b.to > b.from) : [], barBlocks = twoLev ? (spec.barBlocks || []).filter(b => b.to > b.from) : [];
+    const T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (twoLev ? 56 * ts : 0) + (catBlocks.length || barBlocks.length ? 52 * ts : 0) + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
     const pw = W - L - R, ph = H - T - B;
 
     // y range
@@ -489,11 +491,20 @@ const Charts = (() => {
     if (twoLev) { const gw0 = cw * widthOf(st, 0.78), bw0 = gw0 / ns; ctx.font = F(600, 21 * AX); ctx.fillStyle = '#444';
       nameH = (Math.max(1, ...spec.series.map(sr => measureLines(ctx, sr.name, bw0 - 4))) * 25 + 14) * ts;
       spec.categories.forEach((_, ci) => spec.series.forEach((sr, si) => wrapText(ctx, sr.name, L + cw * ci + (cw - gw0) / 2 + bw0 * si + bw0 / 2, T + ph + 10, bw0 - 4, 25 * ts)));
+      // the item over its categories' bars (e.g. Sex under Male and Female), inside each study group
+      if (barBlocks.length) { ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; ctx.font = F(700, 21 * AX); ctx.fillStyle = '#444';
+        spec.categories.forEach((_, ci) => barBlocks.forEach(bk => { const a = L + cw * ci + (cw - gw0) / 2 + bw0 * bk.from + 6, b = L + cw * ci + (cw - gw0) / 2 + bw0 * (bk.to + 1) - 6, yy = T + ph + nameH + 2;
+          ctx.beginPath(); ctx.moveTo(a, yy - 6); ctx.lineTo(a, yy); ctx.lineTo(b, yy); ctx.lineTo(b, yy - 6); ctx.stroke(); wrapText(ctx, bk.label, (a + b) / 2, yy + 4, b - a + bw0 * 0.6, 24 * ts); }));
+        nameH += 46 * ts; }
       ctx.font = F(700, 26 * AX); ctx.fillStyle = '#333';
       // a thin bracket under each block of bars, above its name
       ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; spec.categories.forEach((_, ci) => { const a = L + cw * ci + (cw - gw0) / 2 + 4, b = a + gw0 - 8, yy = T + ph + nameH + 4; ctx.beginPath(); ctx.moveTo(a, yy - 6); ctx.lineTo(a, yy); ctx.lineTo(b, yy); ctx.lineTo(b, yy - 6); ctx.stroke(); }); }
     const catLines = Math.max(1, ...spec.categories.map(cat => measureLines(ctx, cat, cw - 10)));
     spec.categories.forEach((cat, i) => wrapText(ctx, cat, xAt(i), T + ph + 16 + nameH, cw - 10, 30 * ts));
+    if (catBlocks.length && spec.type === 'bar') { const yy = T + ph + 16 + nameH + catLines * 30 * ts + 6; ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+      catBlocks.forEach(bk => { const a = xAt(bk.from) - cw * 0.42, b = xAt(bk.to) + cw * 0.42; ctx.beginPath(); ctx.moveTo(a, yy - 6); ctx.lineTo(a, yy); ctx.lineTo(b, yy); ctx.lineTo(b, yy - 6); ctx.stroke();
+        ctx.font = F(700, 26 * AX); ctx.fillStyle = '#333'; wrapText(ctx, bk.label, (a + b) / 2, yy + 6, b - a, 30 * ts); });
+      nameH += 46 * ts; }
     if (spec.xLabel) { ctx.font = F(700, 26 * TL); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + nameH + (catLines * 30 + 24) * ts); }
 
     // error bars: both directions with caps (default), without caps, or upward only from the mean (mid)

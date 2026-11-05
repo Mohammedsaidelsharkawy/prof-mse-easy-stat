@@ -1477,7 +1477,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost" id="btnPrint" title="Print the report preview, or save it as PDF">🖨 Print / PDF</button>
         <button class="btn ghost" id="btnXlsx" title="Every exported table in an Excel file, one sheet per table">⬇ Tables (Excel)</button><button class="btn ghost" id="btnXlsxF" title="The data and a summary sheet whose numbers are Excel formulas (n, mean, SD, median, counts and %) — they update when the data change">⬇ Excel with formulas</button>
         <button class="btn ghost" id="btnPngs" title="Export one, several or all figures as PNG, JPEG or TIFF, up to 1200 dpi, in colour or greyscale">⬇ Figures (PNG · JPG · TIFF)</button>
-        <button class="btn ghost" id="btnPptx" title="Every exported figure on its own PowerPoint slide, with its caption">⬇ PowerPoint</button><button class="btn ghost" id="btnFigPdf" title="Every exported figure on its own A4 page, with its caption">⬇ Figures (PDF)</button><button class="btn ghost" id="btnCombo" title="Join chosen figures into one figure with panels A, B, C …">🧩 Combine figures</button><button class="btn ghost" id="btnPdf" title="The report as a PDF file, laid out on A4 pages (pages are images: the text is not selectable)">⬇ PDF</button>
+        <button class="btn ghost" id="btnPptx" title="Every exported figure on its own PowerPoint slide, with its caption">⬇ PowerPoint</button><button class="btn ghost" id="btnFigPdf" title="Every exported figure on its own A4 page, with its caption">⬇ Figures (PDF)</button><button class="btn ghost" id="btnPdf" title="The report as a PDF file, laid out on A4 pages (pages are images: the text is not selectable)">⬇ PDF</button>
         <button class="btn primary" id="btnDocx">⬇ Download Word (.docx)</button>
       </div>
       <div id="fmtBar">
@@ -27734,21 +27734,6 @@ const Analysis = (() => {
       }
     }
 
-    // item groups (step 2, e.g. Co-morbidities: DM, HTN, COPD): in each table, the items of a group together under a heading row, indented
-    if (cfg.groupHeadings !== false) sections.forEach(sec => {
-      if (sec.kind !== 'single' || !sec.rows.length) return;
-      const txt = c => [].concat(c && c.t !== undefined ? c.t : c ?? '').join(' ').trim(), W = sec.head.reduce((a, h) => a + ((typeof h === 'object' && h.span) || 1), 0);
-      const grpOf = new Map(cfg.variables.filter(v => v.group).map(v => [v.label, v.group]));
-      if (!grpOf.size) return;
-      const blocks = []; let left = 0;
-      sec.rows.forEach(r => { if (left > 0) { blocks[blocks.length - 1].rows.push(r); left--; return; } const lab = txt(r[0]); blocks.push({ g: grpOf.get(lab) || null, rows: [r] }); left = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); });
-      const cnt = {}; blocks.forEach(b => { if (b.g) cnt[b.g] = (cnt[b.g] || 0) + 1; });
-      const out = [], done = new Set();
-      blocks.forEach(b => { if (!b.g || cnt[b.g] < 2) { out.push(...b.rows); return; } if (done.has(b.g)) return; done.add(b.g);
-        out.push([{ t: [b.g], b: true, span: W, left: true, grp: true }]);
-        blocks.filter(x => x.g === b.g).forEach(x => x.rows.forEach((r, ri) => out.push(ri === 0 ? [{ ...r[0], sub: true }, ...r.slice(1)] : r))); });
-      if (done.size) sec.rows = out;
-    });
     // combined figures: several items in one chart, per group — categorical items (e.g. co-morbidities HTN, DM, IHD): the % of one or all categories of each item,
     // bars grouped by study group (each bar named under it) or by item; numeric items (e.g. age, weight, height): the charts of "Figures by variable", one panel per item or on one axis
     (cfg.combFigs || []).forEach(cf => {
@@ -27772,15 +27757,17 @@ const Analysis = (() => {
           (shown.length ? shown : lv.slice(0, 1)).forEach((level, li) => { const n = vals.map(x => x.filter(y => y === level).length), pct = vals.map((x, gi) => x.length ? 100 * n[gi] / x.length : 0);
             rows.push({ v, level, many: shown.length > 1, pct, tot: vals.flat().length ? 100 * n.reduce((a2, b2) => a2 + b2, 0) / vals.flat().length : 0, p: li === 0 ? pOf(v) : NaN, pos: pos(v) + li / 100 }); }); });
         if (!rows.length) return;
-        order(rows);
-        // the name of each bar: the item (one Yes-like category), the category (several categories of one item, when no other item has it), else "item: category"
-        const lvCount = {}; rows.forEach(r => { lvCount[r.level] = (lvCount[r.level] || 0) + 1; });
-        const generic = l => /^(yes|no|y|n|true|false|positive|negative|pos|neg|present|absent|0|1)$/i.test(String(l).trim());
-        rows.forEach(r => { r.label = !r.many && yesLike(r.level) ? plain(r.v.label) : r.many && !generic(r.level) && (items.length === 1 || lvCount[r.level] === 1) ? String(r.level) : `${plain(r.v.label)}: ${r.level}`;
-          if (stars && r.p <= alpha) r.label += sym; });
-        const byG = cf.layout === 'group';
-        const spec = byG ? { type: 'bar', percent: true, barNames: true, labels: cf.labels !== false, categories: [...Array(Math.max(1, k))].map((_, gi) => gname(gi)), yLabel: cf.yLabel || '% of patients', series: rows.map(r => ({ name: r.label, values: r.pct.map(x => +x.toFixed(2)) })) }
-          : { type: cf.type === 'hbar' ? 'hbar' : 'bar', percent: true, labels: cf.labels !== false, categories: rows.map(r => r.label), yLabel: cf.yLabel || '% of patients', series: [...Array(Math.max(1, k))].map((_, gi) => ({ name: gname(gi), values: rows.map(r => +r.pct[gi].toFixed(2)) })) };
+        // the items are ordered as units, each keeping its categories together
+        { const units = []; rows.forEach(r => { let u = units.find(x => x.v === r.v); if (!u) { u = { v: r.v, rows: [], pos: r.pos, tot: r.tot }; units.push(u); } u.rows.push(r); }); order(units); rows = units.flatMap(u => u.rows); }
+        const byG = cf.layout === 'group', blocksOn = byG || cf.type !== 'hbar';
+        // the name of each bar: the item for one Yes-like category, "item: category" for one other category; an item with two or more categories
+        // shows each category under its bar and the item's name under a bracket below them (on horizontal bars: "item: category")
+        rows.forEach(r => { const star = stars && r.p <= alpha ? sym : '';
+          r.label = r.many ? (blocksOn ? String(r.level) : `${plain(r.v.label)}: ${r.level}`) : (yesLike(r.level) ? plain(r.v.label) : `${plain(r.v.label)}: ${r.level}`) + star; });
+        const blocks = []; if (blocksOn) rows.forEach((r, ri) => { if (!r.many) return; const b = blocks[blocks.length - 1]; if (b && b.v === r.v) b.to = ri; else blocks.push({ v: r.v, from: ri, to: ri, label: plain(r.v.label) + (stars && rows.find(x => x.v === r.v).p <= alpha ? sym : '') }); });
+        const bk = blocks.map(({ label, from, to }) => ({ label, from, to }));
+        const spec = byG ? { type: 'bar', percent: true, barNames: true, barBlocks: bk, labels: cf.labels !== false, categories: [...Array(Math.max(1, k))].map((_, gi) => gname(gi)), yLabel: cf.yLabel || '% of patients', series: rows.map(r => ({ name: r.label, values: r.pct.map(x => +x.toFixed(2)) })) }
+          : { type: cf.type === 'hbar' ? 'hbar' : 'bar', percent: true, labels: cf.labels !== false, catBlocks: bk, categories: rows.map(r => r.label), yLabel: cf.yLabel || '% of patients', series: [...Array(Math.max(1, k))].map((_, gi) => ({ name: gname(gi), values: rows.map(r => +r.pct[gi].toFixed(2)) })) };
         if (byG && cf.type === 'hbar') spec.type = 'bar'; // the two-level labels are drawn on vertical bars
         const levels = [...new Set(rows.map(r => r.level))], what = levels.length === 1 && !yesLike(levels[0]) ? ` (${levels[0]})` : '';
         fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what };
@@ -27905,6 +27892,30 @@ const Analysis = (() => {
       if (opts.boldSig) boldSigP(sec, opts.pHead || 'P value', alpha);
       if (opts.shadeSig) shadeSigRows(sec, opts.pHead || 'P value', alpha);
       if (FMT.sig !== '*') sec.footnote = FMT.sig ? sec.footnote.replace(/^\*: Significant/, FMT.sig + ': Significant') : sec.footnote.replace(/^\*: Significant as P value ≤ [\d.]+(, )?/, '').replace(/^\.$/, '');
+    });
+    // item groups (step 2, e.g. Co-morbidities: HTN, DM, COPD): in each table the items of a group come together, the group's name in the first column
+    // (one cell over all its rows) and each item in the second column; an item with several rows (categories, or mean and range) gets "item: row"
+    if (cfg.groupHeadings !== false) sections.forEach(sec => {
+      if (sec.kind !== 'single' || !sec.rows.length || !sec.head.length) return;
+      const grpOf = new Map(cfg.variables.filter(v => v.group).map(v => [v.label, v.group])); if (!grpOf.size) return;
+      const txt = c => [].concat(c && c.t !== undefined ? c.t : c ?? '').join(' ').trim();
+      const blocks = []; let left = 0;
+      sec.rows.forEach(r => { if (left > 0) { blocks[blocks.length - 1].rows.push(r); left--; return; } blocks.push({ g: grpOf.get(txt(r[0])) || null, rows: [r] }); left = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); });
+      const cnt = {}; blocks.forEach(b => { if (b.g) cnt[b.g] = (cnt[b.g] || 0) + 1; });
+      if (!Object.values(cnt).some(n => n >= 2)) return;
+      // two label columns are needed (the group, then the item): a table with one gets a second
+      const h0 = typeof sec.head[0] === 'object' ? sec.head[0] : { t: sec.head[0] }, L = h0.span || 1;
+      if (L === 1) { sec.head = [{ ...h0, span: 2 }, ...sec.head.slice(1)]; blocks.forEach(b => b.rows.forEach((r, ri) => { if (ri === 0) r[0] = { ...r[0], span: (r[0].span || 1) + 1 }; })); }
+      // the rows of one item, with the item in the second column
+      const itemRows = b => { const r0 = b.rows[0], c0 = r0[0], lab = txt(c0);
+        if ((c0.span || 1) >= 2 && b.rows.length === 1) return [[{ ...c0, span: 1, rs: undefined, left: true }, ...r0.slice(1)]];
+        return b.rows.map((r, ri) => { const cat = ri === 0 ? r[1] : r[0], rest = ri === 0 ? r.slice(2) : r.slice(1);
+          return [{ ...cat, t: [`${lab}: ${txt(cat)}`], b: c0.b, rs: undefined, span: undefined, left: true }, ...rest]; }); };
+      const out = [], done = new Set();
+      blocks.forEach(b => { if (!b.g || cnt[b.g] < 2) { out.push(...b.rows); return; } if (done.has(b.g)) return; done.add(b.g);
+        const rows = blocks.filter(x => x.g === b.g).flatMap(itemRows);
+        rows[0] = [{ t: [b.g], b: true, rs: rows.length, grp: true, left: true }, ...rows[0]]; out.push(...rows); });
+      sec.rows = out;
     });
     return { sections, used, groups: gl, gN, k, methods: (opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
@@ -28926,7 +28937,9 @@ const Charts = (() => {
     if (spec.type === 'stacked') spec = { ...spec, percent: true, series: spec.series.map(s => ({ ...s })) };
     const lm = legendMetrics(ctx, legendItems, st, ts);
     const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0);
-    const T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (twoLev ? 56 * ts : 0) + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    // blocks: an item's categories (e.g. Male and Female) with the item's name (Sex) under a bracket below them — over categories (catBlocks) or over the named bars (barBlocks)
+    const catBlocks = spec.type === 'bar' && !twoLev ? (spec.catBlocks || []).filter(b => b.to > b.from) : [], barBlocks = twoLev ? (spec.barBlocks || []).filter(b => b.to > b.from) : [];
+    const T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (twoLev ? 56 * ts : 0) + (catBlocks.length || barBlocks.length ? 52 * ts : 0) + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
     const pw = W - L - R, ph = H - T - B;
 
     // y range
@@ -29007,11 +29020,20 @@ const Charts = (() => {
     if (twoLev) { const gw0 = cw * widthOf(st, 0.78), bw0 = gw0 / ns; ctx.font = F(600, 21 * AX); ctx.fillStyle = '#444';
       nameH = (Math.max(1, ...spec.series.map(sr => measureLines(ctx, sr.name, bw0 - 4))) * 25 + 14) * ts;
       spec.categories.forEach((_, ci) => spec.series.forEach((sr, si) => wrapText(ctx, sr.name, L + cw * ci + (cw - gw0) / 2 + bw0 * si + bw0 / 2, T + ph + 10, bw0 - 4, 25 * ts)));
+      // the item over its categories' bars (e.g. Sex under Male and Female), inside each study group
+      if (barBlocks.length) { ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; ctx.font = F(700, 21 * AX); ctx.fillStyle = '#444';
+        spec.categories.forEach((_, ci) => barBlocks.forEach(bk => { const a = L + cw * ci + (cw - gw0) / 2 + bw0 * bk.from + 6, b = L + cw * ci + (cw - gw0) / 2 + bw0 * (bk.to + 1) - 6, yy = T + ph + nameH + 2;
+          ctx.beginPath(); ctx.moveTo(a, yy - 6); ctx.lineTo(a, yy); ctx.lineTo(b, yy); ctx.lineTo(b, yy - 6); ctx.stroke(); wrapText(ctx, bk.label, (a + b) / 2, yy + 4, b - a + bw0 * 0.6, 24 * ts); }));
+        nameH += 46 * ts; }
       ctx.font = F(700, 26 * AX); ctx.fillStyle = '#333';
       // a thin bracket under each block of bars, above its name
       ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; spec.categories.forEach((_, ci) => { const a = L + cw * ci + (cw - gw0) / 2 + 4, b = a + gw0 - 8, yy = T + ph + nameH + 4; ctx.beginPath(); ctx.moveTo(a, yy - 6); ctx.lineTo(a, yy); ctx.lineTo(b, yy); ctx.lineTo(b, yy - 6); ctx.stroke(); }); }
     const catLines = Math.max(1, ...spec.categories.map(cat => measureLines(ctx, cat, cw - 10)));
     spec.categories.forEach((cat, i) => wrapText(ctx, cat, xAt(i), T + ph + 16 + nameH, cw - 10, 30 * ts));
+    if (catBlocks.length && spec.type === 'bar') { const yy = T + ph + 16 + nameH + catLines * 30 * ts + 6; ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+      catBlocks.forEach(bk => { const a = xAt(bk.from) - cw * 0.42, b = xAt(bk.to) + cw * 0.42; ctx.beginPath(); ctx.moveTo(a, yy - 6); ctx.lineTo(a, yy); ctx.lineTo(b, yy); ctx.lineTo(b, yy - 6); ctx.stroke();
+        ctx.font = F(700, 26 * AX); ctx.fillStyle = '#333'; wrapText(ctx, bk.label, (a + b) / 2, yy + 6, b - a, 30 * ts); });
+      nameH += 46 * ts; }
     if (spec.xLabel) { ctx.font = F(700, 26 * TL); ctx.fillText(spec.xLabel, L + pw / 2, T + ph + 16 + nameH + (catLines * 30 + 24) * ts); }
 
     // error bars: both directions with caps (default), without caps, or upward only from the mean (mid)
@@ -37138,8 +37160,6 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
         const sc = Math.min((W - 2 * m) / im.width, (Hh - yy - 2 * m) / im.height); x.drawImage(im, m, yy + 30, im.width * sc, im.height * sc);
         pages.push({ w: W, h: Hh, bytes: b64bytes(c.toDataURL('image/jpeg', 0.92)) }); }
       saveUrl(URL.createObjectURL(pdfFromJpegs(pages, 'Figures')), fileName); toast(`${pages.length} figure page${pages.length > 1 ? 's' : ''} saved`); } }
-  // combined figures: chosen figures in a grid with panel letters, added to the exports
-  $('#btnCombo').onclick = () => { go(7); setTimeout(() => { const b = $('#pfBox'); if (b) { b.scrollIntoView({ behavior: 'smooth', block: 'start' }); b.classList.add('ux-flash'); setTimeout(() => b.classList.remove('ux-flash'), 1500); } }, 120); };
   // colour-blind check: the palette as seen with protanopia, deuteranopia and tritanopia (Machado et al. 2009), with the smallest colour difference
   $('#cbCheck').onclick = () => { readUiIntoCfg(); const o = state.cfg.options, pal = Charts.PALETTES[chartPalette(o)] || o.customColors || [], n = Math.max(2, Math.min(pal.length, activeGroups().length || 3)), cols = pal.slice(0, n);
     const M = { Protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]], Deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]], Tritanopia: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.303900]] };
@@ -38226,7 +38246,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
 
   /* ---------- 44. export centre ---------- */
   const EXPORTS = [['Report', [['btnDocx', 12], ['btnPdf', 12], ['btnReview', 12], ['btnSupp', 12], ['btnOnePage', 12], ['btnMd', 12], ['btnTex', 12], ['btnHtml', 12], ['btnLetter', 12]]],
-    ['Figures', [['btnPngs', 12], ['btnPptx', 12], ['btnFigPdf', 12], ['btnCombo', 12], ['btnGA', 12], ['flowPng', 9], ['flowPptx', 9]]], ['Tables and data', [['btnXlsx', 12], ['btnXlsxF', 12], ['xpWord', 10], ['xpXlsx', 10]]], ['Other', [['btnRis', 12], ['btnGdocs', 12], ['btnSaveProj', 0]]]];
+    ['Figures', [['btnPngs', 12], ['btnPptx', 12], ['btnFigPdf', 12], ['btnGA', 12], ['flowPng', 9], ['flowPptx', 9]]], ['Tables and data', [['btnXlsx', 12], ['btnXlsxF', 12], ['xpWord', 10], ['xpXlsx', 10]]], ['Other', [['btnRis', 12], ['btnGdocs', 12], ['btnSaveProj', 0]]]];
   $('#uxExport').onclick = () => { const last = ls.get('lastExport', []), lab = id => { const b = document.getElementById(id); return b ? (b.textContent.replace(/\s+/g, ' ').trim() || b.title) + (b.title ? ` <span class="legend-note">— ${esc(b.title)}</span>` : '') : ''; };
     const p = panel('uxExpP', 'Exports', (last.length ? `<h4>Recently used</h4>${last.map(id => `<div class="ux-exp"><button class="btn primary small" type="button" data-ex="${id}">Go</button> ${lab(id)}</div>`).join('')}` : '')
       + EXPORTS.map(([g, list]) => `<h4>${g}</h4>${list.filter(([id]) => document.getElementById(id)).map(([id]) => `<div class="ux-exp"><button class="btn ghost small" type="button" data-ex="${id}">Go</button> ${lab(id)}</div>`).join('')}`).join('') + '<p class="legend-note">Report exports need a run of the report (step 12).</p>');

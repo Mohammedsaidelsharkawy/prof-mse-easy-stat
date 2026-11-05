@@ -478,7 +478,7 @@
 
   /* ---------- 44. export centre ---------- */
   const EXPORTS = [['Report', [['btnDocx', 12], ['btnPdf', 12], ['btnReview', 12], ['btnSupp', 12], ['btnOnePage', 12], ['btnMd', 12], ['btnTex', 12], ['btnHtml', 12], ['btnLetter', 12]]],
-    ['Figures', [['btnPngs', 12], ['btnPptx', 12], ['btnFigPdf', 12], ['btnCombo', 12], ['btnGA', 12], ['flowPng', 9], ['flowPptx', 9]]], ['Tables and data', [['btnXlsx', 12], ['btnXlsxF', 12], ['xpWord', 10], ['xpXlsx', 10]]], ['Other', [['btnRis', 12], ['btnGdocs', 12], ['btnSaveProj', 0]]]];
+    ['Figures', [['btnPngs', 12], ['btnPptx', 12], ['btnFigPdf', 12], ['btnGA', 12], ['flowPng', 9], ['flowPptx', 9]]], ['Tables and data', [['btnXlsx', 12], ['btnXlsxF', 12], ['xpWord', 10], ['xpXlsx', 10]]], ['Other', [['btnRis', 12], ['btnGdocs', 12], ['btnSaveProj', 0]]]];
   $('#uxExport').onclick = () => { const last = ls.get('lastExport', []), lab = id => { const b = document.getElementById(id); return b ? (b.textContent.replace(/\s+/g, ' ').trim() || b.title) + (b.title ? ` <span class="legend-note">— ${esc(b.title)}</span>` : '') : ''; };
     const p = panel('uxExpP', 'Exports', (last.length ? `<h4>Recently used</h4>${last.map(id => `<div class="ux-exp"><button class="btn primary small" type="button" data-ex="${id}">Go</button> ${lab(id)}</div>`).join('')}` : '')
       + EXPORTS.map(([g, list]) => `<h4>${g}</h4>${list.filter(([id]) => document.getElementById(id)).map(([id]) => `<div class="ux-exp"><button class="btn ghost small" type="button" data-ex="${id}">Go</button> ${lab(id)}</div>`).join('')}`).join('') + '<p class="legend-note">Report exports need a run of the report (step 12).</p>');
