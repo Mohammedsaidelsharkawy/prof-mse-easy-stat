@@ -26,6 +26,23 @@ Fills the master sheet designed in phase 1 with **simulated patients** — for t
 - **🎲 Redraw** one variable: only that variable is drawn again, for the same patients and groups, and the others stay as they are (↺ goes back to the first draw).
 - **Each variable with its results**: a card per variable with its settings, its cells, what was asked, and its full results (tables, figure and report comment, as in Analyse step 10), updated live. Or **all variables in one table**.
 - Missing values and dropouts are **0% by default**.
+- **⋯ More** on a variable:
+  - **shape**: normal, skewed to the right (log-normal), skewed to the left, or uniform, all with the mean and SD asked;
+  - **round to** 0.1, 0.5, 1, 2, 5 or 10 (digit preference, e.g. blood pressure to the nearest 5);
+  - **a quick effect**: Cohen's d for numbers or a relative risk for yes/no, which fills the other groups' values (at every visit after the first);
+  - **a pattern over the visits** for each group (flat, steady change, fast then plateau, slow then fast, change then back) by a chosen amount;
+  - **an effect only in a subgroup** (e.g. only in diabetics), the other patients getting the first group's values.
+- **Missing values are**: at random (MCAR), more when another variable is high (MAR), more when the value itself is high (MNAR), or more in one group, to show how complete-case results can mislead.
+- **Centre effect**: with sites, an intraclass correlation for the numbers (patients of one site alike).
+- **Scenarios**: save the settings under a name (expected, optimistic, pessimistic …) and open them again, or **∅ No differences** (the null scenario: about 5% of tests significant by chance).
+- **Several datasets** in one zip, from consecutive seeds (e.g. one per student), with an **answer key**: what was asked, what came out and the P value of each variable in each dataset.
+- **Power curve**: the power of the main outcome for seven sample sizes, drawn with the 80% line, giving the number of patients for 80% and 90%.
+- **Checks**:
+  - each shape matches its mean, SD and skewness, and rounding to 0.5 holds for every value;
+  - MNAR lowers the observed mean, MAR misses older patients more often, and "more in one group" works;
+  - the subgroup effect appears only in that subgroup;
+  - the centre effect reaches the ICC asked (0.095 for 0.1, 0.28 for 0.3, after standardising the site effects);
+  - the simulated power for d = 0.5 is 52%, 79% and 94% with 64, 128 and 200 patients, against 50%, 80% and 94% by statsmodels.
 - **Links between variables** (a correlation, e.g. age with hypertension), **dates** in their clinical order (enrolment, admission, surgery, discharge, death) with the days between them, **calculated columns** computed (BMI, length of stay, change, totals), and the design's **rules** kept.
 - **Realism**: missing values (all variables or each one), patients who drop out (their later visits missing), outliers, and **messy entries** for cleaning practice (units typed in cells, ×10 typing errors, 999, male / MALE / M, duplicated IDs).
 - **Results of each variable**, analysed and drawn as in 📊 Analyse step 10 — the summary with each group's data (as the Word file), or the figure with all the tables (descriptive statistics, the tests and the one used in the report, pairwise comparisons and effect sizes), with the report's comment — and above each variable what the generator was **asked** for it (e.g. Technique A 30% Yes · Technique B 30% Yes). An overview lists every variable's test and P value; click one to show it alone. **Live** (on by default): a changed expected value, SD, missing % or link generates the data again with the same seed and redraws the results. The data loaded in Analyse are not touched.
