@@ -2,6 +2,19 @@
 
 An offline web app that turns an Excel mastersheet into a formatted Word statistical report: methods paragraph, CONSORT flowchart, results tables, auto-written comments and figures.
 
+## Master sheet builder
+
+**🧱 Master sheet builder** (step 1) designs the data collection sheet of a new study before any data exist, in six steps:
+
+1. **Study**: title, design, planned number of patients, the patient ID format (P001 …), conventions (column names such as Age_years, categories typed as words — the default — or as codes with a codebook, missing values as empty cells or 999, the date format) and the layout (one row per patient, one row per visit, or one sheet per visit), with optional **double data entry**.
+2. **Groups & visits**: the study arms, the visits (each gives the column suffix, e.g. Pain_VAS_cm_Month3), and a **randomisation list** — permuted blocks of chosen sizes or simple, stratified by categorical variables, reproducible from its seed — that can fill the Group column in ID order.
+3. **Variables**: a library of about 90 ready-made variables (demographics, medical history, vital signs, laboratory tests, scores, operative data, outcomes, diagnostic accuracy) with their units, allowed ranges and categories; sections with colours; for each variable the label, column name (automatic or your own), type (number, yes/no, categories, date, time, text, or an **Excel formula**: BMI, days between two dates, age from the date of birth, change from the first to the last visit, sum or mean of items), unit, decimals, allowed range, categories, the visits where it is collected, item group, role, definition and whether it is required.
+4. **Rules**: checks between columns (e.g. discharge ≥ admission), highlighted where broken.
+5. **Preview**: the sheet as it will look, with a list of problems (duplicate or long column names, numbers without a range, formulas not complete).
+6. **Export**: the **Excel master sheet** — a coloured section row over the column names, frozen ID column and header, IDs pre-filled, drop-down lists of the categories, allowed ranges with input messages, out-of-range values in red, broken rules in yellow, formula columns in grey, a codebook, instructions, the randomisation list, double entry with a sheet marking every difference, and the study's setup in a hidden sheet; a printable **case report form** in Word (check boxes, blanks with units and ranges, a table per visit); and a **REDCap data dictionary**.
+
+When the filled master sheet is uploaded, its setup is applied by itself: the rows not entered yet are left out, 999 becomes missing, and the groups (in their order), labels with units, categories (and the labels of codes), item groups, roles, definitions and visits (as repeated measures) are set. Starter templates (two-arm trial, cohort, diagnostic study, before–after, surgical outcomes), designs saved in the browser, and design files to share complete it.
+
 ## Using it
 
 1. Download `Prof_MSE_Easy_Stat.html` and open it in a modern browser (Chrome, Edge, Firefox). No installation or internet connection is needed.

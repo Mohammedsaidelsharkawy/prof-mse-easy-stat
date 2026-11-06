@@ -212,7 +212,7 @@
   function openWorkbook(wb, name) {
     state.wb = wb; state.file = name; state.hdr = { row: 1, two: false, auto: true }; state.cleanLog = [{ time: new Date().toLocaleString(), what: `Opened ${name}` }]; state.snapshots = []; if (state.grid) { state.grid.cf = {}; state.grid.rowsOnly = null; }
     $('#fileName').textContent = name;
-    $('#sheetSel').innerHTML = wb.SheetNames.map(s => `<option>${esc(s)}</option>`).join('');
+    $('#sheetSel').innerHTML = wb.SheetNames.filter(s => !['_EasyStatSetup', 'Lists'].includes(s)).map(s => `<option>${esc(s)}</option>`).join('');
     $('#sheetBox').style.display = '';
     selectSheet(wb.SheetNames[0]);
   }
@@ -377,6 +377,11 @@
     const rows = aoa.slice(hr + (hdr.two ? 2 : 1), aoa.length - Math.max(0, +hdr.foot || 0) || undefined).filter(r => r.some(v => v !== null && String(v).trim() !== ''))
       .map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? null])));
     state.sheet = name;
+    const mbSetup = builderSetup();
+    if (mbSetup) { const lead = new Set([mbSetup.idCol, mbSetup.groupCol, 'Visit'].filter(Boolean)), mb999 = mbSetup.missing === '999';
+      if (mb999) rows.forEach(r => headers.forEach(h => { if (r[h] === 999 || r[h] === '999') r[h] = null; }));
+      // the rows of patients not entered yet (only the pre-filled ID and group) are left out
+      for (let i = rows.length - 1; i >= 0; i--) if (!headers.some(h => !lead.has(h) && !isMissing(rows[i][h]))) rows.splice(i, 1); }
     state.data = { headers, rows };
     state.undo = []; state.redo = []; state.grid.page = 0; state.grid.sort = null;
     let prevCfg = state.pendingCfg;
@@ -386,6 +391,7 @@
     if (prevCfg) applySavedCfg(prevCfg);
     if (prevCfg && prevCfg.setupLocked) state.cfg.setupLocked = true;
     if (state.savMeta) applySavMeta(state.cfg, state.savMeta);
+    if (mbSetup && !prevCfg) { applyBuilderSetup(state.cfg, mbSetup); setTimeout(() => toast(`Master sheet “${mbSetup.title || 'study'}”: its setup was applied (labels, units, categories, groups, visits)`), 700); }
     renderGrid();
     $('#to2').disabled = false;
     renderStepper(); renderPrep();
@@ -2021,6 +2027,35 @@
     return fresh.variables.filter(v => v.kind === 'repeated').length - before;
   }
   // SPSS labels: variable labels become report labels; value labels become value labels (codes analysed as categories) and group names
+  /* ---------- a master sheet from the builder carries its setup in a hidden sheet ---------- */
+  function builderSetup() {
+    const ws = state.wb && state.wb.Sheets && state.wb.Sheets._EasyStatSetup; if (!ws) return null;
+    try { const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true }); const j = JSON.parse(aoa.map(r => r[0] || '').join('')); return j && j.app === 'ProfMSE-EasyStat-mastersheet' ? j : null; } catch (e) { return null; }
+  }
+  function applyBuilderSetup(cfg, S0) {
+    const H = state.data.headers, rows = state.data.rows, owner = col => cfg.variables.find(v => v.cols.some(c => c.col === col));
+    if (S0.idCol && H.includes(S0.idCol)) { cfg.idCols = [S0.idCol]; const v = owner(S0.idCol); if (v) v.include = false; }
+    if (S0.groupCol && H.includes(S0.groupCol)) { cfg.groupCol = S0.groupCol; cfg.noGroups = false; cfg.variables = cfg.variables.filter(v => !v.cols.some(c => c.col === S0.groupCol)); setGroups(cfg);
+      const arms = (S0.arms || []).filter(a => cfg.groupOrder.includes(a)); if (arms.length) cfg.groupOrder = [...arms, ...cfg.groupOrder.filter(g => !arms.includes(g))]; }
+    const tpl = cfg.tpLabels = cfg.tpLabels || {}; cfg.tpOrder = cfg.tpOrder || [];
+    (S0.visits || []).forEach(x => { tpl[x.tag] = x.name; if (!cfg.tpOrder.includes(x.tag)) cfg.tpOrder.push(x.tag); });
+    const typeOf = t => t === 'num' || t === 'calc' ? 'numeric' : t === 'cat' || t === 'yn' ? 'categorical' : null, codes = S0.catAs === 'codes';
+    const props = (v, x) => { const ty = typeOf(x.type); v.label = x.label; if (x.unit) { v.unit = x.unit; } if (x.group) v.group = x.group; if (x.role) v.role = x.role; if (x.definition) v.definition = x.definition;
+      if (ty) v.type = ty; if (ty === 'categorical') { v.levels = codes ? x.cats.map((_, i) => String(i + 1)) : [...x.cats]; if (codes) v.valueLabels = x.cats.map((c, i) => `${i + 1}=${c}`).join(', '); }
+      if (!ty) v.include = false; if (ty === 'numeric' && x.unit && !/\([^)]*\)\s*$/.test(v.label)) v.label = `${x.label} (${x.unit})`; };
+    (S0.vars || []).forEach(x => { const cs = (x.cols || []).filter(c => H.includes(c.col)); if (!cs.length) return;
+      if (cs.length === 1) { let v = owner(cs[0].col);
+        if (v && v.kind === 'repeated') { cfg.variables = cfg.variables.filter(y => y !== v); v = null; }
+        if (!v) { v = { ...singleVariable(rows, cs[0].col, H.indexOf(cs[0].col), 'Demographic and baseline data'), id: 'mb' + Math.random().toString(36).slice(2, 9) }; cfg.variables.push(v); }
+        props(v, x); if (x.section) v.table = /outcome|operative|follow/i.test(x.section) ? 'Outcomes' : /demograph|history|baseline/i.test(x.section) ? 'Demographic and baseline data' : x.section; return; }
+      // the same variable at several visits: one repeated measure
+      const pos = Math.min(...cs.map(c => H.indexOf(c.col)));
+      cfg.variables = cfg.variables.filter(v => !v.cols.some(c => cs.some(y => y.col === c.col)));
+      const v = { id: 'mb' + Math.random().toString(36).slice(2, 9), kind: 'repeated', pos, label: x.label, type: 'numeric', dist: 'auto', table: '', levels: [], note: '', include: true, cols: cs.map(c => ({ col: c.col, tp: c.visit || c.col, label: c.visitName || c.visit || c.col })) };
+      props(v, x); v.kind = 'repeated'; cfg.variables.push(v); });
+    cfg.variables.sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0));
+    if (S0.title && !cfg.study.title) { cfg.study.title = S0.title; const t = $('#studyTitle'); if (t && !t.value) t.value = S0.title; }
+  }
   function applySavMeta(cfg, sv) {
     const join = m => Object.entries(m).map(([k, v]) => `${k}=${v}`).join(', ');
     cfg.variables.forEach(v => {
@@ -6176,7 +6211,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   renderStepper();
   window.EasyStat = state; // for debugging
   // what the interface layer (ux.js) may use
-  window.EasyUI = { REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
+  window.EasyUI = { loadFile, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
     renderAdvanced, renderVariables, renderOptions, effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();
