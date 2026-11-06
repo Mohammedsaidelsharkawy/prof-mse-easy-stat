@@ -2039,11 +2039,11 @@
     if (k === 'wm') rp.watermark = e.target.checked ? 'SIMULATED DATA' : (rp.watermark === 'SIMULATED DATA' ? '' : rp.watermark);
     if (k === 'st') state.cfg.simStatement = e.target.checked; renderSimBanner(); if (state.step === 12) runAnalysis(); });
   /* ---------- a master sheet from the builder carries its setup in a hidden sheet ---------- */
-  function builderSetup() {
-    const ws = state.wb && state.wb.Sheets && state.wb.Sheets._EasyStatSetup; if (!ws) return null;
+  function builderSetup(wb = state.wb) {
+    const ws = wb && wb.Sheets && wb.Sheets._EasyStatSetup; if (!ws) return null;
     try { const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true }); const j = JSON.parse(aoa.map(r => r[0] || '').join('')); return j && j.app === 'ProfMSE-EasyStat-mastersheet' ? j : null; } catch (e) { return null; }
   }
-  function applyBuilderSetup(cfg, S0) {
+  function applyBuilderSetup(cfg, S0, sandbox) {
     const H = state.data.headers, rows = state.data.rows, owner = col => cfg.variables.find(v => v.cols.some(c => c.col === col));
     if (S0.idCol && H.includes(S0.idCol)) { cfg.idCols = [S0.idCol]; const v = owner(S0.idCol); if (v) v.include = false; }
     if (S0.groupCol && H.includes(S0.groupCol)) { cfg.groupCol = S0.groupCol; cfg.noGroups = false; cfg.variables = cfg.variables.filter(v => !v.cols.some(c => c.col === S0.groupCol)); setGroups(cfg);
@@ -2066,7 +2066,7 @@
       props(v, x); v.kind = 'repeated'; cfg.variables.push(v); });
     cfg.variables.sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0));
     if (S0.simulated) { cfg.simulated = S0.simulated; cfg.simTargets = S0.targets || null; }
-    if (S0.title && !cfg.study.title) { cfg.study.title = S0.title; const t = $('#studyTitle'); if (t && !t.value) t.value = S0.title; }
+    if (S0.title && !cfg.study.title && !sandbox) { cfg.study.title = S0.title; const t = $('#studyTitle'); if (t && !t.value) t.value = S0.title; }
   }
   function applySavMeta(cfg, sv) {
     const join = m => Object.entries(m).map(([k, v]) => `${k}=${v}`).join(', ');
@@ -4214,6 +4214,57 @@
       return t.rows.filter(r => ends.includes(r[0]) && r[1] !== 'All patients').map(r => `<b>${esc(r[1])}</b> at ${esc(r[0])}: ${esc(val(r))}`).slice(0, 6); }
     return t.rows.map(r => `<b>${esc(r[0])}:</b> ${esc(val(r))}`).slice(0, 4);
   }
+  /* ---------- phase 2: the results of each variable of a simulated master sheet, drawn as in step 10 — the data of phase 3 are not touched ---------- */
+  function simResults(wb, opt = {}) {
+    const keep = { data: state.data, cfg: state.cfg, explore: state.explore, xpComments: state.xpComments, xpChanged: state.xpChanged, xpOpen: state.xpOpen };
+    try {
+      const S0 = builderSetup(wb), name = wb.SheetNames.find(n => !['_EasyStatSetup', 'Lists', 'Codebook', 'Instructions', 'Randomisation', 'Compare', 'Entry 2'].includes(n)) || wb.SheetNames[0];
+      const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: true, blankrows: false }), filled = r => r.filter(v => v !== null && String(v).trim() !== '').length;
+      const wmax = Math.max(0, ...aoa.slice(0, 30).map(filled)), hr = Math.max(0, aoa.slice(0, 20).findIndex(r => filled(r) >= Math.max(2, 0.6 * wmax)));
+      const seen = {}, headers = (aoa[hr] || []).map((h, i) => { let n = h === null || String(h).trim() === '' ? `Column_${i + 1}` : String(h).trim(); if (seen[n]) n = `${n}_${++seen[n]}`; else seen[n] = 1; return n; });
+      const rows = aoa.slice(hr + 1).map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? null])));
+      if (S0) { const lead = new Set([S0.idCol, S0.groupCol, 'Visit'].filter(Boolean));
+        if (S0.missing === '999') rows.forEach(r => headers.forEach(h => { if (r[h] === 999 || r[h] === '999') r[h] = null; }));
+        for (let i = rows.length - 1; i >= 0; i--) if (!headers.some(h => !lead.has(h) && !isMissing(rows[i][h]))) rows.splice(i, 1); }
+      state.data = { headers, rows }; state.xpComments = new Map(); state.xpChanged = new Set(); state.xpOpen = new Set();
+      const cfg = state.cfg = detect(state.data); if (S0) applyBuilderSetup(cfg, S0, true);
+      cfg.explore = { ...XP_DEFAULT, view: opt.view || 'half', comments: opt.comments !== false };
+      const x = Analysis.explore(state.data, cfg, { fig: 'auto', out: '1.5' }), o = cfg.options, alpha = o.alpha;
+      const list = x.items.filter(it => !opt.only || it.id === opt.only || it.label === opt.only);
+      const figUrl = it => { if (opt.figs === false || ['compact', 'tables'].includes(cfg.explore.view) || !it.spec) return ''; try { return Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png'); } catch (e) { return ''; } };
+      const parts = list.map(it => itemHtml(it, cfg.explore.view, figUrl(it), true).replace(/ contenteditable="true"/g, '').replace(/ data-xr="\d+"/g, '')
+        .replace(/Click a value to change it; Enter to confirm, Esc to cancel\./g, '').replace(/ · purple edge: changed here\./g, '.'));
+      return { html: parts.join(''), parts, items: list.map(it => ({ id: it.id, label: it.label, kind: it.kind, p: it.p, pTxt: isFinite(it.p) ? Analysis.fmtP(it.p, alpha) : '', sig: !!it.sig, test: it.test || '' })), n: rows.length, groups: cfg.groupOrder ? cfg.groupOrder.length : 0 };
+    } finally { Object.assign(state, keep); }
+  }
+  // the results of one variable in step 10's view (also drawn by the Generate phase on simulated data, bare: without the tools)
+  function itemHtml(it, view, u, bare) {
+    const img = u ? `<img class="xp-fig" src="${u}" alt="">` : '';
+    const memo = (state.cfg.variables.find(q => q.id === it.id || it.id.startsWith(q.id + '_')) || {}).memo;
+    const pinned = (state.cfg.xpPins || []).includes(it.id), coll = !bare && state.xpCollapsed.has(it.id);
+    const tools = bare ? '' : `<span class="xp-tools"><button class="btn ghost small" data-xt="pin" data-id="${esc(it.id)}" title="${pinned ? 'Unpin' : 'Pin to the top'}">${pinned ? '★' : '☆'}</button><button class="btn ghost small" data-xt="coll" data-id="${esc(it.id)}" title="${coll ? 'Expand' : 'Collapse'}">${coll ? '▸' : '▾'}</button><button class="btn ghost small" data-xt="lab" data-id="${esc(it.id)}" title="Sensitivity, subgroups, assumptions, bootstrap, test, outliers, edits">🔬</button><button class="btn ghost small" data-xt="note" data-id="${esc(it.id)}" title="Your note (in the Word file)">✎</button><button class="btn ghost small" data-xt="fig" data-id="${esc(it.id)}" title="Copy the figure">⧉</button><button class="btn ghost small" data-xt="flag" data-id="${esc(it.id)}" title="Flag to check later">⚑</button><button class="btn ghost small" data-xt="sent" data-id="${esc(it.id)}" title="Copy the report-ready sentence">📋</button><button class="btn ghost small" data-xt="pts" data-id="${esc(it.id)}" title="This variable's data of every patient, in Excel">⬇ pts</button><button class="btn ghost small" data-xt="print" data-id="${esc(it.id)}" title="Print this variable">🖨</button><button class="btn ghost small" data-xt="word" data-id="${esc(it.id)}" title="This variable alone in Word">W</button><button class="btn ghost small" data-xt="xlsx" data-id="${esc(it.id)}" title="This variable alone in Excel">X</button></span>`;
+    const flag = it.disagree ? `<span class="chip warn" title="The parametric and non-parametric tests disagree on significance">⚠ tests disagree</span>` : '';
+    const note = (state.cfg.xpNotes || {})[it.id], noteBox = !bare && (state.xpNoteOpen.has(it.id) || note) ? `<div class="xp-note"><label class="f">Your note (in the Word file)</label><textarea data-xpnote="${esc(it.id)}" placeholder="Your interpretation of this variable">${esc(note || '')}</textarea></div>` : '';
+    const lab = !bare && state.xpLab.has(it.id) ? `<div class="xp-lab">${labHtml(it)}</div>` : '';
+    const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3>${memo ? `<span class="chip" title="${esc(memo)}" style="cursor:help">ℹ note</span>` : ''}<span class="chip info">${it.kind}</span>${flag}${badges(it)}${tools}<span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>` + noteBox + lab;
+    if (coll) return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-coll" data-xpitem="${esc(it.id)}">${headRow}</div>`;
+    // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
+    if (view === 'side') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
+      <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${tablesHtml(it)}</div></div>
+      ${img ? `<div class="xp-fig-below">${img}</div>` : ''}${commentHtml(it)}</div>`;
+    // data of each group in the left half, the summary table (and the figure) in the right half
+    if (view === 'half') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
+      <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div><div class="xp-sumcopy">${sumWordHtml(it)}${effWordHtml(it)}</div><div style="text-align:right"><button class="btn ghost small" data-xpcopy="${esc(it.id)}" type="button" title="Copy these tables, to paste into Word">⧉ Copy tables</button></div>${img}${commentHtml(it)}</div></div></div>`;
+    if (view === 'stacked') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-stacked">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${tablesHtml(it)}</div>
+      <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
+    if (view === 'tables') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${tablesHtml(it)}</div></div>`;
+    if (view === 'twocol') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${tablesHtml(it)}</div></div>`;
+    if (view === 'compact') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${tablesHtml(it)}</div>
+      <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
+    return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
+      <div class="xp-body">${img ? `<div class="xp-figcol">${img}${commentHtml(it)}</div>` : ''}<div class="xp-tables">${tablesHtml(it)}</div></div>
+      <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
+  }
   function drawExplore() {
     const x = state.explore; if (!x) return;
     const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && !XP_NOFIG.includes(xpo().view);
@@ -4236,33 +4287,7 @@
       $('#xpUndo').disabled = !state.undo || !state.undo.length; $('#xpRedo').disabled = !(state.redo && state.redo.length);
       return;
     }
-    const html = list.map(it => {
-      const u = figUrl(it), img = u ? `<img class="xp-fig" src="${u}" alt="">` : '';
-      const memo = (state.cfg.variables.find(q => q.id === it.id || it.id.startsWith(q.id + '_')) || {}).memo;
-      const pinned = (state.cfg.xpPins || []).includes(it.id), coll = state.xpCollapsed.has(it.id);
-      const tools = `<span class="xp-tools"><button class="btn ghost small" data-xt="pin" data-id="${esc(it.id)}" title="${pinned ? 'Unpin' : 'Pin to the top'}">${pinned ? '★' : '☆'}</button><button class="btn ghost small" data-xt="coll" data-id="${esc(it.id)}" title="${coll ? 'Expand' : 'Collapse'}">${coll ? '▸' : '▾'}</button><button class="btn ghost small" data-xt="lab" data-id="${esc(it.id)}" title="Sensitivity, subgroups, assumptions, bootstrap, test, outliers, edits">🔬</button><button class="btn ghost small" data-xt="note" data-id="${esc(it.id)}" title="Your note (in the Word file)">✎</button><button class="btn ghost small" data-xt="fig" data-id="${esc(it.id)}" title="Copy the figure">⧉</button><button class="btn ghost small" data-xt="flag" data-id="${esc(it.id)}" title="Flag to check later">⚑</button><button class="btn ghost small" data-xt="sent" data-id="${esc(it.id)}" title="Copy the report-ready sentence">📋</button><button class="btn ghost small" data-xt="pts" data-id="${esc(it.id)}" title="This variable's data of every patient, in Excel">⬇ pts</button><button class="btn ghost small" data-xt="print" data-id="${esc(it.id)}" title="Print this variable">🖨</button><button class="btn ghost small" data-xt="word" data-id="${esc(it.id)}" title="This variable alone in Word">W</button><button class="btn ghost small" data-xt="xlsx" data-id="${esc(it.id)}" title="This variable alone in Excel">X</button></span>`;
-      const flag = it.disagree ? `<span class="chip warn" title="The parametric and non-parametric tests disagree on significance">⚠ tests disagree</span>` : '';
-      const note = (state.cfg.xpNotes || {})[it.id], noteBox = state.xpNoteOpen.has(it.id) || note ? `<div class="xp-note"><label class="f">Your note (in the Word file)</label><textarea data-xpnote="${esc(it.id)}" placeholder="Your interpretation of this variable">${esc(note || '')}</textarea></div>` : '';
-      const lab = state.xpLab.has(it.id) ? `<div class="xp-lab">${labHtml(it)}</div>` : '';
-      const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3>${memo ? `<span class="chip" title="${esc(memo)}" style="cursor:help">ℹ note</span>` : ''}<span class="chip info">${it.kind}</span>${flag}${badges(it)}${tools}<span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>` + noteBox + lab;
-      if (coll) return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-coll" data-xpitem="${esc(it.id)}">${headRow}</div>`;
-      // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
-      if (view === 'side') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
-        <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${tablesHtml(it)}</div></div>
-        ${img ? `<div class="xp-fig-below">${img}</div>` : ''}${commentHtml(it)}</div>`;
-      // data of each group in the left half, the summary table (and the figure) in the right half
-      if (view === 'half') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
-        <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div><div class="xp-sumcopy">${sumWordHtml(it)}${effWordHtml(it)}</div><div style="text-align:right"><button class="btn ghost small" data-xpcopy="${esc(it.id)}" type="button" title="Copy these tables, to paste into Word">⧉ Copy tables</button></div>${img}${commentHtml(it)}</div></div></div>`;
-      if (view === 'stacked') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-stacked">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${tablesHtml(it)}</div>
-        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-      if (view === 'tables') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${tablesHtml(it)}</div></div>`;
-      if (view === 'twocol') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${tablesHtml(it)}</div></div>`;
-      if (view === 'compact') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${tablesHtml(it)}</div>
-        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-      return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
-        <div class="xp-body">${img ? `<div class="xp-figcol">${img}${commentHtml(it)}</div>` : ''}<div class="xp-tables">${tablesHtml(it)}</div></div>
-        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-    }).join('');
+    const html = list.map(it => itemHtml(it, view, figUrl(it))).join('');
     // dashboard: variables, patients, missing values and significant results of what is shown
     const nMiss = list.reduce((t, it) => t + it.cols.reduce((u, c) => u + state.data.rows.filter(r => Analysis.groupOf(state.cfg, r) !== null && (r[c.col] === null || r[c.col] === undefined || String(r[c.col]).trim() === '')).length, 0), 0);
     const dash = `<div class="xp-dash"><div><b>${list.length}</b><span>variables</span></div><div><b>${state.data.rows.length}</b><span>patients</span></div><div><b>${list.filter(it => it.sig).length}</b><span>significant</span></div><div><b>${nMiss}</b><span>missing values</span></div><div><b>${list.filter(it => it.disagree).length}</b><span>tests disagree</span></div></div>`;
@@ -6233,7 +6258,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   renderStepper();
   window.EasyStat = state; // for debugging
   // what the interface layer (ux.js) may use
-  window.EasyUI = { loadFile, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
+  window.EasyUI = { loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
     renderAdvanced, renderVariables, renderOptions, effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();

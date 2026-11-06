@@ -47,6 +47,7 @@ html.ph-build #stepper,html.ph-build #presetBar,html.ph-build main>.panel,html.p
 .phase-bar{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin:10px auto 6px;padding:6px;max-width:1100px}
 .phase-btn{border:1px solid var(--line);background:var(--card,#fff);border-radius:22px;padding:7px 16px;font-weight:700;cursor:pointer;color:var(--ink,#222)}.phase-btn.on{background:var(--navy,#1C1648);color:#fff;border-color:transparent}.phase-arrow{color:var(--muted);font-size:20px}
 .gen-tbl td{vertical-align:top}.gen-cell{display:flex;gap:4px;align-items:center;margin:2px 0}.gen-cell .legend-note{min-width:70px}.gen-chk tr.gen-off td{background:#FFF3CD}
+.gen-asked{margin:6px 0 2px;padding:6px 10px;border-radius:8px;background:#FFF8E1;border:1px solid #F0C36D;font-size:13px}.gen-res .xp-ov tr{cursor:pointer}
 .sim-banner{margin:0 0 10px;padding:8px 12px;border-radius:10px;background:#FFF8E1;border:1px solid #F0C36D;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .mb-expect{margin-top:10px;padding:8px 10px;border-radius:8px;background:rgba(46,125,50,.06);border:1px dashed rgba(46,125,50,.35)}
 .mb-head{position:sticky;top:64px;z-index:2;border-radius:12px;margin:0 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--navy,#1C1648);color:#fff}.mb-head .legend-note{color:#d9d3ea}
@@ -33932,11 +33933,11 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (k === 'wm') rp.watermark = e.target.checked ? 'SIMULATED DATA' : (rp.watermark === 'SIMULATED DATA' ? '' : rp.watermark);
     if (k === 'st') state.cfg.simStatement = e.target.checked; renderSimBanner(); if (state.step === 12) runAnalysis(); });
   /* ---------- a master sheet from the builder carries its setup in a hidden sheet ---------- */
-  function builderSetup() {
-    const ws = state.wb && state.wb.Sheets && state.wb.Sheets._EasyStatSetup; if (!ws) return null;
+  function builderSetup(wb = state.wb) {
+    const ws = wb && wb.Sheets && wb.Sheets._EasyStatSetup; if (!ws) return null;
     try { const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true }); const j = JSON.parse(aoa.map(r => r[0] || '').join('')); return j && j.app === 'ProfMSE-EasyStat-mastersheet' ? j : null; } catch (e) { return null; }
   }
-  function applyBuilderSetup(cfg, S0) {
+  function applyBuilderSetup(cfg, S0, sandbox) {
     const H = state.data.headers, rows = state.data.rows, owner = col => cfg.variables.find(v => v.cols.some(c => c.col === col));
     if (S0.idCol && H.includes(S0.idCol)) { cfg.idCols = [S0.idCol]; const v = owner(S0.idCol); if (v) v.include = false; }
     if (S0.groupCol && H.includes(S0.groupCol)) { cfg.groupCol = S0.groupCol; cfg.noGroups = false; cfg.variables = cfg.variables.filter(v => !v.cols.some(c => c.col === S0.groupCol)); setGroups(cfg);
@@ -33959,7 +33960,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       props(v, x); v.kind = 'repeated'; cfg.variables.push(v); });
     cfg.variables.sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0));
     if (S0.simulated) { cfg.simulated = S0.simulated; cfg.simTargets = S0.targets || null; }
-    if (S0.title && !cfg.study.title) { cfg.study.title = S0.title; const t = $('#studyTitle'); if (t && !t.value) t.value = S0.title; }
+    if (S0.title && !cfg.study.title && !sandbox) { cfg.study.title = S0.title; const t = $('#studyTitle'); if (t && !t.value) t.value = S0.title; }
   }
   function applySavMeta(cfg, sv) {
     const join = m => Object.entries(m).map(([k, v]) => `${k}=${v}`).join(', ');
@@ -36107,6 +36108,57 @@ if (typeof module !== 'undefined') module.exports = Sav;
       return t.rows.filter(r => ends.includes(r[0]) && r[1] !== 'All patients').map(r => `<b>${esc(r[1])}</b> at ${esc(r[0])}: ${esc(val(r))}`).slice(0, 6); }
     return t.rows.map(r => `<b>${esc(r[0])}:</b> ${esc(val(r))}`).slice(0, 4);
   }
+  /* ---------- phase 2: the results of each variable of a simulated master sheet, drawn as in step 10 — the data of phase 3 are not touched ---------- */
+  function simResults(wb, opt = {}) {
+    const keep = { data: state.data, cfg: state.cfg, explore: state.explore, xpComments: state.xpComments, xpChanged: state.xpChanged, xpOpen: state.xpOpen };
+    try {
+      const S0 = builderSetup(wb), name = wb.SheetNames.find(n => !['_EasyStatSetup', 'Lists', 'Codebook', 'Instructions', 'Randomisation', 'Compare', 'Entry 2'].includes(n)) || wb.SheetNames[0];
+      const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: true, blankrows: false }), filled = r => r.filter(v => v !== null && String(v).trim() !== '').length;
+      const wmax = Math.max(0, ...aoa.slice(0, 30).map(filled)), hr = Math.max(0, aoa.slice(0, 20).findIndex(r => filled(r) >= Math.max(2, 0.6 * wmax)));
+      const seen = {}, headers = (aoa[hr] || []).map((h, i) => { let n = h === null || String(h).trim() === '' ? `Column_${i + 1}` : String(h).trim(); if (seen[n]) n = `${n}_${++seen[n]}`; else seen[n] = 1; return n; });
+      const rows = aoa.slice(hr + 1).map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? null])));
+      if (S0) { const lead = new Set([S0.idCol, S0.groupCol, 'Visit'].filter(Boolean));
+        if (S0.missing === '999') rows.forEach(r => headers.forEach(h => { if (r[h] === 999 || r[h] === '999') r[h] = null; }));
+        for (let i = rows.length - 1; i >= 0; i--) if (!headers.some(h => !lead.has(h) && !isMissing(rows[i][h]))) rows.splice(i, 1); }
+      state.data = { headers, rows }; state.xpComments = new Map(); state.xpChanged = new Set(); state.xpOpen = new Set();
+      const cfg = state.cfg = detect(state.data); if (S0) applyBuilderSetup(cfg, S0, true);
+      cfg.explore = { ...XP_DEFAULT, view: opt.view || 'half', comments: opt.comments !== false };
+      const x = Analysis.explore(state.data, cfg, { fig: 'auto', out: '1.5' }), o = cfg.options, alpha = o.alpha;
+      const list = x.items.filter(it => !opt.only || it.id === opt.only || it.label === opt.only);
+      const figUrl = it => { if (opt.figs === false || ['compact', 'tables'].includes(cfg.explore.view) || !it.spec) return ''; try { return Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png'); } catch (e) { return ''; } };
+      const parts = list.map(it => itemHtml(it, cfg.explore.view, figUrl(it), true).replace(/ contenteditable="true"/g, '').replace(/ data-xr="\d+"/g, '')
+        .replace(/Click a value to change it; Enter to confirm, Esc to cancel\./g, '').replace(/ · purple edge: changed here\./g, '.'));
+      return { html: parts.join(''), parts, items: list.map(it => ({ id: it.id, label: it.label, kind: it.kind, p: it.p, pTxt: isFinite(it.p) ? Analysis.fmtP(it.p, alpha) : '', sig: !!it.sig, test: it.test || '' })), n: rows.length, groups: cfg.groupOrder ? cfg.groupOrder.length : 0 };
+    } finally { Object.assign(state, keep); }
+  }
+  // the results of one variable in step 10's view (also drawn by the Generate phase on simulated data, bare: without the tools)
+  function itemHtml(it, view, u, bare) {
+    const img = u ? `<img class="xp-fig" src="${u}" alt="">` : '';
+    const memo = (state.cfg.variables.find(q => q.id === it.id || it.id.startsWith(q.id + '_')) || {}).memo;
+    const pinned = (state.cfg.xpPins || []).includes(it.id), coll = !bare && state.xpCollapsed.has(it.id);
+    const tools = bare ? '' : `<span class="xp-tools"><button class="btn ghost small" data-xt="pin" data-id="${esc(it.id)}" title="${pinned ? 'Unpin' : 'Pin to the top'}">${pinned ? '★' : '☆'}</button><button class="btn ghost small" data-xt="coll" data-id="${esc(it.id)}" title="${coll ? 'Expand' : 'Collapse'}">${coll ? '▸' : '▾'}</button><button class="btn ghost small" data-xt="lab" data-id="${esc(it.id)}" title="Sensitivity, subgroups, assumptions, bootstrap, test, outliers, edits">🔬</button><button class="btn ghost small" data-xt="note" data-id="${esc(it.id)}" title="Your note (in the Word file)">✎</button><button class="btn ghost small" data-xt="fig" data-id="${esc(it.id)}" title="Copy the figure">⧉</button><button class="btn ghost small" data-xt="flag" data-id="${esc(it.id)}" title="Flag to check later">⚑</button><button class="btn ghost small" data-xt="sent" data-id="${esc(it.id)}" title="Copy the report-ready sentence">📋</button><button class="btn ghost small" data-xt="pts" data-id="${esc(it.id)}" title="This variable's data of every patient, in Excel">⬇ pts</button><button class="btn ghost small" data-xt="print" data-id="${esc(it.id)}" title="Print this variable">🖨</button><button class="btn ghost small" data-xt="word" data-id="${esc(it.id)}" title="This variable alone in Word">W</button><button class="btn ghost small" data-xt="xlsx" data-id="${esc(it.id)}" title="This variable alone in Excel">X</button></span>`;
+    const flag = it.disagree ? `<span class="chip warn" title="The parametric and non-parametric tests disagree on significance">⚠ tests disagree</span>` : '';
+    const note = (state.cfg.xpNotes || {})[it.id], noteBox = !bare && (state.xpNoteOpen.has(it.id) || note) ? `<div class="xp-note"><label class="f">Your note (in the Word file)</label><textarea data-xpnote="${esc(it.id)}" placeholder="Your interpretation of this variable">${esc(note || '')}</textarea></div>` : '';
+    const lab = !bare && state.xpLab.has(it.id) ? `<div class="xp-lab">${labHtml(it)}</div>` : '';
+    const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3>${memo ? `<span class="chip" title="${esc(memo)}" style="cursor:help">ℹ note</span>` : ''}<span class="chip info">${it.kind}</span>${flag}${badges(it)}${tools}<span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>` + noteBox + lab;
+    if (coll) return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-coll" data-xpitem="${esc(it.id)}">${headRow}</div>`;
+    // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
+    if (view === 'side') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
+      <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${tablesHtml(it)}</div></div>
+      ${img ? `<div class="xp-fig-below">${img}</div>` : ''}${commentHtml(it)}</div>`;
+    // data of each group in the left half, the summary table (and the figure) in the right half
+    if (view === 'half') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
+      <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div><div class="xp-sumcopy">${sumWordHtml(it)}${effWordHtml(it)}</div><div style="text-align:right"><button class="btn ghost small" data-xpcopy="${esc(it.id)}" type="button" title="Copy these tables, to paste into Word">⧉ Copy tables</button></div>${img}${commentHtml(it)}</div></div></div>`;
+    if (view === 'stacked') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-stacked">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${tablesHtml(it)}</div>
+      <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
+    if (view === 'tables') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${tablesHtml(it)}</div></div>`;
+    if (view === 'twocol') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${tablesHtml(it)}</div></div>`;
+    if (view === 'compact') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${tablesHtml(it)}</div>
+      <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
+    return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
+      <div class="xp-body">${img ? `<div class="xp-figcol">${img}${commentHtml(it)}</div>` : ''}<div class="xp-tables">${tablesHtml(it)}</div></div>
+      <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
+  }
   function drawExplore() {
     const x = state.explore; if (!x) return;
     const list = xpList(), o = state.cfg.options, figs = $('#xpFigs').checked && xpo().fig !== 'none' && !XP_NOFIG.includes(xpo().view);
@@ -36129,33 +36181,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       $('#xpUndo').disabled = !state.undo || !state.undo.length; $('#xpRedo').disabled = !(state.redo && state.redo.length);
       return;
     }
-    const html = list.map(it => {
-      const u = figUrl(it), img = u ? `<img class="xp-fig" src="${u}" alt="">` : '';
-      const memo = (state.cfg.variables.find(q => q.id === it.id || it.id.startsWith(q.id + '_')) || {}).memo;
-      const pinned = (state.cfg.xpPins || []).includes(it.id), coll = state.xpCollapsed.has(it.id);
-      const tools = `<span class="xp-tools"><button class="btn ghost small" data-xt="pin" data-id="${esc(it.id)}" title="${pinned ? 'Unpin' : 'Pin to the top'}">${pinned ? '★' : '☆'}</button><button class="btn ghost small" data-xt="coll" data-id="${esc(it.id)}" title="${coll ? 'Expand' : 'Collapse'}">${coll ? '▸' : '▾'}</button><button class="btn ghost small" data-xt="lab" data-id="${esc(it.id)}" title="Sensitivity, subgroups, assumptions, bootstrap, test, outliers, edits">🔬</button><button class="btn ghost small" data-xt="note" data-id="${esc(it.id)}" title="Your note (in the Word file)">✎</button><button class="btn ghost small" data-xt="fig" data-id="${esc(it.id)}" title="Copy the figure">⧉</button><button class="btn ghost small" data-xt="flag" data-id="${esc(it.id)}" title="Flag to check later">⚑</button><button class="btn ghost small" data-xt="sent" data-id="${esc(it.id)}" title="Copy the report-ready sentence">📋</button><button class="btn ghost small" data-xt="pts" data-id="${esc(it.id)}" title="This variable's data of every patient, in Excel">⬇ pts</button><button class="btn ghost small" data-xt="print" data-id="${esc(it.id)}" title="Print this variable">🖨</button><button class="btn ghost small" data-xt="word" data-id="${esc(it.id)}" title="This variable alone in Word">W</button><button class="btn ghost small" data-xt="xlsx" data-id="${esc(it.id)}" title="This variable alone in Excel">X</button></span>`;
-      const flag = it.disagree ? `<span class="chip warn" title="The parametric and non-parametric tests disagree on significance">⚠ tests disagree</span>` : '';
-      const note = (state.cfg.xpNotes || {})[it.id], noteBox = state.xpNoteOpen.has(it.id) || note ? `<div class="xp-note"><label class="f">Your note (in the Word file)</label><textarea data-xpnote="${esc(it.id)}" placeholder="Your interpretation of this variable">${esc(note || '')}</textarea></div>` : '';
-      const lab = state.xpLab.has(it.id) ? `<div class="xp-lab">${labHtml(it)}</div>` : '';
-      const headRow = `<div class="row"><h3 style="margin:0">${esc(it.label)}</h3>${memo ? `<span class="chip" title="${esc(memo)}" style="cursor:help">ℹ note</span>` : ''}<span class="chip info">${it.kind}</span>${flag}${badges(it)}${tools}<span class="spacer"></span><span class="legend-note">${esc(it.summary)}</span></div>` + noteBox + lab;
-      if (coll) return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-coll" data-xpitem="${esc(it.id)}">${headRow}</div>`;
-      // data beside results: every patient's value on the left, the result tables on the right, the figure below (as in the Word file)
-      if (view === 'side') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
-        <div class="xp-side"><div class="xp-side-data"><h4>Data of each group — every patient's value</h4>${dataHtml(it)}</div><div class="xp-tables">${tablesHtml(it)}</div></div>
-        ${img ? `<div class="xp-fig-below">${img}</div>` : ''}${commentHtml(it)}</div>`;
-      // data of each group in the left half, the summary table (and the figure) in the right half
-      if (view === 'half') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
-        <div class="xp-half"><div class="xp-half-data">${dataWordHtml(it)}</div><div><div class="xp-sumcopy">${sumWordHtml(it)}${effWordHtml(it)}</div><div style="text-align:right"><button class="btn ghost small" data-xpcopy="${esc(it.id)}" type="button" title="Copy these tables, to paste into Word">⧉ Copy tables</button></div>${img}${commentHtml(it)}</div></div></div>`;
-      if (view === 'stacked') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item xp-stacked">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${tablesHtml(it)}</div>
-        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-      if (view === 'tables') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${tablesHtml(it)}</div></div>`;
-      if (view === 'twocol') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}${img}${commentHtml(it)}<div class="xp-tables">${tablesHtml(it)}</div></div>`;
-      if (view === 'compact') return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}<div class="xp-tables" style="margin-top:6px">${tablesHtml(it)}</div>
-        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-      return `<div data-xpitem="${esc(it.id)}" class="report-sec xp-item">${headRow}
-        <div class="xp-body">${img ? `<div class="xp-figcol">${img}${commentHtml(it)}</div>` : ''}<div class="xp-tables">${tablesHtml(it)}</div></div>
-        <details class="xp-data" data-xpdata="${esc(it.id)}"${state.xpOpen.has(it.id) ? ' open' : ''}><summary>Data of each group — every patient's value</summary>${state.xpOpen.has(it.id) ? dataHtml(it) : ''}</details></div>`;
-    }).join('');
+    const html = list.map(it => itemHtml(it, view, figUrl(it))).join('');
     // dashboard: variables, patients, missing values and significant results of what is shown
     const nMiss = list.reduce((t, it) => t + it.cols.reduce((u, c) => u + state.data.rows.filter(r => Analysis.groupOf(state.cfg, r) !== null && (r[c.col] === null || r[c.col] === undefined || String(r[c.col]).trim() === '')).length, 0), 0);
     const dash = `<div class="xp-dash"><div><b>${list.length}</b><span>variables</span></div><div><b>${state.data.rows.length}</b><span>patients</span></div><div><b>${list.filter(it => it.sig).length}</b><span>significant</span></div><div><b>${nMiss}</b><span>missing values</span></div><div><b>${list.filter(it => it.disagree).length}</b><span>tests disagree</span></div></div>`;
@@ -38126,7 +38152,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   renderStepper();
   window.EasyStat = state; // for debugging
   // what the interface layer (ux.js) may use
-  window.EasyUI = { loadFile, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
+  window.EasyUI = { loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
     renderAdvanced, renderVariables, renderOptions, effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();
@@ -39422,8 +39448,9 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const U = window.EasyUI, B = window.EasyBuilder; if (!U || !B) return;
   const $ = s => document.querySelector(s), esc = U.esc, toast = U.toast;
   const ls = { get: (k, d) => { try { const v = localStorage.getItem('gen.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem('gen.' + k, JSON.stringify(v)); } catch (e) { /* not kept */ } } };
-  const defaults = () => ({ n: '', ratio: '', seed: 20261107, visitR: 0.6, missAll: 2, miss: {}, dropout: 5, outliers: 0, messy: false, messyPct: 3, start: '2026-01-01', span: 365, targets: {}, sds: {}, corr: [], power: { v: '', visit: '', reps: 200, alpha: 0.05 } });
-  let G = { ...defaults(), ...ls.get('settings', {}) }, last = null, powerOut = '';
+  const defaults = () => ({ n: '', ratio: '', seed: 20261107, visitR: 0.6, missAll: 2, miss: {}, dropout: 5, outliers: 0, messy: false, messyPct: 3, start: '2026-01-01', span: 365, targets: {}, sds: {}, corr: [], power: { v: '', visit: '', reps: 200, alpha: 0.05 }, res: { view: 'half', only: '', comments: true, live: true } });
+  let G = { ...defaults(), ...ls.get('settings', {}) }, last = null, powerOut = '', resKey = '', resOut = null, liveT = 0;
+  G.res = { ...defaults().res, ...(G.res || {}) };
   const save = () => ls.set('settings', G);
 
   /* ---------- the engine ---------- */
@@ -39562,28 +39589,75 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
         <div><label class="f">Patients who drop out (%)</label><input type="number" min="0" max="90" step="any" data-g="dropout" value="${esc(G.dropout)}" ${D.visits.length > 1 ? '' : 'disabled'}></div>
         <div><label class="f">Outliers (% of the numbers)</label><input type="number" min="0" max="20" step="any" data-g="outliers" value="${esc(G.outliers)}"></div>
         <div><label class="check" style="margin-top:22px"><input type="checkbox" data-g="messy" ${G.messy ? 'checked' : ''}><span><b>Messy entries</b> (to practise cleaning) — <input type="number" min="0.5" max="30" step="0.5" data-g="messyPct" value="${esc(G.messyPct)}" style="width:56px">% of the cells: units typed in, ×10 typing errors, 999, male / MALE / M, duplicated IDs</span></label></div></div>
-      <div class="row" style="gap:8px;margin-top:14px"><button class="btn primary" type="button" id="genGo">🎲 Generate</button><button class="btn ghost" type="button" id="genXlsx" ${last ? '' : 'disabled'}>⬇ Simulated master sheet (.xlsx)</button><button class="btn ghost" type="button" id="genSend2" ${last ? '' : 'disabled'}>📊 Analyse these data ›</button><span class="legend-note">${last ? `${last.length} rows generated (seed ${esc(G.seed)})` : 'Not generated yet'}</span></div>
-      ${last ? `<h3>Check: what came out against what was asked</h3><div class="tbl-wrap" style="max-height:380px"><table class="t gen-chk"><thead><tr><th>Variable</th><th>Visit</th><th>Group</th><th>Asked</th><th>Generated</th><th>n</th></tr></thead><tbody>${res.map(r => { const off = r.kind === 'mean' ? Math.abs(r.o.m - r.target) > (r.sd || 1) * 0.6 : Math.abs(r.o.m - r.target) > 15;
-          return `<tr class="${off ? 'gen-off' : ''}"><td>${esc(r.label)}</td><td>${esc(r.visitName)}</td><td>${esc(r.group)}</td><td>${r.kind === 'mean' ? esc(+r.target.toFixed(2)) + (r.sd ? ` ± ${esc(+(+r.sd).toFixed(2))}` : '') : `${esc(r.target)}% ${esc(r.cat)}`}</td><td>${r.o.n ? (r.kind === 'mean' ? `${r.o.m.toFixed(2)} ± ${(r.o.sd || 0).toFixed(2)}` : `${r.o.m.toFixed(1)}%`) : '—'}</td><td>${r.o.n || 0}</td></tr>`; }).join('')}</tbody></table></div>
-        <p class="legend-note">Small samples differ from the targets by chance; rows far from the target are shaded.</p>
-        <h3>First rows</h3>${preview(D)}` : ''}
+      <div class="row" style="gap:8px;margin-top:14px"><button class="btn primary" type="button" id="genGo">🎲 Generate</button><button class="btn ghost" type="button" id="genXlsx" ${last ? '' : 'disabled'}>⬇ Simulated master sheet (.xlsx)</button><button class="btn ghost" type="button" id="genSend2" ${last ? '' : 'disabled'}>📊 Analyse these data ›</button><span class="legend-note" id="genStatus">${last ? `${last.length} rows generated (seed ${esc(G.seed)})` : 'Not generated yet'}</span></div>
+      <div id="genOut">${outHtml(D)}</div>
       <h3>Power of the planned study</h3><p class="legend-note">The study is simulated many times with these settings, and the main outcome tested each time: the share of significant results is the power.</p>
       <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end"><div><label class="f">Main outcome</label><select data-gp="v" style="width:auto">${opt([['', '—'], ...vs.map(v => [v.id, v.label])], G.power.v)}</select></div>
         ${(() => { const v = D.vars.find(x => x.id === G.power.v); return v && visitKeys(D, v).length > 1 ? `<div><label class="f">At</label><select data-gp="visit" style="width:auto">${opt(visitKeys(D, v).map(k2 => [k2, visitName(D, k2)]), G.power.visit || visitKeys(D, v).slice(-1)[0])}</select></div>` : ''; })()}
         <div><label class="f">Simulated studies</label><input type="number" min="20" max="2000" data-gp="reps" value="${esc(G.power.reps)}" style="width:90px"></div><div><label class="f">Significance level</label><input type="number" min="0.001" max="0.2" step="0.005" data-gp="alpha" value="${esc(G.power.alpha)}" style="width:90px"></div>
         <button class="btn ghost" type="button" id="genPower">Run</button></div><div class="legend-note" id="genPowerOut" style="margin-top:6px;font-size:14px">${powerOut}</div>
       </div>`;
+    analyseOut(D);
   }
+  // below the settings: the results of each variable (as in step 10 of Analyse), the check against the targets and the first rows
+  function outHtml(D) {
+    if (!last) return '';
+    const res = targetsList(D).map(t => ({ ...t, o: observed(D, last, t) })), R0 = G.res;
+    const views = [['half', 'Summary and data of each group (as the Word file)'], ['default', 'Figure and all the tables'], ['stacked', 'Figure above the tables'], ['tables', 'Tables only'], ['twocol', 'Two columns']];
+    return `<h3>Results of each variable <span class="legend-note">— analysed as in 📊 Analyse, step 10</span></h3>
+      <div class="row gen-res-bar" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div><label class="f">Variable</label><select data-gr="only" style="width:auto"><option value="">All variables</option>${(resOut ? resOut.allItems || resOut.items : []).map(it => `<option value="${esc(it.id)}" ${R0.only === it.id ? 'selected' : ''}>${esc(it.label)}</option>`).join('')}</select></div>
+        <div><label class="f">View</label><select data-gr="view" style="width:auto">${views.map(([k, l]) => `<option value="${k}" ${R0.view === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+        <label class="check" style="margin:0 0 6px"><input type="checkbox" data-gr="comments" ${R0.comments ? 'checked' : ''}><span>Report comment</span></label>
+        <label class="check" style="margin:0 0 6px" title="Generate again, and redraw the results, as the expected values are typed"><input type="checkbox" data-gr="live" ${R0.live ? 'checked' : ''}><span>Live: follow the expected values</span></label></div>
+      <div id="genRes" class="gen-res">${resOut && resOut.key === resKeyOf(D) ? resHtml(D, res) : '<p class="legend-note">Analysing the simulated data…</p>'}</div>
+      <details class="report-sec" style="margin-top:10px"><summary><b>Check: what came out against what was asked</b> <span class="legend-note">— every variable, group and visit</span></summary><div class="tbl-wrap" style="max-height:380px"><table class="t gen-chk"><thead><tr><th>Variable</th><th>Visit</th><th>Group</th><th>Asked</th><th>Generated</th><th>n</th></tr></thead><tbody>${res.map(r => { const off = r.kind === 'mean' ? Math.abs(r.o.m - r.target) > (r.sd || 1) * 0.6 : Math.abs(r.o.m - r.target) > 15;
+          return `<tr class="${off ? 'gen-off' : ''}"><td>${esc(r.label)}</td><td>${esc(r.visitName)}</td><td>${esc(r.group)}</td><td>${r.kind === 'mean' ? esc(+r.target.toFixed(2)) + (r.sd ? ` ± ${esc(+(+r.sd).toFixed(2))}` : '') : `${esc(r.target)}% ${esc(r.cat)}`}</td><td>${r.o.n ? (r.kind === 'mean' ? `${r.o.m.toFixed(2)} ± ${(r.o.sd || 0).toFixed(2)}` : `${r.o.m.toFixed(1)}%`) : '—'}</td><td>${r.o.n || 0}</td></tr>`; }).join('')}</tbody></table></div>
+        <p class="legend-note">Small samples differ from the targets by chance; rows far from the target are shaded.</p>
+        </details><h3>First rows</h3>${preview(D)}`;
+  }
+  // what the generator was asked for this variable, beside its results
+  function askedLine(D, res, label) {
+    const rs = res.filter(r => label === r.label || label.startsWith(r.label + ' (') || label.startsWith(r.label + ' —'));
+    if (!rs.length) return '';
+    const byVisit = [...new Set(rs.map(r => r.visitName))];
+    return `<div class="gen-asked"><b>🎲 Asked:</b> ${byVisit.map(vn => `${vn ? `<span class="legend-note">${esc(vn)}:</span> ` : ''}${rs.filter(r => r.visitName === vn).map(r => `${esc(r.group)} ${r.kind === 'mean' ? `${esc(+(+r.target).toFixed(2))}${r.sd ? ` ± ${esc(+(+r.sd).toFixed(2))}` : ''}` : `${esc(r.target)}% ${esc(r.cat)}`}`).join(' · ')}`).join(' &nbsp;|&nbsp; ')}</div>`;
+  }
+  function resHtml(D, res) {
+    const o = resOut; if (!o) return ''; if (!o.items.length) return '<p class="legend-note">No variables to analyse.</p>';
+    const ov = o.items.length > 1 ? `<div class="report-sec"><h3 style="margin:0 0 6px">Overview <span class="legend-note">— ${o.n} patients, ${o.items.filter(it => it.sig).length} of ${o.items.length} variables significant</span></h3><div style="overflow-x:auto"><table class="t xp xp-ov"><thead><tr><th>Variable</th><th>Type</th><th>Test</th><th>P value</th><th>Significant</th></tr></thead><tbody>${o.items.map(it => `<tr data-grgo="${esc(it.id)}" title="Show this variable"><td class="b">${esc(it.label)}</td><td>${esc(it.kind)}</td><td>${esc(it.test || '—')}</td><td>${esc(it.pTxt || '—')}</td><td class="${it.sig ? 'sig' : ''}">${it.sig ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+    return ov + o.parts.map((h, k) => { const it = o.items[k]; return h.replace(/(<div data-xpitem="[^"]*" class="report-sec[^"]*"[^>]*>)/, `$1${askedLine(D, res, it.label).replace(/\$/g, '$$$$')}`); }).join('');
+  }
+  const resKeyOf = D => JSON.stringify([last && last.length, G.seed, G.res.view, G.res.only, G.res.comments, resStamp]);
+  let resStamp = 0;
+  // the simulated master sheet analysed by the app itself (its own sandbox: the data in Analyse are not changed)
+  async function analyseOut(D) {
+    if (!last || !U.simResults || typeof XLSX === 'undefined') return; const key = resKeyOf(D); if (resOut && resOut.key === key) return;
+    try { const buf = await B.buildWorkbook(D, fill(D)).arrayBuffer(), wb = XLSX.read(buf, { type: 'array' });
+      const r = U.simResults(wb, { view: G.res.view, only: G.res.only, comments: G.res.comments });
+      // the list of variables always holds all of them
+      r.all = G.res.only ? (resOut && resOut.all) || U.simResults(wb, { view: 'tables', figs: false, comments: false }).items : r.items;
+      resOut = { ...r, key, items: r.items, allItems: r.all };
+    } catch (err) { console.error(err); resOut = { key, items: [], parts: [], n: 0, err: err.message }; }
+    if (key !== resKeyOf(D)) return;
+    const box = $('#genRes'); if (box) box.innerHTML = resOut.err ? `<p style="color:var(--bad)">Could not analyse: ${esc(resOut.err)}</p>` : resHtml(D, targetsList(D).map(t => ({ ...t, o: observed(D, last, t) })));
+    const sel = document.querySelector('[data-gr="only"]'); if (sel) sel.innerHTML = `<option value="">All variables</option>${(resOut.allItems || []).map(it => `<option value="${esc(it.id)}" ${G.res.only === it.id ? 'selected' : ''}>${esc(it.label)}</option>`).join('')}`;
+  }
+  function redrawOut(D) { const box = $('#genOut'); if (box) box.innerHTML = outHtml(D); const st = $('#genStatus'); if (st) st.textContent = last ? `${last.length} rows generated (seed ${G.seed})` : 'Not generated yet';
+    ['genXlsx', 'genSend2'].forEach(id => { const b = $('#' + id); if (b) b.disabled = !last; }); analyseOut(D); }
+  // live: a changed expected value generates again (same seed) and redraws the results
+  function live(D) { if (!G.res.live || !last) return; clearTimeout(liveT); liveT = setTimeout(() => { try { last = generate(D); resStamp++; redrawOut(D); } catch (err) { console.error(err); } }, 500); }
   function preview(D) { const cols = B.columns(D).filter(c => D.layout !== 'long'), A = arms(D);
     return `<div class="tbl-wrap" style="max-height:260px"><table class="t mb-prev"><thead><tr><th>ID</th>${A.length >= 2 ? '<th>Group</th>' : ''}${cols.map(c => `<th>${esc(c.col)}</th>`).join('')}</tr></thead><tbody>${last.slice(0, 8).map(p => `<tr><td>${esc(p.id)}</td>${A.length >= 2 ? `<td>${esc(p.group)}</td>` : ''}${cols.map(c => { const o = p.vals[c.v.id] || {}, x = c.visit ? (o[c.visit.id] ?? (c.visit.id === D.visits[0].id ? o.once : null)) : (o.once ?? o[D.visits[0].id]); return `<td>${esc(x ?? '')}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`; }
   function fill(D) { return { patients: last.map(p => ({ id: p.id, group: p.group, vals: p.vals })), simulated: { at: new Date().toISOString().slice(0, 10), seed: G.seed, n: last.length }, targets: targetsList(D).map(t => ({ ...t, cols: B.columns(D).filter(c => c.v.id === t.varId && (t.visit === 'once' ? !c.visit || c.visit.id === D.visits[0].id : c.visit && c.visit.id === t.visit)).map(c => c.col) })) }; }
   const fileName = D => `Simulated - ${B.fileBase()} - master sheet.xlsx`;
   async function send(D) { if (!last) { last = generate(D); } const blob = B.buildWorkbook(D, fill(D)), f = new File([blob], fileName(D)); B.setPhase('analyse'); U.go(1); await U.loadFile(f); }
   function onClick(e) {
+    const go0 = e.target.closest('[data-grgo]'); if (go0) { G.res.only = go0.dataset.grgo; save(); return redrawOut(D0()); }
     const b = e.target.closest('button'); if (!b) return; const D = D0();
     if (b.dataset.gtab === 'build') return B.setPhase('build');
     if (b.id === 'genSeed') { G.seed = Math.floor(Math.random() * 1e9); save(); last = null; return render(); }
-    if (b.id === 'genGo') { try { last = generate(D); toast(`${last.length} simulated patients`); } catch (err) { console.error(err); toast('Could not generate: ' + err.message); } return render(); }
+    if (b.id === 'genGo') { try { resStamp++; last = generate(D); toast(`${last.length} simulated patients`); } catch (err) { console.error(err); toast('Could not generate: ' + err.message); } return render(); }
     if (b.id === 'genXlsx' && last) { U.saveUrl(URL.createObjectURL(B.buildWorkbook(D, fill(D))), fileName(D)); toast('Simulated master sheet saved'); return; }
     if (b.id === 'genSend' || b.id === 'genSend2') { send(D); return; }
     if (b.id === 'genCorrAdd') { (G.corr = G.corr || []).push({ a: '', b: '', r: 0.4 }); save(); return render(); }
@@ -39592,16 +39666,17 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   }
   function onInput(e) {
     const t = e.target, d = t.dataset, val = t.type === 'checkbox' ? t.checked : t.value, set = (path, x) => { const [id, g, key] = path.split('|'); ((G.targets[id] = G.targets[id] || {})[g] = G.targets[id][g] || {})[key] = x; };
-    if (d.g) { G[d.g] = val; save(); last = null; if (t.type === 'checkbox') render(); return; }
-    if (d.gt) { set(d.gt, val === '' ? '' : +val); save(); return; }
-    if (d.gtp) { if (val === '') set(d.gtp, ''); else { const p = Math.max(0, Math.min(100, +val)); set(d.gtp, [p, 100 - p]); } save(); return; }
-    if (d.gtc) { const ps = String(val).split(/[ ,;/]+/).map(Number).filter(x => isFinite(x)); set(d.gtc, ps.length ? ps : ''); save(); return; }
-    if (d.gsd) { G.sds[d.gsd] = val; save(); return; }
-    if (d.gmiss) { G.miss[d.gmiss] = val; save(); return; }
-    if (d.gc) { const [i, k] = d.gc.split('|'); G.corr[+i][k] = k === 'r' ? +val : val; save(); return; }
+    if (d.gr) { G.res[d.gr] = val; save(); if (d.gr !== 'live') redrawOut(D0()); return; }
+    if (d.g) { G[d.g] = val; save(); if (G.res.live && last && d.g !== 'seed') { if (t.type === 'checkbox') render(); live(D0()); return; } last = null; if (t.type === 'checkbox') render(); else redrawOut(D0()); return; }
+    if (d.gt) { set(d.gt, val === '' ? '' : +val); save(); return live(D0()); }
+    if (d.gtp) { if (val === '') set(d.gtp, ''); else { const p = Math.max(0, Math.min(100, +val)); set(d.gtp, [p, 100 - p]); } save(); return live(D0()); }
+    if (d.gtc) { const ps = String(val).split(/[ ,;/]+/).map(Number).filter(x => isFinite(x)); set(d.gtc, ps.length ? ps : ''); save(); return live(D0()); }
+    if (d.gsd) { G.sds[d.gsd] = val; save(); return live(D0()); }
+    if (d.gmiss) { G.miss[d.gmiss] = val; save(); return live(D0()); }
+    if (d.gc) { const [i, k] = d.gc.split('|'); G.corr[+i][k] = k === 'r' ? +val : val; save(); return live(D0()); }
     if (d.gp) { G.power[d.gp] = val; save(); if (t.tagName === 'SELECT') render(); return; }
   }
-  window.EasyGen = { render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; } };
+  window.EasyGen = { render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; }, get results() { return resOut; } };
   if (document.documentElement.classList.contains('ph-generate')) render();
 })();
 </script>
