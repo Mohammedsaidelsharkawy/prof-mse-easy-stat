@@ -12,6 +12,20 @@ Fills the master sheet designed in phase 1 with **simulated patients** — for t
 
 - **Patients and groups**: the number of patients, the groups from the design's randomisation list or a ratio (1:1, 2:1 …), and a seed (the same seed gives the same data).
 - **Expected values for each group and visit**: the mean of each number (with its SD, normal or skewed / log-normal), the % “Yes” of each yes/no item and the % of each category — empty cells use the expected values set in the design (each library variable has sensible defaults, e.g. age 50 ± 12, hypertension 30%). Different values between the groups make a treatment effect; different values over the visits make a change over time; the correlation of a patient's visits is set too.
+- **How numbers are made**, for each variable:
+  - **Mean & SD**;
+  - **Min & Max**: the values spread between them, centred, with a min–max for each group and visit if you wish;
+  - **Both**: mean & SD kept within the min–max; a value outside is drawn again.
+- **Difference between the groups** (or the change over the visits in one group), for each variable:
+  - **As typed**;
+  - **Significant**: the group means or percentages are set far enough apart for about 95% power with these patients;
+  - **Not significant**: the same values in every group.
+  - The values used are shown after → in the cells, and the P value reached in a badge (✓ / ✗). If the P value is on the wrong side, the variable is drawn again, up to 15 times.
+  - Checked over 5 seeds: numbers and yes/no with two groups, three groups (ANOVA) and one group over visits all came out as asked.
+  - The power calculation ignores this setting and uses the values typed.
+- **🎲 Redraw** one variable: only that variable is drawn again, for the same patients and groups, and the others stay as they are (↺ goes back to the first draw).
+- **Each variable with its results**: a card per variable with its settings, its cells, what was asked, and its full results (tables, figure and report comment, as in Analyse step 10), updated live. Or **all variables in one table**.
+- Missing values and dropouts are **0% by default**.
 - **Links between variables** (a correlation, e.g. age with hypertension), **dates** in their clinical order (enrolment, admission, surgery, discharge, death) with the days between them, **calculated columns** computed (BMI, length of stay, change, totals), and the design's **rules** kept.
 - **Realism**: missing values (all variables or each one), patients who drop out (their later visits missing), outliers, and **messy entries** for cleaning practice (units typed in cells, ×10 typing errors, 999, male / MALE / M, duplicated IDs).
 - **Results of each variable**, analysed and drawn as in 📊 Analyse step 10 — the summary with each group's data (as the Word file), or the figure with all the tables (descriptive statistics, the tests and the one used in the report, pairwise comparisons and effect sizes), with the report's comment — and above each variable what the generator was **asked** for it (e.g. Technique A 30% Yes · Technique B 30% Yes). An overview lists every variable's test and P value; click one to show it alone. **Live** (on by default): a changed expected value, SD, missing % or link generates the data again with the same seed and redraws the results. The data loaded in Analyse are not touched.

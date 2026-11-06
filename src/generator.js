@@ -6,9 +6,12 @@
   const U = window.EasyUI, B = window.EasyBuilder; if (!U || !B) return;
   const $ = s => document.querySelector(s), esc = U.esc, toast = U.toast;
   const ls = { get: (k, d) => { try { const v = localStorage.getItem('gen.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem('gen.' + k, JSON.stringify(v)); } catch (e) { /* not kept */ } } };
-  const defaults = () => ({ n: '', ratio: '', seed: 20261107, visitR: 0.6, missAll: 2, miss: {}, dropout: 5, outliers: 0, messy: false, messyPct: 3, start: '2026-01-01', span: 365, targets: {}, sds: {}, corr: [], power: { v: '', visit: '', reps: 200, alpha: 0.05 }, res: { view: 'half', only: '', comments: true, live: true } });
+  const defaults = () => ({ n: '', ratio: '', seed: 20261107, visitR: 0.6, missAll: 0, miss: {}, dropout: 0, mode: {}, rng: {}, rt: {}, sig: {}, vseed: {}, view: 'table', outliers: 0, messy: false, messyPct: 3, start: '2026-01-01', span: 365, targets: {}, sds: {}, corr: [], power: { v: '', visit: '', reps: 200, alpha: 0.05 }, res: { view: 'half', only: '', comments: true, live: true } });
   let G = { ...defaults(), ...ls.get('settings', {}) }, last = null, powerOut = '', resKey = '', resOut = null, liveT = 0;
-  G.res = { ...defaults().res, ...(G.res || {}) };
+  G.res = { ...defaults().res, ...(G.res || {}) }; ['mode', 'rng', 'rt', 'sig', 'vseed'].forEach(k => { G[k] = G[k] || {}; });
+  // settings kept from an earlier version: the old defaults of missing values (2%) and dropouts (5%) become 0
+  if (!G.v2) { if (+G.missAll === 2) G.missAll = 0; if (+G.dropout === 5) G.dropout = 0; G.v2 = true; }
+  let SIG = {}, sigInfo = {};
   const save = () => ls.set('settings', G);
 
   /* ---------- the engine ---------- */
@@ -18,25 +21,77 @@
   const expect = v => v.expect && Object.keys(v.expect).length ? v.expect : B.expectOf(v.label, v.type, v.cats);
   // the target of a variable for a group at a visit: a mean (numbers) or the % of each category
   function target(v, g, key) {
+    const sg = ((SIG[v.id] || {})[g] || {})[key]; if (sg !== undefined) return sg;
     const t = ((G.targets[v.id] || {})[g] || {})[key], e = expect(v);
     if (v.type === 'num' || v.type === 'calc') return t !== undefined && t !== '' ? +t : e.mean !== '' && e.mean !== undefined ? +e.mean : (v.min !== '' && v.max !== '' ? (+v.min + +v.max) / 2 : 10);
     const pc = Array.isArray(t) ? t : (e.pct && e.pct.length === v.cats.length ? e.pct : v.cats.map(() => 100 / v.cats.length)); const s = pc.reduce((a, b) => a + (+b || 0), 0) || 1; return pc.map(x => (+x || 0) / s);
   }
   const sdOf = v => { const s = G.sds[v.id] !== undefined && G.sds[v.id] !== '' ? +G.sds[v.id] : +expect(v).sd; return isFinite(s) && s > 0 ? s : Math.max(0.5, Math.abs(target(v, 0, 'once')) * 0.2); };
+  const pick = (...xs) => { const x = xs.find(y => y !== undefined && y !== null && y !== '' && isFinite(+y)); return x === undefined ? null : +x; };
+  const modeOf = v => G.mode[v.id] || (pick(expect(v).lo) !== null || pick(expect(v).hi) !== null ? 'both' : 'msd');
+  // the limits of a number: those typed here, else the design's simulated Min / Max, else (for min & max) its allowed range
+  const limits = (v, mode) => { const R0 = G.rng[v.id] || {}, e = expect(v); return mode === 'msd' ? { lo: pick(e.lo), hi: pick(e.hi) } : { lo: pick(R0.lo, e.lo, v.min), hi: pick(R0.hi, e.hi, v.max) }; };
+  // min & max of a group at a visit (typed in its cell, else the limits)
+  const cellRange = (v, g, key) => { const c = (((G.rt[v.id] || {})[g] || {})[key]) || {}, L = limits(v, 'range'); return { lo: pick(c.lo, L.lo), hi: pick(c.hi, L.hi) }; };
+  function numParams(v, g, key) {
+    const mode = modeOf(v), e = expect(v);
+    if (mode === 'range') { const r = cellRange(v, g, key); if (r.lo !== null && r.hi !== null && r.hi > r.lo) { const mid = (r.lo + r.hi) / 2, sg = ((SIG[v.id] || {})[g] || {})[key], sh = sg !== undefined ? sg - mid : 0;
+      return { m: mid + sh, sd: (r.hi - r.lo) / 4, lo: r.lo + sh, hi: r.hi + sh, dist: 'normal' }; } }
+    const L = limits(v, mode === 'range' ? 'both' : mode); return { m: target(v, g, key), sd: sdOf(v), lo: L.lo, hi: L.hi, dist: e.dist };
+  }
   const decOf = (v, sd) => v.dec !== '' && v.dec !== undefined ? +v.dec : sd < 1 ? 2 : sd < 10 ? 1 : 0;
   const yesFirst = v => v.type === 'yn' || /^(yes|y|present|positive)$/i.test(String(v.cats[0] || ''));
   const normInv = p => jStat.normal.inv(Math.min(1 - 1e-12, Math.max(1e-12, p)), 0, 1);
+  const hashOf = s0 => { let h = 7; for (const c of String(s0)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 100003; };
+  // the key compared by the test: the last visit of the variable (one group: the first against the last visit)
+  const sigKey = (D, v) => visitKeys(D, v).slice(-1)[0];
+  // "significant": group targets far enough apart for a power of about 95% with these patients; "not significant": the same targets in every group
+  function sigTargets(D) {
+    const out = {}, k = K(D), n = Math.max(2, +G.n || +D.n || 60), za = 1.96, zb = 1.645, St = typeof Stats !== 'undefined' ? Stats : null;
+    D.vars.forEach(v => { const want = G.sig[v.id]; if (!want || !['num', 'yn', 'cat'].includes(v.type)) return; const keys = visitKeys(D, v), key = sigKey(D, v), o = out[v.id] = {}, put = (g, kk, x) => { (o[g] = o[g] || {})[kk] = x; };
+      if (k < 2 && keys.length < 2) { delete out[v.id]; return; }
+      if (v.type === 'num') { const mode = modeOf(v), base = (g, kk) => { if (mode === 'range') { const r = cellRange(v, g, kk); return r.lo !== null && r.hi !== null ? (r.lo + r.hi) / 2 : target(v, g, kk); } return target(v, g, kk); };
+        const sd = mode === 'range' ? (() => { const r = cellRange(v, 0, key); return r.lo !== null && r.hi !== null ? (r.hi - r.lo) / 4 : sdOf(v); })() : sdOf(v), L = limits(v, mode === 'msd' ? 'both' : mode);
+        if (k >= 2) { const ms = [...Array(k)].map((_, g) => base(g, key)), m0 = ms[0];
+          if (want === 'ns') { const avg = ms.reduce((a, b) => a + b, 0) / k; ms.forEach((_, g) => put(g, key, avg)); return; }
+          const d = (za + zb) * Math.sqrt(2 / (n / k)) * (k > 2 ? 1.5 : 1.2) * sd; let dir = ms[k - 1] >= m0 ? 1 : -1; if (ms.every(x => x === m0)) dir = L.hi !== null && m0 + d > L.hi ? -1 : 1;
+          ms.forEach((_, g) => put(g, key, m0 + dir * d * g / (k - 1))); return; }
+        const first = keys[0], m0 = base(0, first);
+        if (want === 'ns') { put(0, key, m0); return; }
+        const rho = Math.min(0.95, Math.max(0, +G.visitR || 0)), d = (za + zb) / Math.sqrt(n) * sd * Math.sqrt(2 * (1 - rho)) * 1.3, mk = base(0, key); let dir = mk >= m0 ? 1 : -1; if (mk === m0) dir = L.hi !== null && m0 + d > L.hi ? -1 : 1; put(0, key, m0 + dir * Math.max(d, Math.abs(mk - m0))); return; }
+      // categories: the first category moved between the groups (or the visits)
+      const pv = g => target(v, g, k >= 2 ? key : (g ? key : keys[0])), shift = (p, p1) => { const rest = p.slice(1), rs = rest.reduce((a, b) => a + b, 0) || 1; return [p1, ...rest.map(x => (1 - p1) * x / rs)]; };
+      if (k >= 2) { const ps = [...Array(k)].map((_, g) => pv(g));
+        if (want === 'ns') { const avg = ps[0].map((_, j) => ps.reduce((a, p) => a + p[j], 0) / k); ps.forEach((_, g) => put(g, key, avg)); return; }
+        const p0 = ps[0][0], nPer = n / k; let dir = ps[k - 1][0] >= p0 ? 1 : -1, p1 = p0; if (p0 > 0.75 && dir > 0) dir = -1; if (p0 < 0.25 && dir < 0) dir = 1;
+        for (let t = 0; t < 95; t++) { p1 = Math.min(0.97, Math.max(0.03, p1 + dir * 0.01)); if (St && St.powerTwoProps(p0, p1, nPer, nPer) >= (k > 2 ? 0.99 : 0.97)) break; }
+        ps.forEach((p, g) => put(g, key, shift(p, p0 + (p1 - p0) * g / (k - 1)))); return; }
+      const pf = pv(0), p0 = pf[0]; if (want === 'ns') { put(0, key, pf); return; }
+      let p1 = p0, dir = p0 > 0.5 ? -1 : 1; for (let t = 0; t < 95; t++) { p1 = Math.min(0.97, Math.max(0.03, p1 + dir * 0.01)); if (St && St.powerTwoProps(p0, p1, n, n) >= 0.97) break; } put(0, key, shift(pf, p1)); });
+    return out;
+  }
+  // after the values are drawn: variables drawn again (🎲 of a variable), then "significant / not significant" checked (drawn again until it holds, up to 15 times)
+  function adjust(D, P, opt) {
+    const groups = P.map(p => p.g), seed = +opt.seed || +G.seed || 1;
+    const redraw = (v, r) => { const Q = generate(D, { ...opt, seed: seed + 104729 * r + hashOf(v.id), groups, stage1: true }); P.forEach((p, i) => { p.vals[v.id] = Q[i].vals[v.id]; }); };
+    Object.entries(G.vseed).forEach(([id, r]) => { const v = D.vars.find(x => x.id === id); if (v && +r) redraw(v, +r); });
+    sigInfo = {};
+    D.vars.forEach(v => { const want = G.sig[v.id]; if (!want || !SIG[v.id]) return; const key = sigKey(D, v); let p = pTest(D, v, key, P), t = 0; const ok = () => want === 'sig' ? p < 0.05 : !(p < 0.05);
+      while (isFinite(p) && !ok() && t < 15) { t++; redraw(v, 5000 + t + (+G.vseed[v.id] || 0)); p = pTest(D, v, key, P); } sigInfo[v.id] = { p, ok: isFinite(p) && ok(), key, want }; });
+  }
   function generate(D, opt = {}) {
+    if (!opt.stage1 && !opt.plain) SIG = sigTargets(D); else if (opt.plain) SIG = {};
     const rnd = B.prng((+opt.seed || +G.seed || 1) >>> 0), norm = () => { let u = 0; while (!u) u = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd()); };
     const n = Math.max(2, +G.n || +D.n || 60), A = arms(D), k = K(D), rho = Math.min(0.95, Math.max(0, +G.visitR || 0));
     // groups: the randomisation list of the design, or the ratio (e.g. 1:1, 2:1), shuffled
     let grp = [];
     const sites = (D.sites || []).filter(x => x && x.name), per = sites.length ? Math.ceil(n / sites.length) : n;
+    if (opt.groups) grp = [...opt.groups]; else {
     if (A.length >= 2) { if (D.rand && D.rand.on && !(D.rand.strata || []).length) { const rl = B.randomisation({ ...D, n }); grp = (sites.length && rl.length === sites.length ? rl.flatMap(r => r.list.slice(0, per)).slice(0, n) : rl[0].list).map(a => A.indexOf(a)); }
       else { const r = String(G.ratio || A.map(() => 1).join(':')).split(/[:,/ ]+/).map(Number).map(x => x > 0 ? x : 1), tot = r.slice(0, A.length).reduce((a, b) => a + b, 0) || A.length;
         A.forEach((_, i) => { const m = Math.round(n * (r[i] || 1) / tot); for (let j = 0; j < m; j++) grp.push(i); }); while (grp.length < n) grp.push(grp.length % A.length); grp = grp.slice(0, n);
         for (let i = grp.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [grp[i], grp[j]] = [grp[j], grp[i]]; } } }
-    else grp = Array(n).fill(0);
+    else grp = Array(n).fill(0); }
     const vars = D.vars, lat = vars.map(() => null), P = [];
     for (let i = 0; i < n; i++) {
       // a patient's level of each variable (the same patient across visits), linked between variables where asked
@@ -48,11 +103,11 @@
       vars.forEach(v => { if (!['num', 'yn', 'cat', 'multi'].includes(v.type)) return; const o = vals[v.id] = {};
         const keys = visitKeys(D, v); keys.forEach(key => { const z = keys.length === 1 ? u[v.id] : Math.sqrt(rho) * u[v.id] + Math.sqrt(1 - rho) * norm(); // one measurement: the patient's own level
           if (v.type === 'multi') { const pc = expect(v).pct || []; o[key] = v.cats.filter((c, ci) => rnd() * 100 < (isFinite(+pc[ci]) ? +pc[ci] : 20)); return; }
-          if (v.type === 'num') { const m = target(v, g, key), sd = sdOf(v), e = expect(v); let x;
+          if (v.type === 'num') { const np = numParams(v, g, key), m = np.m, sd = np.sd, e = { dist: np.dist }; let x;
             const draw = zz => { if (e.dist === 'skewed' && m > 0) { const s2 = Math.log(1 + sd * sd / (m * m)); return Math.exp(Math.log(m) - s2 / 2 + Math.sqrt(s2) * zz); } return m + sd * zz; };
             x = draw(z);
             // the simulated Min and Max of the design: a value outside is drawn again (a truncated distribution), then kept within them
-            const lo = e.lo === '' || e.lo === undefined || !isFinite(+e.lo) ? null : +e.lo, hi = e.hi === '' || e.hi === undefined || !isFinite(+e.hi) ? null : +e.hi;
+            const lo = np.lo, hi = np.hi;
             if (lo !== null || hi !== null) { for (let t = 0; t < 30 && ((lo !== null && x < lo) || (hi !== null && x > hi)); t++) x = draw(norm()); if (lo !== null) x = Math.max(lo, x); if (hi !== null) x = Math.min(hi, x); }
             if (v.min !== '' && isFinite(+v.min)) x = Math.max(+v.min, x); if (v.max !== '' && isFinite(+v.max)) x = Math.min(+v.max, x);
             const dd = decOf(v, sd); o[key] = +x.toFixed(dd); }
@@ -70,6 +125,8 @@
       const si = sites.length ? Math.min(sites.length - 1, Math.floor(i / per)) : -1;
       P.push({ id: si >= 0 ? `${sites[si].prefix || ''}${String(i - si * per + 1).padStart(+D.idDigits || 3, '0')}` : `${D.idPrefix || ''}${String(i + 1).padStart(+D.idDigits || 3, '0')}`, site: si >= 0 ? sites[si].name : undefined, g, group: A.length >= 2 ? A[g] : null, vals });
     }
+    if (opt.stage1) return P;
+    if (!opt.plain) adjust(D, P, opt);
     // calculated columns (also written as Excel formulas)
     const num = x => (typeof x === 'number' && isFinite(x) ? x : NaN), days = (a, b) => (Date.parse(b) - Date.parse(a)) / 864e5;
     P.forEach(p => vars.filter(v => v.type === 'calc' && v.formula).forEach(v => { const f = v.formula, o = p.vals[v.id] = {}, at = (id, key) => { const x = p.vals[id] || {}; return x[key] ?? x.once ?? x[D.visits[0].id]; };
@@ -122,7 +179,7 @@
   }
   function power(D) { const v = D.vars.find(x => x.id === G.power.v); if (!v) return 'Choose the main outcome first.'; const key = G.power.visit || visitKeys(D, v).slice(-1)[0], reps = Math.min(2000, Math.max(20, +G.power.reps || 200)), alpha = +G.power.alpha || 0.05;
     const keep = { messy: G.messy, outliers: G.outliers }; G.messy = false; G.outliers = 0; let hit = 0, done = 0;
-    try { for (let r = 0; r < reps; r++) { const p = pTest(D, v, key, generate(D, { seed: (+G.seed || 1) + 7919 * (r + 1) })); if (isFinite(p)) { done++; if (p < alpha) hit++; } } } finally { Object.assign(G, keep); }
+    try { for (let r = 0; r < reps; r++) { const p = pTest(D, v, key, generate(D, { seed: (+G.seed || 1) + 7919 * (r + 1), plain: true })); if (isFinite(p)) { done++; if (p < alpha) hit++; } } } finally { Object.assign(G, keep); }
     if (!done) return 'The test could not be run (check the targets and the groups).'; const pw = hit / done, z = 1.96, den = 1 + z * z / done, c = (pw + z * z / (2 * done)) / den, h = z * Math.sqrt(pw * (1 - pw) / done + z * z / (4 * done * done)) / den;
     const nPer = arms(D).length >= 2 ? `${Math.round((+G.n || +D.n || 60) / K(D))} per group` : `${+G.n || +D.n || 60} patients`;
     return `<b>Power ≈ ${(100 * pw).toFixed(0)}%</b> (95% CI ${(100 * (c - h)).toFixed(0)}–${(100 * (c + h)).toFixed(0)}%) to find a difference in ${esc(v.label)}${key !== 'once' ? ` at ${esc(visitName(D, key))}` : ''} with ${nPer}, at P < ${alpha} — ${done} simulated studies (${v.type === 'num' ? K(D) === 2 ? "Welch's t-test" : K(D) > 2 ? 'one-way ANOVA' : 'paired t-test against the first visit' : 'Chi-square test'}).`; }
@@ -133,13 +190,7 @@
     const w = $('#genWrap'); if (!w) return; const D = D0(), A = arms(D), k = K(D), gl = A.length >= 2 ? A : ['All patients'];
     if (!w.dataset.wired) { w.dataset.wired = 1; w.addEventListener('input', onInput); w.addEventListener('click', onClick); }
     const vs = D.vars.filter(v => ['num', 'yn', 'cat'].includes(v.type)), dates = D.vars.filter(v => v.type === 'date'), calcs = D.vars.filter(v => v.type === 'calc');
-    const block = v => { const keys = visitKeys(D, v), e = expect(v);
-      const cellIn = (g, key) => { const t = ((G.targets[v.id] || {})[g] || {})[key];
-        if (v.type === 'num') return `<input type="number" step="any" data-gt="${v.id}|${g}|${key}" value="${esc(t ?? '')}" placeholder="${esc(e.mean ?? '')}" style="width:80px">`;
-        if (v.type === 'yn' || v.cats.length === 2) return `<input type="number" min="0" max="100" step="any" data-gtp="${v.id}|${g}|${key}" value="${esc(Array.isArray(t) ? +(t[0]).toFixed(1) : '')}" placeholder="${esc(((e.pct || [])[0]) ?? 50)}" style="width:70px" title="% ${esc(v.cats[0])}">`;
-        return `<input type="text" data-gtc="${v.id}|${g}|${key}" value="${esc(Array.isArray(t) ? t.join(', ') : '')}" placeholder="${esc((e.pct || []).join(', '))}" style="width:130px" title="% of ${esc(v.cats.join(', '))}">`; };
-      return `<tr><td><b>${esc(v.label)}</b>${v.unit ? ` <span class="legend-note">(${esc(v.unit)})</span>` : ''}<div class="legend-note">${v.type === 'num' ? `SD <input type="number" step="any" min="0" data-gsd="${v.id}" value="${esc(G.sds[v.id] ?? '')}" placeholder="${esc(e.sd ?? '')}" style="width:64px"> · ${e.dist === 'skewed' ? 'skewed' : 'normal'}` : v.type === 'yn' || v.cats.length === 2 ? `% ${esc(v.cats[0])}` : `% of ${esc(v.cats.join(' / '))}`} · missing % <input type="number" min="0" max="100" step="any" data-gmiss="${v.id}" value="${esc(G.miss[v.id] ?? '')}" placeholder="${esc(G.missAll)}" style="width:54px"></div></td>
-        ${gl.map((_, g) => `<td>${keys.map(key => `<div class="gen-cell">${keys.length > 1 || key !== 'once' ? `<span class="legend-note">${esc(visitName(D, key))}</span>` : ''}${cellIn(g, key)}</div>`).join('')}</td>`).join('')}</tr>`; };
+    const block = v => `<tr><td>${varHead(D, v)}</td>${gl.map((_, g) => `<td>${cellsOf(D, v, g)}</td>`).join('')}</tr>`;
     const res = last ? targetsList(D).map(t => ({ ...t, o: observed(D, last, t) })) : [];
     w.innerHTML = `<div class="mb-head"><b>🎲 Generate the data</b><span class="legend-note">${esc(D.title || 'Untitled study')} · ${D.vars.length} variables · simulated patients for teaching, testing the analysis and checking the sample size</span><span class="spacer"></span>
         <button class="btn ghost small" type="button" data-gtab="build">‹ Back to the design</button><button class="btn primary small" type="button" id="genSend">📊 Analyse these data ›</button></div>
@@ -150,8 +201,8 @@
         <div><label class="f">Seed (same seed, same data)</label><div class="row" style="gap:4px"><input type="number" data-g="seed" value="${esc(G.seed)}"><button class="btn ghost small" type="button" id="genSeed" title="A new seed">🎲</button></div></div>
         <div><label class="f">Correlation of a patient's visits</label><input type="number" min="0" max="0.95" step="0.05" data-g="visitR" value="${esc(G.visitR)}"></div></div>
       <h3>Expected values for each group${D.visits.length > 1 ? ' and visit' : ''}</h3>
-      <p class="legend-note">Numbers: the mean (SD shared by the groups); yes/no: the % ${esc('Yes')}; categories: the % of each, separated by commas. Empty cells use the expected values of the design (shown in grey) — type different values to make a difference between the groups or a change over the visits.</p>
-      <div class="tbl-wrap" style="max-height:460px"><table class="t gen-tbl"><thead><tr><th>Variable</th>${gl.map(g => `<th>${esc(g)}</th>`).join('')}</tr></thead><tbody>${vs.map(block).join('') || `<tr><td colspan="${gl.length + 1}" class="legend-note">No variables — design the sheet first (phase 1).</td></tr>`}</tbody></table></div>
+      <p class="legend-note">Numbers: generated by <b>mean & SD</b> (SD shared by the groups), by <b>min & max</b> (spread between them, centred), or <b>both</b> (mean & SD kept within min–max); yes/no: the % ${esc('Yes')}; categories: the % of each, separated by commas. Empty cells use the expected values of the design (shown in grey) — type different values to make a difference between the groups or a change over the visits.</p> <span class="legend-note">“Significant” or “Not significant” sets the group values (or the change over the visits) so that the difference is clearly there or absent with these patients — the values used are shown after →, and the P value reached after generating.</span>
+      ${targetsHtml(D, vs, gl, block)}
       ${dates.length || calcs.length ? `<p class="legend-note">${dates.length ? `Dates (${esc(dates.map(v => v.label).join(', '))}) follow each other from the day of enrolment (study start <input type="date" data-g="start" value="${esc(G.start)}"> over <input type="number" min="1" data-g="span" value="${esc(G.span)}" style="width:70px"> days); the days between them are set in the design. ` : ''}${calcs.length ? `Calculated columns (${esc(calcs.map(v => v.label).join(', '))}) are computed.` : ''}</p>` : ''}
       <h3>Links between variables</h3><p class="legend-note">A correlation between two variables (e.g. age and systolic BP 0.4; diabetes with HbA1c 0.6: a higher value goes with more “Yes”).</p>
       ${(G.corr || []).map((c, i) => `<div class="row" style="gap:6px;margin:4px 0"><select data-gc="${i}|a" style="width:auto">${opt([['', '—'], ...vs.map(v => [v.id, v.label])], c.a)}</select><span>with</span><select data-gc="${i}|b" style="width:auto">${opt([['', '—'], ...vs.map(v => [v.id, v.label])], c.b)}</select><span>r =</span><input type="number" min="-0.95" max="0.95" step="0.05" data-gc="${i}|r" value="${esc(c.r)}" style="width:80px"><button class="btn ghost small" type="button" data-gcdel="${i}">✕</button></div>`).join('')}
@@ -176,13 +227,13 @@
     if (!last) return '';
     const res = targetsList(D).map(t => ({ ...t, o: observed(D, last, t) })), R0 = G.res;
     const views = [['half', 'Summary and data of each group (as the Word file)'], ['default', 'Figure and all the tables'], ['stacked', 'Figure above the tables'], ['tables', 'Tables only'], ['twocol', 'Two columns']];
-    return `<h3>Results of each variable <span class="legend-note">— analysed as in 📊 Analyse, step 10</span></h3>
+    return `${G.view === 'cards' ? '<p class="legend-note">The results of each variable are in its card above.</p><div style="display:none">' : ''}<h3>Results of each variable <span class="legend-note">— analysed as in 📊 Analyse, step 10</span></h3>
       <div class="row gen-res-bar" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
         <div><label class="f">Variable</label><select data-gr="only" style="width:auto"><option value="">All variables</option>${(resOut ? resOut.allItems || resOut.items : []).map(it => `<option value="${esc(it.id)}" ${R0.only === it.id ? 'selected' : ''}>${esc(it.label)}</option>`).join('')}</select></div>
         <div><label class="f">View</label><select data-gr="view" style="width:auto">${views.map(([k, l]) => `<option value="${k}" ${R0.view === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
         <label class="check" style="margin:0 0 6px"><input type="checkbox" data-gr="comments" ${R0.comments ? 'checked' : ''}><span>Report comment</span></label>
         <label class="check" style="margin:0 0 6px" title="Generate again, and redraw the results, as the expected values are typed"><input type="checkbox" data-gr="live" ${R0.live ? 'checked' : ''}><span>Live: follow the expected values</span></label></div>
-      <div id="genRes" class="gen-res">${resOut && resOut.key === resKeyOf(D) ? resHtml(D, res) : '<p class="legend-note">Analysing the simulated data…</p>'}</div>
+      <div id="genRes" class="gen-res">${resOut && resOut.key === resKeyOf(D) ? resHtml(D, res) : '<p class="legend-note">Analysing the simulated data…</p>'}</div>${G.view === 'cards' ? '</div>' : ''}
       <details class="report-sec" style="margin-top:10px"><summary><b>Check: what came out against what was asked</b> <span class="legend-note">— every variable, group and visit</span></summary><div class="tbl-wrap" style="max-height:380px"><table class="t gen-chk"><thead><tr><th>Variable</th><th>Visit</th><th>Group</th><th>Asked</th><th>Generated</th><th>n</th></tr></thead><tbody>${res.map(r => { const off = r.kind === 'mean' ? Math.abs(r.o.m - r.target) > (r.sd || 1) * 0.6 : Math.abs(r.o.m - r.target) > 15;
           return `<tr class="${off ? 'gen-off' : ''}"><td>${esc(r.label)}</td><td>${esc(r.visitName)}</td><td>${esc(r.group)}</td><td>${r.kind === 'mean' ? esc(+r.target.toFixed(2)) + (r.sd ? ` ± ${esc(+(+r.sd).toFixed(2))}` : '') : `${esc(r.target)}% ${esc(r.cat)}`}</td><td>${r.o.n ? (r.kind === 'mean' ? `${r.o.m.toFixed(2)} ± ${(r.o.sd || 0).toFixed(2)}` : `${r.o.m.toFixed(1)}%`) : '—'}</td><td>${r.o.n || 0}</td></tr>`; }).join('')}</tbody></table></div>
         <p class="legend-note">Small samples differ from the targets by chance; rows far from the target are shaded.</p>
@@ -200,25 +251,67 @@
     const ov = o.items.length > 1 ? `<div class="report-sec"><h3 style="margin:0 0 6px">Overview <span class="legend-note">— ${o.n} patients, ${o.items.filter(it => it.sig).length} of ${o.items.length} variables significant</span></h3><div style="overflow-x:auto"><table class="t xp xp-ov"><thead><tr><th>Variable</th><th>Type</th><th>Test</th><th>P value</th><th>Significant</th></tr></thead><tbody>${o.items.map(it => `<tr data-grgo="${esc(it.id)}" title="Show this variable"><td class="b">${esc(it.label)}</td><td>${esc(it.kind)}</td><td>${esc(it.test || '—')}</td><td>${esc(it.pTxt || '—')}</td><td class="${it.sig ? 'sig' : ''}">${it.sig ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table></div></div>` : '';
     return ov + o.parts.map((h, k) => { const it = o.items[k]; return h.replace(/(<div data-xpitem="[^"]*" class="report-sec[^"]*"[^>]*>)/, `$1${askedLine(D, res, it.label).replace(/\$/g, '$$$$')}`); }).join('');
   }
-  const resKeyOf = D => JSON.stringify([last && last.length, G.seed, G.res.view, G.res.only, G.res.comments, resStamp]);
+  const resKeyOf = D => JSON.stringify([last && last.length, G.seed, G.res.view, G.view === 'cards' ? '' : G.res.only, G.res.comments, resStamp]);
   let resStamp = 0;
   // the simulated master sheet analysed by the app itself (its own sandbox: the data in Analyse are not changed)
   async function analyseOut(D) {
-    if (!last || !U.simResults || typeof XLSX === 'undefined') return; const key = resKeyOf(D); if (resOut && resOut.key === key) return;
+    if (!last || !U.simResults || typeof XLSX === 'undefined') return; const key = resKeyOf(D); if (resOut && resOut.key === key) { fillCards(D); return; }
     try { const buf = await B.buildWorkbook(D, fill(D)).arrayBuffer(), wb = XLSX.read(buf, { type: 'array' });
-      const r = U.simResults(wb, { view: G.res.view, only: G.res.only, comments: G.res.comments });
+      const r = U.simResults(wb, { view: G.res.view, only: G.view === 'cards' ? '' : G.res.only, comments: G.res.comments });
       // the list of variables always holds all of them
       r.all = G.res.only ? (resOut && resOut.all) || U.simResults(wb, { view: 'tables', figs: false, comments: false }).items : r.items;
       resOut = { ...r, key, items: r.items, allItems: r.all };
     } catch (err) { console.error(err); resOut = { key, items: [], parts: [], n: 0, err: err.message }; }
-    if (key !== resKeyOf(D)) return;
+    if (key !== resKeyOf(D)) return; void 0;
     const box = $('#genRes'); if (box) box.innerHTML = resOut.err ? `<p style="color:var(--bad)">Could not analyse: ${esc(resOut.err)}</p>` : resHtml(D, targetsList(D).map(t => ({ ...t, o: observed(D, last, t) })));
+    fillCards(D);
     const sel = document.querySelector('[data-gr="only"]'); if (sel) sel.innerHTML = `<option value="">All variables</option>${(resOut.allItems || []).map(it => `<option value="${esc(it.id)}" ${G.res.only === it.id ? 'selected' : ''}>${esc(it.label)}</option>`).join('')}`;
   }
   function redrawOut(D) { const box = $('#genOut'); if (box) box.innerHTML = outHtml(D); const st = $('#genStatus'); if (st) st.textContent = last ? `${last.length} rows generated (seed ${G.seed})` : 'Not generated yet';
     ['genXlsx', 'genSend2'].forEach(id => { const b = $('#' + id); if (b) b.disabled = !last; }); analyseOut(D); }
   // live: a changed expected value generates again (same seed) and redraws the results
-  function live(D) { if (!G.res.live || !last) return; clearTimeout(liveT); liveT = setTimeout(() => { try { last = generate(D); resStamp++; redrawOut(D); } catch (err) { console.error(err); } }, 500); }
+  function live(D) { if (!G.res.live || !last) return; clearTimeout(liveT); liveT = setTimeout(() => { try { last = generate(D); resStamp++; redrawOut(D); document.querySelectorAll('[data-gvres]').forEach(el => { el.innerHTML = '<p class="legend-note">Analysing…</p>'; }); fillCards(D); } catch (err) { console.error(err); } }, 500); }
+  // the inputs of one group of a variable, at each of its visits
+  function cellsOf(D, v, g) {
+    const keys = visitKeys(D, v), e = expect(v), mode = v.type === 'num' ? modeOf(v) : '';
+    const one = key => { const t = ((G.targets[v.id] || {})[g] || {})[key], forced = ((SIG[v.id] || {})[g] || {})[key];
+      if (v.type === 'num') { if (mode === 'range') { const c = ((G.rt[v.id] || {})[g] || {})[key] || {}, L = limits(v, 'range');
+          return `<input type="number" step="any" data-grt="${v.id}|${g}|${key}|lo" value="${esc(c.lo ?? '')}" placeholder="${esc(L.lo ?? 'min')}" style="width:62px" title="Min"><span class="legend-note">–</span><input type="number" step="any" data-grt="${v.id}|${g}|${key}|hi" value="${esc(c.hi ?? '')}" placeholder="${esc(L.hi ?? 'max')}" style="width:62px" title="Max">${forced !== undefined ? `<span class="gen-forced" title="Centre used for the difference asked">→ ${+(+forced).toFixed(2)}</span>` : ''}`; }
+        return `<input type="number" step="any" data-gt="${v.id}|${g}|${key}" value="${esc(t ?? '')}" placeholder="${esc(e.mean ?? '')}" style="width:80px" title="Mean">${forced !== undefined ? `<span class="gen-forced" title="Mean used for the difference asked">→ ${+(+forced).toFixed(2)}</span>` : ''}`; }
+      const fz = forced !== undefined ? `<span class="gen-forced" title="% used for the difference asked">→ ${forced.map(x => +(100 * x).toFixed(1)).join(', ')}%</span>` : '';
+      if (v.type === 'yn' || v.cats.length === 2) return `<input type="number" min="0" max="100" step="any" data-gtp="${v.id}|${g}|${key}" value="${esc(Array.isArray(t) ? +(t[0]).toFixed(1) : '')}" placeholder="${esc(((e.pct || [])[0]) ?? 50)}" style="width:70px" title="% ${esc(v.cats[0])}">${fz}`;
+      return `<input type="text" data-gtc="${v.id}|${g}|${key}" value="${esc(Array.isArray(t) ? t.join(', ') : '')}" placeholder="${esc((e.pct || []).join(', '))}" style="width:130px" title="% of ${esc(v.cats.join(', '))}">${fz}`; };
+    return keys.map(key => `<div class="gen-cell">${keys.length > 1 || key !== 'once' ? `<span class="legend-note">${esc(visitName(D, key))}</span>` : ''}${one(key)}</div>`).join('');
+  }
+  // the name of a variable and its own settings: how numbers are made, the difference between the groups, missing values, draw again
+  function varHead(D, v, card) {
+    const e = expect(v), mode = v.type === 'num' ? modeOf(v) : '', R0 = G.rng[v.id] || {}, Lb = limits(v, 'both'), canSig = K(D) >= 2 || visitKeys(D, v).length > 1, si = sigInfo[v.id];
+    const how = v.type === 'num' ? `<label class="gen-ctl">Generate by <select data-gmode="${v.id}">${opt([['msd', 'Mean & SD'], ['range', 'Min & Max'], ['both', 'Both (mean & SD within min–max)']], mode)}</select></label>
+      ${mode !== 'range' ? `<label class="gen-ctl">SD <input type="number" step="any" min="0" data-gsd="${v.id}" value="${esc(G.sds[v.id] ?? '')}" placeholder="${esc(e.sd ?? '')}" style="width:64px"></label>` : ''}
+      ${mode !== 'msd' ? `<label class="gen-ctl">${mode === 'range' ? 'Default min' : 'Min'} <input type="number" step="any" data-grng="${v.id}|lo" value="${esc(R0.lo ?? '')}" placeholder="${esc(Lb.lo ?? '')}" style="width:64px"></label><label class="gen-ctl">${mode === 'range' ? 'max' : 'Max'} <input type="number" step="any" data-grng="${v.id}|hi" value="${esc(R0.hi ?? '')}" placeholder="${esc(Lb.hi ?? '')}" style="width:64px"></label>` : ''}
+      ${mode !== 'range' ? `<span class="legend-note">${e.dist === 'skewed' ? 'skewed' : 'normal'}</span>` : ''}` : `<span class="legend-note">${v.type === 'yn' || v.cats.length === 2 ? `% ${esc(v.cats[0])}` : `% of ${esc(v.cats.join(' / '))}`}</span>`;
+    const sig = canSig ? `<label class="gen-ctl">${K(D) >= 2 ? 'Difference between groups' : 'Change over the visits'} <select data-gsig="${v.id}">${opt([['', 'As typed'], ['sig', 'Significant'], ['ns', 'Not significant']], G.sig[v.id] || '')}</select></label><span class="gen-sigout" data-gsigout="${v.id}">${sigBadge(D, v, si)}</span>` : '';
+    return `<div class="gen-vhead"><b>${esc(v.label)}</b>${v.unit ? ` <span class="legend-note">(${esc(v.unit)})</span>` : ''}${card ? '' : '<br>'}<span class="gen-ctls">${how} ${sig}
+      <label class="gen-ctl">missing % <input type="number" min="0" max="100" step="any" data-gmiss="${v.id}" value="${esc(G.miss[v.id] ?? '')}" placeholder="${esc(G.missAll)}" style="width:54px"></label>
+      <button class="btn ghost small" type="button" data-gre="${v.id}" title="Draw this variable again (the others stay as they are)">🎲 Redraw${+G.vseed[v.id] ? ` (${G.vseed[v.id]})` : ''}</button>${+G.vseed[v.id] ? `<button class="btn ghost small" type="button" data-greset="${v.id}" title="Back to the first draw">↺</button>` : ''}</span></div>`;
+  }
+  const sigBadge = (D, v, si) => !si ? '' : `<span class="chip ${si.ok ? '' : 'warn'}" title="${esc(`${si.want === 'sig' ? 'Asked: significant' : 'Asked: not significant'}${si.key !== 'once' ? ` at ${visitName(D, si.key)}` : ''}`)}">P ${isFinite(si.p) ? (si.p < 0.001 ? '< 0.001' : '= ' + si.p.toFixed(3)) : '—'} ${si.ok ? '✓' : '✗ not reached'}</span>`;
+  // the targets: one table of every variable, or a card per variable with its results
+  function targetsHtml(D, vs, gl, block) {
+    const view = G.view === 'cards' ? 'cards' : 'table', tog = `<div class="row" style="gap:6px;align-items:center;margin:4px 0 8px"><span class="legend-note">Show</span><button class="btn ${view === 'table' ? 'primary' : 'ghost'} small" type="button" data-gview="table">▤ All variables in one table</button><button class="btn ${view === 'cards' ? 'primary' : 'ghost'} small" type="button" data-gview="cards">▦ Each variable with its results</button></div>`;
+    if (!vs.length) return tog + '<p class="legend-note">No variables — design the sheet first (phase 1).</p>';
+    if (view === 'table') return tog + `<div class="tbl-wrap" style="max-height:520px"><table class="t gen-tbl"><thead><tr><th>Variable</th>${gl.map(g => `<th>${esc(g)}</th>`).join('')}</tr></thead><tbody>${vs.map(block).join('')}</tbody></table></div>`;
+    return tog + `<div class="gen-cards">${vs.map(v => `<div class="gen-card" data-gcard="${v.id}">${varHead(D, v, true)}
+      <div class="tbl-wrap"><table class="t gen-tbl"><thead><tr>${gl.map(g => `<th>${esc(g)}</th>`).join('')}</tr></thead><tbody><tr>${gl.map((_, g) => `<td>${cellsOf(D, v, g)}</td>`).join('')}</tr></tbody></table></div>
+      <div class="gen-vres" data-gvres="${v.id}">${last ? '<p class="legend-note">Analysing…</p>' : '<p class="legend-note">Press 🎲 Generate to see its results here.</p>'}</div></div>`).join('')}</div>`;
+  }
+  // the results of each variable put in its card (cards view), and the significance reached
+  function fillCards(D) {
+    document.querySelectorAll('[data-gsigout]').forEach(el => { const v = D.vars.find(x => x.id === el.dataset.gsigout); if (v) el.innerHTML = sigBadge(D, v, sigInfo[v.id]); });
+    if (G.view !== 'cards' || !resOut || !resOut.parts) return; const res = targetsList(D).map(t => ({ ...t, o: observed(D, last, t) }));
+    document.querySelectorAll('[data-gvres]').forEach(el => { const v = D.vars.find(x => x.id === el.dataset.gvres); if (!v) return; const k = resOut.items.findIndex(it => it.label === v.label || it.label.startsWith(v.label + ' (') || it.label.startsWith(v.label + ' —'));
+      el.innerHTML = k >= 0 ? askedLine(D, res, resOut.items[k].label) + resOut.parts[k] : '<p class="legend-note">Not analysed (see Analyse).</p>'; });
+  }
   function preview(D) { const cols = B.columns(D).filter(c => D.layout !== 'long'), A = arms(D);
     return `<div class="tbl-wrap" style="max-height:260px"><table class="t mb-prev"><thead><tr><th>ID</th>${A.length >= 2 ? '<th>Group</th>' : ''}${cols.map(c => `<th>${esc(c.col)}</th>`).join('')}</tr></thead><tbody>${last.slice(0, 8).map(p => `<tr><td>${esc(p.id)}</td>${A.length >= 2 ? `<td>${esc(p.group)}</td>` : ''}${cols.map(c => { const o = p.vals[c.v.id] || {}, x = c.visit ? (o[c.visit.id] ?? (c.visit.id === D.visits[0].id ? o.once : null)) : (o.once ?? o[D.visits[0].id]); return `<td>${esc(x ?? '')}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`; }
   function fill(D) { return { patients: last.map(p => ({ id: p.id, site: p.site, group: p.group, vals: p.vals })), simulated: { at: new Date().toISOString().slice(0, 10), seed: G.seed, n: last.length }, targets: targetsList(D).map(t => ({ ...t, cols: B.columns(D).filter(c => c.v.id === t.varId && (t.visit === 'once' ? !c.visit || c.visit.id === D.visits[0].id : c.visit && c.visit.id === t.visit)).map(c => c.col) })) }; }
@@ -227,6 +320,9 @@
   function onClick(e) {
     const go0 = e.target.closest('[data-grgo]'); if (go0) { G.res.only = go0.dataset.grgo; save(); return redrawOut(D0()); }
     const b = e.target.closest('button'); if (!b) return; const D = D0();
+    if (b.dataset.gview) { G.view = b.dataset.gview; save(); return render(); }
+    if (b.dataset.gre || b.dataset.greset) { const id = b.dataset.gre || b.dataset.greset; if (b.dataset.gre) G.vseed[id] = (+G.vseed[id] || 0) + 1; else delete G.vseed[id]; save();
+      try { last = generate(D); resStamp++; } catch (err) { console.error(err); toast('Could not generate: ' + err.message); } render(); const v = D.vars.find(x => x.id === id); if (v) toast(`${v.label}: ${b.dataset.gre ? 'drawn again' : 'back to its first draw'}`); return; }
     if (b.dataset.gtab === 'build') return B.setPhase('build');
     if (b.id === 'genSeed') { G.seed = Math.floor(Math.random() * 1e9); save(); last = null; return render(); }
     if (b.id === 'genGo') { try { resStamp++; last = generate(D); toast(`${last.length} simulated patients`); } catch (err) { console.error(err); toast('Could not generate: ' + err.message); } return render(); }
@@ -238,6 +334,10 @@
   }
   function onInput(e) {
     const t = e.target, d = t.dataset, val = t.type === 'checkbox' ? t.checked : t.value, set = (path, x) => { const [id, g, key] = path.split('|'); ((G.targets[id] = G.targets[id] || {})[g] = G.targets[id][g] || {})[key] = x; };
+    if (d.gmode) { G.mode[d.gmode] = val; save(); if (last) { try { last = generate(D0()); resStamp++; } catch (err) { console.error(err); } } return render(); }
+    if (d.gsig !== undefined) { if (val) G.sig[d.gsig] = val; else delete G.sig[d.gsig]; save(); if (last) { try { last = generate(D0()); resStamp++; } catch (err) { console.error(err); } } return render(); }
+    if (d.grng) { const [id, k] = d.grng.split('|'); (G.rng[id] = G.rng[id] || {})[k] = val === '' ? '' : +val; save(); return live(D0()); }
+    if (d.grt) { const [id, g, key, k] = d.grt.split('|'); (((G.rt[id] = G.rt[id] || {})[g] = G.rt[id][g] || {})[key] = G.rt[id][g][key] || {})[k] = val === '' ? '' : +val; save(); return live(D0()); }
     if (d.gr) { G.res[d.gr] = val; save(); if (d.gr !== 'live') redrawOut(D0()); return; }
     if (d.g) { G[d.g] = val; save(); if (G.res.live && last && d.g !== 'seed') { if (t.type === 'checkbox') render(); live(D0()); return; } last = null; if (t.type === 'checkbox') render(); else redrawOut(D0()); return; }
     if (d.gt) { set(d.gt, val === '' ? '' : +val); save(); return live(D0()); }
@@ -248,6 +348,6 @@
     if (d.gc) { const [i, k] = d.gc.split('|'); G.corr[+i][k] = k === 'r' ? +val : val; save(); return live(D0()); }
     if (d.gp) { G.power[d.gp] = val; save(); if (t.tagName === 'SELECT') render(); return; }
   }
-  window.EasyGen = { render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; }, get results() { return resOut; } };
+  window.EasyGen = { render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; }, get results() { return resOut; }, get sigInfo() { return sigInfo; }, numParams: v => numParams(v, 0, 'once') };
   if (document.documentElement.classList.contains('ph-generate')) render();
 })();
