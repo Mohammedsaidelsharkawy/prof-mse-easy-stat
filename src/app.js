@@ -2183,7 +2183,7 @@
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
         <td style="white-space:nowrap"><button class="btn ghost small" data-vgear="${v.id}" type="button" title="More: value labels, unit, decimals, role, ordinal, transformation, Arabic label, merging categories, adjusted comparison">⚙${varBadges(v)}</button>${(warn[v.id] || []).map(w => `<span class="chip warn" title="${esc(w[1])}">${w[0]}</span>`).join('')}</td>
       </tr>`).join('')}</tbody>`;
-    renderRepeated(); filterVars(); renderSubgroup(); renderGroupsBar(); renderRoles(); renderTablesBoard(); renderLock();
+    renderRepeated(); filterVars(); renderSubgroup(); renderGroupsBar(); renderRoles(); if (state.tbSel) { const ids = new Set(state.cfg.variables.map(v => v.id)); state.tbSel.forEach(id => { if (!ids.has(id)) state.tbSel.delete(id); }); } renderTablesBoard(); renderTbSel(); renderLock();
   }
   function filterVars() {
     const q = ($('#varSearch').value || '').trim().toLowerCase(), trs = [...document.querySelectorAll('#varsTbl tr[data-vid]')];
@@ -2738,12 +2738,74 @@
   }
   function renderTablesBoard() {
     const box = $('#tablesBoard'); if (!box || !state.cfg) return; const cfg = state.cfg, blocks = tableModel(), out = cfg.variables.filter(v => !v.include && v.kind !== 'repeated');
-    let tn = 0; const chip = v => `<span class="role-chip tb-chip" draggable="true" data-tvid="${esc(v.id)}" title="${esc(v.cols.map(c => c.col).join(', '))}${v.role ? ` · ${esc((ROLES.find(r => r[0] === v.role) || [])[1] || v.role)}` : ''}">${v.role === 'primary' ? '★ ' : ''}${esc(v.label)}${v.type === 'categorical' ? ' <span class="legend-note">n (%)</span>' : ''}${v.group ? ` <span class="chip" style="font-size:10px">${esc(v.group)}</span>` : ''}</span>`;
+    let tn = 0; const sel = state.tbSel = state.tbSel || new Set(), M = cfg.tableMeta || {};
+    const chip = v => `<span class="role-chip tb-chip ${sel.has(v.id) ? 'tb-sel' : ''}" draggable="true" data-tvid="${esc(v.id)}" title="${esc(v.cols.map(c => c.col).join(', '))}${v.role ? ` · ${esc((ROLES.find(r => r[0] === v.role) || [])[1] || v.role)}` : ''}">${v.role === 'primary' ? '★ ' : ''}${esc(v.label)}${v.type === 'categorical' ? ' <span class="legend-note">n (%)</span>' : ''}${v.group ? ` <span class="chip" style="font-size:10px">${esc(v.group)}</span>` : ''}</span>`;
     box.innerHTML = `<div class="tb-board">${blocks.map((b, i) => { const mv = `${i ? `<button class="btn ghost small" type="button" data-tbmove="${i}|-1" title="Earlier in the report">↑</button>` : ''}${i < blocks.length - 1 ? `<button class="btn ghost small" type="button" data-tbmove="${i}|1" title="Later in the report">↓</button>` : ''}`;
       if (b.rep) return `<div class="tb-card tb-rep"><div class="tb-head"><b>Table ${++tn}</b> <span class="legend-note">repeated measure${b.v.split ? `, by timepoint in “${esc(b.v.splitTable || b.v.table || '')}”` : ' — its own table'}</span><span class="spacer"></span>${mv}</div><div class="tb-body"><span class="role-chip" title="${esc(b.v.cols.map(c => c.col).join(', '))}">↻ ${esc(b.v.label)} <span class="legend-note">${b.v.cols.length} timepoints</span></span></div></div>`;
-      return `<div class="tb-card" data-tbname="${esc(b.name)}"><div class="tb-head"><b>Table ${++tn}</b> <span class="tb-name">${esc(b.name || '(no name)')}</span> <span class="legend-note">${b.vars.length} variable${b.vars.length === 1 ? '' : 's'}</span><span class="spacer"></span>${mv}<button class="btn ghost small" type="button" data-tbren="${esc(b.name)}" title="Rename">✎</button><button class="btn ghost small" type="button" data-tbdel="${esc(b.name)}" title="Remove the table (its variables leave the report; drag them back from “Not in the report”)">✕</button></div>
-        <div class="tb-body">${b.vars.map(chip).join('') || '<span class="legend-note">Drop variables here</span>'}</div></div>`; }).join('')}
+      const rows = b.vars.reduce((t, v) => t + tbRows(v), 0), m = M[b.name] || {}, nm = esc(b.name), prevOn = (state.tbPrev || new Set()).has(b.name), setOn = (state.tbSet || new Set()).has(b.name);
+      return `<div class="tb-card ${prevOn ? 'tb-wide' : ''}" data-tbname="${nm}"><div class="tb-head"><b>Table ${++tn}</b> <span class="tb-name">${esc(b.name || '(no name)')}</span> <span class="legend-note">${b.vars.length} variable${b.vars.length === 1 ? '' : 's'} · <span class="${rows > 25 ? 'tb-long' : ''}" title="${rows > 25 ? 'A long table: think of splitting it (select variables, then move them to a new table)' : 'Rows of the table'}">≈ ${rows} rows${rows > 25 ? ' ⚠' : ''}</span></span>${m.title || m.note ? ' <span class="chip" title="Own title or note">✎ title/note</span>' : ''}</div>
+        <div class="tb-tools">${mv}<button class="btn ghost small ${prevOn ? 'on' : ''}" type="button" data-tbprev="${nm}" title="Preview the table as in the report">👁</button><button class="btn ghost small ${setOn ? 'on' : ''}" type="button" data-tbset="${nm}" title="Its title and a note under it">⚙</button>
+          <select data-tbsort="${nm}" title="Order the variables of this table" style="width:auto;padding:1px 4px;font-size:12px"><option value="">⇅ Order</option><option value="sheet">As in the sheet</option><option value="az">A → Z</option><option value="num">Numbers first</option><option value="cat">Categories first</option><option value="sig">Significant first</option></select>
+          <button class="btn ghost small" type="button" data-tbren="${nm}" title="Rename">✎</button><button class="btn ghost small" type="button" data-tbdel="${nm}" title="Remove the table (its variables leave the report; drag them back from “Not in the report”)">✕</button></div>
+        ${setOn ? `<div class="tb-set"><label class="f">Title in the report</label><input type="text" data-tbmeta="${nm}|title" value="${esc(m.title || '')}" placeholder="${esc(b.name)} of the studied groups"><label class="f">Note under the table</label><input type="text" data-tbmeta="${nm}|note" value="${esc(m.note || '')}" placeholder="e.g. Laboratory values at admission."></div>` : ''}
+        <div class="tb-body">${b.vars.map(chip).join('') || '<span class="legend-note">Drop variables here</span>'}</div>${prevOn ? `<div class="tb-prev">${tbPreview(b.name)}</div>` : ''}</div>`; }).join('')}
       <div class="tb-card tb-out" data-tbname="__out"><div class="tb-head"><b>Not in the report</b> <span class="legend-note">${out.length}</span></div><div class="tb-body">${out.map(chip).join('') || '<span class="legend-note">Drop a variable here to leave it out</span>'}</div></div></div>`;
+  }
+  // rows a variable takes in its table: one for a number or a yes/no item, a heading and a row per category otherwise
+  const tbRows = v => v.type === 'categorical' ? ((v.levels || []).length <= 2 ? 1 : (v.levels || []).length + 1) : 1;
+  const tbTitleRe = name => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} of the studied (groups|patients)`);
+  // own titles and notes of the tables (step 2), put on the sections of the report
+  function applyTableMeta(res) {
+    const M = state.cfg.tableMeta || {}; if (!Object.keys(M).length) return;
+    res.sections.forEach(sec => { if (sec.kind !== 'single' || !sec.title) return; Object.entries(M).forEach(([name, m]) => { const re = tbTitleRe(name); if (!re.test(sec.title)) return;
+      if (m.title && m.title.trim()) sec.title = sec.title.replace(re, m.title.trim().replace(/\.$/, ''));
+      if (m.note && m.note.trim()) sec.footnote = `${(sec.footnote || '').trim()}${sec.footnote ? ' ' : ''}${m.note.trim()}`; }); });
+  }
+  // a table alone, as the report will show it
+  function tbPreview(name) {
+    const cfg = state.cfg, ids = new Set(cfg.variables.filter(v => v.include && v.kind !== 'repeated' && (v.table || '') === name).map(v => v.id)); if (!ids.size) return '<span class="legend-note">No variables.</span>';
+    try { const res = Analysis.run(state.data, { ...cfg, variables: cfg.variables.map(v => ({ ...v, include: ids.has(v.id) })), advanced: [], options: { ...effOptions(), figures: 'none', correlation: false, summary: false } });
+      applyTableMeta(res); const sec = res.sections.find(x => x.kind === 'single'); if (!sec) return '<span class="legend-note">Nothing to show.</span>';
+      return `<div class="xw-title">${esc(sec.title)}</div>${htmlTable(sec.head, sec.rows)}${sec.footnote ? `<div class="legend-note" style="margin-top:4px">${esc(sec.footnote)}</div>` : ''}`; }
+    catch (err) { console.error(err); return `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; }
+  }
+  // the selection: click variables to select them, then move them together (e.g. to split a table)
+  function renderTbSel() {
+    const bar = $('#tbSelBar'); if (!bar || !state.cfg) return; const sel = state.tbSel || new Set(), vs = state.cfg.variables.filter(v => sel.has(v.id));
+    if (!vs.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    const names = tableModel().filter(b => !b.rep).map(b => b.name);
+    bar.style.display = ''; bar.innerHTML = `<b>${vs.length} selected</b><span class="legend-note">Move to</span><select id="tbSelTo" style="width:auto"><option value="">—</option>${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}<option value="__new">A new table…</option><option value="__out">Not in the report</option></select><button class="btn ghost small" type="button" id="tbSelClear">Clear the selection</button>`;
+  }
+  function tbMove(ids, name) {
+    const cfg = state.cfg, vs = ids.map(id => cfg.variables.find(v => v.id === id)).filter(v => v && v.kind !== 'repeated');
+    if (name === '__out') { vs.forEach(v => { v.include = false; }); return; }
+    const blocks = tableModel(); vs.forEach(v => { v.include = true; }); blocks.forEach(b => { if (!b.rep) b.vars = b.vars.filter(x => !vs.includes(x)); });
+    let b = blocks.findIndex(x => !x.rep && x.name === name);
+    // a new table goes right after the table the first variable came from
+    if (b < 0) { const from = blocks.findIndex(x => !x.rep && x.name === (vs[0] && vs[0].table)); blocks.splice(from >= 0 ? from + 1 : blocks.length, 0, { name, vars: [] }); b = from >= 0 ? from + 1 : blocks.length - 1; }
+    blocks[b].vars.push(...vs); tableCommit(blocks);
+  }
+  // shell tables (Word): the empty tables of the protocol or the thesis plan — rows of the variables, columns of the groups and the P value
+  async function shellTables() {
+    readUiIntoCfg(); const cfg = state.cfg, { Document, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, ShadingType } = window.docx, font = cfg.options.font || 'Times New Roman', kids = [];
+    const gs = cfg.noGroups ? [] : (cfg.groupOrder || []).filter(g => (cfg.groupInclude || {})[g] !== false), gl = gs.map(g => (cfg.groupLabels || {})[g] || g), one = !gs.length;
+    const P = (t, o = {}) => new Paragraph({ alignment: o.align, spacing: { before: o.before || 0, after: o.after ?? 0 }, indent: o.ind ? { left: 240 } : undefined, children: [new TextRun({ text: t, bold: o.bold, italics: o.it, size: o.size || 20, font, color: o.color })] });
+    const cell = (t, o = {}) => new TableCell({ shading: o.head ? { type: ShadingType.CLEAR, fill: 'D9D9D9', color: 'auto' } : undefined, children: [P(t, { bold: o.head || o.bold, align: o.left ? AlignmentType.LEFT : AlignmentType.CENTER, ind: o.ind, color: o.grey ? '808080' : undefined })] });
+    const cols = one ? ['All patients (n = __)'] : [...gl.map(g => `${g} (n = __)`), 'P value'], numTxt = v => v.dist === 'nonparam' ? 'xx (xx – xx)' : 'xx ± xx';
+    let k = 0;
+    tableModel().forEach(b => { k++;
+      const head = new TableRow({ tableHeader: true, children: [cell(b.rep ? 'Timepoint' : 'Variable', { head: true, left: true }), ...cols.map(c => cell(c, { head: true }))] }), rows = [];
+      if (b.rep) b.v.cols.forEach(c => rows.push(new TableRow({ children: [cell(c.label || c.tp || c.col, { left: true }), ...cols.map((c2, i) => cell(!one && i === cols.length - 1 ? 'x.xxx' : numTxt(b.v), { grey: true }))] })));
+      else b.vars.forEach(v => { const lv = v.levels || [];
+        if (v.type !== 'categorical') { rows.push(new TableRow({ children: [cell(v.label, { left: true }), ...cols.map((c, i) => cell(!one && i === cols.length - 1 ? 'x.xxx' : numTxt(v), { grey: true }))] })); return; }
+        if (lv.length <= 2) { rows.push(new TableRow({ children: [cell(`${v.label}${lv.length === 2 ? `: ${lv[0]}` : ''}`, { left: true }), ...cols.map((c, i) => cell(!one && i === cols.length - 1 ? 'x.xxx' : 'xx (xx.x%)', { grey: true }))] })); return; }
+        rows.push(new TableRow({ children: [cell(v.label, { left: true, bold: true }), ...cols.map((c, i) => cell(!one && i === cols.length - 1 ? 'x.xxx' : '', { grey: true }))] }));
+        lv.forEach(l => rows.push(new TableRow({ children: [cell(String(l), { left: true, ind: true }), ...cols.map((c, i) => cell(!one && i === cols.length - 1 ? '' : 'xx (xx.x%)', { grey: true }))] }))); });
+      const m = b.rep ? {} : (cfg.tableMeta || {})[b.name] || {}, title = m.title && m.title.trim() ? m.title.trim() : `${b.rep ? b.v.label : b.name} of the studied ${one ? 'patients' : 'groups'}`;
+      kids.push(P(`Table ${k}: ${title}`, { bold: true, before: 240, after: 80, size: 22 }), new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [head, ...rows] }),
+        P(`Data are presented as mean ± SD or median (IQR) and frequency (%).${m.note ? ' ' + m.note : ''}`, { it: true, size: 18, before: 60 })); });
+    const doc = new Document({ creator: 'Prof MSE Easy Stat', title: 'Shell tables', sections: [{ children: [P(`${(cfg.study && cfg.study.title) || 'Study'} — shell tables`, { bold: true, size: 28, after: 120 }), P('The tables planned for the results, before the data: replace xx with the values.', { it: true, color: '555555', after: 120 }), ...kids] }] });
+    saveUrl(URL.createObjectURL(await window.docx.Packer.toBlob(doc)), `${(state.file || 'Study').replace(/\.[^.]+$/, '')} - shell tables.docx`); toast(`${k} shell table${k === 1 ? '' : 's'} saved`);
   }
   let tbDrag = null;
   $('#tablesBoard').addEventListener('dragstart', e => { const c = e.target.closest('[data-tvid]'); if (c) { tbDrag = c.dataset.tvid; e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); } });
@@ -2757,11 +2819,17 @@
     const at = before ? b.vars.findIndex(x => x.id === before.dataset.tvid) : -1; if (at >= 0) b.vars.splice(at, 0, v); else b.vars.push(v);
     tableCommit(blocks); renderVariables(); $('#tablesBox').open = true; toast(`${v.label} → ${name}`); });
   $('#tablesBoard').addEventListener('dragend', () => { tbDrag = null; document.querySelectorAll('#tablesBoard .over,#tablesBoard .dropto,#tablesBoard .dragging').forEach(x => x.classList.remove('over', 'dropto', 'dragging')); });
-  $('#tablesBox').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !state.cfg) return; const d = b.dataset, cfg = state.cfg;
+  $('#tablesBox').addEventListener('click', e => { const ch = e.target.closest('.tb-chip[data-tvid]');
+    if (ch && state.cfg) { const sel = state.tbSel = state.tbSel || new Set(), id = ch.dataset.tvid; if (sel.has(id)) sel.delete(id); else sel.add(id); ch.classList.toggle('tb-sel', sel.has(id)); renderTbSel(); return; }
+    const b = e.target.closest('button'); if (!b || !state.cfg) return; const d = b.dataset, cfg = state.cfg;
+    if (d.tbprev !== undefined) { const S = state.tbPrev = state.tbPrev || new Set(); if (S.has(d.tbprev)) S.delete(d.tbprev); else S.add(d.tbprev); readUiIntoCfg(); renderTablesBoard(); return; }
+    if (d.tbset !== undefined) { const S = state.tbSet = state.tbSet || new Set(); if (S.has(d.tbset)) S.delete(d.tbset); else S.add(d.tbset); readUiIntoCfg(); renderTablesBoard(); return; }
+    if (b.id === 'tbSelClear') { state.tbSel = new Set(); renderTablesBoard(); renderTbSel(); return; }
+    if (b.id === 'tbShell') { shellTables().catch(err => { console.error(err); toast('Could not make the shell tables: ' + err.message); }); return; }
     if (d.tbmove) { readUiIntoCfg(); const [i, dir] = d.tbmove.split('|').map(Number), blocks = tableModel(), j = i + dir; if (j < 0 || j >= blocks.length) return; [blocks[i], blocks[j]] = [blocks[j], blocks[i]]; tableCommit(blocks); renderVariables(); $('#tablesBox').open = true; return; }
     if (d.tbren !== undefined) { const old = d.tbren, n = (prompt('Name of the table:', old) || '').trim(); if (!n || n === old) return; readUiIntoCfg();
       const exists = tableModel().some(x => !x.rep && x.name === n && !x.empty); if (exists && !confirm(`A table “${n}” exists: put the two tables together?`)) return;
-      cfg.variables.forEach(v => { if (v.kind !== 'repeated' && (v.table || '') === old) v.table = n; }); cfg.emptyTables = (cfg.emptyTables || []).map(x => x === old ? n : x); renderVariables(); $('#tablesBox').open = true; return; }
+      cfg.variables.forEach(v => { if (v.kind !== 'repeated' && (v.table || '') === old) v.table = n; }); if (cfg.tableMeta && cfg.tableMeta[old]) { if (!cfg.tableMeta[n]) cfg.tableMeta[n] = cfg.tableMeta[old]; delete cfg.tableMeta[old]; } cfg.emptyTables = (cfg.emptyTables || []).map(x => x === old ? n : x); renderVariables(); $('#tablesBox').open = true; return; }
     if (d.tbdel !== undefined) { readUiIntoCfg(); const vs = cfg.variables.filter(v => v.include && v.kind !== 'repeated' && (v.table || '') === d.tbdel);
       if (vs.length && !confirm(`Remove “${d.tbdel}”? Its ${vs.length} variable${vs.length > 1 ? 's leave' : ' leaves'} the report (drag them back from “Not in the report”).`)) return;
       vs.forEach(v => { v.include = false; }); cfg.emptyTables = (cfg.emptyTables || []).filter(x => x !== d.tbdel); renderVariables(); $('#tablesBox').open = true; return; }
@@ -2776,6 +2844,19 @@
       if (how === 'type') cfg.variables.forEach(v => { if (v.kind === 'repeated' || !v.include) return; const t = v.type === 'categorical' ? 'Categorical variables' : 'Numerical variables'; if (v.table !== t) { v.table = t; n++; } });
       renderVariables(); $('#tablesBox').open = true; toast(n ? `${n} variable${n > 1 ? 's' : ''} moved` : (how === 'role' ? 'No variable has a role yet (🎭 Roles)' : how === 'group' ? 'No item groups yet' : 'Nothing to move')); return; }
   });
+  // the selection moved, the order of a table, the title and note of a table
+  $('#tablesBox').addEventListener('change', e => { const t = e.target, cfg = state.cfg; if (!cfg) return;
+    if (t.id === 'tbSelTo' && t.value) { readUiIntoCfg(); let to = t.value; if (to === '__new') { to = (prompt('Name of the new table:', 'Outcomes') || '').trim(); if (!to) { t.value = ''; return; } }
+      const ids = [...(state.tbSel || [])]; tbMove(ids, to); state.tbSel = new Set(); renderVariables(); renderTbSel(); $('#tablesBox').open = true; toast(`${ids.length} variable${ids.length > 1 ? 's' : ''} → ${to === '__out' ? 'not in the report' : to}`); return; }
+    if (t.dataset.tbsort !== undefined && t.value) { readUiIntoCfg(); const name = t.dataset.tbsort, how = t.value, blocks = tableModel(), b = blocks.find(x => !x.rep && x.name === name); if (!b) return;
+      const H = state.data.headers, at = v => Math.min(...v.cols.map(c => H.indexOf(c.col)).filter(i => i >= 0));
+      let pOf = () => 2; if (how === 'sig') { try { const x = Analysis.explore(state.data, { ...cfg, variables: b.vars.map(v => ({ ...v, include: true })) }, {}); const m = new Map(x.items.map(it => [it.id, isFinite(it.p) ? it.p : 2])); pOf = v => m.get(v.id) ?? 2; } catch (err) { console.error(err); } }
+      const cmp = { sheet: (a, c) => at(a) - at(c), az: (a, c) => a.label.localeCompare(c.label), num: (a, c) => (a.type === 'categorical') - (c.type === 'categorical'), cat: (a, c) => (c.type === 'categorical') - (a.type === 'categorical'), sig: (a, c) => pOf(a) - pOf(c) }[how];
+      b.vars = b.vars.map((v, i) => [v, i]).sort((x, y) => cmp(x[0], y[0]) || x[1] - y[1]).map(x => x[0]); tableCommit(blocks); renderVariables(); $('#tablesBox').open = true; toast(`${name}: ${t.options[t.selectedIndex].text}`); return; }
+  });
+  $('#tablesBox').addEventListener('input', e => { const k = e.target.dataset.tbmeta; if (!k || !state.cfg) return; const [name, f] = k.split('|'), M = state.cfg.tableMeta = state.cfg.tableMeta || {}; (M[name] = M[name] || {})[f] = e.target.value; if (!M[name].title && !M[name].note) delete M[name]; });
+  // the preview of that table follows its title and note (only the preview is drawn again, so the typing goes on)
+  $('#tablesBox').addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.tbmeta; if (!k) return; const name = k.split('|')[0], card = e.target.closest('.tb-card'), pv = card && card.querySelector('.tb-prev'); if (pv) pv.innerHTML = tbPreview(name); });
   function renderLock() { const on = !!(state.cfg && state.cfg.setupLocked); $('#p2').classList.toggle('setup-locked', on); $('#btnLock').textContent = on ? '🔓 Unlock the setup' : '🔒 Lock the setup';
     $('#lockInfo').textContent = on ? 'Locked: labels, units, groups, tables and order are frozen, and a new file with the same columns uses this setup.' : ''; }
   $('#btnLock').onclick = () => { if (!state.cfg) return; readUiIntoCfg(); state.cfg.setupLocked = !state.cfg.setupLocked;
@@ -5119,6 +5200,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         { const defs = state.cfg.variables.filter(v => v.include && v.definition).map(v => { const d0 = v.definition.trim().replace(/\.$/, ''); return /\bdefined\b/i.test(d0) ? d0 + '.' : `${v.label.replace(/\s*\([^)]*\)\s*$/, '')} was defined as ${/^[A-Z][a-z]+\b/.test(d0) ? d0.charAt(0).toLowerCase() + d0.slice(1) : d0}.`; });
           if (defs.length && res.methods) res.methods = `${res.methods.trim()} Definitions: ${defs.join(' ')}`; }
         if (state.cfg.simulated && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The data were simulated (Prof MSE Easy Stat data generator, seed ${state.cfg.simulated.seed}) and do not describe real patients.`;
+        applyTableMeta(res);
         placeFigures(res, cfg.options); state.figTables = res.sections.filter(s => !s.figOnly).map(s => s.title).filter(Boolean);
         state.result = res; state.runKey = runKey();
         if (state.pendingEdits) { applyEdits(res, state.pendingEdits); state.pendingEdits = null; }
