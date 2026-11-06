@@ -107,6 +107,14 @@ When the filled master sheet is uploaded, its setup is applied by itself: the ro
   - **×** on a variable leaves it out, and **↩** brings it back;
   - drag a variable to another table, before any of its variables;
   - **select several** by clicking them, then move them to a table or a new one (to split a table), **↑ Up / ↓ Down** within their table, or leave them out.
+- **Several variables at once**:
+  - click variables to select them (**Shift-click** selects a range, the **☐** of a card selects the whole table), then **drag** any of them and the whole selection moves, or use **Move to**;
+  - **+ Several…** on a card lists the variables of the other tables and those left out (with "all" for each group): tick them, then **Move here** or **⧉ Also show here**.
+- **One variable in two tables**: **⧉ Also show in…** (selection bar), **⧉ Also show here** (+ Several…) or **Ctrl / Alt-drag**.
+  - A notification first explains what it means: each copy is analysed again, so its rows, P value, comment sentence and figure appear in both tables, it counts twice in the number of variables and in any correction for multiple comparisons, and readers may take it for two results.
+  - The copy shows as ⧉ in the second table, after its own variables, and **×** removes it (the variable stays in its own table).
+  - Renaming or removing a table updates its copies, and moving a variable into a table where it has a copy removes the copy.
+  - "+ Add a variable…" asks before moving a variable away from another table.
 - **The tables**: click a table's **name** to rename it (renaming to an existing name joins the two), ↑ ↓ to order the tables, ✕ to remove one, **+ New table**, and **⇅ Sort** a table (as in the sheet, A → Z, numbers or categories first, significant first).
 - **Every table** options for the whole report: Total column, n column, Missing column, effect size (MD / RR, 95% CI), test column, post hoc letters and P for trend (three or more groups), only significant rows, and row order (as listed, smallest P first, largest effect first).
 - **⚙ Options** of one table: its own title, a note under it, and its own columns and row order (an "own option" badge shows on the card; **As every table** resets it). They apply to that table alone in the report.

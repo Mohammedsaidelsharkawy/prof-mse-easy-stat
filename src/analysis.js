@@ -2769,6 +2769,10 @@ const Analysis = (() => {
         b.vars.sort((x, y) => (ROLE_RANK[x.role] ?? 3) - (ROLE_RANK[y.role] ?? 3));
       }
     }
+    // a variable also shown in other tables (step 2, Tables): analysed again in each, after that table's own variables
+    vars.filter(v => v.kind !== 'repeated' && (v.alsoTables || []).length).forEach(v => v.alsoTables.forEach((t, i) => { if (t === v.table) return;
+      const c = { ...v, id: `${v.id}__also${i}`, copyOf: v.id, table: t, alsoTables: [] }; let b = blocks.find(x => x.kind === 'single' && x.table === t);
+      if (!b) { b = { kind: 'single', table: t, vars: [], pos: v.pos + 0.01 }; blocks.push(b); } b.vars.push(c); }));
     blocks.sort((a, b) => a.pos - b.pos);
 
     const effectLines = res => res.pairs.map((q, idx) =>

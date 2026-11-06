@@ -2726,6 +2726,9 @@
     blocks.forEach(b => { if (b.vars) b.vars = b.vars.map((v, i) => [v, i]).sort((x, y) => (TB_RANK[x[0].role] ?? 3) - (TB_RANK[y[0].role] ?? 3) || x[1] - y[1]).map(x => x[0]); });
     blocks.sort((a, b) => a.pos - b.pos);
     (cfg.emptyTables || []).filter(n => !blocks.some(b => !b.rep && b.name === n)).forEach(n => blocks.push({ name: n, vars: [], empty: true }));
+    // copies: a variable also shown in another table
+    blocks.forEach(b => { if (!b.rep) b.copies = []; });
+    cfg.variables.filter(v => v.include && v.kind !== 'repeated' && (v.alsoTables || []).length).forEach(v => v.alsoTables.forEach(t => { if (t === (v.table || '')) return; let b = blocks.find(x => !x.rep && x.name === t); if (!b) blocks.push(b = { name: t, vars: [], copies: [], empty: true }); b.copies.push(v); }));
     return blocks;
   }
   // the order of the blocks written back: the included variables take their new order (the others keep their places), positions renumbered
@@ -2751,9 +2754,14 @@
     const addSel = name => { const others = cfg.variables.filter(v => v.kind !== 'repeated' && !(v.include && (v.table || '') === name)); if (!others.length) return '';
       const grp = (lab, vs) => vs.length ? `<optgroup label="${esc(lab)}">${vs.map(v => `<option value="${esc(v.id)}">${esc(v.label)}</option>`).join('')}</optgroup>` : '';
       return `<select data-tbadd="${esc(name)}" class="tb-add" title="Add a variable to this table"><option value="">+ Add a variable…</option>${grp('Not in the report', others.filter(v => !v.include))}${names.filter(n => n !== name).map(n => grp(`From ${n || '(no name)'}`, others.filter(v => v.include && (v.table || '') === n))).join('')}</select>`; };
+    // several variables at once: tick them, then move them here or show them here too
+    const addMany = name => { const pick = state.tbPick = state.tbPick || new Set(), others = cfg.variables.filter(v => v.kind !== 'repeated' && !(v.include && (v.table || '') === name)), grp = (lab, vs) => vs.length ? `<div class="tb-pickg"><b>${esc(lab)}</b> <button class="btn ghost small" type="button" data-tbpickall="${esc(vs.map(v => v.id).join(','))}">all</button><div>${vs.map(v => `<label class="check" style="margin:0"><input type="checkbox" data-tbpick="${esc(v.id)}" ${pick.has(v.id) ? 'checked' : ''}><span>${esc(v.label)}${(v.alsoTables || []).includes(name) ? ' <span class="legend-note">(⧉ already here)</span>' : ''}</span></label>`).join('')}</div></div>` : '';
+      const nP = [...pick].filter(id => others.some(v => v.id === id)).length;
+      return `<div class="tb-many">${grp('Not in the report', others.filter(v => !v.include))}${names.filter(n => n !== name).map(n => grp(`From ${n || '(no name)'}`, others.filter(v => v.include && (v.table || '') === n))).join('')}
+        <div class="row" style="gap:6px;margin-top:6px"><button class="btn primary small" type="button" data-tbaddgo="move|${esc(name)}" ${nP ? '' : 'disabled'}>Move here (${nP})</button><button class="btn ghost small" type="button" data-tbaddgo="copy|${esc(name)}" ${nP ? '' : 'disabled'} title="Keep them in their own tables too — you are asked first">⧉ Also show here (${nP})</button><button class="btn ghost small" type="button" data-tbaddgo="close|${esc(name)}">Close</button></div></div>`; };
     box.innerHTML = `<div class="tb-board">${blocks.map((b, i) => { const mv = `<button class="btn ghost small" type="button" data-tbmove="${i}|-1" title="Earlier in the report" ${i ? '' : 'disabled'}>↑</button><button class="btn ghost small" type="button" data-tbmove="${i}|1" title="Later in the report" ${i < blocks.length - 1 ? '' : 'disabled'}>↓</button>`;
       if (b.rep) return `<div class="tb-card tb-rep"><div class="tb-head"><b>Table ${++tn}</b> <span class="tb-name">${esc(b.v.label)}</span> <span class="legend-note">repeated measure, ${b.v.cols.length} timepoints${b.v.split ? `, by timepoint in “${esc(b.v.splitTable || b.v.table || '')}”` : ' — its own table'}</span></div><div class="tb-tools">${mv}<span class="legend-note">Timepoints and their tests: step 3</span></div></div>`;
-      const rows = b.vars.reduce((t, v) => t + tbRows(v), 0), m = M[b.name] || {}, own = TO[b.name] || {}, nm = esc(b.name), prevOn = (state.tbPrev || new Set()).has(b.name), setOn = (state.tbSet || new Set()).has(b.name), nOwn = Object.keys(own).length;
+      const rows = [...b.vars, ...(b.copies || [])].reduce((t, v) => t + tbRows(v), 0), m = M[b.name] || {}, own = TO[b.name] || {}, nm = esc(b.name), prevOn = (state.tbPrev || new Set()).has(b.name), setOn = (state.tbSet || new Set()).has(b.name), nOwn = Object.keys(own).length;
       const eff = x => own[x] !== undefined ? own[x] : O[x];
       return `<div class="tb-card ${prevOn ? 'tb-wide' : ''}" data-tbname="${nm}"><div class="tb-head"><b>Table ${++tn}</b> <span class="tb-name" data-tbren="${nm}" title="Click to rename">${esc(b.name || '(no name)')} ✎</span> <span class="legend-note">${b.vars.length} variable${b.vars.length === 1 ? '' : 's'} · <span class="${rows > 25 ? 'tb-long' : ''}" title="${rows > 25 ? 'A long table: think of splitting it (select variables, then move them to a new table)' : 'Rows of the table'}">≈ ${rows} rows${rows > 25 ? ' ⚠' : ''}</span></span>${m.title || m.note ? ' <span class="chip" title="Own title or note">title/note</span>' : ''}${nOwn ? ` <span class="chip info" title="Options of its own">${nOwn} own option${nOwn > 1 ? 's' : ''}</span>` : ''}</div>
         <div class="tb-tools">${mv}<button class="btn ghost small ${prevOn ? 'on' : ''}" type="button" data-tbprev="${nm}" title="Preview the table as in the report">👁 Preview</button><button class="btn ghost small ${setOn ? 'on' : ''}" type="button" data-tbset="${nm}" title="Title, note, columns and order of this table">⚙ Options</button>
@@ -2762,7 +2770,7 @@
         ${setOn ? `<div class="tb-set"><div class="grid g2"><div><label class="f">Title in the report</label><input type="text" data-tbmeta="${nm}|title" value="${esc(m.title || '')}" placeholder="${esc(b.name)} of the studied groups"></div><div><label class="f">Note under the table</label><input type="text" data-tbmeta="${nm}|note" value="${esc(m.note || '')}" placeholder="e.g. Laboratory values at admission."></div></div>
           <div class="tb-own"><span class="legend-note">This table:</span>${TB_OPTS.filter(([x]) => k > 2 || !['postLetters', 'groupTrend'].includes(x)).map(([x, l]) => `<label class="check ${own[x] !== undefined ? 'tb-ownon' : ''}" style="margin:0" title="${own[x] !== undefined ? 'Its own setting' : 'As every table'}"><input type="checkbox" data-tbown="${nm}|${x}" ${eff(x) ? 'checked' : ''}><span>${l}</span></label>`).join('')}
             <label class="legend-note" style="margin:0">Rows <select data-tbown="${nm}|tableSort" style="width:auto;font-size:12px">${TB_SORT.map(([v, l]) => `<option value="${v}" ${(eff('tableSort') || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>${nOwn ? `<button class="btn ghost small" type="button" data-tbreset="${nm}">As every table</button>` : ''}</div></div>` : ''}
-        <div class="tb-body">${b.vars.map(v => chip(v, b.name)).join('') || '<span class="legend-note">Empty — add variables below or drag them here</span>'}</div><div class="tb-foot">${addSel(b.name)}</div>${prevOn ? `<div class="tb-prev">${tbPreview(b.name)}</div>` : ''}</div>`; }).join('')}
+        <div class="tb-body">${b.vars.length ? `<label class="tb-all" title="Select every variable of this table"><input type="checkbox" data-tbselall="${nm}" ${b.vars.every(v => sel.has(v.id)) ? 'checked' : ''}></label>` : ''}${b.vars.map(v => chip(v, b.name)).join('')}${(b.copies || []).map(v => `<span class="role-chip tb-chip tb-copy" title="Also shown here — its own table is “${esc(v.table || '(no name)')}”">⧉ ${esc(v.label)}<button type="button" class="tb-x" data-tbxcopy="${esc(v.id)}|${nm}" title="Remove this copy (it stays in its own table)">×</button></span>`).join('')}${b.vars.length || (b.copies || []).length ? '' : '<span class="legend-note">Empty — add variables below or drag them here</span>'}</div><div class="tb-foot">${addSel(b.name)}<button class="btn ghost small" type="button" data-tbaddm="${nm}" title="Choose several variables to move or show here">+ Several…</button></div>${state.tbAddOpen === b.name ? addMany(b.name) : ''}${prevOn ? `<div class="tb-prev">${tbPreview(b.name)}</div>` : ''}</div>`; }).join('')}
       <div class="tb-card tb-out" data-tbname="__out"><div class="tb-head"><b>Not in the report</b> <span class="legend-note">${out.length}</span></div><div class="tb-body">${out.map(v => chip(v, '__out')).join('') || '<span class="legend-note">Drop a variable here (or press × on it) to leave it out</span>'}</div></div></div>`;
   }
   // rows a variable takes in its table: one for a number or a yes/no item, a heading and a row per category otherwise
@@ -2777,9 +2785,9 @@
   }
   // a table alone, as the report will show it
   function tbPreview(name) {
-    const cfg = state.cfg, ids = new Set(cfg.variables.filter(v => v.include && v.kind !== 'repeated' && (v.table || '') === name).map(v => v.id)); if (!ids.size) return '<span class="legend-note">No variables.</span>';
+    const cfg = state.cfg, ids = new Set(cfg.variables.filter(v => v.include && v.kind !== 'repeated' && ((v.table || '') === name || (v.alsoTables || []).includes(name))).map(v => v.id)); if (!ids.size) return '<span class="legend-note">No variables.</span>';
     try { const res = Analysis.run(state.data, { ...cfg, variables: cfg.variables.map(v => ({ ...v, include: ids.has(v.id) })), advanced: [], options: { ...effOptions(), figures: 'none', correlation: false, summary: false } });
-      applyTableMeta(res); const sec = res.sections.find(x => x.kind === 'single'); if (!sec) return '<span class="legend-note">Nothing to show.</span>';
+      const sec = res.sections.find(x => x.kind === 'single' && tbTitleRe(name).test(x.title || '')) || res.sections.find(x => x.kind === 'single'); if (!sec) return '<span class="legend-note">Nothing to show.</span>'; applyTableMeta({ sections: [sec] });
       return `<div class="xw-title">${esc(sec.title)}</div>${htmlTable(sec.head, sec.rows)}${sec.footnote ? `<div class="legend-note" style="margin-top:4px">${esc(sec.footnote)}</div>` : ''}`; }
     catch (err) { console.error(err); return `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; }
   }
@@ -2789,12 +2797,23 @@
     if (!vs.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
     const names = tableModel().filter(b => !b.rep).map(b => b.name);
     bar.style.display = ''; bar.innerHTML = `<b>${vs.length} selected</b><span class="legend-note">Move to</span><select id="tbSelTo" style="width:auto"><option value="">—</option>${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}<option value="__new">A new table…</option><option value="__out">Not in the report</option></select>
+      <span class="legend-note">or</span><select id="tbSelCopy" style="width:auto" title="Keep them in their tables and show them in another one too (you are asked first)"><option value="">⧉ Also show in…</option>${names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select>
       <button class="btn ghost small" type="button" id="tbSelUp" title="Up within its table">↑ Up</button><button class="btn ghost small" type="button" id="tbSelDown" title="Down within its table">↓ Down</button><button class="btn ghost small" type="button" id="tbSelOut">× Leave out</button><button class="btn ghost small" type="button" id="tbSelClear">Clear the selection</button>`;
+  }
+  // a variable also shown in another table: the reader is told what it means first
+  function tbCopy(ids, name) {
+    const cfg = state.cfg, vs = ids.map(id => cfg.variables.find(v => v.id === id)).filter(v => v && v.kind !== 'repeated' && (v.table || '') !== name && !(v.alsoTables || []).includes(name));
+    if (!vs.length) { toast('Already in that table'); return 0; }
+    const list = vs.slice(0, 6).map(v => `“${v.label}” (now in “${v.table || 'no name'}”)`).join('\n') + (vs.length > 6 ? `\n… and ${vs.length - 6} more` : '');
+    if (!confirm(`Show in two tables?\n\n${list}\n\nwill also be shown in “${name}”.\n\nEach copy is analysed again: its rows, P value, comment sentence and figure appear in both tables, it counts twice in the number of variables and in any correction for multiple comparisons, and readers may take it for two results. Remove the copy at any time with its ×.\n\nShow ${vs.length > 1 ? 'them' : 'it'} in both tables?`)) return 0;
+    vs.forEach(v => { v.include = true; v.alsoTables = [...(v.alsoTables || []), name]; });
+    if ((cfg.emptyTables || []).includes(name) || !tableModel().some(b => !b.rep && b.name === name)) cfg.emptyTables = [...new Set([...(cfg.emptyTables || []), name])];
+    return vs.length;
   }
   function tbMove(ids, name) {
     const cfg = state.cfg, vs = ids.map(id => cfg.variables.find(v => v.id === id)).filter(v => v && v.kind !== 'repeated');
     if (name === '__out') { vs.forEach(v => { v.include = false; }); return; }
-    const blocks = tableModel(); vs.forEach(v => { v.include = true; }); blocks.forEach(b => { if (!b.rep) b.vars = b.vars.filter(x => !vs.includes(x)); });
+    const blocks = tableModel(); vs.forEach(v => { v.include = true; if (v.alsoTables) v.alsoTables = v.alsoTables.filter(t => t !== name); }); blocks.forEach(b => { if (!b.rep) b.vars = b.vars.filter(x => !vs.includes(x)); });
     let b = blocks.findIndex(x => !x.rep && x.name === name);
     // a new table goes right after the table the first variable came from
     if (b < 0) { const from = blocks.findIndex(x => !x.rep && x.name === (vs[0] && vs[0].table)); blocks.splice(from >= 0 ? from + 1 : blocks.length, 0, { name, vars: [] }); b = from >= 0 ? from + 1 : blocks.length - 1; }
@@ -2828,6 +2847,9 @@
     document.querySelectorAll('#tablesBoard .over,#tablesBoard .dropto').forEach(x => x.classList.remove('over', 'dropto')); card.classList.add('over'); const c = e.target.closest('[data-tvid]'); if (c && c.dataset.tvid !== tbDrag) c.classList.add('dropto'); });
   $('#tablesBoard').addEventListener('drop', e => { const card = e.target.closest('.tb-card[data-tbname]'); if (!card || !tbDrag || !state.cfg) return; e.preventDefault(); readUiIntoCfg();
     const cfg = state.cfg, v = cfg.variables.find(x => x.id === tbDrag), before = e.target.closest('[data-tvid]'), name = card.dataset.tbname; tbDrag = null; if (!v) return;
+    const S = state.tbSel || new Set(), many = S.has(v.id) && S.size > 1 ? [...S] : null;
+    if ((e.ctrlKey || e.altKey || e.metaKey) && name !== '__out') { const n = tbCopy(many || [v.id], name); if (n) { state.tbSel = new Set(); renderVariables(); renderTbSel(); toast(`${n} also shown in “${name}”`); } return; }
+    if (many) { tbMove(many, name); state.tbSel = new Set(); renderVariables(); renderTbSel(); $('#tablesBox').open = true; toast(`${many.length} variables → ${name === '__out' ? 'not in the report' : name}`); return; }
     if (name === '__out') { v.include = false; renderVariables(); toast(`${v.label}: left out of the report`); return; }
     v.include = true; const blocks = tableModel(); blocks.forEach(b => { if (!b.rep) b.vars = b.vars.filter(x => x !== v); });
     let b = blocks.find(x => !x.rep && x.name === name); if (!b) blocks.push(b = { name, vars: [] });
@@ -2835,6 +2857,13 @@
     tableCommit(blocks); renderVariables(); $('#tablesBox').open = true; toast(`${v.label} → ${name}`); });
   $('#tablesBoard').addEventListener('dragend', () => { tbDrag = null; document.querySelectorAll('#tablesBoard .over,#tablesBoard .dropto,#tablesBoard .dragging').forEach(x => x.classList.remove('over', 'dropto', 'dragging')); });
   $('#tablesBox').addEventListener('click', e => {
+    const xc = e.target.closest('[data-tbxcopy]'); if (xc && state.cfg) { readUiIntoCfg(); const [id, name] = xc.dataset.tbxcopy.split('|'), v = state.cfg.variables.find(y => y.id === id); if (v) { v.alsoTables = (v.alsoTables || []).filter(t => t !== name); renderVariables(); toast(`The copy of ${v.label} was removed from “${name}”`); } return; }
+    const am = e.target.closest('[data-tbaddm]'); if (am && state.cfg) { state.tbAddOpen = state.tbAddOpen === am.dataset.tbaddm ? null : am.dataset.tbaddm; state.tbPick = new Set(); readUiIntoCfg(); renderTablesBoard(); return; }
+    const pa = e.target.closest('[data-tbpickall]'); if (pa) { const P0 = state.tbPick = state.tbPick || new Set(), ids = pa.dataset.tbpickall.split(','), on = ids.some(id => !P0.has(id)); ids.forEach(id => on ? P0.add(id) : P0.delete(id)); renderTablesBoard(); return; }
+    const ag = e.target.closest('[data-tbaddgo]'); if (ag && state.cfg) { const [how, ...nn] = ag.dataset.tbaddgo.split('|'), name = nn.join('|'), ids = [...(state.tbPick || [])];
+      if (how === 'close') { state.tbAddOpen = null; state.tbPick = new Set(); renderTablesBoard(); return; }
+      readUiIntoCfg(); let n = 0; if (how === 'move') { tbMove(ids, name); n = ids.length; } else n = tbCopy(ids, name);
+      if (n) { state.tbAddOpen = null; state.tbPick = new Set(); renderVariables(); toast(how === 'move' ? `${n} variable${n > 1 ? 's' : ''} moved to “${name}”` : `${n} variable${n > 1 ? 's' : ''} also shown in “${name}”`); } return; }
     const x = e.target.closest('[data-tbx]'); if (x && state.cfg) { readUiIntoCfg(); const v = state.cfg.variables.find(y => y.id === x.dataset.tbx); if (v) { v.include = !v.include; if (state.tbSel) state.tbSel.delete(v.id); renderVariables(); $('#tablesBox').open = true; toast(`${v.label}: ${v.include ? `back in “${v.table || '(no name)'}”` : 'left out of the report'}`); } return; }
     const rn = e.target.closest('.tb-name[data-tbren]'); if (rn) { const fake = document.createElement('button'); fake.dataset.tbren = rn.dataset.tbren; return tbClick(fake); }
     const bb = e.target.closest('button'); if (bb && state.cfg) { const S = state.tbSel || new Set();
@@ -2844,7 +2873,10 @@
       if (bb.dataset.tbreset !== undefined) { readUiIntoCfg(); if (state.cfg.tableOpts) delete state.cfg.tableOpts[bb.dataset.tbreset]; renderTablesBoard(); return; } }
     return tbClick(e.target.closest('.tb-chip[data-tvid]') || e.target.closest('button'), e); });
   function tbClick(el0, e0) { const e = e0 || { target: el0 }; const ch = el0 && el0.closest && el0.classList.contains('tb-chip') ? el0 : null;
-    if (ch && state.cfg) { const sel = state.tbSel = state.tbSel || new Set(), id = ch.dataset.tvid; if (sel.has(id)) sel.delete(id); else sel.add(id); ch.classList.toggle('tb-sel', sel.has(id)); renderTbSel(); return; }
+    if (ch && state.cfg) { const sel = state.tbSel = state.tbSel || new Set(), id = ch.dataset.tvid, body = ch.closest('.tb-body'), all = [...body.querySelectorAll('.tb-chip[data-tvid]')].map(x => x.dataset.tvid);
+      if (e.shiftKey && state.tbLast && all.includes(state.tbLast)) { const [i0, i1] = [all.indexOf(state.tbLast), all.indexOf(id)].sort((a, b) => a - b); all.slice(i0, i1 + 1).forEach(x => sel.add(x)); body.querySelectorAll('.tb-chip[data-tvid]').forEach(x => x.classList.toggle('tb-sel', sel.has(x.dataset.tvid))); }
+      else { if (sel.has(id)) sel.delete(id); else sel.add(id); ch.classList.toggle('tb-sel', sel.has(id)); }
+      state.tbLast = id; const box2 = body.querySelector('[data-tbselall]'); if (box2) box2.checked = all.every(x => sel.has(x)); renderTbSel(); return; }
     const b = el0 && el0.tagName === 'BUTTON' ? el0 : null; if (!b || !state.cfg) return; const d = b.dataset, cfg = state.cfg; void e;
     if (d.tbprev !== undefined) { const S = state.tbPrev = state.tbPrev || new Set(); if (S.has(d.tbprev)) S.delete(d.tbprev); else S.add(d.tbprev); readUiIntoCfg(); renderTablesBoard(); return; }
     if (d.tbset !== undefined) { const S = state.tbSet = state.tbSet || new Set(); if (S.has(d.tbset)) S.delete(d.tbset); else S.add(d.tbset); readUiIntoCfg(); renderTablesBoard(); return; }
@@ -2853,10 +2885,10 @@
     if (d.tbmove) { readUiIntoCfg(); const [i, dir] = d.tbmove.split('|').map(Number), blocks = tableModel(), j = i + dir; if (j < 0 || j >= blocks.length) return; [blocks[i], blocks[j]] = [blocks[j], blocks[i]]; tableCommit(blocks); renderVariables(); $('#tablesBox').open = true; return; }
     if (d.tbren !== undefined) { const old = d.tbren, n = (prompt('Name of the table:', old) || '').trim(); if (!n || n === old) return; readUiIntoCfg();
       const exists = tableModel().some(x => !x.rep && x.name === n && !x.empty); if (exists && !confirm(`A table “${n}” exists: put the two tables together?`)) return;
-      cfg.variables.forEach(v => { if (v.kind !== 'repeated' && (v.table || '') === old) v.table = n; }); if (cfg.tableMeta && cfg.tableMeta[old]) { if (!cfg.tableMeta[n]) cfg.tableMeta[n] = cfg.tableMeta[old]; delete cfg.tableMeta[old]; } if (cfg.tableOpts && cfg.tableOpts[old]) { if (!cfg.tableOpts[n]) cfg.tableOpts[n] = cfg.tableOpts[old]; delete cfg.tableOpts[old]; } cfg.emptyTables = (cfg.emptyTables || []).map(x => x === old ? n : x); renderVariables(); $('#tablesBox').open = true; return; }
+      cfg.variables.forEach(v => { if (v.kind !== 'repeated' && (v.table || '') === old) v.table = n; }); if (cfg.tableMeta && cfg.tableMeta[old]) { if (!cfg.tableMeta[n]) cfg.tableMeta[n] = cfg.tableMeta[old]; delete cfg.tableMeta[old]; } if (cfg.tableOpts && cfg.tableOpts[old]) { if (!cfg.tableOpts[n]) cfg.tableOpts[n] = cfg.tableOpts[old]; delete cfg.tableOpts[old]; } cfg.variables.forEach(v => { if (v.alsoTables) v.alsoTables = [...new Set(v.alsoTables.map(t => t === old ? n : t))].filter(t => t !== (v.table || '')); }); cfg.emptyTables = (cfg.emptyTables || []).map(x => x === old ? n : x); renderVariables(); $('#tablesBox').open = true; return; }
     if (d.tbdel !== undefined) { readUiIntoCfg(); const vs = cfg.variables.filter(v => v.include && v.kind !== 'repeated' && (v.table || '') === d.tbdel);
       if (vs.length && !confirm(`Remove “${d.tbdel}”? Its ${vs.length} variable${vs.length > 1 ? 's leave' : ' leaves'} the report (drag them back from “Not in the report”).`)) return;
-      vs.forEach(v => { v.include = false; }); cfg.emptyTables = (cfg.emptyTables || []).filter(x => x !== d.tbdel); if (cfg.tableOpts) delete cfg.tableOpts[d.tbdel]; if (cfg.tableMeta) delete cfg.tableMeta[d.tbdel]; renderVariables(); $('#tablesBox').open = true; return; }
+      vs.forEach(v => { v.include = false; }); cfg.emptyTables = (cfg.emptyTables || []).filter(x => x !== d.tbdel); if (cfg.tableOpts) delete cfg.tableOpts[d.tbdel]; if (cfg.tableMeta) delete cfg.tableMeta[d.tbdel]; cfg.variables.forEach(v => { if (v.alsoTables) v.alsoTables = v.alsoTables.filter(t => t !== d.tbdel); }); renderVariables(); $('#tablesBox').open = true; return; }
     if (b.id === 'tbNew') { const n = (prompt('Name of the new table:', 'Outcomes') || '').trim(); if (!n) return; if (tableModel().some(x => !x.rep && x.name === n)) { toast(`“${n}” exists already`); return; } readUiIntoCfg(); (cfg.emptyTables = cfg.emptyTables || []).push(n); renderVariables(); $('#tablesBox').open = true; toast(`Table “${n}” added — drag variables into it`); return; }
     if (b.dataset.tbauto) { readUiIntoCfg(); const how = b.dataset.tbauto; let n = 0;
       if (how === 'names') { $('#autoTables').click(); $('#tablesBox').open = true; return; }
@@ -2870,7 +2902,12 @@
   }
   // the selection moved, the order of a table, the title and note of a table
   $('#tablesBox').addEventListener('change', e => { const t = e.target, cfg = state.cfg; if (!cfg) return;
-    if (t.dataset.tbadd !== undefined && t.value) { readUiIntoCfg(); const v = cfg.variables.find(x => x.id === t.value); tbMove([t.value], t.dataset.tbadd); renderVariables(); $('#tablesBox').open = true; if (v) toast(`${v.label} → ${t.dataset.tbadd}`); return; }
+    if (t.dataset.tbpick) { const P0 = state.tbPick = state.tbPick || new Set(); if (t.checked) P0.add(t.dataset.tbpick); else P0.delete(t.dataset.tbpick); const card = t.closest('.tb-card'); const n = P0.size; card.querySelectorAll('[data-tbaddgo^="move"],[data-tbaddgo^="copy"]').forEach(btn => { btn.disabled = !n; btn.textContent = btn.textContent.replace(/\(\d+\)/, `(${n})`); }); return; }
+    if (t.dataset.tbselall !== undefined) { const sel = state.tbSel = state.tbSel || new Set(), b0 = tableModel().find(b => !b.rep && b.name === t.dataset.tbselall); if (b0) b0.vars.forEach(v => t.checked ? sel.add(v.id) : sel.delete(v.id)); renderTablesBoard(); renderTbSel(); return; }
+    if (t.id === 'tbSelCopy' && t.value) { readUiIntoCfg(); const ids = [...(state.tbSel || [])], n = tbCopy(ids, t.value); if (n) { state.tbSel = new Set(); renderVariables(); renderTbSel(); toast(`${n} also shown in “${t.value}”`); } else t.value = ''; return; }
+    if (t.dataset.tbadd !== undefined && t.value) { readUiIntoCfg(); const v = cfg.variables.find(x => x.id === t.value);
+      if (v && v.include && (v.table || '') && !confirm(`Move “${v.label}” from “${v.table}” to “${t.dataset.tbadd}”?\n\nOK: move it.  Cancel: keep it where it is (to show it in both tables, select it and use “⧉ Also show in…”, or drag it with Ctrl).`)) { t.value = ''; return; }
+      tbMove([t.value], t.dataset.tbadd); renderVariables(); $('#tablesBox').open = true; if (v) toast(`${v.label} → ${t.dataset.tbadd}`); return; }
     if (t.dataset.tbglob) { readUiIntoCfg(); cfg.options[t.dataset.tbglob] = t.type === 'checkbox' ? t.checked : t.value; renderOptions(); renderTablesBoard(); toast(`Every table: ${t.closest('label').textContent.trim()} ${t.type === 'checkbox' ? (t.checked ? 'on' : 'off') : ''}`); return; }
     if (t.dataset.tbown) { readUiIntoCfg(); const [name, key] = t.dataset.tbown.split('|'), val = t.type === 'checkbox' ? t.checked : t.value, TO = cfg.tableOpts = cfg.tableOpts || {}, own = TO[name] = TO[name] || {};
       if ((cfg.options[key] ?? (key === 'tableSort' ? '' : false)) === val || (key === 'tableSort' && (cfg.options[key] || '') === val)) delete own[key]; else own[key] = val; if (!Object.keys(own).length) delete TO[name]; renderTablesBoard(); return; }
