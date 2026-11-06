@@ -2966,7 +2966,11 @@ const Analysis = (() => {
         brief: opts.paperStyle ? wording(sent[0] || '') : '', briefSig: !!sig, figures, meta: { param, tps, within: [w] } };
     }
 
+    // the options of a table (step 2, Tables): its columns and order, for that table only
+    const TB_KEYS = ['totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort'];
+    let tbSaved = null; const tbRestore = () => { if (tbSaved) { Object.assign(opts, tbSaved); tbSaved = null; } };
     for (const b of blocks) {
+      tbRestore(); { const o2 = b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table]; if (o2) { const ks = TB_KEYS.filter(x => o2[x] !== undefined); if (ks.length) { tbSaved = Object.fromEntries(ks.map(x => [x, opts[x]])); ks.forEach(x => { opts[x] = o2[x]; }); } } }
       if (k === 1) { sections.push(b.kind === 'repeated' ? oneGroupRepeated(b.vars[0]) : oneGroupSingle(b)); continue; }
       if (b.kind === 'repeated') {
         const v = b.vars[0];
@@ -3560,6 +3564,7 @@ const Analysis = (() => {
           brief: opts.paperStyle ? wording(briefSingle(res, gl, alpha, d)) : '', briefSig: anySig });
       }
     }
+    tbRestore();
 
     // enrolment over time: patients per month from a date column (step 9)
     if (cfg.timeline && cfg.timeline.col) { const sec = timelineSection(cfg, rows, groups, gl); if (sec) sections.unshift(sec); }

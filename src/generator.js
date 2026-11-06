@@ -49,7 +49,11 @@
         const keys = visitKeys(D, v); keys.forEach(key => { const z = keys.length === 1 ? u[v.id] : Math.sqrt(rho) * u[v.id] + Math.sqrt(1 - rho) * norm(); // one measurement: the patient's own level
           if (v.type === 'multi') { const pc = expect(v).pct || []; o[key] = v.cats.filter((c, ci) => rnd() * 100 < (isFinite(+pc[ci]) ? +pc[ci] : 20)); return; }
           if (v.type === 'num') { const m = target(v, g, key), sd = sdOf(v), e = expect(v); let x;
-            if (e.dist === 'skewed' && m > 0) { const s2 = Math.log(1 + sd * sd / (m * m)); x = Math.exp(Math.log(m) - s2 / 2 + Math.sqrt(s2) * z); } else x = m + sd * z;
+            const draw = zz => { if (e.dist === 'skewed' && m > 0) { const s2 = Math.log(1 + sd * sd / (m * m)); return Math.exp(Math.log(m) - s2 / 2 + Math.sqrt(s2) * zz); } return m + sd * zz; };
+            x = draw(z);
+            // the simulated Min and Max of the design: a value outside is drawn again (a truncated distribution), then kept within them
+            const lo = e.lo === '' || e.lo === undefined || !isFinite(+e.lo) ? null : +e.lo, hi = e.hi === '' || e.hi === undefined || !isFinite(+e.hi) ? null : +e.hi;
+            if (lo !== null || hi !== null) { for (let t = 0; t < 30 && ((lo !== null && x < lo) || (hi !== null && x > hi)); t++) x = draw(norm()); if (lo !== null) x = Math.max(lo, x); if (hi !== null) x = Math.min(hi, x); }
             if (v.min !== '' && isFinite(+v.min)) x = Math.max(+v.min, x); if (v.max !== '' && isFinite(+v.max)) x = Math.min(+v.max, x);
             const dd = decOf(v, sd); o[key] = +x.toFixed(dd); }
           else { const p = target(v, g, key), zz = yesFirst(v) ? -z : z; let c = 0, cum = 0; for (; c < p.length - 1; c++) { cum += p[c]; if (zz <= normInv(cum)) break; } o[key] = D.conv.catAs === 'codes' ? c + 1 : v.cats[c]; } }); });
