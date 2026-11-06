@@ -438,14 +438,16 @@
       const nums = state.data.rows.map(r => Analysis.toNum(r[h])).filter(isFinite), num = !lv && v && v.type === 'numeric' && nums.length;
       const lo = num ? (v.refLo !== undefined && v.refLo !== '' ? +v.refLo : Math.min(...nums)) : null, hi = num ? (v.refHi !== undefined && v.refHi !== '' ? +v.refHi : Math.max(...nums)) : null;
       const span = num ? hi - lo : 0, lo2 = num ? +(lo - span * 0.5).toPrecision(4) : null, hi2 = num ? +(hi + span * 0.5).toPrecision(4) : null;
-      if (lv && lv.length && lv.join(',').length < 250) dv.push(`<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${L(i)}2:${L(i)}2000"><formula1>"${lv.map(x => String(x).replace(/"/g, '""').replace(/&/g, '&amp;').replace(/</g, '&lt;')).join(',')}"</formula1></dataValidation>`);
+      if (lv && lv.length && !lv.some(x => String(x).includes(',')) && lv.join(',').length < 250) dv.push(`<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${L(i)}2:${L(i)}2000"><formula1>"${lv.map(x => String(x).replace(/"/g, '""').replace(/&/g, '&amp;').replace(/</g, '&lt;')).join(',')}"</formula1></dataValidation>`);
       if (num && isFinite(lo2) && isFinite(hi2)) dv.push(`<dataValidation type="decimal" allowBlank="1" showErrorMessage="1" errorTitle="Out of range" error="Allowed: ${lo2} to ${hi2}" sqref="${L(i)}2:${L(i)}2000"><formula1>${lo2}</formula1><formula2>${hi2}</formula2></dataValidation>`);
       guide.push([h, v ? v.label : isGroup ? 'Study group' : '', isGroup ? 'group' : v ? v.type : '', lv ? lv.join(' / ') : num ? `${lo2} to ${hi2}` : '', v && v.unit || '', v && v.definition || '']); });
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Data entry'); const g = XLSX.utils.aoa_to_sheet(guide); g['!cols'] = [{ wch: 22 }, { wch: 26 }, { wch: 12 }, { wch: 40 }, { wch: 10 }, { wch: 40 }]; XLSX.utils.book_append_sheet(wb, g, 'Guide');
     // the drop-down lists and ranges are written into the sheet's XML (SheetJS does not write them)
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), z = XLSX.CFB.read(new Uint8Array(out), { type: 'array' }), e = z.FileIndex[z.FullPaths.indexOf('Root Entry/xl/worksheets/sheet1.xml')];
     if (e && dv.length) { let x = new TextDecoder().decode(e.content); const tag = `<dataValidations count="${dv.length}">${dv.join('')}</dataValidations>`;
-      x = /<pageMargins/.test(x) ? x.replace(/<pageMargins/, tag + '<pageMargins') : x.replace('</worksheet>', tag + '</worksheet>'); const u = new TextEncoder().encode(x); e.content = u; e.size = u.length; }
+      // Excel requires the elements of a sheet in a fixed order: the lists go before the first element that must follow them (ignoredErrors, pageMargins …)
+      const after = /<(hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|customProperties|cellWatches|ignoredErrors|smartTags|drawing|legacyDrawing|legacyDrawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b/.exec(x);
+      x = after ? x.slice(0, after.index) + tag + x.slice(after.index) : x.replace('</worksheet>', tag + '</worksheet>'); const u = new TextEncoder().encode(x); e.content = u; e.size = u.length; }
     saveUrl(URL.createObjectURL(new Blob([XLSX.CFB.write(z, { fileType: 'zip', type: 'array', compression: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })), `${baseName()} - data entry sheet.xlsx`);
     toast(`Data-entry sheet saved: ${dv.length} columns with drop-down lists or allowed ranges, and a guide sheet`); };
 
