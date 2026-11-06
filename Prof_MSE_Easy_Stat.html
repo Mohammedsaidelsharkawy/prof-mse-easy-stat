@@ -42,8 +42,14 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 @media (max-width:1480px){.top-actions > .btn:not(.ux-word) .tl,.top-actions > label.btn .tl{display:none}.top-actions{gap:6px}}
 @media (max-width:640px){.brand h1{font-size:17px}.logo{width:40px;height:40px}}
 .brand{flex-shrink:0}
-.mb-wrap{position:fixed;inset:0;z-index:900;background:var(--bg,#F6F4FA);overflow:auto;padding:0 0 40px}html.mb-open body{overflow:hidden}
-.mb-head{position:sticky;top:0;z-index:2;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--navy,#1C1648);color:#fff}.mb-head .legend-note{color:#d9d3ea}
+.mb-wrap{display:none;padding:0 0 30px}html.ph-build #mbWrap,html.ph-generate #genWrap{display:block}
+html.ph-build #stepper,html.ph-build #presetBar,html.ph-build main>.panel,html.ph-generate #stepper,html.ph-generate #presetBar,html.ph-generate main>.panel{display:none!important}
+.phase-bar{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin:10px auto 6px;padding:6px;max-width:1100px}
+.phase-btn{border:1px solid var(--line);background:var(--card,#fff);border-radius:22px;padding:7px 16px;font-weight:700;cursor:pointer;color:var(--ink,#222)}.phase-btn.on{background:var(--navy,#1C1648);color:#fff;border-color:transparent}.phase-arrow{color:var(--muted);font-size:20px}
+.gen-tbl td{vertical-align:top}.gen-cell{display:flex;gap:4px;align-items:center;margin:2px 0}.gen-cell .legend-note{min-width:70px}.gen-chk tr.gen-off td{background:#FFF3CD}
+.sim-banner{margin:0 0 10px;padding:8px 12px;border-radius:10px;background:#FFF8E1;border:1px solid #F0C36D;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.mb-expect{margin-top:10px;padding:8px 10px;border-radius:8px;background:rgba(46,125,50,.06);border:1px dashed rgba(46,125,50,.35)}
+.mb-head{position:sticky;top:64px;z-index:2;border-radius:12px;margin:0 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--navy,#1C1648);color:#fff}.mb-head .legend-note{color:#d9d3ea}
 .mb-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:10px 16px 0}.mb-tab{border:1px solid var(--line);background:var(--card,#fff);border-radius:10px 10px 0 0;padding:8px 14px;cursor:pointer;font-weight:600}.mb-tab.on{background:var(--purple,#7B2FBE);color:#fff;border-color:transparent}
 .mb-body{margin:0 16px;padding:16px;background:var(--card,#fff);border:1px solid var(--line);border-radius:0 12px 12px 12px}
 .mb-vars{display:grid;grid-template-columns:minmax(260px,1fr) minmax(320px,1.3fr) minmax(240px,1fr);gap:14px;align-items:start}@media (max-width:1100px){.mb-vars{grid-template-columns:1fr}}
@@ -32007,6 +32013,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (n === 10) renderExplore();
     if (n === 11) renderPageSetup();
     if (n === 12) runAnalysis();
+    if (n === 1 || n === 12) renderSimBanner();
     $('#presetBar').style.display = n >= 4 ? '' : 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -32278,6 +32285,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (prevCfg) applySavedCfg(prevCfg);
     if (prevCfg && prevCfg.setupLocked) state.cfg.setupLocked = true;
     if (state.savMeta) applySavMeta(state.cfg, state.savMeta);
+    setTimeout(renderSimBanner, 50);
     if (mbSetup && !prevCfg) { applyBuilderSetup(state.cfg, mbSetup); setTimeout(() => toast(`Master sheet “${mbSetup.title || 'study'}”: its setup was applied (labels, units, categories, groups, visits)`), 700); }
     renderGrid();
     $('#to2').disabled = false;
@@ -33914,6 +33922,15 @@ if (typeof module !== 'undefined') module.exports = Sav;
     return fresh.variables.filter(v => v.kind === 'repeated').length - before;
   }
   // SPSS labels: variable labels become report labels; value labels become value labels (codes analysed as categories) and group names
+  /* ---------- simulated data (phase 2): a notice in the app; a watermark and a sentence in the methods only when chosen ---------- */
+  function renderSimBanner() {
+    document.querySelectorAll('.sim-banner').forEach(x => x.remove()); const sim = state.cfg && state.cfg.simulated; if (!sim) return; const rp = report();
+    ['#p1', '#p12'].forEach(id => { const pnl = $(id); if (!pnl) return; const b = document.createElement('div'); b.className = 'sim-banner';
+      b.innerHTML = `<b>🎲 Simulated data</b> — generated ${esc(sim.at)} (seed ${esc(sim.seed)}), not real patients. <label class="check" style="margin:0 0 0 10px"><input type="checkbox" data-simk="wm" ${rp.watermark === 'SIMULATED DATA' ? 'checked' : ''}><span>“SIMULATED DATA” watermark in the Word report</span></label> <label class="check" style="margin:0 0 0 10px"><input type="checkbox" data-simk="st" ${state.cfg.simStatement ? 'checked' : ''}><span>Say so in the statistical analysis</span></label>`;
+      pnl.prepend(b); }); }
+  document.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.simk; if (!k || !state.cfg) return; const rp = report();
+    if (k === 'wm') rp.watermark = e.target.checked ? 'SIMULATED DATA' : (rp.watermark === 'SIMULATED DATA' ? '' : rp.watermark);
+    if (k === 'st') state.cfg.simStatement = e.target.checked; renderSimBanner(); if (state.step === 12) runAnalysis(); });
   /* ---------- a master sheet from the builder carries its setup in a hidden sheet ---------- */
   function builderSetup() {
     const ws = state.wb && state.wb.Sheets && state.wb.Sheets._EasyStatSetup; if (!ws) return null;
@@ -33925,7 +33942,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (S0.groupCol && H.includes(S0.groupCol)) { cfg.groupCol = S0.groupCol; cfg.noGroups = false; cfg.variables = cfg.variables.filter(v => !v.cols.some(c => c.col === S0.groupCol)); setGroups(cfg);
       const arms = (S0.arms || []).filter(a => cfg.groupOrder.includes(a)); if (arms.length) cfg.groupOrder = [...arms, ...cfg.groupOrder.filter(g => !arms.includes(g))]; }
     const tpl = cfg.tpLabels = cfg.tpLabels || {}; cfg.tpOrder = cfg.tpOrder || [];
-    (S0.visits || []).forEach(x => { tpl[x.tag] = x.name; if (!cfg.tpOrder.includes(x.tag)) cfg.tpOrder.push(x.tag); });
+    (S0.visits || []).forEach(x => { tpl[x.tag] = x.name; }); const vt = (S0.visits || []).map(x => x.tag); cfg.tpOrder = [...vt, ...cfg.tpOrder.filter(t => !vt.includes(t))]; // the visits in the design's order
     const typeOf = t => t === 'num' || t === 'calc' ? 'numeric' : t === 'cat' || t === 'yn' ? 'categorical' : null, codes = S0.catAs === 'codes';
     const props = (v, x) => { const ty = typeOf(x.type); v.label = x.label; if (x.unit) { v.unit = x.unit; } if (x.group) v.group = x.group; if (x.role) v.role = x.role; if (x.definition) v.definition = x.definition;
       if (ty) v.type = ty; if (ty === 'categorical') { v.levels = codes ? x.cats.map((_, i) => String(i + 1)) : [...x.cats]; if (codes) v.valueLabels = x.cats.map((c, i) => `${i + 1}=${c}`).join(', '); }
@@ -33941,6 +33958,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const v = { id: 'mb' + Math.random().toString(36).slice(2, 9), kind: 'repeated', pos, label: x.label, type: 'numeric', dist: 'auto', table: '', levels: [], note: '', include: true, cols: cs.map(c => ({ col: c.col, tp: c.visit || c.col, label: c.visitName || c.visit || c.col })) };
       props(v, x); v.kind = 'repeated'; cfg.variables.push(v); });
     cfg.variables.sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0));
+    if (S0.simulated) { cfg.simulated = S0.simulated; cfg.simTargets = S0.targets || null; }
     if (S0.title && !cfg.study.title) { cfg.study.title = S0.title; const t = $('#studyTitle'); if (t && !t.value) t.value = S0.title; }
   }
   function applySavMeta(cfg, sv) {
@@ -35845,6 +35863,15 @@ if (typeof module !== 'undefined') module.exports = Sav;
     return by ? list.map((it, i) => [it, i]).sort((a, b) => pinFirst(a[0], b[0]) || by(a[0], b[0]) || a[1] - b[1]).map(x => x[0]) : list;
   };
   const xpTables = it => { const o = xpo(); return it.tables.filter(t => !t.cat || o[t.cat] !== false); };
+  // step 10, simulated data: the targets of the generator against the data as they are now (after cleaning)
+  function simCard() {
+    const T = state.cfg && state.cfg.simTargets; if (!T || !T.length) return ''; const cfg = state.cfg, rows = state.data.rows;
+    const out = T.map(t => { const col = (t.cols || [])[0]; if (!col || !state.data.headers.includes(col)) return null; const rs = rows.filter(r => t.group === 'All patients' || String(r[cfg.groupCol] ?? '').trim() === t.group), xs = rs.map(r => r[col]).filter(x => !isMissing(x));
+      let got = '—'; if (t.kind === 'mean') { const nn = xs.map(Analysis.toNum).filter(isFinite); if (nn.length) { const m = nn.reduce((a, b) => a + b, 0) / nn.length; got = m.toFixed(2); } }
+      else if (xs.length) got = (100 * xs.filter(x => String(x).trim().toLowerCase() === String(t.cat).toLowerCase() || String(x).trim() === '1' && cfg.variables.some(v => v.valueLabels)).length / xs.length).toFixed(1) + '%';
+      return `<tr><td>${esc(t.label)}</td><td>${esc(t.visitName || '')}</td><td>${esc(t.group)}</td><td>${t.kind === 'mean' ? esc(t.target) : `${esc(t.target)}% ${esc(t.cat)}`}</td><td>${esc(got)}</td></tr>`; }).filter(Boolean);
+    return out.length ? `<details class="report-sec xp-sim"><summary><b>🎲 Simulated data: the targets against the data</b> <span class="legend-note">— did the analysis recover what the generator was asked for?</span></summary><div class="tbl-wrap" style="max-height:320px;margin-top:6px"><table class="t xp"><thead><tr><th>Variable</th><th>Visit</th><th>Group</th><th>Target</th><th>In the data</th></tr></thead><tbody>${out.join('')}</tbody></table></div></details>` : '';
+  }
   // step 10: each item group in one card — the % of each yes/no item per study group, with its P value (any item and the number per patient included)
   function groupCards(list) {
     const g = groupsOf(); if (!g.size || !state.cfg) return ''; const cfg = state.cfg, gs = activeGroups(), gl = gs.map(x => cfg.groupLabels[x] || x), rows = state.data.rows.filter(r => gs.includes(Analysis.groupOf(cfg, r)));
@@ -36134,7 +36161,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const dash = `<div class="xp-dash"><div><b>${list.length}</b><span>variables</span></div><div><b>${state.data.rows.length}</b><span>patients</span></div><div><b>${list.filter(it => it.sig).length}</b><span>significant</span></div><div><b>${nMiss}</b><span>missing values</span></div><div><b>${list.filter(it => it.disagree).length}</b><span>tests disagree</span></div></div>`;
     const cmp = $('#xpVar').value && xpo().cmp && list.length === 2;
     $('#explore').classList.toggle('xp-dark', !!xpo().dark);
-    $('#explore').innerHTML = dash + groupCards(list) + topPanels(list) + ov + (list.length ? (view === 'twocol' || cmp ? `<div class="xp-twocol">${html}</div>` : html) : empty);
+    $('#explore').innerHTML = dash + simCard() + groupCards(list) + topPanels(list) + ov + (list.length ? (view === 'twocol' || cmp ? `<div class="xp-twocol">${html}</div>` : html) : empty);
     // matches of the table search highlighted
     const tq = (xpo().tq || '').trim().toLowerCase(); if (tq) document.querySelectorAll('#explore td').forEach(td => { if (td.textContent.toLowerCase().includes(tq)) td.classList.add('xp-hit'); });
     $('#xpUndo').disabled = !state.undo || !state.undo.length; $('#xpRedo').disabled = !(state.redo && state.redo.length);
@@ -36896,6 +36923,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         if (cfg.options.rmLayout === 'cols') res.sections = res.sections.map(Analysis.timepointsAsColumns);
         { const defs = state.cfg.variables.filter(v => v.include && v.definition).map(v => { const d0 = v.definition.trim().replace(/\.$/, ''); return /\bdefined\b/i.test(d0) ? d0 + '.' : `${v.label.replace(/\s*\([^)]*\)\s*$/, '')} was defined as ${/^[A-Z][a-z]+\b/.test(d0) ? d0.charAt(0).toLowerCase() + d0.slice(1) : d0}.`; });
           if (defs.length && res.methods) res.methods = `${res.methods.trim()} Definitions: ${defs.join(' ')}`; }
+        if (state.cfg.simulated && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The data were simulated (Prof MSE Easy Stat data generator, seed ${state.cfg.simulated.seed}) and do not describe real patients.`;
         placeFigures(res, cfg.options); state.figTables = res.sections.filter(s => !s.figOnly).map(s => s.title).filter(Boolean);
         state.result = res; state.runKey = runKey();
         if (state.pendingEdits) { applyEdits(res, state.pendingEdits); state.pendingEdits = null; }
@@ -38935,7 +38963,24 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     ['Outcomes', [['Complications', 'yn'], ['Type of complication', 'text'], ['Readmission', 'yn'], ['Reoperation', 'yn'], ['ICU admission', 'yn'], ['Date of admission', 'date'], ['Date of discharge', 'date'],
       ['Length of stay', 'num', 'days', 0, 365, null, 0], ['Recurrence', 'yn'], ['Mortality', 'yn'], ['Date of death', 'date'], ['Follow-up', 'num', 'months', 0, 240, null, 0]]],
     ['Diagnostic accuracy', [['Index test result', 'cat', '', null, null, ['Positive', 'Negative']], ['Reference standard', 'cat', '', null, null, ['Positive', 'Negative']], ['Index test value', 'num', '', null, null, null, 2]]]];
-  const libVar = (section, e) => ({ id: uid(), section, label: e[0], type: e[1], unit: e[2] || '', min: e[3] ?? '', max: e[4] ?? '', cats: e[1] === 'yn' ? [...YN] : e[5] ? [...e[5]] : [], dec: e[6] ?? '', required: false, visits: [], group: section === 'Medical history' && e[1] === 'yn' ? 'Co-morbidities' : '', role: '', definition: '' });
+  // expected values of each variable (used by the generator): mean ± SD (skewed for lab values that are), % of each category, days after the previous date
+  const EXPECT = { 'Age': [50, 12], 'Weight': [75, 14], 'Height': [165, 9], 'Charlson comorbidity index': [2, 1.8, 1], 'Systolic BP': [130, 18], 'Diastolic BP': [80, 11], 'Heart rate': [82, 14], 'Respiratory rate': [18, 4], 'Temperature': [37, 0.5],
+    'SpO2': [96, 2.5], 'Glasgow coma scale': [14, 1.5], 'Haemoglobin': [12.8, 1.8], 'WBC': [8, 3, 1], 'Platelets': [250, 70], 'Creatinine': [1, 0.35, 1], 'Urea': [35, 12, 1], 'ALT': [30, 18, 1], 'AST': [28, 14, 1], 'Albumin': [3.9, 0.5],
+    'Total bilirubin': [0.8, 0.45, 1], 'Sodium': [138, 3], 'Potassium': [4.2, 0.45], 'Fasting glucose': [110, 30, 1], 'HbA1c': [6.5, 1.3], 'CRP': [15, 20, 1], 'INR': [1.1, 0.2], 'Troponin': [20, 40, 1], 'D-dimer': [800, 600, 1],
+    'Vitamin D': [22, 10], 'LDL cholesterol': [120, 35], 'Pain VAS': [6, 2], 'Pain NRS': [6, 2], 'WOMAC': [55, 15], 'Oswestry disability index': [40, 15], 'Barthel index': [70, 20], 'PHQ-9': [8, 5, 1], 'GAD-7': [7, 4, 1],
+    'MMSE': [25, 4], 'APACHE II': [15, 7], 'SOFA': [6, 3], 'Operative time': [90, 30], 'Blood loss': [250, 150, 1], 'Length of stay': [5, 3, 1], 'Follow-up': [12, 4], 'Index test value': [50, 20] };
+  const YES_PCT = { 'Hypertension': 30, 'Diabetes': 20, 'Ischaemic heart disease': 10, 'Heart failure': 5, 'COPD': 8, 'Asthma': 7, 'Chronic kidney disease': 6, 'Chronic liver disease': 4, 'Stroke': 4, 'Dyslipidaemia': 25, 'Hypothyroidism': 6,
+    'Cancer': 5, 'Previous surgery': 30, 'Intraoperative complications': 5, 'Conversion': 4, 'Complications': 15, 'Readmission': 8, 'Reoperation': 5, 'ICU admission': 10, 'Recurrence': 10, 'Mortality': 5 };
+  const CAT_PCT = { 'Smoking': [55, 20, 25], 'ASA class': [30, 45, 20, 4, 1], 'Residence': [60, 40], 'Satisfaction': [10, 20, 40, 30], 'Index test result': [40, 60], 'Reference standard': [35, 65] };
+  const DATE_GAP = { 'Date of surgery': [1, 1], 'Date of discharge': [4, 2], 'Date of death': [60, 40] };
+  function expectOf(label, type, cats) {
+    if (type === 'num' || type === 'calc') { const e = EXPECT[label]; return e ? { mean: e[0], sd: e[1], dist: e[2] ? 'skewed' : 'normal' } : { mean: '', sd: '', dist: 'normal' }; }
+    if (type === 'yn') { const y = YES_PCT[label] ?? 30; return { pct: [y, 100 - y] }; }
+    if (type === 'cat') { const c = CAT_PCT[label]; return { pct: c && c.length === cats.length ? [...c] : cats.map(() => +(100 / cats.length).toFixed(1)) }; }
+    if (type === 'date') { const g = DATE_GAP[label] || [7, 3]; return { mean: g[0], sd: g[1] }; }
+    return {};
+  }
+  const libVar = (section, e) => ({ expect: expectOf(e[0], e[1], e[1] === 'yn' ? YN : e[5] || []), id: uid(), section, label: e[0], type: e[1], unit: e[2] || '', min: e[3] ?? '', max: e[4] ?? '', cats: e[1] === 'yn' ? [...YN] : e[5] ? [...e[5]] : [], dec: e[6] ?? '', required: false, visits: [], group: section === 'Medical history' && e[1] === 'yn' ? 'Co-morbidities' : '', role: '', definition: '' });
   const findLib = label => { for (const [sec, list] of LIB) { const e = list.find(x => x[0].toLowerCase() === label.toLowerCase()); if (e) return libVar(sec, e); } return null; };
 
   /* ---------- templates ---------- */
@@ -39031,7 +39076,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   function sheetXml(rows, o = {}) {
     const W = Math.max(1, ...rows.map(r => r.length)), dims = `A1:${colL(W - 1)}${Math.max(1, rows.length)}`;
     const cell = (c, ri, ci) => { if (c === null || c === undefined || c === '') return ''; const ref = `${colL(ci)}${ri + 1}`, o2 = typeof c === 'object' ? c : { v: c }, s = o2.s ? ` s="${o2.s}"` : '';
-      if (o2.f) return `<c r="${ref}"${s}><f>${X(o2.f)}</f></c>`;
+      if (o2.f) return o2.cv === undefined || o2.cv === null || o2.cv === '' ? `<c r="${ref}"${s}><f>${X(o2.f)}</f></c>` : typeof o2.cv === 'number' ? `<c r="${ref}"${s}><f>${X(o2.f)}</f><v>${o2.cv}</v></c>` : `<c r="${ref}"${s} t="str"><f>${X(o2.f)}</f><v>${X(o2.cv)}</v></c>`;
       if (typeof o2.v === 'number' && isFinite(o2.v)) return `<c r="${ref}"${s}><v>${o2.v}</v></c>`;
       if (o2.v === undefined || o2.v === null || o2.v === '') return s ? `<c r="${ref}"${s}/>` : '';
       return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${X(o2.v)}</t></is></c>`; };
@@ -39059,9 +39104,11 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   /* ---------- the master sheet workbook ---------- */
   const missingCode = D => D.conv.missing === '999' ? 999 : null;
   const codeOf = (v, c) => v.cats.indexOf(c) + 1;
-  function buildWorkbook(D) {
+  // fill (from the generator): { patients: [{ id, group, vals: { varId: { visitId | 'once': value } } }], simulated, targets }
+  const xlDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d) ? Math.round((Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) - Date.UTC(1899, 11, 30)) / 864e5) : d;
+  function buildWorkbook(D, fill) {
     const cols = columns(D), long = D.layout === 'long', perVisit = D.layout === 'sheets', arms = D.arms.filter(Boolean), hasGroup = arms.length >= 2;
-    const n = Math.max(1, +D.n || 60), ids = Array.from({ length: n }, (_, i) => `${D.idPrefix || ''}${String(i + 1).padStart(+D.idDigits || 3, '0')}`);
+    const n = fill ? fill.patients.length : Math.max(1, +D.n || 60), ids = fill ? fill.patients.map(p => p.id) : Array.from({ length: n }, (_, i) => `${D.idPrefix || ''}${String(i + 1).padStart(+D.idDigits || 3, '0')}`);
     const rand = hasGroup && D.rand.on ? randomisation(D) : null, prefillGroup = rand && rand.length === 1 && D.rand.prefill !== false ? rand[0].list : null;
     const order = D.sections.length ? D.sections : [...new Set(D.vars.map(v => v.section))];
     // lists of the categories (a hidden sheet, so any category works in a drop-down list)
@@ -39077,9 +39124,12 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
         for (let k = i; k <= j; k++) head0[k] = { v: k === i ? sec : '', s: st }; if (j > i) merges.push(`${colL(i)}1:${colL(j)}1`); i = j + 1; }
       const at = (cid, visitId) => { const k = all.findIndex(c => c.v && c.v.id === cid && (long || !visitId || (c.visit && c.visit.id === visitId) || (!c.visit && !visitId))); return k < 0 ? all.findIndex(c => c.v && c.v.id === cid) : k; };
       const rows = [head0, head1];
+      const fv = (p, v, c, vi) => { if (!fill || !withLead) return null; const pv = fill.patients[p].vals[v.id] || {}; if (long) { const vis = (v.visits || []).length ? v.visits : [D.visits[0].id]; const id = D.visits[vi].id; return vis.includes(id) ? (pv[id] ?? (id === D.visits[0].id ? pv.once : null)) : null; }
+        return c.visit ? (pv[c.visit.id] ?? (c.visit.id === D.visits[0].id ? pv.once : null)) : (pv.once ?? pv[D.visits[0].id] ?? null); };
       for (let r = 0; r < nRows; r++) { const p = long ? Math.floor(r / D.visits.length) : r, vi = long ? r % D.visits.length : 0, R = r + 3;
-        const row = all.map((c, ci) => { if (ci === 0) return withLead ? ids[p] : null; if (c.col === 'Group') return prefillGroup && withLead ? prefillGroup[p] : null; if (c.col === 'Visit') return D.visits[vi].name;
-          const v = c.v; if (v.type === 'date') return { v: null, s: 2 };
+        const row = all.map((c, ci) => { if (ci === 0) return withLead ? ids[p] : null; if (c.col === 'Group') return withLead ? (fill ? fill.patients[p].group : prefillGroup ? prefillGroup[p] : null) : null; if (c.col === 'Visit') return D.visits[vi].name;
+          const v = c.v, val = fv(p, v, c, vi); if (v.type === 'date') return { v: typeof val === 'string' ? (xlDate(val) ?? val) : val, s: typeof val === 'string' && !/^\d{4}-/.test(val) ? 0 : 2 };
+          if (v.type !== 'calc' && fill) return val;
           if (v.type === 'calc' && v.formula) { const f = v.formula, A = at(f.a, c.visit && c.visit.id), B = f.b ? at(f.b, c.visit && c.visit.id) : -1, a = A >= 0 ? `${colL(A)}${R}` : null, b = B >= 0 ? `${colL(B)}${R}` : null;
             let fx = null;
             if (f.kind === 'bmi' && a && b) fx = `IF(AND(ISNUMBER(${a}),ISNUMBER(${b}),${b}>0),ROUND(${a}/(${b}/100)^2,1),"")`;
@@ -39087,7 +39137,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
             if (f.kind === 'age' && a) fx = b ? `IF(AND(ISNUMBER(${a}),ISNUMBER(${b})),DATEDIF(${a},${b},"y"),"")` : `IF(ISNUMBER(${a}),DATEDIF(${a},TODAY(),"y"),"")`;
             if (f.kind === 'change' && !long) { const vs = all.map((x, k) => [x, k]).filter(([x]) => x.v && x.v.id === f.a), first = vs[0], last = vs[vs.length - 1]; if (first && last && first !== last) fx = `IF(AND(ISNUMBER(${colL(last[1])}${R}),ISNUMBER(${colL(first[1])}${R})),${colL(last[1])}${R}-${colL(first[1])}${R},"")`; }
             if ((f.kind === 'sum' || f.kind === 'mean') && (f.list || []).length) { const refs = f.list.map(id => at(id, c.visit && c.visit.id)).filter(k => k >= 0).map(k => `${colL(k)}${R}`); if (refs.length) fx = `IF(COUNT(${refs.join(',')})=${refs.length},${f.kind === 'sum' ? 'SUM' : 'AVERAGE'}(${refs.join(',')}),"")`; }
-            return fx ? { f: fx, s: CALC_STYLE } : { v: null, s: CALC_STYLE }; }
+            return fx ? { f: fx, s: CALC_STYLE, cv: fill ? val : undefined } : { v: fill ? val : null, s: CALC_STYLE }; }
           return null; });
         rows.push(row); }
       // validations, highlighting and the input message of each column
@@ -39121,7 +39171,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     cols.forEach(c => { const v = c.v; cb.push([c.col, v.label, v.section, { num: 'Number', yn: 'Yes / no', cat: 'Categories', date: 'Date', time: 'Time', text: 'Text', calc: 'Calculated' }[v.type] || v.type, v.unit, v.type === 'num' || v.type === 'calc' ? (v.min !== '' || v.max !== '' ? `${v.min} to ${v.max}` : '') : v.cats.join(' / '),
       (v.type === 'cat' || v.type === 'yn') ? v.cats.map((x, i) => `${i + 1}=${x}`).join(', ') : '', c.visit ? c.visit.name : long ? (visitsOf(D, v).map(x => x.name).join(', ') || 'all') : '', v.required ? 'Yes' : '', v.group || '', v.definition || '', v.type === 'calc' && v.formula ? { bmi: 'Weight / (height in m)²', days: 'Days between the two dates', age: 'Completed years between the dates', change: 'Last visit − first visit', sum: 'Sum of items', mean: 'Mean of items' }[v.formula.kind] || '' : '']); });
     sheets.push({ name: 'Codebook', xml: sheetXml(cb, { widths: [22, 26, 16, 12, 10, 26, 26, 12, 9, 16, 40, 26], freeze: { r: 1, c: 0 } }) });
-    const ins = [[{ v: D.title || 'Master sheet', s: 3 }], ['How to fill this sheet', ''],
+    const ins = [[{ v: D.title || 'Master sheet', s: 3 }], ...(fill && fill.simulated ? [[{ v: `SIMULATED DATA — generated ${fill.simulated.at} (seed ${fill.simulated.seed}). Not real patients.`, s: 3 }, '']] : []), ['How to fill this sheet', ''],
       ['1', 'One row per patient' + (long ? ' and visit' : '') + '. Keep the ID; do not change the column names in row 2 (row 1 shows the sections).'],
       ['2', 'Choose categories from the drop-down list; numbers outside the allowed range are refused or highlighted in red.'],
       ['3', `Missing values: ${D.conv.missing === '999' ? 'type 999' : 'leave the cell empty'}. Dates: ${D.conv.date}.`],
@@ -39133,7 +39183,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     sheets.push({ name: 'Instructions', xml: sheetXml(ins, { widths: [6, 110] }) });
     if (rand) { const rr = [['Stratum', 'No.', 'Allocation', 'Patient ID', 'Date', 'Initials'].map(v => ({ v, s: 1 }))]; rand.forEach(s => s.list.forEach((a, i) => rr.push([s.stratum, i + 1, a, rand.length === 1 ? ids[i] : null, null, null]))); sheets.push({ name: 'Randomisation', xml: sheetXml(rr, { widths: [30, 6, 16, 12, 12, 10], freeze: { r: 1, c: 0 } }) }); }
     sheets.push({ name: 'Lists', hidden: true, xml: sheetXml(listsRows, {}) });
-    const setup = JSON.stringify(setupFor(D)), chunks = []; for (let k = 0; k < setup.length; k += 30000) chunks.push([setup.slice(k, k + 30000)]);
+    const setup = JSON.stringify({ ...setupFor(D), ...(fill && fill.simulated ? { simulated: fill.simulated, targets: fill.targets || null } : {}) }), chunks = []; for (let k = 0; k < setup.length; k += 30000) chunks.push([setup.slice(k, k + 30000)]);
     sheets.push({ name: '_EasyStatSetup', hidden: true, xml: sheetXml(chunks, {}) });
     return xlsxBlob(sheets);
   }
@@ -39184,11 +39234,23 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const save = () => ls.set('current', D);
   const TABS = [['study', '1 · Study'], ['visits', '2 · Groups & visits'], ['vars', '3 · Variables'], ['rules', '4 · Rules'], ['preview', '5 · Preview'], ['export', '6 · Export']];
   const TYPES = [['num', 'Number'], ['yn', 'Yes / no'], ['cat', 'Categories'], ['date', 'Date'], ['time', 'Time'], ['text', 'Text'], ['calc', 'Calculated (Excel formula)']];
-  function open() {
-    let w = $('#mbWrap'); if (!w) { w = document.createElement('div'); w.id = 'mbWrap'; w.className = 'mb-wrap'; document.body.appendChild(w); w.addEventListener('input', onInput); w.addEventListener('change', onChange); w.addEventListener('click', onClick); }
-    w.style.display = ''; document.documentElement.classList.add('mb-open'); render();
+  /* ---------- the three phases: 🧱 Build · 🎲 Generate · 📊 Analyse ---------- */
+  const PHASES = [['build', '🧱 Build the master sheet'], ['generate', '🎲 Generate the data'], ['analyse', '📊 Analyse (Easy Stat)']];
+  let phase = 'analyse';
+  function setPhase(ph) {
+    phase = ph; const h = document.documentElement; PHASES.forEach(([k]) => h.classList.toggle('ph-' + k, k === ph));
+    document.querySelectorAll('[data-phase]').forEach(b => b.classList.toggle('on', b.dataset.phase === ph));
+    if (ph === 'build') { const w = $('#mbWrap'); if (!w.dataset.wired) { w.dataset.wired = 1; w.addEventListener('input', onInput); w.addEventListener('change', onChange); w.addEventListener('click', onClick); } render(); }
+    if (ph === 'generate' && window.EasyGen) window.EasyGen.render();
+    try { localStorage.setItem('mb.phase', ph); } catch (e) { /* none */ }
+    window.scrollTo({ top: 0 });
   }
-  const close = () => { const w = $('#mbWrap'); if (w) w.style.display = 'none'; document.documentElement.classList.remove('mb-open'); };
+  const main = document.querySelector('main');
+  if (main) { const bar = document.createElement('div'); bar.className = 'phase-bar'; bar.id = 'phaseBar';
+    bar.innerHTML = PHASES.map(([k, l], i) => `${i ? '<span class="phase-arrow">›</span>' : ''}<button type="button" class="phase-btn" data-phase="${k}">${l}</button>`).join('');
+    main.prepend(bar); const w = document.createElement('div'); w.id = 'mbWrap'; w.className = 'mb-wrap'; bar.after(w); const g = document.createElement('div'); g.id = 'genWrap'; g.className = 'mb-wrap'; w.after(g);
+    bar.addEventListener('click', e => { const b = e.target.closest('[data-phase]'); if (b) setPhase(b.dataset.phase); }); }
+  const open = () => setPhase('build'), close = () => setPhase('analyse');
   const opt = (list, cur) => list.map(([k, l]) => `<option value="${esc(k)}" ${String(cur) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('');
   function render() {
     const w = $('#mbWrap'); if (!w) return; const pr = problems(D);
@@ -39196,7 +39258,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${opt(Object.entries(TEMPLATES).map(([k, t]) => [k, t.name]), '')}<option value="__blank">Empty design</option></select>
       <select id="mbMine" style="width:auto"><option value="">My designs…</option>${opt(Object.keys(ls.get('designs', {})).map(k => [k, k]), '')}</select>
       <button class="btn ghost small" id="mbSaveAs" type="button">💾 Save design</button><button class="btn ghost small" id="mbExportJson" type="button" title="The design as a file, to share or keep">⬇ Design file</button><label class="btn ghost small" style="margin:0">⬆ Open design<input type="file" id="mbImportJson" accept=".json" hidden></label>
-      <button class="btn primary small" id="mbClose" type="button">✕ Close</button></div>
+      <button class="btn primary small" id="mbClose" type="button" title="Phase 2: fill the sheet with simulated patients">🎲 Generate the data ›</button></div>
       <div class="mb-tabs">${TABS.map(([k, l]) => `<button type="button" class="mb-tab ${tab === k ? 'on' : ''}" data-mbtab="${k}">${l}${k === 'preview' && pr.length ? ` <span class="chip warn">${pr.length}</span>` : ''}</button>`).join('')}</div>
       <div class="mb-body">${({ study: tStudy, visits: tVisits, vars: tVars, rules: tRules, preview: tPreview, export: tExport })[tab]()}</div>`;
   }
@@ -39255,7 +39317,18 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       <div><label class="f">Item group <span class="legend-note">(e.g. Co-morbidities)</span></label><input type="text" data-mbv="group" value="${esc(v.group || '')}" list="mbGrpList"><datalist id="mbGrpList">${[...new Set(D.vars.map(x => x.group).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist></div>
       <div><label class="f">Role</label>${sel2('role', v.role || '', [['', '—'], ['baseline', 'Baseline characteristic'], ['primary', 'Primary outcome'], ['secondary', 'Secondary outcome'], ['outcome', 'Other outcome'], ['safety', 'Safety outcome']])}</div>
       <div style="grid-column:1/-1"><label class="f">Definition</label><input type="text" data-mbv="definition" value="${esc(v.definition || '')}" placeholder="e.g. BP ≥ 140/90 mmHg or antihypertensive treatment"></div>
-      <div><label class="check" style="margin-top:6px"><input type="checkbox" data-mbv="required" ${v.required ? 'checked' : ''}><span>Required</span></label></div></div>`;
+      <div><label class="check" style="margin-top:6px"><input type="checkbox" data-mbv="required" ${v.required ? 'checked' : ''}><span>Required</span></label></div></div>
+      ${expectBox(v)}`;
+  }
+  // expected values (for the generator, phase 2): the same fields are in the generator
+  function expectBox(v) {
+    const e = v.expect || (v.expect = expectOf(v.label, v.type, v.cats));
+    if (v.type === 'num' || v.type === 'calc') return `<div class="mb-expect"><b>Expected values</b> <span class="legend-note">(used to simulate data)</span><div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px">
+      <div><label class="f">Mean</label><input type="number" step="any" data-mbe="mean" value="${esc(e.mean ?? '')}" style="width:100px"></div><div><label class="f">SD</label><input type="number" step="any" min="0" data-mbe="sd" value="${esc(e.sd ?? '')}" style="width:100px"></div>
+      <div><label class="f">Distribution</label><select data-mbe="dist" style="width:auto">${opt([['normal', 'Normal'], ['skewed', 'Skewed (log-normal)']], e.dist || 'normal')}</select></div></div></div>`;
+    if (v.type === 'cat' || v.type === 'yn') { const pc = v.cats.map((_, i) => (e.pct || [])[i] ?? +(100 / v.cats.length).toFixed(1)); return `<div class="mb-expect"><b>Expected %</b> <span class="legend-note">(used to simulate data)</span><div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px">${v.cats.map((c, i) => `<div><label class="f">${esc(c)}</label><input type="number" min="0" max="100" step="any" data-mbep="${i}" value="${esc(pc[i])}" style="width:80px"></div>`).join('')}</div></div>`; }
+    if (v.type === 'date') return `<div class="mb-expect"><b>Expected date</b> <span class="legend-note">(simulation: days after the previous date of the sheet)</span><div class="row" style="gap:8px;margin-top:4px"><div><label class="f">Mean days</label><input type="number" step="any" data-mbe="mean" value="${esc(e.mean ?? 7)}" style="width:90px"></div><div><label class="f">SD</label><input type="number" step="any" data-mbe="sd" value="${esc(e.sd ?? 3)}" style="width:90px"></div></div></div>`;
+    return '';
   }
   const tRules = () => { const vs = D.vars.filter(v => ['num', 'date', 'calc'].includes(v.type)), o2 = [['', '—'], ...vs.map(v => [v.id, v.label])];
     return `<h3 style="margin-top:0">Checks between columns</h3><p class="legend-note">Cells that break a rule are highlighted in yellow in the master sheet (e.g. discharge ≥ admission, diastolic &lt; systolic BP).</p>
@@ -39281,7 +39354,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   async function onClick(e) {
     const b = e.target.closest('button,[data-mbsel],[data-mbtab]'); if (!b) return; const d = b.dataset;
     if (d.mbtab) { tab = d.mbtab; return render(); }
-    if (b.id === 'mbClose') return close();
+    if (b.id === 'mbClose') return setPhase('generate');
     if (d.mbsel) { sel = d.mbsel; return render(); }
     if (d.mblib) { const [sec, lab] = d.mblib.split('|'), e2 = LIB.find(x => x[0] === sec)[1].find(x => x[0] === lab); const v = libVar(sec, e2); D.vars.push(v); if (!D.sections.includes(sec)) D.sections.push(sec); sel = v.id; save(); return render(); }
     if (b.id === 'mbNewVar') { const sec = (D.vars.find(x => x.id === sel) || {}).section || D.sections[0] || 'Other'; const v = { id: uid(), section: sec, label: 'New variable', type: 'num', unit: '', min: '', max: '', cats: [], dec: '', required: false, visits: [], group: '', role: '', definition: '' }; D.vars.push(v); if (!D.sections.includes(sec)) D.sections.push(sec); sel = v.id; save(); return render(); }
@@ -39303,7 +39376,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       try { U.saveUrl(URL.createObjectURL(buildWorkbook(D)), `${fileBase()} - master sheet.xlsx`); toast('Master sheet saved'); } catch (err) { console.error(err); toast('Could not build the sheet: ' + err.message); } return; }
     if (b.id === 'mbCrf') { try { U.saveUrl(URL.createObjectURL(await buildCrf(D)), `${fileBase()} - CRF.docx`); toast('Case report form saved'); } catch (err) { console.error(err); toast('Could not build the form: ' + err.message); } return; }
     if (b.id === 'mbRedcap') { U.saveUrl(URL.createObjectURL(redcap(D)), `${fileBase()} - REDCap data dictionary.csv`); toast('REDCap data dictionary saved'); return; }
-    if (b.id === 'mbTry') { const blob = buildWorkbook(D), f = new File([blob], `${fileBase()} - master sheet.xlsx`); close(); U.go(1); await U.loadFile(f); return; }
+    if (b.id === 'mbTry') { const blob = buildWorkbook(D), f = new File([blob], `${fileBase()} - master sheet.xlsx`); setPhase('analyse'); U.go(1); await U.loadFile(f); return; }
   }
   function onInput(e) {
     const t = e.target, d = t.dataset, val = t.type === 'checkbox' ? t.checked : t.value;
@@ -39317,13 +39390,15 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (d.mbck) { const [i, k] = d.mbck.split(':'); D.checks[+i][k] = val; save(); return; }
     const v = D.vars.find(x => x.id === sel); if (!v) return;
     if (d.mbv) { const k = d.mbv;
-      if (k === 'cats') v.cats = String(val).split('\n').map(x => x.trim()).filter(Boolean);
+      if (k === 'cats') { v.cats = String(val).split('\n').map(x => x.trim()).filter(Boolean); if (!v.expect || !v.expect.pct || v.expect.pct.length !== v.cats.length) v.expect = expectOf(v.label, v.type, v.cats); }
       else if (k === 'fkind') v.formula = { ...(v.formula || {}), kind: val };
       else if (k === 'fa' || k === 'fb') v.formula = { kind: 'bmi', ...(v.formula || {}), [k.slice(1)]: val };
-      else if (k === 'type') { v.type = val; if (val === 'yn') v.cats = [...YN]; if (val === 'calc' && !v.formula) v.formula = { kind: 'bmi' }; }
+      else if (k === 'type') { v.type = val; if (val === 'yn') v.cats = [...YN]; if (val === 'calc' && !v.formula) v.formula = { kind: 'bmi' }; v.expect = expectOf(v.label, v.type, v.cats); }
       else v[k] = val;
       save(); if (t.tagName === 'SELECT' || t.type === 'checkbox' || k === 'section') render(); return; }
     if (d.mbvisit) { const on = new Set((v.visits || []).length ? v.visits : [D.visits[0].id]); if (val) on.add(d.mbvisit); else on.delete(d.mbvisit); v.visits = D.visits.map(x => x.id).filter(id => on.has(id)); if (v.visits.length === 1 && v.visits[0] === D.visits[0].id) v.visits = []; save(); return render(); }
+    if (d.mbe) { v.expect = { ...(v.expect || {}), [d.mbe]: d.mbe === 'dist' ? val : val === '' ? '' : +val }; save(); return; }
+    if (d.mbep !== undefined) { const e = v.expect = v.expect || {}; e.pct = v.cats.map((_, i) => (e.pct || [])[i] ?? +(100 / v.cats.length).toFixed(1)); e.pct[+d.mbep] = +val || 0; save(); return; }
     if (d.mbflist) { const L = new Set((v.formula || {}).list || []); if (val) L.add(d.mbflist); else L.delete(d.mbflist); v.formula = { ...(v.formula || {}), list: [...L] }; save(); return; }
   }
   function onChange(e) {
@@ -39335,7 +39410,199 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   }
   // the entry on step 1
   const anchor = $('#btnTemplate'); if (anchor) { const b = document.createElement('button'); b.className = 'btn ghost small'; b.type = 'button'; b.id = 'btnBuilder'; b.title = 'Design the master sheet of a new study: variables, visits, groups, ranges, randomisation — then an Excel sheet, a case report form and a REDCap dictionary'; b.textContent = '🧱 Master sheet builder'; anchor.parentNode.insertBefore(b, anchor); b.onclick = open; }
-  window.EasyBuilder = { open, close, buildWorkbook: d => buildWorkbook(d || D), setupFor, columns, randomisation, redcap, fromTemplate, get design() { return D; }, set design(x) { D = x; save(); } };
+  setPhase('analyse');
+  window.EasyBuilder = { open, close, setPhase, get phase() { return phase; }, buildWorkbook: (d, fill) => buildWorkbook(d || D, fill), setupFor, columns, visitsOf: v => visitsOf(D, v), baseName: v => baseName(D, v), tagOf, expectOf, prng, randomisation, redcap, fromTemplate, fileBase, save, get design() { return D; }, set design(x) { D = x; save(); } };
+})();
+
+/* Prof MSE Easy Stat — phase 2, the data generator: fills the master sheet designed in phase 1 with simulated patients
+   (for teaching, testing an analysis plan and checking a sample size). Expected values come from the design and can be
+   set here for each group and visit; links between variables, missing data, dropouts, outliers and "messy" entries make it
+   realistic; a power simulation repeats it many times. The sheet is marked as simulated inside the file. */
+(() => {
+  const U = window.EasyUI, B = window.EasyBuilder; if (!U || !B) return;
+  const $ = s => document.querySelector(s), esc = U.esc, toast = U.toast;
+  const ls = { get: (k, d) => { try { const v = localStorage.getItem('gen.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem('gen.' + k, JSON.stringify(v)); } catch (e) { /* not kept */ } } };
+  const defaults = () => ({ n: '', ratio: '', seed: 20261107, visitR: 0.6, missAll: 2, miss: {}, dropout: 5, outliers: 0, messy: false, messyPct: 3, start: '2026-01-01', span: 365, targets: {}, sds: {}, corr: [], power: { v: '', visit: '', reps: 200, alpha: 0.05 } });
+  let G = { ...defaults(), ...ls.get('settings', {}) }, last = null, powerOut = '';
+  const save = () => ls.set('settings', G);
+
+  /* ---------- the engine ---------- */
+  const D0 = () => B.design, arms = D => D.arms.filter(Boolean), K = D => arms(D).length >= 2 ? arms(D).length : 1;
+  const visitKeys = (D, v) => { const vis = (v.visits || []).map(id => D.visits.find(x => x.id === id)).filter(Boolean); return vis.length ? vis.map(x => x.id) : ['once']; };
+  const visitName = (D, key) => key === 'once' ? '' : (D.visits.find(x => x.id === key) || {}).name || key;
+  const expect = v => v.expect && Object.keys(v.expect).length ? v.expect : B.expectOf(v.label, v.type, v.cats);
+  // the target of a variable for a group at a visit: a mean (numbers) or the % of each category
+  function target(v, g, key) {
+    const t = ((G.targets[v.id] || {})[g] || {})[key], e = expect(v);
+    if (v.type === 'num' || v.type === 'calc') return t !== undefined && t !== '' ? +t : e.mean !== '' && e.mean !== undefined ? +e.mean : (v.min !== '' && v.max !== '' ? (+v.min + +v.max) / 2 : 10);
+    const pc = Array.isArray(t) ? t : (e.pct && e.pct.length === v.cats.length ? e.pct : v.cats.map(() => 100 / v.cats.length)); const s = pc.reduce((a, b) => a + (+b || 0), 0) || 1; return pc.map(x => (+x || 0) / s);
+  }
+  const sdOf = v => { const s = G.sds[v.id] !== undefined && G.sds[v.id] !== '' ? +G.sds[v.id] : +expect(v).sd; return isFinite(s) && s > 0 ? s : Math.max(0.5, Math.abs(target(v, 0, 'once')) * 0.2); };
+  const decOf = (v, sd) => v.dec !== '' && v.dec !== undefined ? +v.dec : sd < 1 ? 2 : sd < 10 ? 1 : 0;
+  const yesFirst = v => v.type === 'yn' || /^(yes|y|present|positive)$/i.test(String(v.cats[0] || ''));
+  const normInv = p => jStat.normal.inv(Math.min(1 - 1e-12, Math.max(1e-12, p)), 0, 1);
+  function generate(D, opt = {}) {
+    const rnd = B.prng((+opt.seed || +G.seed || 1) >>> 0), norm = () => { let u = 0; while (!u) u = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd()); };
+    const n = Math.max(2, +G.n || +D.n || 60), A = arms(D), k = K(D), rho = Math.min(0.95, Math.max(0, +G.visitR || 0));
+    // groups: the randomisation list of the design, or the ratio (e.g. 1:1, 2:1), shuffled
+    let grp = [];
+    if (A.length >= 2) { if (D.rand && D.rand.on && !(D.rand.strata || []).length) grp = B.randomisation({ ...D, n })[0].list.map(a => A.indexOf(a));
+      else { const r = String(G.ratio || A.map(() => 1).join(':')).split(/[:,/ ]+/).map(Number).map(x => x > 0 ? x : 1), tot = r.slice(0, A.length).reduce((a, b) => a + b, 0) || A.length;
+        A.forEach((_, i) => { const m = Math.round(n * (r[i] || 1) / tot); for (let j = 0; j < m; j++) grp.push(i); }); while (grp.length < n) grp.push(grp.length % A.length); grp = grp.slice(0, n);
+        for (let i = grp.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [grp[i], grp[j]] = [grp[j], grp[i]]; } } }
+    else grp = Array(n).fill(0);
+    const vars = D.vars, lat = vars.map(() => null), P = [];
+    for (let i = 0; i < n; i++) {
+      // a patient's level of each variable (the same patient across visits), linked between variables where asked
+      const u = {}; vars.forEach(v => { u[v.id] = norm(); });
+      (G.corr || []).forEach(c => { if (u[c.a] === undefined || u[c.b] === undefined) return; const r = Math.max(-0.95, Math.min(0.95, +c.r || 0)); u[c.b] = r * u[c.a] + Math.sqrt(1 - r * r) * u[c.b]; });
+      const g = grp[i], vals = {};
+      vars.forEach(v => { if (!['num', 'yn', 'cat'].includes(v.type)) return; const o = vals[v.id] = {};
+        const keys = visitKeys(D, v); keys.forEach(key => { const z = keys.length === 1 ? u[v.id] : Math.sqrt(rho) * u[v.id] + Math.sqrt(1 - rho) * norm(); // one measurement: the patient's own level
+          if (v.type === 'num') { const m = target(v, g, key), sd = sdOf(v), e = expect(v); let x;
+            if (e.dist === 'skewed' && m > 0) { const s2 = Math.log(1 + sd * sd / (m * m)); x = Math.exp(Math.log(m) - s2 / 2 + Math.sqrt(s2) * z); } else x = m + sd * z;
+            if (v.min !== '' && isFinite(+v.min)) x = Math.max(+v.min, x); if (v.max !== '' && isFinite(+v.max)) x = Math.min(+v.max, x);
+            const dd = decOf(v, sd); o[key] = +x.toFixed(dd); }
+          else { const p = target(v, g, key), zz = yesFirst(v) ? -z : z; let c = 0, cum = 0; for (; c < p.length - 1; c++) { cum += p[c]; if (zz <= normInv(cum)) break; } o[key] = D.conv.catAs === 'codes' ? c + 1 : v.cats[c]; } }); });
+      // dates: one after the other (days after the previous date of the sheet), from the day of enrolment
+      let prev = Date.parse(G.start || '2026-01-01') + Math.floor(rnd() * (+G.span || 365)) * 864e5;
+      // in the clinical order of events, whatever their order in the sheet: birth, enrolment / admission, surgery, discharge, follow-up, death
+      const rank = v => { const l = v.label.toLowerCase(); return /birth/.test(l) ? 0 : /enrol|recruit|consent/.test(l) ? 1 : /admission|admit/.test(l) ? 2 : /surgery|operation|procedure|injection|intervention/.test(l) ? 3 : /discharge/.test(l) ? 5 : /follow|visit/.test(l) ? 6 : /death|died/.test(l) ? 8 : 4; };
+      vars.filter(v => v.type === 'date').map((v, i) => [v, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(x => x[0]).forEach((v, di) => { const e = expect(v), gap = di === 0 && /enrol|admission|birth/i.test(v.label) ? 0 : Math.max(0, Math.round((+e.mean || 0) + (+e.sd || 0) * norm()));
+        let t = prev + gap * 864e5; if (/birth/i.test(v.label)) t = prev - Math.round((target({ ...v, type: 'num', expect: { mean: 50 } }, 0, 'once') + 12 * norm()) * 365.25) * 864e5; else prev = t;
+        vals[v.id] = { once: new Date(t).toISOString().slice(0, 10) }; });
+      P.push({ id: `${D.idPrefix || ''}${String(i + 1).padStart(+D.idDigits || 3, '0')}`, g, group: A.length >= 2 ? A[g] : null, vals });
+    }
+    // calculated columns (also written as Excel formulas)
+    const num = x => (typeof x === 'number' && isFinite(x) ? x : NaN), days = (a, b) => (Date.parse(b) - Date.parse(a)) / 864e5;
+    P.forEach(p => vars.filter(v => v.type === 'calc' && v.formula).forEach(v => { const f = v.formula, o = p.vals[v.id] = {}, at = (id, key) => { const x = p.vals[id] || {}; return x[key] ?? x.once ?? x[D.visits[0].id]; };
+      visitKeys(D, v).forEach(key => { let r = null;
+        if (f.kind === 'bmi') { const w = num(at(f.a, key)), h = num(at(f.b, key)); if (w > 0 && h > 0) r = +(w / (h / 100) ** 2).toFixed(1); }
+        if (f.kind === 'days') { const a = at(f.a, key), b = at(f.b, key); if (a && b) r = Math.round(days(a, b)); }
+        if (f.kind === 'age') { const a = at(f.a, key), b = f.b ? at(f.b, key) : new Date().toISOString().slice(0, 10); if (a && b) r = Math.floor(days(a, b) / 365.25); }
+        if (f.kind === 'change') { const x = p.vals[f.a] || {}, ks = Object.keys(x); if (ks.length > 1) { const a = num(x[ks[0]]), b = num(x[ks[ks.length - 1]]); if (isFinite(a) && isFinite(b)) r = +(b - a).toFixed(2); } }
+        if ((f.kind === 'sum' || f.kind === 'mean') && (f.list || []).length) { const xs = f.list.map(id => num(at(id, key))); if (xs.every(isFinite)) { const s = xs.reduce((a, b) => a + b, 0); r = +(f.kind === 'sum' ? s : s / xs.length).toFixed(2); } }
+        o[key] = r; }); }));
+    // rules between columns (e.g. discharge ≥ admission) are kept
+    P.forEach(p => (D.checks || []).forEach(ch => { const a = p.vals[ch.a], b = p.vals[ch.b]; if (!a || !b) return; Object.keys(a).forEach(key => { const bv = b[key] ?? b.once; let av = a[key]; if (av == null || bv == null) return;
+      const isD = typeof av === 'string', x = isD ? Date.parse(av) : av, y = isD ? Date.parse(bv) : bv, ok = { '>': x > y, '>=': x >= y, '<': x < y, '<=': x <= y, '=': x === y }[ch.op]; if (ok !== false) return;
+      const step = isD ? 864e5 : 1, nv = ch.op === '>' ? y + step : ch.op === '<' ? y - step : y; a[key] = isD ? new Date(nv).toISOString().slice(0, 10) : nv; }); }));
+    // missing values, dropouts (the later visits of a patient are missing), outliers
+    const VK = D.visits.map(x => x.id);
+    P.forEach(p => { const drop = D.visits.length > 1 && rnd() * 100 < (+G.dropout || 0) ? 1 + Math.floor(rnd() * (D.visits.length - 1)) : 0;
+      vars.forEach(v => { const o = p.vals[v.id]; if (!o) return; Object.keys(o).forEach(key => { const vi = VK.indexOf(key);
+        if (drop && vi >= drop) { o[key] = null; return; }
+        const pm = G.miss[v.id] !== undefined && G.miss[v.id] !== '' ? +G.miss[v.id] : +G.missAll || 0; if (v.type !== 'calc' && !v.required && rnd() * 100 < pm) o[key] = null;
+        if (v.type === 'num' && o[key] != null && rnd() * 100 < (+G.outliers || 0)) { const m = target(v, p.g, key), sd = sdOf(v); o[key] = +(m + (rnd() < 0.5 && !(+v.min >= 0) ? -4 : 4) * sd).toFixed(decOf(v, sd)); } }); }); });
+    // messy entries, for practice in cleaning data: units in cells, typing errors, 999 codes, mixed spelling of categories, duplicated IDs
+    if (G.messy) { const pm = (+G.messyPct || 3) / 100;
+      P.forEach(p => vars.forEach(v => { const o = p.vals[v.id]; if (!o || v.type === 'calc') return; Object.keys(o).forEach(key => { const x = o[key]; if (x == null || rnd() > pm) return; const w = rnd();
+        if (v.type === 'num') o[key] = w < 0.35 && v.unit ? `${x} ${v.unit}` : w < 0.6 ? +(x * 10).toFixed(2) : w < 0.8 && D.conv.missing !== '999' ? 999 : String(x).replace('.', ',');
+        else if (typeof x === 'string') o[key] = w < 0.3 ? x.toLowerCase() : w < 0.55 ? x.toUpperCase() : w < 0.8 ? x.charAt(0) : ` ${x} `; }); }));
+      const dup = Math.max(1, Math.round(P.length * 0.02)); for (let d = 0; d < dup; d++) { const src = P[Math.floor(rnd() * P.length)]; P.splice(Math.floor(rnd() * P.length), 0, JSON.parse(JSON.stringify(src))); } }
+    return P;
+  }
+  // what was asked for, and what came out (per variable, group and visit)
+  function targetsList(D) { const out = []; D.vars.filter(v => ['num', 'yn', 'cat'].includes(v.type)).forEach(v => visitKeys(D, v).forEach(key => { for (let g = 0; g < K(D); g++) { const t = target(v, g, key);
+    out.push({ varId: v.id, label: v.label, unit: v.unit, kind: v.type === 'num' ? 'mean' : 'pct', cat: v.type === 'num' ? '' : String(v.cats[0]), visit: key, visitName: visitName(D, key), g, group: arms(D)[g] || 'All patients', target: v.type === 'num' ? +(+t).toFixed(3) : +(t[0] * 100).toFixed(1), sd: v.type === 'num' ? sdOf(v) : null }); } })); return out; }
+  function observed(D, P, t) { const v = D.vars.find(x => x.id === t.varId), xs = P.filter(p => p.g === t.g).map(p => (p.vals[t.varId] || {})[t.visit]).filter(x => x != null && x !== '');
+    if (t.kind === 'mean') { const nn = xs.map(Number).filter(isFinite); if (!nn.length) return { n: 0 }; const m = nn.reduce((a, b) => a + b, 0) / nn.length, sd = Math.sqrt(nn.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, nn.length - 1)); return { n: nn.length, m, sd }; }
+    const first = D.conv.catAs === 'codes' ? 1 : v.cats[0]; return { n: xs.length, m: xs.length ? 100 * xs.filter(x => String(x).trim().toLowerCase() === String(first).toLowerCase()).length / xs.length : NaN }; }
+
+  /* ---------- power: the same study simulated many times, the main outcome tested each time ---------- */
+  function pTest(D, v, key, P) {
+    const k = K(D), groups = [...Array(k)].map((_, g) => P.filter(p => p.g === g).map(p => (p.vals[v.id] || {})[key]).filter(x => x != null && x !== ''));
+    if (v.type === 'num') { const gs = groups.map(x => x.map(Number).filter(isFinite));
+      if (k === 1) { const base = P.map(p => [(p.vals[v.id] || {})[D.visits[0].id] ?? (p.vals[v.id] || {}).once, (p.vals[v.id] || {})[key]]).filter(([a, b]) => isFinite(+a) && isFinite(+b) && a !== null && b !== null).map(([a, b]) => +b - +a);
+        if (base.length < 3) return NaN; const m = base.reduce((a, b) => a + b, 0) / base.length, sd = Math.sqrt(base.reduce((a, b) => a + (b - m) ** 2, 0) / (base.length - 1)); if (!(sd > 0)) return NaN; const t = m / (sd / Math.sqrt(base.length)); return 2 * (1 - jStat.studentt.cdf(Math.abs(t), base.length - 1)); }
+      const st = gs.map(x => { const m = x.reduce((a, b) => a + b, 0) / x.length; return { n: x.length, m, v: x.reduce((a, b) => a + (b - m) ** 2, 0) / (x.length - 1) }; }); if (st.some(s => s.n < 2)) return NaN;
+      if (k === 2) { const se = Math.sqrt(st[0].v / st[0].n + st[1].v / st[1].n), t = (st[0].m - st[1].m) / se, df = se ** 4 / ((st[0].v / st[0].n) ** 2 / (st[0].n - 1) + (st[1].v / st[1].n) ** 2 / (st[1].n - 1)); return 2 * (1 - jStat.studentt.cdf(Math.abs(t), df)); }
+      const N = st.reduce((a, s) => a + s.n, 0), gm = st.reduce((a, s) => a + s.n * s.m, 0) / N, ssb = st.reduce((a, s) => a + s.n * (s.m - gm) ** 2, 0), ssw = st.reduce((a, s) => a + (s.n - 1) * s.v, 0), F = (ssb / (k - 1)) / (ssw / (N - k)); return 1 - jStat.centralF.cdf(F, k - 1, N - k); }
+    const cats = D.conv.catAs === 'codes' ? v.cats.map((_, i) => i + 1) : v.cats, tab = groups.map(x => cats.map(c => x.filter(y => String(y) === String(c)).length)), rs = tab.map(r => r.reduce((a, b) => a + b, 0)), cs = cats.map((_, j) => tab.reduce((a, r) => a + r[j], 0)), N = rs.reduce((a, b) => a + b, 0);
+    if (k === 1 || !N) return NaN; let chi = 0, df = 0; const usedC = cs.filter(c => c > 0).length; tab.forEach((r, i) => r.forEach((o, j) => { const e = rs[i] * cs[j] / N; if (e > 0) chi += (o - e) ** 2 / e; })); df = (k - 1) * (usedC - 1); return df > 0 ? 1 - jStat.chisquare.cdf(chi, df) : NaN;
+  }
+  function power(D) { const v = D.vars.find(x => x.id === G.power.v); if (!v) return 'Choose the main outcome first.'; const key = G.power.visit || visitKeys(D, v).slice(-1)[0], reps = Math.min(2000, Math.max(20, +G.power.reps || 200)), alpha = +G.power.alpha || 0.05;
+    const keep = { messy: G.messy, outliers: G.outliers }; G.messy = false; G.outliers = 0; let hit = 0, done = 0;
+    try { for (let r = 0; r < reps; r++) { const p = pTest(D, v, key, generate(D, { seed: (+G.seed || 1) + 7919 * (r + 1) })); if (isFinite(p)) { done++; if (p < alpha) hit++; } } } finally { Object.assign(G, keep); }
+    if (!done) return 'The test could not be run (check the targets and the groups).'; const pw = hit / done, z = 1.96, den = 1 + z * z / done, c = (pw + z * z / (2 * done)) / den, h = z * Math.sqrt(pw * (1 - pw) / done + z * z / (4 * done * done)) / den;
+    const nPer = arms(D).length >= 2 ? `${Math.round((+G.n || +D.n || 60) / K(D))} per group` : `${+G.n || +D.n || 60} patients`;
+    return `<b>Power ≈ ${(100 * pw).toFixed(0)}%</b> (95% CI ${(100 * (c - h)).toFixed(0)}–${(100 * (c + h)).toFixed(0)}%) to find a difference in ${esc(v.label)}${key !== 'once' ? ` at ${esc(visitName(D, key))}` : ''} with ${nPer}, at P < ${alpha} — ${done} simulated studies (${v.type === 'num' ? K(D) === 2 ? "Welch's t-test" : K(D) > 2 ? 'one-way ANOVA' : 'paired t-test against the first visit' : 'Chi-square test'}).`; }
+
+  /* ---------- the workspace ---------- */
+  const opt = (list, cur) => list.map(([k, l]) => `<option value="${esc(k)}" ${String(cur) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  function render() {
+    const w = $('#genWrap'); if (!w) return; const D = D0(), A = arms(D), k = K(D), gl = A.length >= 2 ? A : ['All patients'];
+    if (!w.dataset.wired) { w.dataset.wired = 1; w.addEventListener('input', onInput); w.addEventListener('click', onClick); }
+    const vs = D.vars.filter(v => ['num', 'yn', 'cat'].includes(v.type)), dates = D.vars.filter(v => v.type === 'date'), calcs = D.vars.filter(v => v.type === 'calc');
+    const block = v => { const keys = visitKeys(D, v), e = expect(v);
+      const cellIn = (g, key) => { const t = ((G.targets[v.id] || {})[g] || {})[key];
+        if (v.type === 'num') return `<input type="number" step="any" data-gt="${v.id}|${g}|${key}" value="${esc(t ?? '')}" placeholder="${esc(e.mean ?? '')}" style="width:80px">`;
+        if (v.type === 'yn' || v.cats.length === 2) return `<input type="number" min="0" max="100" step="any" data-gtp="${v.id}|${g}|${key}" value="${esc(Array.isArray(t) ? +(t[0]).toFixed(1) : '')}" placeholder="${esc(((e.pct || [])[0]) ?? 50)}" style="width:70px" title="% ${esc(v.cats[0])}">`;
+        return `<input type="text" data-gtc="${v.id}|${g}|${key}" value="${esc(Array.isArray(t) ? t.join(', ') : '')}" placeholder="${esc((e.pct || []).join(', '))}" style="width:130px" title="% of ${esc(v.cats.join(', '))}">`; };
+      return `<tr><td><b>${esc(v.label)}</b>${v.unit ? ` <span class="legend-note">(${esc(v.unit)})</span>` : ''}<div class="legend-note">${v.type === 'num' ? `SD <input type="number" step="any" min="0" data-gsd="${v.id}" value="${esc(G.sds[v.id] ?? '')}" placeholder="${esc(e.sd ?? '')}" style="width:64px"> · ${e.dist === 'skewed' ? 'skewed' : 'normal'}` : v.type === 'yn' || v.cats.length === 2 ? `% ${esc(v.cats[0])}` : `% of ${esc(v.cats.join(' / '))}`} · missing % <input type="number" min="0" max="100" step="any" data-gmiss="${v.id}" value="${esc(G.miss[v.id] ?? '')}" placeholder="${esc(G.missAll)}" style="width:54px"></div></td>
+        ${gl.map((_, g) => `<td>${keys.map(key => `<div class="gen-cell">${keys.length > 1 || key !== 'once' ? `<span class="legend-note">${esc(visitName(D, key))}</span>` : ''}${cellIn(g, key)}</div>`).join('')}</td>`).join('')}</tr>`; };
+    const res = last ? targetsList(D).map(t => ({ ...t, o: observed(D, last, t) })) : [];
+    w.innerHTML = `<div class="mb-head"><b>🎲 Generate the data</b><span class="legend-note">${esc(D.title || 'Untitled study')} · ${D.vars.length} variables · simulated patients for teaching, testing the analysis and checking the sample size</span><span class="spacer"></span>
+        <button class="btn ghost small" type="button" data-gtab="build">‹ Back to the design</button><button class="btn primary small" type="button" id="genSend">📊 Analyse these data ›</button></div>
+      <div class="mb-body" style="border-radius:12px;margin-top:10px">
+      <div class="grid g4">
+        <div><label class="f">Number of patients</label><input type="number" min="2" max="20000" data-g="n" value="${esc(G.n)}" placeholder="${esc(D.n)}"></div>
+        ${A.length >= 2 ? (D.rand && D.rand.on && !(D.rand.strata || []).length ? `<div><label class="f">Groups</label><div class="legend-note" style="margin-top:8px">From the randomisation list of the design</div></div>` : `<div><label class="f">Group sizes (ratio)</label><input type="text" data-g="ratio" value="${esc(G.ratio)}" placeholder="${A.map(() => 1).join(':')}"></div>`) : '<div><label class="f">Groups</label><div class="legend-note" style="margin-top:8px">One group</div></div>'}
+        <div><label class="f">Seed (same seed, same data)</label><div class="row" style="gap:4px"><input type="number" data-g="seed" value="${esc(G.seed)}"><button class="btn ghost small" type="button" id="genSeed" title="A new seed">🎲</button></div></div>
+        <div><label class="f">Correlation of a patient's visits</label><input type="number" min="0" max="0.95" step="0.05" data-g="visitR" value="${esc(G.visitR)}"></div></div>
+      <h3>Expected values for each group${D.visits.length > 1 ? ' and visit' : ''}</h3>
+      <p class="legend-note">Numbers: the mean (SD shared by the groups); yes/no: the % ${esc('Yes')}; categories: the % of each, separated by commas. Empty cells use the expected values of the design (shown in grey) — type different values to make a difference between the groups or a change over the visits.</p>
+      <div class="tbl-wrap" style="max-height:460px"><table class="t gen-tbl"><thead><tr><th>Variable</th>${gl.map(g => `<th>${esc(g)}</th>`).join('')}</tr></thead><tbody>${vs.map(block).join('') || `<tr><td colspan="${gl.length + 1}" class="legend-note">No variables — design the sheet first (phase 1).</td></tr>`}</tbody></table></div>
+      ${dates.length || calcs.length ? `<p class="legend-note">${dates.length ? `Dates (${esc(dates.map(v => v.label).join(', '))}) follow each other from the day of enrolment (study start <input type="date" data-g="start" value="${esc(G.start)}"> over <input type="number" min="1" data-g="span" value="${esc(G.span)}" style="width:70px"> days); the days between them are set in the design. ` : ''}${calcs.length ? `Calculated columns (${esc(calcs.map(v => v.label).join(', '))}) are computed.` : ''}</p>` : ''}
+      <h3>Links between variables</h3><p class="legend-note">A correlation between two variables (e.g. age and systolic BP 0.4; diabetes with HbA1c 0.6: a higher value goes with more “Yes”).</p>
+      ${(G.corr || []).map((c, i) => `<div class="row" style="gap:6px;margin:4px 0"><select data-gc="${i}|a" style="width:auto">${opt([['', '—'], ...vs.map(v => [v.id, v.label])], c.a)}</select><span>with</span><select data-gc="${i}|b" style="width:auto">${opt([['', '—'], ...vs.map(v => [v.id, v.label])], c.b)}</select><span>r =</span><input type="number" min="-0.95" max="0.95" step="0.05" data-gc="${i}|r" value="${esc(c.r)}" style="width:80px"><button class="btn ghost small" type="button" data-gcdel="${i}">✕</button></div>`).join('')}
+      <button class="btn ghost small" type="button" id="genCorrAdd">+ Link</button>
+      <h3>Realism</h3><div class="grid g4">
+        <div><label class="f">Missing values (% of every variable)</label><input type="number" min="0" max="90" step="any" data-g="missAll" value="${esc(G.missAll)}"></div>
+        <div><label class="f">Patients who drop out (%)</label><input type="number" min="0" max="90" step="any" data-g="dropout" value="${esc(G.dropout)}" ${D.visits.length > 1 ? '' : 'disabled'}></div>
+        <div><label class="f">Outliers (% of the numbers)</label><input type="number" min="0" max="20" step="any" data-g="outliers" value="${esc(G.outliers)}"></div>
+        <div><label class="check" style="margin-top:22px"><input type="checkbox" data-g="messy" ${G.messy ? 'checked' : ''}><span><b>Messy entries</b> (to practise cleaning) — <input type="number" min="0.5" max="30" step="0.5" data-g="messyPct" value="${esc(G.messyPct)}" style="width:56px">% of the cells: units typed in, ×10 typing errors, 999, male / MALE / M, duplicated IDs</span></label></div></div>
+      <div class="row" style="gap:8px;margin-top:14px"><button class="btn primary" type="button" id="genGo">🎲 Generate</button><button class="btn ghost" type="button" id="genXlsx" ${last ? '' : 'disabled'}>⬇ Simulated master sheet (.xlsx)</button><button class="btn ghost" type="button" id="genSend2" ${last ? '' : 'disabled'}>📊 Analyse these data ›</button><span class="legend-note">${last ? `${last.length} rows generated (seed ${esc(G.seed)})` : 'Not generated yet'}</span></div>
+      ${last ? `<h3>Check: what came out against what was asked</h3><div class="tbl-wrap" style="max-height:380px"><table class="t gen-chk"><thead><tr><th>Variable</th><th>Visit</th><th>Group</th><th>Asked</th><th>Generated</th><th>n</th></tr></thead><tbody>${res.map(r => { const off = r.kind === 'mean' ? Math.abs(r.o.m - r.target) > (r.sd || 1) * 0.6 : Math.abs(r.o.m - r.target) > 15;
+          return `<tr class="${off ? 'gen-off' : ''}"><td>${esc(r.label)}</td><td>${esc(r.visitName)}</td><td>${esc(r.group)}</td><td>${r.kind === 'mean' ? esc(+r.target.toFixed(2)) + (r.sd ? ` ± ${esc(+(+r.sd).toFixed(2))}` : '') : `${esc(r.target)}% ${esc(r.cat)}`}</td><td>${r.o.n ? (r.kind === 'mean' ? `${r.o.m.toFixed(2)} ± ${(r.o.sd || 0).toFixed(2)}` : `${r.o.m.toFixed(1)}%`) : '—'}</td><td>${r.o.n || 0}</td></tr>`; }).join('')}</tbody></table></div>
+        <p class="legend-note">Small samples differ from the targets by chance; rows far from the target are shaded.</p>
+        <h3>First rows</h3>${preview(D)}` : ''}
+      <h3>Power of the planned study</h3><p class="legend-note">The study is simulated many times with these settings, and the main outcome tested each time: the share of significant results is the power.</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end"><div><label class="f">Main outcome</label><select data-gp="v" style="width:auto">${opt([['', '—'], ...vs.map(v => [v.id, v.label])], G.power.v)}</select></div>
+        ${(() => { const v = D.vars.find(x => x.id === G.power.v); return v && visitKeys(D, v).length > 1 ? `<div><label class="f">At</label><select data-gp="visit" style="width:auto">${opt(visitKeys(D, v).map(k2 => [k2, visitName(D, k2)]), G.power.visit || visitKeys(D, v).slice(-1)[0])}</select></div>` : ''; })()}
+        <div><label class="f">Simulated studies</label><input type="number" min="20" max="2000" data-gp="reps" value="${esc(G.power.reps)}" style="width:90px"></div><div><label class="f">Significance level</label><input type="number" min="0.001" max="0.2" step="0.005" data-gp="alpha" value="${esc(G.power.alpha)}" style="width:90px"></div>
+        <button class="btn ghost" type="button" id="genPower">Run</button></div><div class="legend-note" id="genPowerOut" style="margin-top:6px;font-size:14px">${powerOut}</div>
+      </div>`;
+  }
+  function preview(D) { const cols = B.columns(D).filter(c => D.layout !== 'long'), A = arms(D);
+    return `<div class="tbl-wrap" style="max-height:260px"><table class="t mb-prev"><thead><tr><th>ID</th>${A.length >= 2 ? '<th>Group</th>' : ''}${cols.map(c => `<th>${esc(c.col)}</th>`).join('')}</tr></thead><tbody>${last.slice(0, 8).map(p => `<tr><td>${esc(p.id)}</td>${A.length >= 2 ? `<td>${esc(p.group)}</td>` : ''}${cols.map(c => { const o = p.vals[c.v.id] || {}, x = c.visit ? (o[c.visit.id] ?? (c.visit.id === D.visits[0].id ? o.once : null)) : (o.once ?? o[D.visits[0].id]); return `<td>${esc(x ?? '')}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`; }
+  function fill(D) { return { patients: last.map(p => ({ id: p.id, group: p.group, vals: p.vals })), simulated: { at: new Date().toISOString().slice(0, 10), seed: G.seed, n: last.length }, targets: targetsList(D).map(t => ({ ...t, cols: B.columns(D).filter(c => c.v.id === t.varId && (t.visit === 'once' ? !c.visit || c.visit.id === D.visits[0].id : c.visit && c.visit.id === t.visit)).map(c => c.col) })) }; }
+  const fileName = D => `Simulated - ${B.fileBase()} - master sheet.xlsx`;
+  async function send(D) { if (!last) { last = generate(D); } const blob = B.buildWorkbook(D, fill(D)), f = new File([blob], fileName(D)); B.setPhase('analyse'); U.go(1); await U.loadFile(f); }
+  function onClick(e) {
+    const b = e.target.closest('button'); if (!b) return; const D = D0();
+    if (b.dataset.gtab === 'build') return B.setPhase('build');
+    if (b.id === 'genSeed') { G.seed = Math.floor(Math.random() * 1e9); save(); last = null; return render(); }
+    if (b.id === 'genGo') { try { last = generate(D); toast(`${last.length} simulated patients`); } catch (err) { console.error(err); toast('Could not generate: ' + err.message); } return render(); }
+    if (b.id === 'genXlsx' && last) { U.saveUrl(URL.createObjectURL(B.buildWorkbook(D, fill(D))), fileName(D)); toast('Simulated master sheet saved'); return; }
+    if (b.id === 'genSend' || b.id === 'genSend2') { send(D); return; }
+    if (b.id === 'genCorrAdd') { (G.corr = G.corr || []).push({ a: '', b: '', r: 0.4 }); save(); return render(); }
+    if (b.dataset.gcdel !== undefined) { G.corr.splice(+b.dataset.gcdel, 1); save(); return render(); }
+    if (b.id === 'genPower') { const out = $('#genPowerOut'); out.textContent = 'Simulating…'; setTimeout(() => { try { powerOut = power(D); } catch (err) { console.error(err); powerOut = 'Failed: ' + esc(err.message); } out.innerHTML = powerOut; }, 30); return; }
+  }
+  function onInput(e) {
+    const t = e.target, d = t.dataset, val = t.type === 'checkbox' ? t.checked : t.value, set = (path, x) => { const [id, g, key] = path.split('|'); ((G.targets[id] = G.targets[id] || {})[g] = G.targets[id][g] || {})[key] = x; };
+    if (d.g) { G[d.g] = val; save(); last = null; if (t.type === 'checkbox') render(); return; }
+    if (d.gt) { set(d.gt, val === '' ? '' : +val); save(); return; }
+    if (d.gtp) { if (val === '') set(d.gtp, ''); else { const p = Math.max(0, Math.min(100, +val)); set(d.gtp, [p, 100 - p]); } save(); return; }
+    if (d.gtc) { const ps = String(val).split(/[ ,;/]+/).map(Number).filter(x => isFinite(x)); set(d.gtc, ps.length ? ps : ''); save(); return; }
+    if (d.gsd) { G.sds[d.gsd] = val; save(); return; }
+    if (d.gmiss) { G.miss[d.gmiss] = val; save(); return; }
+    if (d.gc) { const [i, k] = d.gc.split('|'); G.corr[+i][k] = k === 'r' ? +val : val; save(); return; }
+    if (d.gp) { G.power[d.gp] = val; save(); if (t.tagName === 'SELECT') render(); return; }
+  }
+  window.EasyGen = { render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; } };
+  if (document.documentElement.classList.contains('ph-generate')) render();
 })();
 </script>
 </body>

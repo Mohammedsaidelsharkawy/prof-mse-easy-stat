@@ -2,6 +2,24 @@
 
 An offline web app that turns an Excel mastersheet into a formatted Word statistical report: methods paragraph, CONSORT flowchart, results tables, auto-written comments and figures.
 
+## Three phases: 🧱 Build · 🎲 Generate · 📊 Analyse
+
+A bar at the top of the app moves between the three phases of a study; each can be used on its own (Analyse works with your own data as before), and one project keeps all three.
+
+### 🎲 Generate the data
+
+Fills the master sheet designed in phase 1 with **simulated patients** — for teaching, for testing the analysis plan before the data exist, and for checking the sample size:
+
+- **Patients and groups**: the number of patients, the groups from the design's randomisation list or a ratio (1:1, 2:1 …), and a seed (the same seed gives the same data).
+- **Expected values for each group and visit**: the mean of each number (with its SD, normal or skewed / log-normal), the % “Yes” of each yes/no item and the % of each category — empty cells use the expected values set in the design (each library variable has sensible defaults, e.g. age 50 ± 12, hypertension 30%). Different values between the groups make a treatment effect; different values over the visits make a change over time; the correlation of a patient's visits is set too.
+- **Links between variables** (a correlation, e.g. age with hypertension), **dates** in their clinical order (enrolment, admission, surgery, discharge, death) with the days between them, **calculated columns** computed (BMI, length of stay, change, totals), and the design's **rules** kept.
+- **Realism**: missing values (all variables or each one), patients who drop out (their later visits missing), outliers, and **messy entries** for cleaning practice (units typed in cells, ×10 typing errors, 999, male / MALE / M, duplicated IDs).
+- **Check**: what came out against what was asked, for each variable, group and visit; and the first rows.
+- **Power**: the study is simulated many times (e.g. 200) and the main outcome tested each time (Welch's t-test, ANOVA, Chi-square, or a paired t-test for one group): the share of significant results is the power, with its 95% CI.
+- **Output**: the simulated master sheet in Excel (as in phase 1, with the formulas' results) or **📊 Analyse these data** in one click. The file is named “Simulated …”, its instructions say so, and it carries a hidden flag: the app then shows a notice, and two marks are offered — a “SIMULATED DATA” watermark in the Word report and a sentence in the statistical analysis — both off unless ticked. Step 10 compares the generator's targets with the data.
+
+Checked on 20,000 simulated patients: means, SDs, percentages, skewed (log-normal) values and the correlation between variables match their targets (e.g. a latent correlation of 0.5 with 30% “Yes” gives a point-biserial r of 0.387 against 0.379 in theory), and the simulated power of a two-group comparison (d = 0.75, 60 per group) is 97%, as by the formula.
+
 ## Master sheet builder
 
 **🧱 Master sheet builder** (step 1) designs the data collection sheet of a new study before any data exist, in six steps:

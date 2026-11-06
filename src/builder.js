@@ -30,7 +30,24 @@
     ['Outcomes', [['Complications', 'yn'], ['Type of complication', 'text'], ['Readmission', 'yn'], ['Reoperation', 'yn'], ['ICU admission', 'yn'], ['Date of admission', 'date'], ['Date of discharge', 'date'],
       ['Length of stay', 'num', 'days', 0, 365, null, 0], ['Recurrence', 'yn'], ['Mortality', 'yn'], ['Date of death', 'date'], ['Follow-up', 'num', 'months', 0, 240, null, 0]]],
     ['Diagnostic accuracy', [['Index test result', 'cat', '', null, null, ['Positive', 'Negative']], ['Reference standard', 'cat', '', null, null, ['Positive', 'Negative']], ['Index test value', 'num', '', null, null, null, 2]]]];
-  const libVar = (section, e) => ({ id: uid(), section, label: e[0], type: e[1], unit: e[2] || '', min: e[3] ?? '', max: e[4] ?? '', cats: e[1] === 'yn' ? [...YN] : e[5] ? [...e[5]] : [], dec: e[6] ?? '', required: false, visits: [], group: section === 'Medical history' && e[1] === 'yn' ? 'Co-morbidities' : '', role: '', definition: '' });
+  // expected values of each variable (used by the generator): mean ± SD (skewed for lab values that are), % of each category, days after the previous date
+  const EXPECT = { 'Age': [50, 12], 'Weight': [75, 14], 'Height': [165, 9], 'Charlson comorbidity index': [2, 1.8, 1], 'Systolic BP': [130, 18], 'Diastolic BP': [80, 11], 'Heart rate': [82, 14], 'Respiratory rate': [18, 4], 'Temperature': [37, 0.5],
+    'SpO2': [96, 2.5], 'Glasgow coma scale': [14, 1.5], 'Haemoglobin': [12.8, 1.8], 'WBC': [8, 3, 1], 'Platelets': [250, 70], 'Creatinine': [1, 0.35, 1], 'Urea': [35, 12, 1], 'ALT': [30, 18, 1], 'AST': [28, 14, 1], 'Albumin': [3.9, 0.5],
+    'Total bilirubin': [0.8, 0.45, 1], 'Sodium': [138, 3], 'Potassium': [4.2, 0.45], 'Fasting glucose': [110, 30, 1], 'HbA1c': [6.5, 1.3], 'CRP': [15, 20, 1], 'INR': [1.1, 0.2], 'Troponin': [20, 40, 1], 'D-dimer': [800, 600, 1],
+    'Vitamin D': [22, 10], 'LDL cholesterol': [120, 35], 'Pain VAS': [6, 2], 'Pain NRS': [6, 2], 'WOMAC': [55, 15], 'Oswestry disability index': [40, 15], 'Barthel index': [70, 20], 'PHQ-9': [8, 5, 1], 'GAD-7': [7, 4, 1],
+    'MMSE': [25, 4], 'APACHE II': [15, 7], 'SOFA': [6, 3], 'Operative time': [90, 30], 'Blood loss': [250, 150, 1], 'Length of stay': [5, 3, 1], 'Follow-up': [12, 4], 'Index test value': [50, 20] };
+  const YES_PCT = { 'Hypertension': 30, 'Diabetes': 20, 'Ischaemic heart disease': 10, 'Heart failure': 5, 'COPD': 8, 'Asthma': 7, 'Chronic kidney disease': 6, 'Chronic liver disease': 4, 'Stroke': 4, 'Dyslipidaemia': 25, 'Hypothyroidism': 6,
+    'Cancer': 5, 'Previous surgery': 30, 'Intraoperative complications': 5, 'Conversion': 4, 'Complications': 15, 'Readmission': 8, 'Reoperation': 5, 'ICU admission': 10, 'Recurrence': 10, 'Mortality': 5 };
+  const CAT_PCT = { 'Smoking': [55, 20, 25], 'ASA class': [30, 45, 20, 4, 1], 'Residence': [60, 40], 'Satisfaction': [10, 20, 40, 30], 'Index test result': [40, 60], 'Reference standard': [35, 65] };
+  const DATE_GAP = { 'Date of surgery': [1, 1], 'Date of discharge': [4, 2], 'Date of death': [60, 40] };
+  function expectOf(label, type, cats) {
+    if (type === 'num' || type === 'calc') { const e = EXPECT[label]; return e ? { mean: e[0], sd: e[1], dist: e[2] ? 'skewed' : 'normal' } : { mean: '', sd: '', dist: 'normal' }; }
+    if (type === 'yn') { const y = YES_PCT[label] ?? 30; return { pct: [y, 100 - y] }; }
+    if (type === 'cat') { const c = CAT_PCT[label]; return { pct: c && c.length === cats.length ? [...c] : cats.map(() => +(100 / cats.length).toFixed(1)) }; }
+    if (type === 'date') { const g = DATE_GAP[label] || [7, 3]; return { mean: g[0], sd: g[1] }; }
+    return {};
+  }
+  const libVar = (section, e) => ({ expect: expectOf(e[0], e[1], e[1] === 'yn' ? YN : e[5] || []), id: uid(), section, label: e[0], type: e[1], unit: e[2] || '', min: e[3] ?? '', max: e[4] ?? '', cats: e[1] === 'yn' ? [...YN] : e[5] ? [...e[5]] : [], dec: e[6] ?? '', required: false, visits: [], group: section === 'Medical history' && e[1] === 'yn' ? 'Co-morbidities' : '', role: '', definition: '' });
   const findLib = label => { for (const [sec, list] of LIB) { const e = list.find(x => x[0].toLowerCase() === label.toLowerCase()); if (e) return libVar(sec, e); } return null; };
 
   /* ---------- templates ---------- */
@@ -126,7 +143,7 @@
   function sheetXml(rows, o = {}) {
     const W = Math.max(1, ...rows.map(r => r.length)), dims = `A1:${colL(W - 1)}${Math.max(1, rows.length)}`;
     const cell = (c, ri, ci) => { if (c === null || c === undefined || c === '') return ''; const ref = `${colL(ci)}${ri + 1}`, o2 = typeof c === 'object' ? c : { v: c }, s = o2.s ? ` s="${o2.s}"` : '';
-      if (o2.f) return `<c r="${ref}"${s}><f>${X(o2.f)}</f></c>`;
+      if (o2.f) return o2.cv === undefined || o2.cv === null || o2.cv === '' ? `<c r="${ref}"${s}><f>${X(o2.f)}</f></c>` : typeof o2.cv === 'number' ? `<c r="${ref}"${s}><f>${X(o2.f)}</f><v>${o2.cv}</v></c>` : `<c r="${ref}"${s} t="str"><f>${X(o2.f)}</f><v>${X(o2.cv)}</v></c>`;
       if (typeof o2.v === 'number' && isFinite(o2.v)) return `<c r="${ref}"${s}><v>${o2.v}</v></c>`;
       if (o2.v === undefined || o2.v === null || o2.v === '') return s ? `<c r="${ref}"${s}/>` : '';
       return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${X(o2.v)}</t></is></c>`; };
@@ -154,9 +171,11 @@
   /* ---------- the master sheet workbook ---------- */
   const missingCode = D => D.conv.missing === '999' ? 999 : null;
   const codeOf = (v, c) => v.cats.indexOf(c) + 1;
-  function buildWorkbook(D) {
+  // fill (from the generator): { patients: [{ id, group, vals: { varId: { visitId | 'once': value } } }], simulated, targets }
+  const xlDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d) ? Math.round((Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) - Date.UTC(1899, 11, 30)) / 864e5) : d;
+  function buildWorkbook(D, fill) {
     const cols = columns(D), long = D.layout === 'long', perVisit = D.layout === 'sheets', arms = D.arms.filter(Boolean), hasGroup = arms.length >= 2;
-    const n = Math.max(1, +D.n || 60), ids = Array.from({ length: n }, (_, i) => `${D.idPrefix || ''}${String(i + 1).padStart(+D.idDigits || 3, '0')}`);
+    const n = fill ? fill.patients.length : Math.max(1, +D.n || 60), ids = fill ? fill.patients.map(p => p.id) : Array.from({ length: n }, (_, i) => `${D.idPrefix || ''}${String(i + 1).padStart(+D.idDigits || 3, '0')}`);
     const rand = hasGroup && D.rand.on ? randomisation(D) : null, prefillGroup = rand && rand.length === 1 && D.rand.prefill !== false ? rand[0].list : null;
     const order = D.sections.length ? D.sections : [...new Set(D.vars.map(v => v.section))];
     // lists of the categories (a hidden sheet, so any category works in a drop-down list)
@@ -172,9 +191,12 @@
         for (let k = i; k <= j; k++) head0[k] = { v: k === i ? sec : '', s: st }; if (j > i) merges.push(`${colL(i)}1:${colL(j)}1`); i = j + 1; }
       const at = (cid, visitId) => { const k = all.findIndex(c => c.v && c.v.id === cid && (long || !visitId || (c.visit && c.visit.id === visitId) || (!c.visit && !visitId))); return k < 0 ? all.findIndex(c => c.v && c.v.id === cid) : k; };
       const rows = [head0, head1];
+      const fv = (p, v, c, vi) => { if (!fill || !withLead) return null; const pv = fill.patients[p].vals[v.id] || {}; if (long) { const vis = (v.visits || []).length ? v.visits : [D.visits[0].id]; const id = D.visits[vi].id; return vis.includes(id) ? (pv[id] ?? (id === D.visits[0].id ? pv.once : null)) : null; }
+        return c.visit ? (pv[c.visit.id] ?? (c.visit.id === D.visits[0].id ? pv.once : null)) : (pv.once ?? pv[D.visits[0].id] ?? null); };
       for (let r = 0; r < nRows; r++) { const p = long ? Math.floor(r / D.visits.length) : r, vi = long ? r % D.visits.length : 0, R = r + 3;
-        const row = all.map((c, ci) => { if (ci === 0) return withLead ? ids[p] : null; if (c.col === 'Group') return prefillGroup && withLead ? prefillGroup[p] : null; if (c.col === 'Visit') return D.visits[vi].name;
-          const v = c.v; if (v.type === 'date') return { v: null, s: 2 };
+        const row = all.map((c, ci) => { if (ci === 0) return withLead ? ids[p] : null; if (c.col === 'Group') return withLead ? (fill ? fill.patients[p].group : prefillGroup ? prefillGroup[p] : null) : null; if (c.col === 'Visit') return D.visits[vi].name;
+          const v = c.v, val = fv(p, v, c, vi); if (v.type === 'date') return { v: typeof val === 'string' ? (xlDate(val) ?? val) : val, s: typeof val === 'string' && !/^\d{4}-/.test(val) ? 0 : 2 };
+          if (v.type !== 'calc' && fill) return val;
           if (v.type === 'calc' && v.formula) { const f = v.formula, A = at(f.a, c.visit && c.visit.id), B = f.b ? at(f.b, c.visit && c.visit.id) : -1, a = A >= 0 ? `${colL(A)}${R}` : null, b = B >= 0 ? `${colL(B)}${R}` : null;
             let fx = null;
             if (f.kind === 'bmi' && a && b) fx = `IF(AND(ISNUMBER(${a}),ISNUMBER(${b}),${b}>0),ROUND(${a}/(${b}/100)^2,1),"")`;
@@ -182,7 +204,7 @@
             if (f.kind === 'age' && a) fx = b ? `IF(AND(ISNUMBER(${a}),ISNUMBER(${b})),DATEDIF(${a},${b},"y"),"")` : `IF(ISNUMBER(${a}),DATEDIF(${a},TODAY(),"y"),"")`;
             if (f.kind === 'change' && !long) { const vs = all.map((x, k) => [x, k]).filter(([x]) => x.v && x.v.id === f.a), first = vs[0], last = vs[vs.length - 1]; if (first && last && first !== last) fx = `IF(AND(ISNUMBER(${colL(last[1])}${R}),ISNUMBER(${colL(first[1])}${R})),${colL(last[1])}${R}-${colL(first[1])}${R},"")`; }
             if ((f.kind === 'sum' || f.kind === 'mean') && (f.list || []).length) { const refs = f.list.map(id => at(id, c.visit && c.visit.id)).filter(k => k >= 0).map(k => `${colL(k)}${R}`); if (refs.length) fx = `IF(COUNT(${refs.join(',')})=${refs.length},${f.kind === 'sum' ? 'SUM' : 'AVERAGE'}(${refs.join(',')}),"")`; }
-            return fx ? { f: fx, s: CALC_STYLE } : { v: null, s: CALC_STYLE }; }
+            return fx ? { f: fx, s: CALC_STYLE, cv: fill ? val : undefined } : { v: fill ? val : null, s: CALC_STYLE }; }
           return null; });
         rows.push(row); }
       // validations, highlighting and the input message of each column
@@ -216,7 +238,7 @@
     cols.forEach(c => { const v = c.v; cb.push([c.col, v.label, v.section, { num: 'Number', yn: 'Yes / no', cat: 'Categories', date: 'Date', time: 'Time', text: 'Text', calc: 'Calculated' }[v.type] || v.type, v.unit, v.type === 'num' || v.type === 'calc' ? (v.min !== '' || v.max !== '' ? `${v.min} to ${v.max}` : '') : v.cats.join(' / '),
       (v.type === 'cat' || v.type === 'yn') ? v.cats.map((x, i) => `${i + 1}=${x}`).join(', ') : '', c.visit ? c.visit.name : long ? (visitsOf(D, v).map(x => x.name).join(', ') || 'all') : '', v.required ? 'Yes' : '', v.group || '', v.definition || '', v.type === 'calc' && v.formula ? { bmi: 'Weight / (height in m)²', days: 'Days between the two dates', age: 'Completed years between the dates', change: 'Last visit − first visit', sum: 'Sum of items', mean: 'Mean of items' }[v.formula.kind] || '' : '']); });
     sheets.push({ name: 'Codebook', xml: sheetXml(cb, { widths: [22, 26, 16, 12, 10, 26, 26, 12, 9, 16, 40, 26], freeze: { r: 1, c: 0 } }) });
-    const ins = [[{ v: D.title || 'Master sheet', s: 3 }], ['How to fill this sheet', ''],
+    const ins = [[{ v: D.title || 'Master sheet', s: 3 }], ...(fill && fill.simulated ? [[{ v: `SIMULATED DATA — generated ${fill.simulated.at} (seed ${fill.simulated.seed}). Not real patients.`, s: 3 }, '']] : []), ['How to fill this sheet', ''],
       ['1', 'One row per patient' + (long ? ' and visit' : '') + '. Keep the ID; do not change the column names in row 2 (row 1 shows the sections).'],
       ['2', 'Choose categories from the drop-down list; numbers outside the allowed range are refused or highlighted in red.'],
       ['3', `Missing values: ${D.conv.missing === '999' ? 'type 999' : 'leave the cell empty'}. Dates: ${D.conv.date}.`],
@@ -228,7 +250,7 @@
     sheets.push({ name: 'Instructions', xml: sheetXml(ins, { widths: [6, 110] }) });
     if (rand) { const rr = [['Stratum', 'No.', 'Allocation', 'Patient ID', 'Date', 'Initials'].map(v => ({ v, s: 1 }))]; rand.forEach(s => s.list.forEach((a, i) => rr.push([s.stratum, i + 1, a, rand.length === 1 ? ids[i] : null, null, null]))); sheets.push({ name: 'Randomisation', xml: sheetXml(rr, { widths: [30, 6, 16, 12, 12, 10], freeze: { r: 1, c: 0 } }) }); }
     sheets.push({ name: 'Lists', hidden: true, xml: sheetXml(listsRows, {}) });
-    const setup = JSON.stringify(setupFor(D)), chunks = []; for (let k = 0; k < setup.length; k += 30000) chunks.push([setup.slice(k, k + 30000)]);
+    const setup = JSON.stringify({ ...setupFor(D), ...(fill && fill.simulated ? { simulated: fill.simulated, targets: fill.targets || null } : {}) }), chunks = []; for (let k = 0; k < setup.length; k += 30000) chunks.push([setup.slice(k, k + 30000)]);
     sheets.push({ name: '_EasyStatSetup', hidden: true, xml: sheetXml(chunks, {}) });
     return xlsxBlob(sheets);
   }
@@ -279,11 +301,23 @@
   const save = () => ls.set('current', D);
   const TABS = [['study', '1 · Study'], ['visits', '2 · Groups & visits'], ['vars', '3 · Variables'], ['rules', '4 · Rules'], ['preview', '5 · Preview'], ['export', '6 · Export']];
   const TYPES = [['num', 'Number'], ['yn', 'Yes / no'], ['cat', 'Categories'], ['date', 'Date'], ['time', 'Time'], ['text', 'Text'], ['calc', 'Calculated (Excel formula)']];
-  function open() {
-    let w = $('#mbWrap'); if (!w) { w = document.createElement('div'); w.id = 'mbWrap'; w.className = 'mb-wrap'; document.body.appendChild(w); w.addEventListener('input', onInput); w.addEventListener('change', onChange); w.addEventListener('click', onClick); }
-    w.style.display = ''; document.documentElement.classList.add('mb-open'); render();
+  /* ---------- the three phases: 🧱 Build · 🎲 Generate · 📊 Analyse ---------- */
+  const PHASES = [['build', '🧱 Build the master sheet'], ['generate', '🎲 Generate the data'], ['analyse', '📊 Analyse (Easy Stat)']];
+  let phase = 'analyse';
+  function setPhase(ph) {
+    phase = ph; const h = document.documentElement; PHASES.forEach(([k]) => h.classList.toggle('ph-' + k, k === ph));
+    document.querySelectorAll('[data-phase]').forEach(b => b.classList.toggle('on', b.dataset.phase === ph));
+    if (ph === 'build') { const w = $('#mbWrap'); if (!w.dataset.wired) { w.dataset.wired = 1; w.addEventListener('input', onInput); w.addEventListener('change', onChange); w.addEventListener('click', onClick); } render(); }
+    if (ph === 'generate' && window.EasyGen) window.EasyGen.render();
+    try { localStorage.setItem('mb.phase', ph); } catch (e) { /* none */ }
+    window.scrollTo({ top: 0 });
   }
-  const close = () => { const w = $('#mbWrap'); if (w) w.style.display = 'none'; document.documentElement.classList.remove('mb-open'); };
+  const main = document.querySelector('main');
+  if (main) { const bar = document.createElement('div'); bar.className = 'phase-bar'; bar.id = 'phaseBar';
+    bar.innerHTML = PHASES.map(([k, l], i) => `${i ? '<span class="phase-arrow">›</span>' : ''}<button type="button" class="phase-btn" data-phase="${k}">${l}</button>`).join('');
+    main.prepend(bar); const w = document.createElement('div'); w.id = 'mbWrap'; w.className = 'mb-wrap'; bar.after(w); const g = document.createElement('div'); g.id = 'genWrap'; g.className = 'mb-wrap'; w.after(g);
+    bar.addEventListener('click', e => { const b = e.target.closest('[data-phase]'); if (b) setPhase(b.dataset.phase); }); }
+  const open = () => setPhase('build'), close = () => setPhase('analyse');
   const opt = (list, cur) => list.map(([k, l]) => `<option value="${esc(k)}" ${String(cur) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('');
   function render() {
     const w = $('#mbWrap'); if (!w) return; const pr = problems(D);
@@ -291,7 +325,7 @@
       <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${opt(Object.entries(TEMPLATES).map(([k, t]) => [k, t.name]), '')}<option value="__blank">Empty design</option></select>
       <select id="mbMine" style="width:auto"><option value="">My designs…</option>${opt(Object.keys(ls.get('designs', {})).map(k => [k, k]), '')}</select>
       <button class="btn ghost small" id="mbSaveAs" type="button">💾 Save design</button><button class="btn ghost small" id="mbExportJson" type="button" title="The design as a file, to share or keep">⬇ Design file</button><label class="btn ghost small" style="margin:0">⬆ Open design<input type="file" id="mbImportJson" accept=".json" hidden></label>
-      <button class="btn primary small" id="mbClose" type="button">✕ Close</button></div>
+      <button class="btn primary small" id="mbClose" type="button" title="Phase 2: fill the sheet with simulated patients">🎲 Generate the data ›</button></div>
       <div class="mb-tabs">${TABS.map(([k, l]) => `<button type="button" class="mb-tab ${tab === k ? 'on' : ''}" data-mbtab="${k}">${l}${k === 'preview' && pr.length ? ` <span class="chip warn">${pr.length}</span>` : ''}</button>`).join('')}</div>
       <div class="mb-body">${({ study: tStudy, visits: tVisits, vars: tVars, rules: tRules, preview: tPreview, export: tExport })[tab]()}</div>`;
   }
@@ -350,7 +384,18 @@
       <div><label class="f">Item group <span class="legend-note">(e.g. Co-morbidities)</span></label><input type="text" data-mbv="group" value="${esc(v.group || '')}" list="mbGrpList"><datalist id="mbGrpList">${[...new Set(D.vars.map(x => x.group).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist></div>
       <div><label class="f">Role</label>${sel2('role', v.role || '', [['', '—'], ['baseline', 'Baseline characteristic'], ['primary', 'Primary outcome'], ['secondary', 'Secondary outcome'], ['outcome', 'Other outcome'], ['safety', 'Safety outcome']])}</div>
       <div style="grid-column:1/-1"><label class="f">Definition</label><input type="text" data-mbv="definition" value="${esc(v.definition || '')}" placeholder="e.g. BP ≥ 140/90 mmHg or antihypertensive treatment"></div>
-      <div><label class="check" style="margin-top:6px"><input type="checkbox" data-mbv="required" ${v.required ? 'checked' : ''}><span>Required</span></label></div></div>`;
+      <div><label class="check" style="margin-top:6px"><input type="checkbox" data-mbv="required" ${v.required ? 'checked' : ''}><span>Required</span></label></div></div>
+      ${expectBox(v)}`;
+  }
+  // expected values (for the generator, phase 2): the same fields are in the generator
+  function expectBox(v) {
+    const e = v.expect || (v.expect = expectOf(v.label, v.type, v.cats));
+    if (v.type === 'num' || v.type === 'calc') return `<div class="mb-expect"><b>Expected values</b> <span class="legend-note">(used to simulate data)</span><div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px">
+      <div><label class="f">Mean</label><input type="number" step="any" data-mbe="mean" value="${esc(e.mean ?? '')}" style="width:100px"></div><div><label class="f">SD</label><input type="number" step="any" min="0" data-mbe="sd" value="${esc(e.sd ?? '')}" style="width:100px"></div>
+      <div><label class="f">Distribution</label><select data-mbe="dist" style="width:auto">${opt([['normal', 'Normal'], ['skewed', 'Skewed (log-normal)']], e.dist || 'normal')}</select></div></div></div>`;
+    if (v.type === 'cat' || v.type === 'yn') { const pc = v.cats.map((_, i) => (e.pct || [])[i] ?? +(100 / v.cats.length).toFixed(1)); return `<div class="mb-expect"><b>Expected %</b> <span class="legend-note">(used to simulate data)</span><div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px">${v.cats.map((c, i) => `<div><label class="f">${esc(c)}</label><input type="number" min="0" max="100" step="any" data-mbep="${i}" value="${esc(pc[i])}" style="width:80px"></div>`).join('')}</div></div>`; }
+    if (v.type === 'date') return `<div class="mb-expect"><b>Expected date</b> <span class="legend-note">(simulation: days after the previous date of the sheet)</span><div class="row" style="gap:8px;margin-top:4px"><div><label class="f">Mean days</label><input type="number" step="any" data-mbe="mean" value="${esc(e.mean ?? 7)}" style="width:90px"></div><div><label class="f">SD</label><input type="number" step="any" data-mbe="sd" value="${esc(e.sd ?? 3)}" style="width:90px"></div></div></div>`;
+    return '';
   }
   const tRules = () => { const vs = D.vars.filter(v => ['num', 'date', 'calc'].includes(v.type)), o2 = [['', '—'], ...vs.map(v => [v.id, v.label])];
     return `<h3 style="margin-top:0">Checks between columns</h3><p class="legend-note">Cells that break a rule are highlighted in yellow in the master sheet (e.g. discharge ≥ admission, diastolic &lt; systolic BP).</p>
@@ -376,7 +421,7 @@
   async function onClick(e) {
     const b = e.target.closest('button,[data-mbsel],[data-mbtab]'); if (!b) return; const d = b.dataset;
     if (d.mbtab) { tab = d.mbtab; return render(); }
-    if (b.id === 'mbClose') return close();
+    if (b.id === 'mbClose') return setPhase('generate');
     if (d.mbsel) { sel = d.mbsel; return render(); }
     if (d.mblib) { const [sec, lab] = d.mblib.split('|'), e2 = LIB.find(x => x[0] === sec)[1].find(x => x[0] === lab); const v = libVar(sec, e2); D.vars.push(v); if (!D.sections.includes(sec)) D.sections.push(sec); sel = v.id; save(); return render(); }
     if (b.id === 'mbNewVar') { const sec = (D.vars.find(x => x.id === sel) || {}).section || D.sections[0] || 'Other'; const v = { id: uid(), section: sec, label: 'New variable', type: 'num', unit: '', min: '', max: '', cats: [], dec: '', required: false, visits: [], group: '', role: '', definition: '' }; D.vars.push(v); if (!D.sections.includes(sec)) D.sections.push(sec); sel = v.id; save(); return render(); }
@@ -398,7 +443,7 @@
       try { U.saveUrl(URL.createObjectURL(buildWorkbook(D)), `${fileBase()} - master sheet.xlsx`); toast('Master sheet saved'); } catch (err) { console.error(err); toast('Could not build the sheet: ' + err.message); } return; }
     if (b.id === 'mbCrf') { try { U.saveUrl(URL.createObjectURL(await buildCrf(D)), `${fileBase()} - CRF.docx`); toast('Case report form saved'); } catch (err) { console.error(err); toast('Could not build the form: ' + err.message); } return; }
     if (b.id === 'mbRedcap') { U.saveUrl(URL.createObjectURL(redcap(D)), `${fileBase()} - REDCap data dictionary.csv`); toast('REDCap data dictionary saved'); return; }
-    if (b.id === 'mbTry') { const blob = buildWorkbook(D), f = new File([blob], `${fileBase()} - master sheet.xlsx`); close(); U.go(1); await U.loadFile(f); return; }
+    if (b.id === 'mbTry') { const blob = buildWorkbook(D), f = new File([blob], `${fileBase()} - master sheet.xlsx`); setPhase('analyse'); U.go(1); await U.loadFile(f); return; }
   }
   function onInput(e) {
     const t = e.target, d = t.dataset, val = t.type === 'checkbox' ? t.checked : t.value;
@@ -412,13 +457,15 @@
     if (d.mbck) { const [i, k] = d.mbck.split(':'); D.checks[+i][k] = val; save(); return; }
     const v = D.vars.find(x => x.id === sel); if (!v) return;
     if (d.mbv) { const k = d.mbv;
-      if (k === 'cats') v.cats = String(val).split('\n').map(x => x.trim()).filter(Boolean);
+      if (k === 'cats') { v.cats = String(val).split('\n').map(x => x.trim()).filter(Boolean); if (!v.expect || !v.expect.pct || v.expect.pct.length !== v.cats.length) v.expect = expectOf(v.label, v.type, v.cats); }
       else if (k === 'fkind') v.formula = { ...(v.formula || {}), kind: val };
       else if (k === 'fa' || k === 'fb') v.formula = { kind: 'bmi', ...(v.formula || {}), [k.slice(1)]: val };
-      else if (k === 'type') { v.type = val; if (val === 'yn') v.cats = [...YN]; if (val === 'calc' && !v.formula) v.formula = { kind: 'bmi' }; }
+      else if (k === 'type') { v.type = val; if (val === 'yn') v.cats = [...YN]; if (val === 'calc' && !v.formula) v.formula = { kind: 'bmi' }; v.expect = expectOf(v.label, v.type, v.cats); }
       else v[k] = val;
       save(); if (t.tagName === 'SELECT' || t.type === 'checkbox' || k === 'section') render(); return; }
     if (d.mbvisit) { const on = new Set((v.visits || []).length ? v.visits : [D.visits[0].id]); if (val) on.add(d.mbvisit); else on.delete(d.mbvisit); v.visits = D.visits.map(x => x.id).filter(id => on.has(id)); if (v.visits.length === 1 && v.visits[0] === D.visits[0].id) v.visits = []; save(); return render(); }
+    if (d.mbe) { v.expect = { ...(v.expect || {}), [d.mbe]: d.mbe === 'dist' ? val : val === '' ? '' : +val }; save(); return; }
+    if (d.mbep !== undefined) { const e = v.expect = v.expect || {}; e.pct = v.cats.map((_, i) => (e.pct || [])[i] ?? +(100 / v.cats.length).toFixed(1)); e.pct[+d.mbep] = +val || 0; save(); return; }
     if (d.mbflist) { const L = new Set((v.formula || {}).list || []); if (val) L.add(d.mbflist); else L.delete(d.mbflist); v.formula = { ...(v.formula || {}), list: [...L] }; save(); return; }
   }
   function onChange(e) {
@@ -430,5 +477,6 @@
   }
   // the entry on step 1
   const anchor = $('#btnTemplate'); if (anchor) { const b = document.createElement('button'); b.className = 'btn ghost small'; b.type = 'button'; b.id = 'btnBuilder'; b.title = 'Design the master sheet of a new study: variables, visits, groups, ranges, randomisation — then an Excel sheet, a case report form and a REDCap dictionary'; b.textContent = '🧱 Master sheet builder'; anchor.parentNode.insertBefore(b, anchor); b.onclick = open; }
-  window.EasyBuilder = { open, close, buildWorkbook: d => buildWorkbook(d || D), setupFor, columns, randomisation, redcap, fromTemplate, get design() { return D; }, set design(x) { D = x; save(); } };
+  setPhase('analyse');
+  window.EasyBuilder = { open, close, setPhase, get phase() { return phase; }, buildWorkbook: (d, fill) => buildWorkbook(d || D, fill), setupFor, columns, visitsOf: v => visitsOf(D, v), baseName: v => baseName(D, v), tagOf, expectOf, prng, randomisation, redcap, fromTemplate, fileBase, save, get design() { return D; }, set design(x) { D = x; save(); } };
 })();

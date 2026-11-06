@@ -120,6 +120,7 @@
     if (n === 10) renderExplore();
     if (n === 11) renderPageSetup();
     if (n === 12) runAnalysis();
+    if (n === 1 || n === 12) renderSimBanner();
     $('#presetBar').style.display = n >= 4 ? '' : 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -391,6 +392,7 @@
     if (prevCfg) applySavedCfg(prevCfg);
     if (prevCfg && prevCfg.setupLocked) state.cfg.setupLocked = true;
     if (state.savMeta) applySavMeta(state.cfg, state.savMeta);
+    setTimeout(renderSimBanner, 50);
     if (mbSetup && !prevCfg) { applyBuilderSetup(state.cfg, mbSetup); setTimeout(() => toast(`Master sheet “${mbSetup.title || 'study'}”: its setup was applied (labels, units, categories, groups, visits)`), 700); }
     renderGrid();
     $('#to2').disabled = false;
@@ -2027,6 +2029,15 @@
     return fresh.variables.filter(v => v.kind === 'repeated').length - before;
   }
   // SPSS labels: variable labels become report labels; value labels become value labels (codes analysed as categories) and group names
+  /* ---------- simulated data (phase 2): a notice in the app; a watermark and a sentence in the methods only when chosen ---------- */
+  function renderSimBanner() {
+    document.querySelectorAll('.sim-banner').forEach(x => x.remove()); const sim = state.cfg && state.cfg.simulated; if (!sim) return; const rp = report();
+    ['#p1', '#p12'].forEach(id => { const pnl = $(id); if (!pnl) return; const b = document.createElement('div'); b.className = 'sim-banner';
+      b.innerHTML = `<b>🎲 Simulated data</b> — generated ${esc(sim.at)} (seed ${esc(sim.seed)}), not real patients. <label class="check" style="margin:0 0 0 10px"><input type="checkbox" data-simk="wm" ${rp.watermark === 'SIMULATED DATA' ? 'checked' : ''}><span>“SIMULATED DATA” watermark in the Word report</span></label> <label class="check" style="margin:0 0 0 10px"><input type="checkbox" data-simk="st" ${state.cfg.simStatement ? 'checked' : ''}><span>Say so in the statistical analysis</span></label>`;
+      pnl.prepend(b); }); }
+  document.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.simk; if (!k || !state.cfg) return; const rp = report();
+    if (k === 'wm') rp.watermark = e.target.checked ? 'SIMULATED DATA' : (rp.watermark === 'SIMULATED DATA' ? '' : rp.watermark);
+    if (k === 'st') state.cfg.simStatement = e.target.checked; renderSimBanner(); if (state.step === 12) runAnalysis(); });
   /* ---------- a master sheet from the builder carries its setup in a hidden sheet ---------- */
   function builderSetup() {
     const ws = state.wb && state.wb.Sheets && state.wb.Sheets._EasyStatSetup; if (!ws) return null;
@@ -2038,7 +2049,7 @@
     if (S0.groupCol && H.includes(S0.groupCol)) { cfg.groupCol = S0.groupCol; cfg.noGroups = false; cfg.variables = cfg.variables.filter(v => !v.cols.some(c => c.col === S0.groupCol)); setGroups(cfg);
       const arms = (S0.arms || []).filter(a => cfg.groupOrder.includes(a)); if (arms.length) cfg.groupOrder = [...arms, ...cfg.groupOrder.filter(g => !arms.includes(g))]; }
     const tpl = cfg.tpLabels = cfg.tpLabels || {}; cfg.tpOrder = cfg.tpOrder || [];
-    (S0.visits || []).forEach(x => { tpl[x.tag] = x.name; if (!cfg.tpOrder.includes(x.tag)) cfg.tpOrder.push(x.tag); });
+    (S0.visits || []).forEach(x => { tpl[x.tag] = x.name; }); const vt = (S0.visits || []).map(x => x.tag); cfg.tpOrder = [...vt, ...cfg.tpOrder.filter(t => !vt.includes(t))]; // the visits in the design's order
     const typeOf = t => t === 'num' || t === 'calc' ? 'numeric' : t === 'cat' || t === 'yn' ? 'categorical' : null, codes = S0.catAs === 'codes';
     const props = (v, x) => { const ty = typeOf(x.type); v.label = x.label; if (x.unit) { v.unit = x.unit; } if (x.group) v.group = x.group; if (x.role) v.role = x.role; if (x.definition) v.definition = x.definition;
       if (ty) v.type = ty; if (ty === 'categorical') { v.levels = codes ? x.cats.map((_, i) => String(i + 1)) : [...x.cats]; if (codes) v.valueLabels = x.cats.map((c, i) => `${i + 1}=${c}`).join(', '); }
@@ -2054,6 +2065,7 @@
       const v = { id: 'mb' + Math.random().toString(36).slice(2, 9), kind: 'repeated', pos, label: x.label, type: 'numeric', dist: 'auto', table: '', levels: [], note: '', include: true, cols: cs.map(c => ({ col: c.col, tp: c.visit || c.col, label: c.visitName || c.visit || c.col })) };
       props(v, x); v.kind = 'repeated'; cfg.variables.push(v); });
     cfg.variables.sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0));
+    if (S0.simulated) { cfg.simulated = S0.simulated; cfg.simTargets = S0.targets || null; }
     if (S0.title && !cfg.study.title) { cfg.study.title = S0.title; const t = $('#studyTitle'); if (t && !t.value) t.value = S0.title; }
   }
   function applySavMeta(cfg, sv) {
@@ -3958,6 +3970,15 @@
     return by ? list.map((it, i) => [it, i]).sort((a, b) => pinFirst(a[0], b[0]) || by(a[0], b[0]) || a[1] - b[1]).map(x => x[0]) : list;
   };
   const xpTables = it => { const o = xpo(); return it.tables.filter(t => !t.cat || o[t.cat] !== false); };
+  // step 10, simulated data: the targets of the generator against the data as they are now (after cleaning)
+  function simCard() {
+    const T = state.cfg && state.cfg.simTargets; if (!T || !T.length) return ''; const cfg = state.cfg, rows = state.data.rows;
+    const out = T.map(t => { const col = (t.cols || [])[0]; if (!col || !state.data.headers.includes(col)) return null; const rs = rows.filter(r => t.group === 'All patients' || String(r[cfg.groupCol] ?? '').trim() === t.group), xs = rs.map(r => r[col]).filter(x => !isMissing(x));
+      let got = '—'; if (t.kind === 'mean') { const nn = xs.map(Analysis.toNum).filter(isFinite); if (nn.length) { const m = nn.reduce((a, b) => a + b, 0) / nn.length; got = m.toFixed(2); } }
+      else if (xs.length) got = (100 * xs.filter(x => String(x).trim().toLowerCase() === String(t.cat).toLowerCase() || String(x).trim() === '1' && cfg.variables.some(v => v.valueLabels)).length / xs.length).toFixed(1) + '%';
+      return `<tr><td>${esc(t.label)}</td><td>${esc(t.visitName || '')}</td><td>${esc(t.group)}</td><td>${t.kind === 'mean' ? esc(t.target) : `${esc(t.target)}% ${esc(t.cat)}`}</td><td>${esc(got)}</td></tr>`; }).filter(Boolean);
+    return out.length ? `<details class="report-sec xp-sim"><summary><b>🎲 Simulated data: the targets against the data</b> <span class="legend-note">— did the analysis recover what the generator was asked for?</span></summary><div class="tbl-wrap" style="max-height:320px;margin-top:6px"><table class="t xp"><thead><tr><th>Variable</th><th>Visit</th><th>Group</th><th>Target</th><th>In the data</th></tr></thead><tbody>${out.join('')}</tbody></table></div></details>` : '';
+  }
   // step 10: each item group in one card — the % of each yes/no item per study group, with its P value (any item and the number per patient included)
   function groupCards(list) {
     const g = groupsOf(); if (!g.size || !state.cfg) return ''; const cfg = state.cfg, gs = activeGroups(), gl = gs.map(x => cfg.groupLabels[x] || x), rows = state.data.rows.filter(r => gs.includes(Analysis.groupOf(cfg, r)));
@@ -4247,7 +4268,7 @@
     const dash = `<div class="xp-dash"><div><b>${list.length}</b><span>variables</span></div><div><b>${state.data.rows.length}</b><span>patients</span></div><div><b>${list.filter(it => it.sig).length}</b><span>significant</span></div><div><b>${nMiss}</b><span>missing values</span></div><div><b>${list.filter(it => it.disagree).length}</b><span>tests disagree</span></div></div>`;
     const cmp = $('#xpVar').value && xpo().cmp && list.length === 2;
     $('#explore').classList.toggle('xp-dark', !!xpo().dark);
-    $('#explore').innerHTML = dash + groupCards(list) + topPanels(list) + ov + (list.length ? (view === 'twocol' || cmp ? `<div class="xp-twocol">${html}</div>` : html) : empty);
+    $('#explore').innerHTML = dash + simCard() + groupCards(list) + topPanels(list) + ov + (list.length ? (view === 'twocol' || cmp ? `<div class="xp-twocol">${html}</div>` : html) : empty);
     // matches of the table search highlighted
     const tq = (xpo().tq || '').trim().toLowerCase(); if (tq) document.querySelectorAll('#explore td').forEach(td => { if (td.textContent.toLowerCase().includes(tq)) td.classList.add('xp-hit'); });
     $('#xpUndo').disabled = !state.undo || !state.undo.length; $('#xpRedo').disabled = !(state.redo && state.redo.length);
@@ -5009,6 +5030,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         if (cfg.options.rmLayout === 'cols') res.sections = res.sections.map(Analysis.timepointsAsColumns);
         { const defs = state.cfg.variables.filter(v => v.include && v.definition).map(v => { const d0 = v.definition.trim().replace(/\.$/, ''); return /\bdefined\b/i.test(d0) ? d0 + '.' : `${v.label.replace(/\s*\([^)]*\)\s*$/, '')} was defined as ${/^[A-Z][a-z]+\b/.test(d0) ? d0.charAt(0).toLowerCase() + d0.slice(1) : d0}.`; });
           if (defs.length && res.methods) res.methods = `${res.methods.trim()} Definitions: ${defs.join(' ')}`; }
+        if (state.cfg.simulated && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The data were simulated (Prof MSE Easy Stat data generator, seed ${state.cfg.simulated.seed}) and do not describe real patients.`;
         placeFigures(res, cfg.options); state.figTables = res.sections.filter(s => !s.figOnly).map(s => s.title).filter(Boolean);
         state.result = res; state.runKey = runKey();
         if (state.pendingEdits) { applyEdits(res, state.pendingEdits); state.pendingEdits = null; }
