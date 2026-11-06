@@ -2183,7 +2183,7 @@
         <td><input type="text" data-k="note" value="${esc(v.note)}" placeholder="e.g. NRS: Numeric rating scale"></td>
         <td style="white-space:nowrap"><button class="btn ghost small" data-vgear="${v.id}" type="button" title="More: value labels, unit, decimals, role, ordinal, transformation, Arabic label, merging categories, adjusted comparison">⚙${varBadges(v)}</button>${(warn[v.id] || []).map(w => `<span class="chip warn" title="${esc(w[1])}">${w[0]}</span>`).join('')}</td>
       </tr>`).join('')}</tbody>`;
-    renderRepeated(); filterVars(); renderSubgroup(); renderGroupsBar(); renderRoles(); renderLock();
+    renderRepeated(); filterVars(); renderSubgroup(); renderGroupsBar(); renderRoles(); renderTablesBoard(); renderLock();
   }
   function filterVars() {
     const q = ($('#varSearch').value || '').trim().toLowerCase(), trs = [...document.querySelectorAll('#varsTbl tr[data-vid]')];
@@ -2715,6 +2715,67 @@
   $('#rolesBoard').addEventListener('drop', e => { const col = e.target.closest('.roles-col'); if (!col || !roleDrag || !state.cfg) return; e.preventDefault(); readUiIntoCfg();
     const v = state.cfg.variables.find(x => x.id === roleDrag); roleDrag = null; if (!v) return; if (col.dataset.role) v.role = col.dataset.role; else delete v.role; renderVariables(); $('#rolesBox').open = true; toast(`${v.label}: ${ROLES.find(r => r[0] === (v.role || ''))[1]}`); });
   $('#rolesBoard').addEventListener('dragend', () => { roleDrag = null; document.querySelectorAll('.roles-col.over').forEach(x => x.classList.remove('over')); });
+  /* ---------- step 2: the tables of the report — each table a card; drag the variables between tables, rename, order, add and remove tables ---------- */
+  const TB_RANK = { primary: 0, secondary: 1, safety: 2 };
+  // the tables as the analysis will make them: single variables gathered by table name (outcomes by role first), each repeated measure its own table, in order of position
+  function tableModel() {
+    const cfg = state.cfg, blocks = [];
+    cfg.variables.filter(v => v.include && v.role !== 'ignore').forEach(v => { if (v.kind === 'repeated') { blocks.push({ rep: true, v, pos: v.pos ?? 0 }); return; }
+      let b = blocks.find(x => !x.rep && x.name === (v.table || '')); if (!b) blocks.push(b = { name: v.table || '', vars: [], pos: v.pos ?? 0 }); b.vars.push(v); });
+    blocks.forEach(b => { if (b.vars) b.vars = b.vars.map((v, i) => [v, i]).sort((x, y) => (TB_RANK[x[0].role] ?? 3) - (TB_RANK[y[0].role] ?? 3) || x[1] - y[1]).map(x => x[0]); });
+    blocks.sort((a, b) => a.pos - b.pos);
+    (cfg.emptyTables || []).filter(n => !blocks.some(b => !b.rep && b.name === n)).forEach(n => blocks.push({ name: n, vars: [], empty: true }));
+    return blocks;
+  }
+  // the order of the blocks written back: the included variables take their new order (the others keep their places), positions renumbered
+  function tableCommit(blocks) {
+    const cfg = state.cfg, seq = blocks.flatMap(b => b.rep ? [b.v] : b.vars), set = new Set(seq), slots = [];
+    blocks.forEach(b => { if (!b.rep) b.vars.forEach(v => { v.table = b.name; }); });
+    cfg.variables.forEach((v, i) => { if (set.has(v)) slots.push(i); });
+    const rest = seq.filter(v => cfg.variables.includes(v)); slots.forEach((i, k) => { cfg.variables[i] = rest[k]; });
+    cfg.variables.forEach((v, i) => { v.pos = i; });
+    cfg.emptyTables = blocks.filter(b => !b.rep && !b.vars.length).map(b => b.name);
+  }
+  function renderTablesBoard() {
+    const box = $('#tablesBoard'); if (!box || !state.cfg) return; const cfg = state.cfg, blocks = tableModel(), out = cfg.variables.filter(v => !v.include && v.kind !== 'repeated');
+    let tn = 0; const chip = v => `<span class="role-chip tb-chip" draggable="true" data-tvid="${esc(v.id)}" title="${esc(v.cols.map(c => c.col).join(', '))}${v.role ? ` · ${esc((ROLES.find(r => r[0] === v.role) || [])[1] || v.role)}` : ''}">${v.role === 'primary' ? '★ ' : ''}${esc(v.label)}${v.type === 'categorical' ? ' <span class="legend-note">n (%)</span>' : ''}${v.group ? ` <span class="chip" style="font-size:10px">${esc(v.group)}</span>` : ''}</span>`;
+    box.innerHTML = `<div class="tb-board">${blocks.map((b, i) => { const mv = `${i ? `<button class="btn ghost small" type="button" data-tbmove="${i}|-1" title="Earlier in the report">↑</button>` : ''}${i < blocks.length - 1 ? `<button class="btn ghost small" type="button" data-tbmove="${i}|1" title="Later in the report">↓</button>` : ''}`;
+      if (b.rep) return `<div class="tb-card tb-rep"><div class="tb-head"><b>Table ${++tn}</b> <span class="legend-note">repeated measure${b.v.split ? `, by timepoint in “${esc(b.v.splitTable || b.v.table || '')}”` : ' — its own table'}</span><span class="spacer"></span>${mv}</div><div class="tb-body"><span class="role-chip" title="${esc(b.v.cols.map(c => c.col).join(', '))}">↻ ${esc(b.v.label)} <span class="legend-note">${b.v.cols.length} timepoints</span></span></div></div>`;
+      return `<div class="tb-card" data-tbname="${esc(b.name)}"><div class="tb-head"><b>Table ${++tn}</b> <span class="tb-name">${esc(b.name || '(no name)')}</span> <span class="legend-note">${b.vars.length} variable${b.vars.length === 1 ? '' : 's'}</span><span class="spacer"></span>${mv}<button class="btn ghost small" type="button" data-tbren="${esc(b.name)}" title="Rename">✎</button><button class="btn ghost small" type="button" data-tbdel="${esc(b.name)}" title="Remove the table (its variables leave the report; drag them back from “Not in the report”)">✕</button></div>
+        <div class="tb-body">${b.vars.map(chip).join('') || '<span class="legend-note">Drop variables here</span>'}</div></div>`; }).join('')}
+      <div class="tb-card tb-out" data-tbname="__out"><div class="tb-head"><b>Not in the report</b> <span class="legend-note">${out.length}</span></div><div class="tb-body">${out.map(chip).join('') || '<span class="legend-note">Drop a variable here to leave it out</span>'}</div></div></div>`;
+  }
+  let tbDrag = null;
+  $('#tablesBoard').addEventListener('dragstart', e => { const c = e.target.closest('[data-tvid]'); if (c) { tbDrag = c.dataset.tvid; e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); } });
+  $('#tablesBoard').addEventListener('dragover', e => { const card = e.target.closest('.tb-card[data-tbname]'); if (!card || !tbDrag) return; e.preventDefault();
+    document.querySelectorAll('#tablesBoard .over,#tablesBoard .dropto').forEach(x => x.classList.remove('over', 'dropto')); card.classList.add('over'); const c = e.target.closest('[data-tvid]'); if (c && c.dataset.tvid !== tbDrag) c.classList.add('dropto'); });
+  $('#tablesBoard').addEventListener('drop', e => { const card = e.target.closest('.tb-card[data-tbname]'); if (!card || !tbDrag || !state.cfg) return; e.preventDefault(); readUiIntoCfg();
+    const cfg = state.cfg, v = cfg.variables.find(x => x.id === tbDrag), before = e.target.closest('[data-tvid]'), name = card.dataset.tbname; tbDrag = null; if (!v) return;
+    if (name === '__out') { v.include = false; renderVariables(); toast(`${v.label}: left out of the report`); return; }
+    v.include = true; const blocks = tableModel(); blocks.forEach(b => { if (!b.rep) b.vars = b.vars.filter(x => x !== v); });
+    let b = blocks.find(x => !x.rep && x.name === name); if (!b) blocks.push(b = { name, vars: [] });
+    const at = before ? b.vars.findIndex(x => x.id === before.dataset.tvid) : -1; if (at >= 0) b.vars.splice(at, 0, v); else b.vars.push(v);
+    tableCommit(blocks); renderVariables(); $('#tablesBox').open = true; toast(`${v.label} → ${name}`); });
+  $('#tablesBoard').addEventListener('dragend', () => { tbDrag = null; document.querySelectorAll('#tablesBoard .over,#tablesBoard .dropto,#tablesBoard .dragging').forEach(x => x.classList.remove('over', 'dropto', 'dragging')); });
+  $('#tablesBox').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !state.cfg) return; const d = b.dataset, cfg = state.cfg;
+    if (d.tbmove) { readUiIntoCfg(); const [i, dir] = d.tbmove.split('|').map(Number), blocks = tableModel(), j = i + dir; if (j < 0 || j >= blocks.length) return; [blocks[i], blocks[j]] = [blocks[j], blocks[i]]; tableCommit(blocks); renderVariables(); $('#tablesBox').open = true; return; }
+    if (d.tbren !== undefined) { const old = d.tbren, n = (prompt('Name of the table:', old) || '').trim(); if (!n || n === old) return; readUiIntoCfg();
+      const exists = tableModel().some(x => !x.rep && x.name === n && !x.empty); if (exists && !confirm(`A table “${n}” exists: put the two tables together?`)) return;
+      cfg.variables.forEach(v => { if (v.kind !== 'repeated' && (v.table || '') === old) v.table = n; }); cfg.emptyTables = (cfg.emptyTables || []).map(x => x === old ? n : x); renderVariables(); $('#tablesBox').open = true; return; }
+    if (d.tbdel !== undefined) { readUiIntoCfg(); const vs = cfg.variables.filter(v => v.include && v.kind !== 'repeated' && (v.table || '') === d.tbdel);
+      if (vs.length && !confirm(`Remove “${d.tbdel}”? Its ${vs.length} variable${vs.length > 1 ? 's leave' : ' leaves'} the report (drag them back from “Not in the report”).`)) return;
+      vs.forEach(v => { v.include = false; }); cfg.emptyTables = (cfg.emptyTables || []).filter(x => x !== d.tbdel); renderVariables(); $('#tablesBox').open = true; return; }
+    if (b.id === 'tbNew') { const n = (prompt('Name of the new table:', 'Outcomes') || '').trim(); if (!n) return; if (tableModel().some(x => !x.rep && x.name === n)) { toast(`“${n}” exists already`); return; } readUiIntoCfg(); (cfg.emptyTables = cfg.emptyTables || []).push(n); renderVariables(); $('#tablesBox').open = true; toast(`Table “${n}” added — drag variables into it`); return; }
+    if (b.dataset.tbauto) { readUiIntoCfg(); const how = b.dataset.tbauto; let n = 0;
+      if (how === 'names') { $('#autoTables').click(); $('#tablesBox').open = true; return; }
+      cfg.variables.forEach(v => { if (v.kind === 'repeated' || !v.include) return; let t = null;
+        if (how === 'role' && v.role && v.role !== 'ignore') t = (ROLES.find(r => r[0] === v.role) || [])[1];
+        if (how === 'group' && v.group) t = v.group;
+        if (how === 'one') t = 'Results';
+        if (t && v.table !== t) { v.table = t; n++; } });
+      if (how === 'type') cfg.variables.forEach(v => { if (v.kind === 'repeated' || !v.include) return; const t = v.type === 'categorical' ? 'Categorical variables' : 'Numerical variables'; if (v.table !== t) { v.table = t; n++; } });
+      renderVariables(); $('#tablesBox').open = true; toast(n ? `${n} variable${n > 1 ? 's' : ''} moved` : (how === 'role' ? 'No variable has a role yet (🎭 Roles)' : how === 'group' ? 'No item groups yet' : 'Nothing to move')); return; }
+  });
   function renderLock() { const on = !!(state.cfg && state.cfg.setupLocked); $('#p2').classList.toggle('setup-locked', on); $('#btnLock').textContent = on ? '🔓 Unlock the setup' : '🔒 Lock the setup';
     $('#lockInfo').textContent = on ? 'Locked: labels, units, groups, tables and order are frozen, and a new file with the same columns uses this setup.' : ''; }
   $('#btnLock').onclick = () => { if (!state.cfg) return; readUiIntoCfg(); state.cfg.setupLocked = !state.cfg.setupLocked;
