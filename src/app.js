@@ -2065,6 +2065,8 @@
       const v = { id: 'mb' + Math.random().toString(36).slice(2, 9), kind: 'repeated', pos, label: x.label, type: 'numeric', dist: 'auto', table: '', levels: [], note: '', include: true, cols: cs.map(c => ({ col: c.col, tp: c.visit || c.col, label: c.visitName || c.visit || c.col })) };
       props(v, x); v.kind = 'repeated'; cfg.variables.push(v); });
     cfg.variables.sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0));
+    // the sample size calculated in the builder, for the methods section
+    if (S0.sampleSize) { const mi = cfg.methodsInfo = cfg.methodsInfo || {}; if (!mi.sampleSize) mi.sampleSize = S0.sampleSize; }
     if (S0.simulated) { cfg.simulated = S0.simulated; cfg.simTargets = S0.targets || null; }
     if (S0.title && !cfg.study.title && !sandbox) { cfg.study.title = S0.title; const t = $('#studyTitle'); if (t && !t.value) t.value = S0.title; }
   }

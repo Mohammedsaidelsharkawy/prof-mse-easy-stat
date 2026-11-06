@@ -49,6 +49,7 @@ html.ph-build #stepper,html.ph-build #presetBar,html.ph-build main>.panel,html.p
 .gen-tbl td{vertical-align:top}.gen-cell{display:flex;gap:4px;align-items:center;margin:2px 0}.gen-cell .legend-note{min-width:70px}.gen-chk tr.gen-off td{background:#FFF3CD}
 .gen-asked{margin:6px 0 2px;padding:6px 10px;border-radius:8px;background:#FFF8E1;border:1px solid #F0C36D;font-size:13px}.gen-res .xp-ov tr{cursor:pointer}
 .sim-banner{margin:0 0 10px;padding:8px 12px;border-radius:10px;background:#FFF8E1;border:1px solid #F0C36D;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.mb-ss{margin-top:8px;padding:10px 12px;border-radius:10px;background:rgba(123,47,190,.06);border:1px solid var(--line)}.mb-paste{border:1px dashed var(--line);border-radius:8px;padding:8px;margin-bottom:8px}.mb-paste textarea{width:100%;font-family:inherit}
 .mb-expect{margin-top:10px;padding:8px 10px;border-radius:8px;background:rgba(46,125,50,.06);border:1px dashed rgba(46,125,50,.35)}
 .mb-head{position:sticky;top:64px;z-index:2;border-radius:12px;margin:0 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--navy,#1C1648);color:#fff}.mb-head .legend-note{color:#d9d3ea}
 .mb-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:10px 16px 0}.mb-tab{border:1px solid var(--line);background:var(--card,#fff);border-radius:10px 10px 0 0;padding:8px 14px;cursor:pointer;font-weight:600}.mb-tab.on{background:var(--purple,#7B2FBE);color:#fff;border-color:transparent}
@@ -33959,6 +33960,8 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const v = { id: 'mb' + Math.random().toString(36).slice(2, 9), kind: 'repeated', pos, label: x.label, type: 'numeric', dist: 'auto', table: '', levels: [], note: '', include: true, cols: cs.map(c => ({ col: c.col, tp: c.visit || c.col, label: c.visitName || c.visit || c.col })) };
       props(v, x); v.kind = 'repeated'; cfg.variables.push(v); });
     cfg.variables.sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0));
+    // the sample size calculated in the builder, for the methods section
+    if (S0.sampleSize) { const mi = cfg.methodsInfo = cfg.methodsInfo || {}; if (!mi.sampleSize) mi.sampleSize = S0.sampleSize; }
     if (S0.simulated) { cfg.simulated = S0.simulated; cfg.simTargets = S0.targets || null; }
     if (S0.title && !cfg.study.title && !sandbox) { cfg.study.title = S0.title; const t = $('#studyTitle'); if (t && !t.value) t.value = S0.title; }
   }
@@ -38989,6 +38992,13 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     ['Outcomes', [['Complications', 'yn'], ['Type of complication', 'text'], ['Readmission', 'yn'], ['Reoperation', 'yn'], ['ICU admission', 'yn'], ['Date of admission', 'date'], ['Date of discharge', 'date'],
       ['Length of stay', 'num', 'days', 0, 365, null, 0], ['Recurrence', 'yn'], ['Mortality', 'yn'], ['Date of death', 'date'], ['Follow-up', 'num', 'months', 0, 240, null, 0]]],
     ['Diagnostic accuracy', [['Index test result', 'cat', '', null, null, ['Positive', 'Negative']], ['Reference standard', 'cat', '', null, null, ['Positive', 'Negative']], ['Index test value', 'num', '', null, null, null, 2]]]];
+  // scales with their items (each item a column, the total a formula): PHQ-9 and GAD-7 (free to use), or any Likert scale
+  const SCALES = {
+    'PHQ-9': { items: ['Little interest or pleasure', 'Feeling down or hopeless', 'Sleep problems', 'Tired or little energy', 'Poor appetite or overeating', 'Feeling bad about yourself', 'Trouble concentrating', 'Moving slowly or restless', 'Thoughts of self-harm'],
+      min: 0, max: 3, def: 'PHQ-9 total: 0–4 minimal, 5–9 mild, 10–14 moderate, 15–19 moderately severe, 20–27 severe depression. Items scored 0 (not at all) to 3 (nearly every day), over the last 2 weeks.' },
+    'GAD-7': { items: ['Nervous or anxious', 'Cannot stop worrying', 'Worrying too much', 'Trouble relaxing', 'Restless', 'Easily annoyed', 'Afraid something awful might happen'],
+      min: 0, max: 3, def: 'GAD-7 total: 0–4 minimal, 5–9 mild, 10–14 moderate, 15–21 severe anxiety. Items scored 0 (not at all) to 3 (nearly every day), over the last 2 weeks.' }
+  };
   // expected values of each variable (used by the generator): mean ± SD (skewed for lab values that are), % of each category, days after the previous date
   const EXPECT = { 'Age': [50, 12], 'Weight': [75, 14], 'Height': [165, 9], 'Charlson comorbidity index': [2, 1.8, 1], 'Systolic BP': [130, 18], 'Diastolic BP': [80, 11], 'Heart rate': [82, 14], 'Respiratory rate': [18, 4], 'Temperature': [37, 0.5],
     'SpO2': [96, 2.5], 'Glasgow coma scale': [14, 1.5], 'Haemoglobin': [12.8, 1.8], 'WBC': [8, 3, 1], 'Platelets': [250, 70], 'Creatinine': [1, 0.35, 1], 'Urea': [35, 12, 1], 'ALT': [30, 18, 1], 'AST': [28, 14, 1], 'Albumin': [3.9, 0.5],
@@ -39043,6 +39053,9 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (D.conv.naming === 'camel') return words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('') + (u ? u.charAt(0).toUpperCase() + u.slice(1).replace(/_/g, '') : '');
     const s = [...words, ...(u ? [u] : [])].join('_'); return D.conv.naming === 'lower' ? s.toLowerCase() : s;
   }
+  // skip logic: a variable asked only when another one has a given category
+  const whenParent = (D, v) => v.when && v.when.v ? D.vars.find(x => x.id === v.when.v) : null;
+  const whenTxt = (D, v) => { const p = whenParent(D, v); return p ? `${p.label} = ${v.when.cat}` : ''; };
   const visitsOf = (D, v) => (v.visits || []).map(id => D.visits.find(x => x.id === id)).filter(Boolean);
   // every column of the wide sheet: [{ col, v, visit }]
   function columns(D) {
@@ -39058,8 +39071,120 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     cols.forEach(c => { const k = c.col.toLowerCase(); if (seen[k]) out.push(`Two columns are named “${c.col}”`); seen[k] = 1;
       if (c.col.length > 32) out.push(`“${c.col}” is longer than 32 characters (SPSS)`); if (!/^[A-Za-z]/.test(c.col)) out.push(`“${c.col}” should start with a letter`); });
     D.vars.forEach(v => { if (v.type === 'num' && v.min === '' && v.max === '') out.push(`${v.label}: no allowed range (typing errors are not caught)`);
-      if ((v.type === 'cat') && v.cats.length < 2) out.push(`${v.label}: fewer than two categories`); if (v.type === 'calc' && !(v.formula && v.formula.a)) out.push(`${v.label}: the formula is not complete`); });
+      if ((v.type === 'cat') && v.cats.length < 2) out.push(`${v.label}: fewer than two categories`); if (v.type === 'calc' && !(v.formula && (v.formula.a || (v.formula.list || []).length))) out.push(`${v.label}: the formula is not complete`);
+      if (v.when && v.when.v) { const p = whenParent(D, v); if (!p) out.push(`${v.label}: asked only when a variable that was removed — change it in step 3`); else if (!p.cats.includes(v.when.cat)) out.push(`${v.label}: asked only when ${p.label} = ${v.when.cat}, a category that no longer exists`); } });
+    // the design as a whole
+    const labs = {}; D.vars.forEach(v => { const k = v.label.trim().toLowerCase(); if (labs[k]) out.push(`Two variables are labelled “${v.label}”`); labs[k] = 1; });
+    if (D.design === 'rct' && D.arms.filter(Boolean).length < 2) out.push('A randomised trial needs at least two groups (step 2)');
+    if (D.vars.length && !D.vars.some(v => v.role === 'primary')) out.push('No primary outcome is marked (Role, in step 3) — the sample size and the analysis plan use it');
+    if (D.visits.length > 1) D.visits.forEach((x, i) => { if (!D.vars.some(v => (v.visits || []).includes(x.id) || (i === 0 && !(v.visits || []).length))) out.push(`Visit “${x.name}” has no variable`); });
+    const ss = ssCalc(D); if (ss && !ss.err && +D.n < ss.enrol) out.push(`The planned number of patients (${D.n}) is below the sample size (${ss.enrol} to enrol) — step 1`);
     return out;
+  }
+
+  /* ---------- sample size: two groups (means or proportions) or one group before and after (paired means) ---------- */
+  const ssDef = D => (D.ss = { v: '', alpha: 0.05, power: 0.8, drop: 10, ratio: 1, a: '', b: '', sd: '', ...(D.ss || {}) });
+  const ssOutcomes = D => D.vars.filter(v => v.type === 'num' || v.type === 'calc' || ((v.type === 'yn' || v.type === 'cat') && v.cats.length === 2));
+  function ssCalc(D) {
+    const s = ssDef(D), St = typeof Stats !== 'undefined' ? Stats : null, arms = D.arms.filter(Boolean), k = arms.length;
+    const v = D.vars.find(x => x.id === s.v) || ssOutcomes(D).find(x => x.role === 'primary'); if (!v || !St) return null;
+    const e = v.expect && Object.keys(v.expect).length ? v.expect : expectOf(v.label, v.type, v.cats), alpha = +s.alpha || 0.05, power = +s.power || 0.8, drop = Math.min(90, Math.max(0, +s.drop || 0)), ratio = +s.ratio > 0 ? +s.ratio : 1;
+    const paired = k < 2 && D.visits.length > 1, num = v.type === 'num' || v.type === 'calc', lab = v.label + (v.unit ? ` (${v.unit})` : ''), r0 = x => +(+x).toFixed(2);
+    if (k < 2 && !paired) return { v, err: 'The sample size here compares two groups, or one group before and after (two visits or more).' };
+    if (k > 2) return { v, err: 'More than two groups: use the sample-size calculators of Analyse (step 10, ANOVA).' };
+    let r;
+    if (num) { const m = isFinite(+e.mean) ? +e.mean : 0, sd = s.sd !== '' ? +s.sd : +e.sd || 1, a = s.a !== '' ? +s.a : r0(m), b = s.b !== '' ? +s.b : r0(m - 0.5 * sd), diff = Math.abs(a - b);
+      if (!(diff > 0) || !(sd > 0)) return { v, err: 'The two means must differ, and the SD be above 0.' };
+      if (paired) { const n = St.nPairedMean(diff, sd, alpha, power); r = { n1: n, n2: 0, total: n, test: 'paired t-test', what: `a mean change of ${r0(diff)} in ${lab} (from ${a} to ${b}; SD of the change ${sd})` }; }
+      else { const x = St.nTwoMeans(diff, sd, alpha, power, ratio); r = { n1: x.n1, n2: x.n2, total: x.n1 + x.n2, test: "two-sample Student's t-test", what: `a difference of ${r0(diff)} in the mean ${lab} (${a} in ${arms[0]} vs ${b} in ${arms[1]}; SD ${sd})` }; }
+      Object.assign(r, { a, b, sd }); }
+    else { if (paired) return { v, err: 'A yes/no outcome before and after: use the calculators of Analyse (step 10, McNemar).' };
+      const p0 = isFinite(+(e.pct || [])[0]) ? +(e.pct || [])[0] : 50, a = s.a !== '' ? +s.a : r0(p0), b = s.b !== '' ? +s.b : r0(Math.max(1, Math.min(99, p0 + (p0 >= 50 ? -20 : 20))));
+      if (!(a > 0 && a < 100 && b > 0 && b < 100) || a === b) return { v, err: 'Two different percentages between 0 and 100 are needed.' };
+      const x = St.nTwoProps(a / 100, b / 100, alpha, power, ratio); r = { n1: x.n1, n2: x.n2, total: x.n1 + x.n2, test: 'Chi-square test', what: `${a}% vs ${b}% ${v.cats[0]} for ${v.label} (${arms[0]} vs ${arms[1]})`, a, b }; }
+    const up = n => Math.ceil(n / (1 - drop / 100));
+    r.enrol = paired ? up(r.total) : up(r.n1) + up(r.n2);
+    Object.assign(r, { v, paired, num, alpha, power, drop, ratio, arms });
+    const per = paired ? `${r.total} patients` : r.n1 === r.n2 ? `${r.n1} patients per group (${r.total} in total)` : `${r.n1} patients in ${arms[0]} and ${r.n2} in ${arms[1]} (${r.total} in total)`;
+    r.text = `A sample size of ${per} is needed to detect ${r.what} with ${Math.round(power * 100)}% power at a two-sided significance level of ${alpha} (${r.test}).${drop ? ` Allowing for ${drop}% dropout, ${r.enrol} patients will be enrolled.` : ''}`;
+    return r;
+  }
+
+  /* ---------- a design from an existing sheet: the columns, their types, categories, ranges, visits (from suffixes), groups and expected values ---------- */
+  const VIS_RE = /^(.*?)[\s_.\-]+(baseline|pre[\s_-]?op(?:erative)?|post[\s_-]?op(?:erative)?|pre|post|before|after|admission|discharge|follow[\s_-]?up|(?:day|d|week|wk|w|month|mo|m|year|yr|y|visit|v|t|time)[\s_-]?\d+)$/i;
+  const visPretty = t => { const m = /^(day|d|week|wk|w|month|mo|m|year|yr|y|visit|v|t|time)[\s_-]?(\d+)$/i.exec(t); if (!m) return t.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace(/^Pre ?Op(erative)?$/i, 'Pre-operative').replace(/^Post ?Op(erative)?$/i, 'Post-operative');
+    const u = m[1].toLowerCase(), w = { d: 'Day', day: 'Day', w: 'Week', wk: 'Week', week: 'Week', m: 'Month', mo: 'Month', month: 'Month', y: 'Year', yr: 'Year', year: 'Year', v: 'Visit', visit: 'Visit', t: 'T', time: 'Time' }[u]; return u === 't' ? `T${m[2]}` : `${w} ${m[2]}`; };
+  const UNITS = new Set(LIB.flatMap(([, l]) => l.map(e => e[2]).filter(Boolean)).concat(['years', 'yrs', 'kg', 'cm', 'mm', 'm', 'g', 'mg', 'ml', 'mL', 'L', 'min', 'hours', 'h', 'days', 'weeks', 'months', 'mmHg', 'bpm', 'percent', 'IU', 'U/L']).map(x => x.toLowerCase()));
+  const UNIT2 = { 'kg m2': 'kg/m²', 'mg dl': 'mg/dL', 'g dl': 'g/dL', 'mmol l': 'mmol/L', 'umol l': 'µmol/L', 'u l': 'U/L', 'iu l': 'IU/L', 'ng ml': 'ng/mL', 'pg ml': 'pg/mL', 'mg l': 'mg/L', 'g l': 'g/L', 'meq l': 'mEq/L', 'x10e9 l': '×10⁹/L', 'ml min': 'mL/min', 'cm h2o': 'cmH₂O' };
+  function designFromSheet(aoa, title) {
+    const blankCell = x => x === null || x === undefined || String(x).trim() === '', filled = r => (r || []).filter(x => !blankCell(x)).length;
+    const wmax = Math.max(1, ...aoa.slice(0, 30).map(filled)), hr = Math.max(0, aoa.slice(0, 20).findIndex(r => filled(r) >= Math.max(2, 0.6 * wmax)));
+    const heads = (aoa[hr] || []).map((h, i) => blankCell(h) ? `Column_${i + 1}` : String(h).trim()), body = aoa.slice(hr + 1).filter(r => filled(r));
+    const vals = i => body.map(r => r[i]).filter(x => !blankCell(x)), Dn = blank(); Dn.title = title; Dn.vars = []; Dn.arms = []; Dn.visits = []; Dn.n = body.length || 60; Dn.rand.on = false;
+    const norm0 = h => h.replace(/[\s_]+/g, ' ').trim();
+    let idI = heads.findIndex(h => /^(id|patient id|pt id|patient no\.?|code|serial|serial no\.?|no\.?|number|record id|s\.? ?n\.?|case(?: no\.?)?)$/i.test(norm0(h)));
+    if (idI < 0 && vals(0).length && new Set(vals(0).map(String)).size === vals(0).length && vals(0).some(x => typeof x === 'string' || Number.isInteger(x))) idI = 0;
+    if (idI >= 0) { const m = /^([A-Za-z\-_]*)(\d+)$/.exec(String(vals(idI)[0] || '')); if (m) { Dn.idPrefix = m[1]; Dn.idDigits = m[2].length; } }
+    const grpI = heads.findIndex((h, i) => i !== idI && /^(study )?(group|arm|treatment|allocation|randomi[sz]ation)s?$/i.test(norm0(h)) && (n => n >= 2 && n <= 8)(new Set(vals(i).map(x => String(x).trim())).size));
+    if (grpI >= 0) Dn.arms = [...new Set(vals(grpI).map(x => String(x).trim()))];
+    // visits: a stem found with two suffixes or more (Pain_Baseline, Pain_M3) — a single "_m2" is a unit, not a visit
+    const parts = heads.map((h, i) => { if (i === idI || i === grpI) return null; const m = VIS_RE.exec(h); return m ? { stem: m[1].trim(), tag: m[2] } : null; });
+    const stems = {}; parts.forEach((p, i) => { if (p) (stems[p.stem.toLowerCase()] = stems[p.stem.toLowerCase()] || []).push(i); });
+    const repStem = st => (stems[st.toLowerCase()] || []).length >= 2;
+    parts.forEach(p => { if (p && repStem(p.stem)) { const nm = visPretty(p.tag); if (!Dn.visits.some(x => x.name.toLowerCase() === nm.toLowerCase())) Dn.visits.push({ id: uid(), name: nm }); } });
+    if (!Dn.visits.length) Dn.visits = [{ id: 'v0', name: 'Baseline' }];
+    const visitOf = tag => Dn.visits.find(x => x.name.toLowerCase() === visPretty(tag).toLowerCase());
+    const YESNO = /^(yes|no|y|n|present|absent|true|false)$/i, done = new Set();
+    heads.forEach((h, i) => { if (i === idI || i === grpI || done.has(i)) return;
+      const p = parts[i], rep = p && repStem(p.stem), cols = rep ? stems[p.stem.toLowerCase()] : [i]; cols.forEach(c => done.add(c));
+      const xs = cols.flatMap(vals); let label = rep ? p.stem : h, unit = '';
+      const mu = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(label); if (mu) { label = mu[1]; unit = mu[2]; }
+      else { const w = label.split(/[_\s]+/), two = w.length > 2 ? UNIT2[w.slice(-2).join(' ').toLowerCase()] : null;
+        if (two) { unit = two; w.splice(-2); label = w.join(' '); } else if (w.length > 1 && UNITS.has(w[w.length - 1].toLowerCase())) { unit = w.pop(); label = w.join(' '); unit = { percent: '%', yrs: 'years', ml: 'mL' }[unit.toLowerCase()] || unit; } }
+      label = label.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim() || h;
+      const lib = findLib(label), nums = xs.map(x => typeof x === 'number' ? x : /^\s*-?\d+([.,]\d+)?\s*$/.test(String(x)) ? +String(x).replace(',', '.') : NaN), nOk = nums.filter(isFinite);
+      const strs = [...new Set(xs.map(x => String(x).trim()))], isDate = xs.some(x => x instanceof Date) || (/\bdate\b|\bdob\b/i.test(label) && xs.every(x => x instanceof Date || typeof x === 'number' || /\d{1,4}[\/.-]\d{1,2}[\/.-]\d{1,4}/.test(String(x))));
+      let v;
+      if (isDate) v = { type: 'date' };
+      else if (xs.length && nOk.length >= 0.9 * xs.length && !(strs.length <= 2 && strs.every(x => x === '0' || x === '1'))) {
+        const lo = Math.min(...nOk), hi = Math.max(...nOk), dec = Math.min(3, Math.max(0, ...nOk.map(x => (String(x).split('.')[1] || '').length))), m = nOk.reduce((a, b) => a + b, 0) / nOk.length, sd = Math.sqrt(nOk.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, nOk.length - 1));
+        const sk = sd > 0 ? nOk.reduce((a, b) => a + ((b - m) / sd) ** 3, 0) / nOk.length : 0;
+        v = { type: 'num', dec: String(dec), min: lib && lib.min !== '' ? Math.min(+lib.min, lo) : Math.floor(lo), max: lib && lib.max !== '' ? Math.max(+lib.max, hi) : Math.ceil(hi), expect: { mean: +m.toFixed(2), sd: +sd.toFixed(2), dist: sk > 1 && lo >= 0 ? 'skewed' : 'normal' } }; }
+      else if (xs.length && (strs.length <= 2 && strs.every(x => x === '0' || x === '1') || strs.every(x => YESNO.test(x)) && strs.length <= 4)) {
+        const yes = xs.filter(x => /^(1|yes|y|present|true)$/i.test(String(x).trim())).length; v = { type: 'yn', cats: [...YN], expect: { pct: [+(100 * yes / xs.length).toFixed(1), +(100 - 100 * yes / xs.length).toFixed(1)] } }; }
+      else if (xs.length && strs.length <= 12 && strs.length <= Math.max(2, 0.5 * xs.length)) {
+        const known = lib && lib.cats.length && strs.every(x => lib.cats.some(c => c.toLowerCase() === x.toLowerCase())) ? lib.cats : strs, cnt = c => xs.filter(x => String(x).trim().toLowerCase() === c.toLowerCase()).length;
+        v = { type: 'cat', cats: [...known], expect: { pct: known.map(c => +(100 * cnt(c) / xs.length).toFixed(1)) } }; }
+      else v = { type: xs.length ? 'text' : 'num' };
+      const base = lib && lib.type === v.type ? lib : { section: 'Study data', unit: '', definition: '' };
+      Dn.vars.push({ id: uid(), section: base.section, label, type: v.type, unit: unit || base.unit || '', min: v.min ?? '', max: v.max ?? '', cats: v.cats || [], dec: v.dec ?? '', required: false,
+        visits: rep ? cols.map(c => (visitOf(parts[c].tag) || {}).id).filter(Boolean) : [], group: '', role: '', definition: '', name: rep ? '' : h, expect: v.expect || expectOf(label, v.type, v.cats || []) }); });
+    // names: a single column keeps its own; a repeated one gets its stem with the visit suffixes
+    Dn.vars.forEach(v => { if (v.visits.length === 1 && v.visits[0] === Dn.visits[0].id) v.visits = []; });
+    Dn.sections = [...new Set(Dn.vars.map(v => v.section))];
+    return { D: Dn, n: body.length, cols: heads.length, id: idI >= 0 ? heads[idI] : '', group: grpI >= 0 ? heads[grpI] : '' };
+  }
+
+  /* ---------- quick entry: a pasted list of variables ---------- */
+  function fromLine(D, line, sec) {
+    let s = String(line).replace(/^\s*[-•*\d.)]+\s+/, '').trim(); if (!s) return null; let vis = '', cats = null, unit = '';
+    const m1 = /\s*@\s*(all|last|every visit)\s*$/i.exec(s); if (m1) { vis = /last/i.test(m1[1]) ? 'last' : 'all'; s = s.slice(0, m1.index).trim(); }
+    const m2 = /^(.*?)\s*:\s*(.+)$/.exec(s); if (m2) { s = m2[1].trim(); cats = m2[2].split(/\s*[\/|,;]\s*/).map(x => x.trim()).filter(Boolean); }
+    const m3 = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(s); if (m3) { s = m3[1].trim(); unit = m3[2].trim(); }
+    let v = findLib(s);
+    if (v) { if (unit) v.unit = unit; if (cats && cats.length >= 2) { v.type = cats.length === 2 && cats.every(c => /^(yes|no)$/i.test(c)) ? 'yn' : 'cat'; v.cats = v.type === 'yn' ? [...YN] : cats; v.expect = expectOf(v.label, v.type, v.cats); } }
+    else { const type = cats && cats.length >= 2 ? (cats.length === 2 && cats.every(c => /^(yes|no)$/i.test(c)) ? 'yn' : 'cat') : /\bdate\b|\bdob\b/i.test(s) ? 'date' : /^(type|cause|site|reason|comment|notes?|other|specify|details?)\b/i.test(s) ? 'text' : 'num';
+      v = { id: uid(), section: sec, label: s, type, unit, min: '', max: '', cats: type === 'yn' ? [...YN] : type === 'cat' ? cats : [], dec: '', required: false, visits: [], group: '', role: '', definition: '' }; v.expect = expectOf(s, type, v.cats); }
+    v.visits = vis === 'all' ? D.visits.map(x => x.id) : vis === 'last' && D.visits.length > 1 ? [D.visits[D.visits.length - 1].id] : [];
+    return v;
+  }
+  function addScale(D, name, items, min, max, def) {
+    const all = D.visits.length > 1 && confirm(`Collect ${name} at every visit (${D.visits.map(x => x.name).join(', ')})?\nOK: every visit · Cancel: the first visit only`), vis = all ? D.visits.map(x => x.id) : [];
+    const im = +(min + (max - min) * 0.35).toFixed(2), isd = +((max - min) / 3.2).toFixed(2), tag = tagOf(name);
+    const ids = items.map((t, i) => { const v = { id: uid(), section: name, label: t ? `${name} ${i + 1}. ${t}` : `${name} item ${i + 1}`, name: `${tag}_${i + 1}`, type: 'num', unit: '', min, max, cats: [], dec: '0', required: false, visits: [...vis], group: '', role: '', definition: '', scale: name, expect: { mean: im, sd: isd, dist: 'normal' } }; D.vars.push(v); return v.id; });
+    const k = items.length, tsd = +(isd * Math.sqrt(k * (1 + (k - 1) * 0.6))).toFixed(1);
+    D.vars.push({ id: uid(), section: name, label: `${name} total`, name: `${tag}_total`, type: 'calc', unit: '', min: k * min, max: k * max, cats: [], dec: '0', required: false, visits: [...vis], group: '', role: '', definition: def || `${name}: sum of ${k} items (${min}–${max} each)`, formula: { kind: 'sum', list: ids }, expect: { mean: +(k * im).toFixed(1), sd: tsd, dist: 'normal' } });
+    if (!D.sections.includes(name)) D.sections.push(name); return ids.length;
   }
 
   /* ---------- randomisation (seeded, simple or in blocks, by strata) ---------- */
@@ -39094,7 +39219,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       + SEC_FILL.map((_, i) => `<xf numFmtId="0" fontId="2" fillId="${4 + i}" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>`).join('')
       + `<xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/></cellXfs>`
       + `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>`
-      + `<dxfs count="2"><dxf><font><color rgb="FF9C0006"/></font><fill><patternFill><bgColor rgb="FFFFC7CE"/></patternFill></fill></dxf><dxf><font><b/><color rgb="FF9C0006"/></font><fill><patternFill><bgColor rgb="FFFFEB9C"/></patternFill></fill></dxf></dxfs>`
+      + `<dxfs count="3"><dxf><font><color rgb="FF9C0006"/></font><fill><patternFill><bgColor rgb="FFFFC7CE"/></patternFill></fill></dxf><dxf><font><b/><color rgb="FF9C0006"/></font><fill><patternFill><bgColor rgb="FFFFEB9C"/></patternFill></fill></dxf><dxf><font><color rgb="FF808080"/></font><fill><patternFill><bgColor rgb="FFD9D9D9"/></patternFill></fill></dxf></dxfs>`
       + `<tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/></styleSheet>`;
   }
   const CALC_STYLE = 5 + SEC_FILL.length;
@@ -39176,7 +39301,9 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
           else dv.push({ type: 'decimal', op: 'between', ref: ref(k), f1: -1e15, f2: 1e15, errTitle: 'A number', err: `${v.label}: a number${miss !== null ? ` (missing: ${miss})` : ''}`, pTitle: v.label + unit, prompt: `${lo !== null && hi !== null ? `${lo} to ${hi}` : 'A number'}${miss !== null ? ` · missing = ${miss}` : ''}${note ? ` · ${note}` : ''}` });
           if (lo !== null && hi !== null) cfs.push({ ref: ref(k), type: 'expression', f: [`AND(ISNUMBER(${colL(k)}3),OR(${colL(k)}3<${lo},${colL(k)}3>${hi})${miss !== null ? `,${colL(k)}3<>${miss}` : ''})`] }); }
         if (v.type === 'date') dv.push({ type: 'date', op: 'between', ref: ref(k), f1: 1, f2: 2958465, errTitle: 'A date', err: `${v.label}: a date (${D.conv.date})`, pTitle: v.label, prompt: `A date, ${D.conv.date}${note ? ` · ${note}` : ''}` });
-        if (v.type === 'text' || v.type === 'time') dv.push({ type: 'textLength', op: 'lessThanOrEqual', ref: ref(k), f1: 255, pTitle: v.label + unit, prompt: note || (v.type === 'time' ? 'hh:mm' : 'Text') }); });
+        if (v.type === 'text' || v.type === 'time') dv.push({ type: 'textLength', op: 'lessThanOrEqual', ref: ref(k), f1: 255, pTitle: v.label + unit, prompt: note || (v.type === 'time' ? 'hh:mm' : 'Text') });
+        // skip logic: the cells of a patient who is not asked are greyed
+        const pv = whenParent(D, v); if (pv) { const pk = at(pv.id, c.visit && c.visit.id); if (pk >= 0 && pk !== k) { const P = `${colL(pk)}3`, want = D.conv.catAs === 'codes' ? String(codeOf(pv, v.when.cat)) : `"${String(v.when.cat).replace(/"/g, '""')}"`; cfs.push({ ref: ref(k), type: 'expression', dxf: 2, f: [`AND(${P}<>"",${P}<>${want})`] }); } } });
       // checks across columns (e.g. discharge ≥ admission): highlighted when broken
       (D.checks || []).forEach(ch => { const ks = all.map((c, k) => [c, k]).filter(([c]) => c.v && c.v.id === ch.a), kb = all.map((c, k) => [c, k]).filter(([c]) => c.v && c.v.id === ch.b);
         ks.forEach(([ca, a], i) => { const b = (kb.find(([cb]) => (cb.visit && cb.visit.id) === (ca.visit && ca.visit.id)) || kb[i] || kb[0] || [])[1]; if (b === undefined) return; const op = { '>': '<=', '>=': '<', '<': '>=', '<=': '>', '=': '<>' }[ch.op] || '<';
@@ -39193,10 +39320,10 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       for (let r = 0; r < nRows; r++) { const R = r + 3; cmp.push([...Array(all)].map((_, k) => k === 0 ? { f: `Data!A${R}` } : { f: `IF(Data!${colL(k)}${R}&""='Entry 2'!${colL(k)}${R}&"","","≠")` })); }
       sheets.push({ name: 'Compare', xml: sheetXml(cmp, { widths: [...Array(all)].map(() => 12), freeze: { r: 2, c: 1 }, cfs: [{ ref: `B3:${colL(all - 1)}${nRows + 2}`, type: 'cellIs', op: 'equal', f: ['"≠"'] }] }) }); }
     // codebook, instructions, randomisation, lists and the setup for the analysis
-    const cb = [['Column', 'Label', 'Section', 'Type', 'Unit', 'Allowed values / range', 'Codes', 'Visit', 'Required', 'Item group', 'Definition', 'Formula'].map(v => ({ v, s: 1 }))];
+    const cb = [['Column', 'Label', 'Section', 'Type', 'Unit', 'Allowed values / range', 'Codes', 'Visit', 'Required', 'Item group', 'Definition', 'Formula', 'Asked only when'].map(v => ({ v, s: 1 }))];
     cols.forEach(c => { const v = c.v; cb.push([c.col, v.label, v.section, { num: 'Number', yn: 'Yes / no', cat: 'Categories', date: 'Date', time: 'Time', text: 'Text', calc: 'Calculated' }[v.type] || v.type, v.unit, v.type === 'num' || v.type === 'calc' ? (v.min !== '' || v.max !== '' ? `${v.min} to ${v.max}` : '') : v.cats.join(' / '),
-      (v.type === 'cat' || v.type === 'yn') ? v.cats.map((x, i) => `${i + 1}=${x}`).join(', ') : '', c.visit ? c.visit.name : long ? (visitsOf(D, v).map(x => x.name).join(', ') || 'all') : '', v.required ? 'Yes' : '', v.group || '', v.definition || '', v.type === 'calc' && v.formula ? { bmi: 'Weight / (height in m)²', days: 'Days between the two dates', age: 'Completed years between the dates', change: 'Last visit − first visit', sum: 'Sum of items', mean: 'Mean of items' }[v.formula.kind] || '' : '']); });
-    sheets.push({ name: 'Codebook', xml: sheetXml(cb, { widths: [22, 26, 16, 12, 10, 26, 26, 12, 9, 16, 40, 26], freeze: { r: 1, c: 0 } }) });
+      (v.type === 'cat' || v.type === 'yn') ? v.cats.map((x, i) => `${i + 1}=${x}`).join(', ') : '', c.visit ? c.visit.name : long ? (visitsOf(D, v).map(x => x.name).join(', ') || 'all') : '', v.required ? 'Yes' : '', v.group || '', v.definition || '', v.type === 'calc' && v.formula ? { bmi: 'Weight / (height in m)²', days: 'Days between the two dates', age: 'Completed years between the dates', change: 'Last visit − first visit', sum: 'Sum of items', mean: 'Mean of items' }[v.formula.kind] || '' : '', whenTxt(D, v)]); });
+    sheets.push({ name: 'Codebook', xml: sheetXml(cb, { widths: [22, 26, 16, 12, 10, 26, 26, 12, 9, 16, 40, 26, 26], freeze: { r: 1, c: 0 } }) });
     const ins = [[{ v: D.title || 'Master sheet', s: 3 }], ...(fill && fill.simulated ? [[{ v: `SIMULATED DATA — generated ${fill.simulated.at} (seed ${fill.simulated.seed}). Not real patients.`, s: 3 }, '']] : []), ['How to fill this sheet', ''],
       ['1', 'One row per patient' + (long ? ' and visit' : '') + '. Keep the ID; do not change the column names in row 2 (row 1 shows the sections).'],
       ['2', 'Choose categories from the drop-down list; numbers outside the allowed range are refused or highlighted in red.'],
@@ -39205,6 +39332,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       ['5', 'Cells highlighted in yellow break a rule between columns (e.g. discharge before admission).'],
       ...(D.double ? [['6', 'Double entry: a second person types the same forms in “Entry 2”; the “Compare” sheet marks every difference (≠).']] : []),
       ...(rand ? [['7', `The allocation of each patient is in “Randomisation” (${D.rand.type === 'simple' ? 'simple' : `blocks of ${D.rand.sizes}`}, seed ${D.rand.seed}). Allocate in order and do not skip numbers.`]] : []),
+      ...(D.vars.some(v => whenParent(D, v)) ? [['8', `Grey cells are not asked for this patient: ${D.vars.filter(v => whenParent(D, v)).map(v => `${v.label} only when ${whenTxt(D, v)}`).join('; ')}.`]] : []),
       ['', ''], ['Upload this file to Prof MSE Easy Stat: the setup (labels, units, groups, visits and categories) is read from it.', '']];
     sheets.push({ name: 'Instructions', xml: sheetXml(ins, { widths: [6, 110] }) });
     if (rand) { const rr = [['Stratum', 'No.', 'Allocation', 'Patient ID', 'Date', 'Initials'].map(v => ({ v, s: 1 }))]; rand.forEach(s => s.list.forEach((a, i) => rr.push([s.stratum, i + 1, a, rand.length === 1 ? ids[i] : null, null, null]))); sheets.push({ name: 'Randomisation', xml: sheetXml(rr, { widths: [30, 6, 16, 12, 12, 10], freeze: { r: 1, c: 0 } }) }); }
@@ -39218,7 +39346,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const cols = columns(D), long = D.layout === 'long';
     return { app: 'ProfMSE-EasyStat-mastersheet', version: 1, title: D.title, design: D.design, groupCol: D.arms.filter(Boolean).length >= 2 ? 'Group' : '', idCol: 'ID', arms: D.arms, layout: D.layout, catAs: D.conv.catAs, missing: D.conv.missing,
       visits: D.visits.map(x => ({ tag: tagOf(x.name), name: x.name })),
-      vars: D.vars.map(v => ({ id: v.id, label: v.label, unit: v.unit, type: v.type, cats: v.cats, group: v.group, role: v.role, definition: v.definition, section: v.section,
+      sampleSize: (r => r && !r.err ? r.text : '')(ssCalc(D)),
+      vars: D.vars.map(v => ({ id: v.id, label: v.label, unit: v.unit, type: v.type, cats: v.cats, group: v.group || (v.scale ? '' : v.group), role: v.role, definition: v.definition, section: v.section, when: whenTxt(D, v) || undefined,
         cols: long ? [{ col: baseName(D, v) }] : cols.filter(c => c.v.id === v.id).map(c => ({ col: c.col, visit: c.visit ? tagOf(c.visit.name) : '', visitName: c.visit ? c.visit.name : '' })) })) };
   }
 
@@ -39234,10 +39363,10 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     order.forEach(sec => { const vs = D.vars.filter(v => v.section === sec); if (!vs.length) return;
       kids.push(new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: sec, bold: true, size: 26, font })] }));
       const once = vs.filter(v => visitsOf(D, v).length <= 1), rep = vs.filter(v => visitsOf(D, v).length > 1);
-      if (once.length) kids.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: once.map(v => new TableRow({ children: [cell(v.label + (v.unit && v.type !== 'num' ? ` (${v.unit})` : '') + (v.required ? ' *' : ''), 38, true), cell(answer(v), 62)] })) }));
+      if (once.length) kids.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: once.map(v => new TableRow({ children: [cell((whenParent(D, v) ? '↳ ' : '') + v.label + (v.unit && v.type !== 'num' ? ` (${v.unit})` : '') + (v.required ? ' *' : '') + (whenParent(D, v) ? ` (if ${whenTxt(D, v)})` : ''), 38, true), cell(answer(v), 62)] })) }));
       if (rep.length) { const vis = [...new Set(rep.flatMap(v => visitsOf(D, v).map(x => x.id)))].map(id => D.visits.find(x => x.id === id)), w = Math.floor(62 / vis.length);
         kids.push(P('', { after: 60 }), new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [new TableRow({ children: [cell('', 38, true), ...vis.map(x => cell(x.name, w, true))] }),
-          ...rep.map(v => new TableRow({ children: [cell(v.label + (v.unit ? ` (${v.unit})` : ''), 38, true), ...vis.map(x => cell((v.visits || []).includes(x.id) ? (v.type === 'cat' || v.type === 'yn' ? v.cats.map(c => `☐ ${c}`).join('  ') : '') : '—', w))] }))] })); }
+          ...rep.map(v => new TableRow({ children: [cell(v.label + (v.unit ? ` (${v.unit})` : '') + (whenParent(D, v) ? ` (if ${whenTxt(D, v)})` : ''), 38, true), ...vis.map(x => cell((v.visits || []).includes(x.id) ? (v.type === 'cat' || v.type === 'yn' ? v.cats.map(c => `☐ ${c}`).join('  ') : '') : '—', w))] }))] })); }
       const defs = vs.filter(v => v.definition); if (defs.length) kids.push(P(defs.map(v => `${v.label}: ${v.definition}`).join(' · '), { size: 18, color: '555555', after: 120 })); });
     kids.push(P(''), P('Investigator: ____________________     Signature: ____________     Date: __ / __ / ____', { after: 0 }));
     return Packer.toBlob(new Document({ creator: 'Prof MSE Easy Stat', title: (D.title || 'CRF') + ' — case report form', sections: [{ properties: { page: { margin: { top: 900, bottom: 900, left: 900, right: 900 } } }, children: kids }] }));
@@ -39249,15 +39378,20 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const rc = s => String(s).toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').replace(/^(\d)/, 'v$1').slice(0, 26), rows = [head], q = s => /[",\n]/.test(String(s)) ? `"${String(s).replace(/"/g, '""')}"` : String(s);
     rows.push(['record_id', 'master_sheet', '', 'text', 'Patient ID', '', '', '', '', '', 'y', '', 'y', '', '', '', '', '']);
     if (D.arms.filter(Boolean).length >= 2) rows.push(['group', 'master_sheet', '', 'radio', 'Group', D.arms.map((a, i) => `${i + 1}, ${a}`).join(' | '), '', '', '', '', '', '', 'y', '', '', '', '', '']);
-    let lastSec = ''; columns(D).forEach(c => { const v = c.v, sec = v.section !== lastSec ? v.section : ''; lastSec = v.section;
+    const allC = columns(D), branch = c => { const p = whenParent(D, c.v); if (!p) return ''; const pc = allC.find(x => x.v.id === p.id && (x.visit && x.visit.id) === (c.visit && c.visit.id)) || allC.find(x => x.v.id === p.id); if (!pc) return '';
+      const code = p.type === 'yn' ? (/^yes$/i.test(c.v.when.cat) ? 1 : 0) : p.cats.indexOf(c.v.when.cat) + 1; return `[${rc(pc.col)}] = '${code}'`; };
+    let lastSec = ''; allC.forEach(c => { const v = c.v, sec = v.section !== lastSec ? v.section : ''; lastSec = v.section;
       const type = v.type === 'yn' ? 'yesno' : v.type === 'cat' ? 'radio' : v.type === 'calc' ? 'text' : 'text', val = v.type === 'num' ? (String(v.dec) === '0' ? 'integer' : 'number') : v.type === 'date' ? (D.conv.date.startsWith('mm') ? 'date_mdy' : D.conv.date.startsWith('yyyy') ? 'date_ymd' : 'date_dmy') : v.type === 'time' ? 'time' : '';
-      rows.push([rc(c.col), 'master_sheet', sec, type, v.label + (c.visit ? ` — ${c.visit.name}` : ''), v.type === 'cat' ? v.cats.map((x, i) => `${i + 1}, ${x}`).join(' | ') : '', [v.unit, v.definition, v.type === 'calc' ? 'calculated in Excel' : ''].filter(Boolean).join(' · '), val, v.type === 'num' ? v.min : '', v.type === 'num' ? v.max : '', '', '', v.required ? 'y' : '', '', '', '', '', '']); });
+      rows.push([rc(c.col), 'master_sheet', sec, type, v.label + (c.visit ? ` — ${c.visit.name}` : ''), v.type === 'cat' ? v.cats.map((x, i) => `${i + 1}, ${x}`).join(' | ') : '', [v.unit, v.definition, v.type === 'calc' ? 'calculated in Excel' : ''].filter(Boolean).join(' · '), val, v.type === 'num' ? v.min : '', v.type === 'num' ? v.max : '', '', branch(c), v.required ? 'y' : '', '', '', '', '', '']); });
     return new Blob(['﻿' + rows.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv' });
   }
 
   /* ---------- the workspace ---------- */
-  let D = ls.get('current', null) || fromTemplate('rct2'), tab = 'study', sel = null, libQ = '';
-  const save = () => ls.set('current', D);
+  let D = ls.get('current', null) || fromTemplate('rct2'), tab = 'study', sel = null, libQ = '', pasteOpen = false, pasteTxt = '';
+  // undo / redo: a snapshot before each change (typing in one field is one step)
+  let undoS = [], redoS = [], lastT = 0, prevJ = JSON.stringify(D);
+  const save = () => { const j = JSON.stringify(D), now = Date.now(); if (j !== prevJ) { if (now - lastT > 800) { undoS.push(prevJ); if (undoS.length > 80) undoS.shift(); redoS = []; } lastT = now; prevJ = j; } ls.set('current', D); };
+  function undo(back) { const from = back ? undoS : redoS, to = back ? redoS : undoS; if (!from.length) { toast(back ? 'Nothing to undo' : 'Nothing to redo'); return; } to.push(JSON.stringify(D)); D = JSON.parse(from.pop()); prevJ = JSON.stringify(D); lastT = 0; ls.set('current', D); if (sel && !D.vars.some(v => v.id === sel)) sel = null; render(); }
   const TABS = [['study', '1 · Study'], ['visits', '2 · Groups & visits'], ['vars', '3 · Variables'], ['rules', '4 · Rules'], ['preview', '5 · Preview'], ['export', '6 · Export']];
   const TYPES = [['num', 'Number'], ['yn', 'Yes / no'], ['cat', 'Categories'], ['date', 'Date'], ['time', 'Time'], ['text', 'Text'], ['calc', 'Calculated (Excel formula)']];
   /* ---------- the three phases: 🧱 Build · 🎲 Generate · 📊 Analyse ---------- */
@@ -39283,6 +39417,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     w.innerHTML = `<div class="mb-head"><b>🧱 Master sheet builder</b><span class="legend-note">${esc(D.title || 'Untitled study')} · ${D.vars.length} variables · ${columns(D).length} columns</span><span class="spacer"></span>
       <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${opt(Object.entries(TEMPLATES).map(([k, t]) => [k, t.name]), '')}<option value="__blank">Empty design</option></select>
       <select id="mbMine" style="width:auto"><option value="">My designs…</option>${opt(Object.keys(ls.get('designs', {})).map(k => [k, k]), '')}</select>
+      <button class="btn ghost small" id="mbUndo" type="button" title="Undo (Ctrl+Z)" ${undoS.length ? '' : 'disabled'}>↶</button><button class="btn ghost small" id="mbRedo" type="button" title="Redo (Ctrl+Y)" ${redoS.length ? '' : 'disabled'}>↷</button>
+      <label class="btn ghost small" style="margin:0" title="Make the design from a sheet you already have: its columns, types, categories, ranges, visits (from suffixes such as _Baseline, _M3), groups — and its values as the expected values">⬆ From an existing sheet<input type="file" id="mbFromSheet" accept=".xlsx,.xls,.xlsm,.csv,.txt" hidden></label>
       <button class="btn ghost small" id="mbSaveAs" type="button">💾 Save design</button><button class="btn ghost small" id="mbExportJson" type="button" title="The design as a file, to share or keep">⬇ Design file</button><label class="btn ghost small" style="margin:0">⬆ Open design<input type="file" id="mbImportJson" accept=".json" hidden></label>
       <button class="btn primary small" id="mbClose" type="button" title="Phase 2: fill the sheet with simulated patients">🎲 Generate the data ›</button></div>
       <div class="mb-tabs">${TABS.map(([k, l]) => `<button type="button" class="mb-tab ${tab === k ? 'on' : ''}" data-mbtab="${k}">${l}${k === 'preview' && pr.length ? ` <span class="chip warn">${pr.length}</span>` : ''}</button>`).join('')}</div>
@@ -39300,7 +39436,27 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       <div><label class="f">Missing values</label><select data-mbc="missing">${opt([['blank', 'Empty cell'], ['999', 'Code 999 (numbers)']], D.conv.missing)}</select></div>
       <div><label class="f">Dates</label><select data-mbc="date">${opt([['dd/mm/yyyy', 'dd/mm/yyyy'], ['mm/dd/yyyy', 'mm/dd/yyyy'], ['yyyy-mm-dd', 'yyyy-mm-dd']], D.conv.date)}</select></div></div>
     <h3>Layout</h3><div class="grid g3"><div><label class="f">Rows</label><select data-mb="layout">${opt([['wide', 'One row per patient (visits as columns)'], ['long', 'One row per visit (patient × visit)'], ['sheets', 'One sheet per visit']], D.layout)}</select></div>
-      <div><label class="check" style="margin-top:22px"><input type="checkbox" data-mb="double" ${D.double ? 'checked' : ''}><span><b>Double data entry</b> — a second entry sheet and a sheet marking every difference</span></label></div></div>`;
+      <div><label class="check" style="margin-top:22px"><input type="checkbox" data-mb="double" ${D.double ? 'checked' : ''}><span><b>Double data entry</b> — a second entry sheet and a sheet marking every difference</span></label></div></div>${ssBox()}`;
+  function ssBox() {
+    const s = ssDef(D), r = ssCalc(D), vs = ssOutcomes(D), v = r && r.v, arms = D.arms.filter(Boolean), paired = arms.length < 2 && D.visits.length > 1;
+    const num = v && (v.type === 'num' || v.type === 'calc'), inp = (k, lab, ph, w = 100) => `<div><label class="f">${lab}</label><input type="number" step="any" data-mbs="${k}" value="${esc(s[k])}" placeholder="${esc(ph ?? '')}" style="width:${w}px"></div>`;
+    return `<h3>Sample size</h3><p class="legend-note">From the main outcome and its expected values (step 3) — ${paired ? 'one group, before and after (paired t-test)' : 'two groups (t-test for a number, Chi-square for yes/no)'}.</p>
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end"><div><label class="f">Main outcome</label><select data-mbs="v" style="width:auto">${opt([['', v && !s.v ? `${v.label} (primary)` : '—'], ...vs.map(x => [x.id, x.label + (x.role === 'primary' ? ' (primary)' : '')])], s.v)}</select></div>
+      ${v ? (num ? inp('a', paired ? 'Mean before' : `Mean in ${esc(arms[0] || 'group 1')}`, r && r.a) + inp('b', paired ? 'Mean after' : `Mean in ${esc(arms[1] || 'group 2')}`, r && r.b) + inp('sd', paired ? 'SD of the change' : 'SD', r && r.sd, 80)
+        : inp('a', `% ${esc(v.cats[0])} in ${esc(arms[0] || 'group 1')}`, r && r.a) + inp('b', `% ${esc(v.cats[0])} in ${esc(arms[1] || 'group 2')}`, r && r.b)) : ''}
+      <div><label class="f">Significance</label><select data-mbs="alpha" style="width:auto">${opt([[0.05, '0.05'], [0.01, '0.01'], [0.1, '0.10']], s.alpha)}</select></div>
+      <div><label class="f">Power</label><select data-mbs="power" style="width:auto">${opt([[0.8, '80%'], [0.85, '85%'], [0.9, '90%'], [0.95, '95%']], s.power)}</select></div>
+      <div><label class="f">Dropout %</label><input type="number" min="0" max="90" data-mbs="drop" value="${esc(s.drop)}" style="width:70px"></div>
+      ${paired ? '' : `<div><label class="f">Ratio ${esc(arms[1] || '2')} : ${esc(arms[0] || '1')}</label><input type="number" min="0.2" max="5" step="0.5" data-mbs="ratio" value="${esc(s.ratio)}" style="width:70px"></div>`}</div>
+      <div id="mbSsOut" class="mb-ss">${ssOut(r)}</div>`;
+  }
+  function ssOut(r) {
+    if (!r) return '<span class="legend-note">Mark the primary outcome (Role, step 3) or choose it here.</span>';
+    if (r.err) return `<span class="legend-note">${esc(r.err)}</span>`;
+    return `<div class="row" style="gap:14px;align-items:baseline;flex-wrap:wrap"><span class="pbig">${r.paired ? `n = ${r.total}` : `${r.n1}${r.n1 === r.n2 ? ' per group' : ` + ${r.n2}`} · ${r.total} in total`}</span><span><b>${r.enrol}</b> to enrol${r.drop ? ` (with ${r.drop}% dropout)` : ''}</span>
+      <button class="btn ${+D.n === r.enrol ? 'ghost' : 'primary'} small" type="button" id="mbSsUse" ${+D.n === r.enrol ? 'disabled' : ''}>${+D.n === r.enrol ? '✓ The planned number' : `Use ${r.enrol} as the planned number`}</button><button class="btn ghost small" type="button" id="mbSsCopy">📋 Copy the paragraph</button></div>
+      <p class="legend-note" style="margin-top:6px">${esc(r.text)}</p>`;
+  }
   const tVisits = () => `<h3 style="margin-top:0">Study groups (arms)</h3><p class="legend-note">Leave one or none for a one-group study.</p>
     <div class="mb-list">${D.arms.map((a, i) => `<div class="row" style="gap:6px"><input type="text" data-mbarm="${i}" value="${esc(a)}" style="max-width:260px"><button class="btn ghost small" type="button" data-mbarmdel="${i}">✕</button></div>`).join('')}<button class="btn ghost small" type="button" id="mbArmAdd">+ Group</button></div>
     <h3>Visits</h3><p class="legend-note">Each variable is collected once (at the first visit) unless you tick other visits for it in step 3.</p>
@@ -39316,11 +39472,21 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   function tVars() {
     const order = D.sections.length ? D.sections : [...new Set(D.vars.map(v => v.section))], v = D.vars.find(x => x.id === sel), q = libQ.toLowerCase();
     const lib = LIB.map(([sec, list]) => [sec, list.filter(e => !q || e[0].toLowerCase().includes(q) || sec.toLowerCase().includes(q))]).filter(([, l]) => l.length);
-    return `<div class="mb-vars"><div class="mb-col"><div class="row" style="gap:6px;margin-bottom:6px"><b>Variables</b><span class="spacer"></span><button class="btn ghost small" type="button" id="mbNewVar">+ New</button><button class="btn ghost small" type="button" id="mbNewSec">+ Section</button></div>
+    return `<div class="mb-vars"><div class="mb-col"><div class="row" style="gap:6px;margin-bottom:6px"><b>Variables</b><span class="spacer"></span><button class="btn ghost small" type="button" id="mbNewVar">+ New</button><button class="btn ghost small ${pasteOpen ? 'on' : ''}" type="button" id="mbPaste" title="Type or paste many variables at once">+ List</button><button class="btn ghost small" type="button" id="mbNewSec">+ Section</button></div>
+      ${pasteOpen ? `<div class="mb-paste"><textarea id="mbPasteTxt" rows="7" data-keep="1" placeholder="One variable per line, e.g.
+Age
+HbA1c @all
+Pain score (0-10) @all
+Smoking: Never / Former / Current
+Readmission: Yes / No @last
+Date of surgery">${esc(pasteTxt)}</textarea>
+        <div class="legend-note">Names from the library are recognised (with their unit, range and categories). <b>Name (unit)</b> a number · <b>Name: A / B / C</b> categories · <b>@all</b> every visit · <b>@last</b> the last visit.</div>
+        <div class="row" style="gap:6px;margin-top:4px"><button class="btn primary small" type="button" id="mbPasteGo">Add them</button><button class="btn ghost small" type="button" id="mbPasteCancel">Cancel</button></div></div>` : ''}
       ${order.map((sec, si) => { const vs = D.vars.filter(x => x.section === sec); return `<div class="mb-sec"><div class="mb-sec-h" style="border-left:5px solid #${SEC_FILL[si % SEC_FILL.length]}"><b>${esc(sec)}</b> <span class="legend-note">${vs.length}</span><span class="spacer"></span>${si ? `<button class="btn ghost small" type="button" data-mbsecup="${si}" title="Move the section up">↑</button>` : ''}<button class="btn ghost small" type="button" data-mbsecren="${si}" title="Rename">✎</button></div>
-        ${vs.map(x => `<div class="mb-var ${x.id === sel ? 'on' : ''}" data-mbsel="${x.id}"><span>${esc(x.label)}${x.unit ? ` <span class="legend-note">(${esc(x.unit)})</span>` : ''}</span><span class="spacer"></span><span class="legend-note">${esc({ num: 'Number', yn: 'Yes/no', cat: 'Categories', date: 'Date', time: 'Time', text: 'Text', calc: 'Formula' }[x.type] || x.type)}${(x.visits || []).length > 1 ? ` · ${x.visits.length} visits` : ''}</span><button class="btn ghost small" type="button" data-mbup="${x.id}" title="Up">↑</button><button class="btn ghost small" type="button" data-mbdel="${x.id}" title="Remove">✕</button></div>`).join('') || '<div class="legend-note" style="padding:4px 8px">Empty section</div>'}</div>`; }).join('') || '<p class="legend-note">No variables yet — add some from the library →</p>'}</div>
+        ${vs.map(x => `<div class="mb-var ${x.id === sel ? 'on' : ''}" data-mbsel="${x.id}"><span>${whenParent(D, x) ? `<span class="legend-note" title="Asked only when ${esc(whenTxt(D, x))}">↳</span> ` : ''}${x.role === 'primary' ? '<span title="Primary outcome">★</span> ' : ''}${esc(x.label)}${x.unit ? ` <span class="legend-note">(${esc(x.unit)})</span>` : ''}</span><span class="spacer"></span><span class="legend-note">${esc({ num: 'Number', yn: 'Yes/no', cat: 'Categories', date: 'Date', time: 'Time', text: 'Text', calc: 'Formula' }[x.type] || x.type)}${(x.visits || []).length > 1 ? ` · ${x.visits.length} visits` : ''}</span><button class="btn ghost small" type="button" data-mbup="${x.id}" title="Up">↑</button><button class="btn ghost small" type="button" data-mbdup="${x.id}" title="Duplicate">⧉</button><button class="btn ghost small" type="button" data-mbdel="${x.id}" title="Remove">✕</button></div>`).join('') || '<div class="legend-note" style="padding:4px 8px">Empty section</div>'}</div>`; }).join('') || '<p class="legend-note">No variables yet — add some from the library →</p>'}</div>
       <div class="mb-col">${v ? editor(v) : '<p class="legend-note">Click a variable to edit it.</p>'}</div>
       <div class="mb-col"><div class="row" style="gap:6px;margin-bottom:6px"><b>Library</b><input type="search" id="mbLibQ" value="${esc(libQ)}" placeholder="Search, e.g. HbA1c" style="flex:1"></div>
+        <div class="mb-lib-sec"><div class="legend-note"><b>Scales with their items</b> <span>(an item per column, the total by formula)</span></div>${Object.keys(SCALES).map(k => `<button type="button" class="mb-lib" data-mbscale="${esc(k)}" title="${esc(SCALES[k].items.length)} items, ${SCALES[k].min}–${SCALES[k].max} each, and the total">+ ${esc(k)}</button>`).join('')}<button type="button" class="mb-lib" data-mbscale="__likert" title="Any questionnaire: its name, the number of items and the points of each">+ Likert scale…</button></div>
         ${lib.map(([sec, list]) => `<div class="mb-lib-sec"><div class="legend-note"><b>${esc(sec)}</b></div>${list.map(e => { const has = D.vars.some(x => x.label.toLowerCase() === e[0].toLowerCase()); return `<button type="button" class="mb-lib ${has ? 'has' : ''}" data-mblib="${esc(sec)}|${esc(e[0])}" title="${esc([e[2], e[3] !== undefined && e[3] !== null ? `${e[3]}–${e[4]}` : '', e[5] ? e[5].join(' / ') : ''].filter(Boolean).join(' · '))}">${has ? '✓' : '+'} ${esc(e[0])}</button>`; }).join('')}</div>`).join('')}</div></div>`;
   }
   function editor(v) {
@@ -39343,6 +39509,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       <div><label class="f">Item group <span class="legend-note">(e.g. Co-morbidities)</span></label><input type="text" data-mbv="group" value="${esc(v.group || '')}" list="mbGrpList"><datalist id="mbGrpList">${[...new Set(D.vars.map(x => x.group).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist></div>
       <div><label class="f">Role</label>${sel2('role', v.role || '', [['', '—'], ['baseline', 'Baseline characteristic'], ['primary', 'Primary outcome'], ['secondary', 'Secondary outcome'], ['outcome', 'Other outcome'], ['safety', 'Safety outcome']])}</div>
       <div style="grid-column:1/-1"><label class="f">Definition</label><input type="text" data-mbv="definition" value="${esc(v.definition || '')}" placeholder="e.g. BP ≥ 140/90 mmHg or antihypertensive treatment"></div>
+      <div style="grid-column:1/-1"><label class="f">Asked only when <span class="legend-note">(skip logic — greyed in Excel otherwise, “if …” in the CRF, branching logic in REDCap)</span></label><div class="row" style="gap:6px;flex-wrap:wrap">${(() => { const pw = whenParent(D, v), cands = others.filter(x => (x.type === 'yn' || x.type === 'cat') && x.cats.length);
+        return `<select data-mbv="whenV" style="width:auto">${opt([['', '— always asked —'], ...cands.map(x => [x.id, x.label])], pw ? pw.id : '')}</select>${pw ? `<span>is</span><select data-mbv="whenC" style="width:auto">${opt(pw.cats.map(c => [c, c]), v.when.cat)}</select>` : ''}`; })()}</div></div>
       <div><label class="check" style="margin-top:6px"><input type="checkbox" data-mbv="required" ${v.required ? 'checked' : ''}><span>Required</span></label></div></div>
       ${expectBox(v)}`;
   }
@@ -39384,6 +39552,21 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (d.mbsel) { sel = d.mbsel; return render(); }
     if (d.mblib) { const [sec, lab] = d.mblib.split('|'), e2 = LIB.find(x => x[0] === sec)[1].find(x => x[0] === lab); const v = libVar(sec, e2); D.vars.push(v); if (!D.sections.includes(sec)) D.sections.push(sec); sel = v.id; save(); return render(); }
     if (b.id === 'mbNewVar') { const sec = (D.vars.find(x => x.id === sel) || {}).section || D.sections[0] || 'Other'; const v = { id: uid(), section: sec, label: 'New variable', type: 'num', unit: '', min: '', max: '', cats: [], dec: '', required: false, visits: [], group: '', role: '', definition: '' }; D.vars.push(v); if (!D.sections.includes(sec)) D.sections.push(sec); sel = v.id; save(); return render(); }
+    if (b.id === 'mbUndo' || b.id === 'mbRedo') return undo(b.id === 'mbUndo');
+    if (b.id === 'mbPaste' || b.id === 'mbPasteCancel') { pasteOpen = !pasteOpen; render(); const t = $('#mbPasteTxt'); if (t) t.focus(); return; }
+    if (b.id === 'mbPasteGo') { const sec = (D.vars.find(x => x.id === sel) || {}).section || D.sections[D.sections.length - 1] || 'Other', lines = ($('#mbPasteTxt').value || '').split(/\r?\n/);
+      const add = lines.map(l => fromLine(D, l, sec)).filter(Boolean), known = add.filter(v => v.section !== sec || LIB.some(([, l]) => l.some(e => e[0].toLowerCase() === v.label.toLowerCase()))).length;
+      add.forEach(v => { D.vars.push(v); if (!D.sections.includes(v.section)) D.sections.push(v.section); }); pasteOpen = false; pasteTxt = ''; if (add.length) sel = add[add.length - 1].id; save(); render();
+      toast(add.length ? `${add.length} variable${add.length > 1 ? 's' : ''} added (${known} from the library)` : 'No variable in the list'); return; }
+    if (d.mbdup) { const i = D.vars.findIndex(x => x.id === d.mbdup), c = JSON.parse(JSON.stringify(D.vars[i])); c.id = uid(); c.label = `${c.label} (copy)`; c.name = ''; D.vars.splice(i + 1, 0, c); sel = c.id; save(); return render(); }
+    if (d.mbscale) { let n;
+      if (d.mbscale === '__likert') { const name = (prompt('Name of the scale (e.g. Satisfaction, KOOS pain):', 'Satisfaction') || '').trim(); if (!name) return; const k = Math.round(+prompt('Number of items:', '5')); if (!(k >= 1 && k <= 60)) return;
+        const pts = (prompt('Points of each item, from–to:', '1-5') || '1-5').split(/[^0-9]+/).filter(Boolean).map(Number), lo = pts[0] ?? 1, hi = pts[1] ?? 5; if (!(hi > lo)) return;
+        n = addScale(D, name, Array.from({ length: k }, () => ''), lo, hi, `${name}: sum of ${k} items scored ${lo}–${hi}`); }
+      else { const S = SCALES[d.mbscale]; n = addScale(D, d.mbscale, S.items, S.min, S.max, S.def); }
+      sel = D.vars[D.vars.length - 1].id; save(); render(); toast(`${n} items and their total added`); return; }
+    if (b.id === 'mbSsUse') { const r = ssCalc(D); if (r && !r.err) { D.n = r.enrol; save(); render(); toast(`Planned number: ${r.enrol} patients`); } return; }
+    if (b.id === 'mbSsCopy') { const r = ssCalc(D); if (r && !r.err) { try { await navigator.clipboard.writeText(r.text); toast('Sample-size paragraph copied'); } catch (err) { prompt('Copy the paragraph:', r.text); } } return; }
     if (b.id === 'mbNewSec') { const n = (prompt('Name of the new section:', 'Other') || '').trim(); if (n && !D.sections.includes(n)) { D.sections.push(n); save(); render(); } return; }
     if (d.mbsecup) { const i = +d.mbsecup; D.sections = D.sections.length ? D.sections : [...new Set(D.vars.map(v => v.section))]; [D.sections[i - 1], D.sections[i]] = [D.sections[i], D.sections[i - 1]]; save(); return render(); }
     if (d.mbsecren) { D.sections = D.sections.length ? D.sections : [...new Set(D.vars.map(v => v.section))]; const old = D.sections[+d.mbsecren], n = (prompt('New name of the section:', old) || '').trim(); if (!n || n === old) return; D.sections[+d.mbsecren] = n; D.vars.forEach(v => { if (v.section === old) v.section = n; }); save(); return render(); }
@@ -39406,9 +39589,11 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   }
   function onInput(e) {
     const t = e.target, d = t.dataset, val = t.type === 'checkbox' ? t.checked : t.value;
+    if (t.id === 'mbPasteTxt') { pasteTxt = t.value; return; }
     if (t.id === 'mbLibQ') { libQ = t.value; const pos = t.selectionStart; render(); const q = $('#mbLibQ'); if (q) { q.focus(); q.setSelectionRange(pos, pos); } return; }
     if (d.mb) { D[d.mb] = d.mb === 'n' || d.mb === 'idDigits' ? +val : val; save(); if (t.type !== 'text' && t.type !== 'number') render(); return; }
     if (d.mbc) { D.conv[d.mbc] = val; save(); return render(); }
+    if (d.mbs) { ssDef(D)[d.mbs] = d.mbs === 'v' ? val : val === '' ? '' : +val; if (d.mbs === 'v') { D.ss.a = ''; D.ss.b = ''; D.ss.sd = ''; } save(); if (t.tagName === 'SELECT') return render(); const o = $('#mbSsOut'); if (o) o.innerHTML = ssOut(ssCalc(D)); return; }
     if (d.mbr) { D.rand[d.mbr] = val; save(); if (t.type !== 'text' && t.type !== 'number') render(); return; }
     if (d.mbarm !== undefined) { D.arms[+d.mbarm] = val; save(); return; }
     if (d.mbvis !== undefined) { D.visits[+d.mbvis].name = val; save(); return; }
@@ -39417,6 +39602,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const v = D.vars.find(x => x.id === sel); if (!v) return;
     if (d.mbv) { const k = d.mbv;
       if (k === 'cats') { v.cats = String(val).split('\n').map(x => x.trim()).filter(Boolean); if (!v.expect || !v.expect.pct || v.expect.pct.length !== v.cats.length) v.expect = expectOf(v.label, v.type, v.cats); }
+      else if (k === 'whenV') { const p = D.vars.find(x => x.id === val); v.when = p ? { v: p.id, cat: p.cats[0] } : null; }
+      else if (k === 'whenC') v.when = { ...(v.when || {}), cat: val };
       else if (k === 'fkind') v.formula = { ...(v.formula || {}), kind: val };
       else if (k === 'fa' || k === 'fb') v.formula = { kind: 'bmi', ...(v.formula || {}), [k.slice(1)]: val };
       else if (k === 'type') { v.type = val; if (val === 'yn') v.cats = [...YN]; if (val === 'calc' && !v.formula) v.formula = { kind: 'bmi' }; v.expect = expectOf(v.label, v.type, v.cats); }
@@ -39431,13 +39618,22 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const t = e.target;
     if (t.id === 'mbTpl' && t.value) { if (D.vars.length && !confirm('Replace the current design?')) { t.value = ''; return; } D = t.value === '__blank' ? blank() : fromTemplate(t.value); sel = null; tab = 'study'; save(); return render(); }
     if (t.id === 'mbMine' && t.value) { const all = ls.get('designs', {}); if (all[t.value] && (!D.vars.length || confirm(`Open “${t.value}” (the current design is replaced)?`))) { D = JSON.parse(JSON.stringify(all[t.value])); sel = null; save(); render(); } else t.value = ''; return; }
+    if (t.id === 'mbFromSheet' && t.files[0]) { const f = t.files[0]; t.value = '';
+      if (D.vars.length && !confirm(`Make a new design from “${f.name}”? The current design is replaced (Undo brings it back).`)) return;
+      f.arrayBuffer().then(buf => { try { const wb = XLSX.read(buf, { type: 'array', cellDates: true }), name = wb.SheetNames.find(n => !['_EasyStatSetup', 'Lists', 'Codebook', 'Instructions', 'Randomisation'].includes(n) && (wb.Sheets[n]['!ref'] || '').includes(':')) || wb.SheetNames[0];
+        const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: true, blankrows: false }), r = designFromSheet(aoa, f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim());
+        if (!r.D.vars.length) throw new Error('no columns found'); D = r.D; sel = null; tab = 'vars'; save(); render();
+        toast(`“${name}”: ${r.D.vars.length} variables from ${r.cols} columns${r.D.visits.length > 1 ? `, ${r.D.visits.length} visits` : ''}${r.D.arms.length ? `, groups ${r.D.arms.join(' / ')}` : ''}${r.id ? ` · ID: ${r.id}` : ''} — the values (${r.n} rows) became the expected values`); } catch (err) { console.error(err); toast('Could not read the sheet: ' + err.message); } }); return; }
     if (t.id === 'mbImportJson' && t.files[0]) { t.files[0].text().then(txt => { try { const j = JSON.parse(txt); if (!j.design || !Array.isArray(j.design.vars)) throw new Error('not a design file'); D = j.design; sel = null; save(); render(); toast('Design opened'); } catch (err) { toast('Could not open it: ' + err.message); } }); return; }
+    if (t.id === 'mbPasteTxt') return;
     if (t.type === 'text' || t.type === 'number' || t.tagName === 'TEXTAREA') render();
   }
+  document.addEventListener('keydown', e => { if (phase !== 'build' || !(e.ctrlKey || e.metaKey) || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(true); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); undo(false); } });
   // the entry on step 1
   const anchor = $('#btnTemplate'); if (anchor) { const b = document.createElement('button'); b.className = 'btn ghost small'; b.type = 'button'; b.id = 'btnBuilder'; b.title = 'Design the master sheet of a new study: variables, visits, groups, ranges, randomisation — then an Excel sheet, a case report form and a REDCap dictionary'; b.textContent = '🧱 Master sheet builder'; anchor.parentNode.insertBefore(b, anchor); b.onclick = open; }
   setPhase('analyse');
-  window.EasyBuilder = { open, close, setPhase, get phase() { return phase; }, buildWorkbook: (d, fill) => buildWorkbook(d || D, fill), setupFor, columns, visitsOf: v => visitsOf(D, v), baseName: v => baseName(D, v), tagOf, expectOf, prng, randomisation, redcap, fromTemplate, fileBase, save, get design() { return D; }, set design(x) { D = x; save(); } };
+  window.EasyBuilder = { open, close, setPhase, get phase() { return phase; }, buildWorkbook: (d, fill) => buildWorkbook(d || D, fill), setupFor, columns, visitsOf: v => visitsOf(D, v), baseName: v => baseName(D, v), tagOf, expectOf, prng, randomisation, redcap, fromTemplate, fileBase, save, ssCalc: d => ssCalc(d || D), designFromSheet, fromLine: (l, sec) => fromLine(D, l, sec || 'Other'), addScale: (n, it, lo, hi, def) => addScale(D, n, it, lo, hi, def), problems: d => problems(d || D), undo, get design() { return D; }, set design(x) { D = x; save(); } };
 })();
 
 /* Prof MSE Easy Stat — phase 2, the data generator: fills the master sheet designed in phase 1 with simulated patients
@@ -39482,6 +39678,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     for (let i = 0; i < n; i++) {
       // a patient's level of each variable (the same patient across visits), linked between variables where asked
       const u = {}; vars.forEach(v => { u[v.id] = norm(); });
+      // the items of a scale answer together (a shared level of the patient)
+      if (vars.some(v => v.scale)) { const sh = {}; vars.forEach(v => { if (!v.scale) return; const s0 = sh[v.scale] ?? (sh[v.scale] = norm()); u[v.id] = Math.sqrt(0.6) * s0 + Math.sqrt(0.4) * u[v.id]; }); }
       (G.corr || []).forEach(c => { if (u[c.a] === undefined || u[c.b] === undefined) return; const r = Math.max(-0.95, Math.min(0.95, +c.r || 0)); u[c.b] = r * u[c.a] + Math.sqrt(1 - r * r) * u[c.b]; });
       const g = grp[i], vals = {};
       vars.forEach(v => { if (!['num', 'yn', 'cat'].includes(v.type)) return; const o = vals[v.id] = {};
@@ -39498,6 +39696,9 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       vars.filter(v => v.type === 'date').map((v, i) => [v, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(x => x[0]).forEach((v, di) => { const e = expect(v), gap = di === 0 && /enrol|admission|birth/i.test(v.label) ? 0 : Math.max(0, Math.round((+e.mean || 0) + (+e.sd || 0) * norm()));
         let t = prev + gap * 864e5; if (/birth/i.test(v.label)) t = prev - Math.round((target({ ...v, type: 'num', expect: { mean: 50 } }, 0, 'once') + 12 * norm()) * 365.25) * 864e5; else prev = t;
         vals[v.id] = { once: new Date(t).toISOString().slice(0, 10) }; });
+      // skip logic: not asked (empty) unless the other variable has the category
+      vars.forEach(v => { if (!v.when || !v.when.v || !vals[v.id]) return; const pv = D.vars.find(x => x.id === v.when.v); if (!pv) return; const pval = vals[pv.id] || {}, want = D.conv.catAs === 'codes' ? pv.cats.indexOf(v.when.cat) + 1 : v.when.cat;
+        Object.keys(vals[v.id]).forEach(key => { const x = pval[key] ?? pval.once ?? pval[D.visits[0].id]; if (x !== want) vals[v.id][key] = null; }); });
       P.push({ id: `${D.idPrefix || ''}${String(i + 1).padStart(+D.idDigits || 3, '0')}`, g, group: A.length >= 2 ? A[g] : null, vals });
     }
     // calculated columns (also written as Excel formulas)

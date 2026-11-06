@@ -40,6 +40,8 @@
     for (let i = 0; i < n; i++) {
       // a patient's level of each variable (the same patient across visits), linked between variables where asked
       const u = {}; vars.forEach(v => { u[v.id] = norm(); });
+      // the items of a scale answer together (a shared level of the patient)
+      if (vars.some(v => v.scale)) { const sh = {}; vars.forEach(v => { if (!v.scale) return; const s0 = sh[v.scale] ?? (sh[v.scale] = norm()); u[v.id] = Math.sqrt(0.6) * s0 + Math.sqrt(0.4) * u[v.id]; }); }
       (G.corr || []).forEach(c => { if (u[c.a] === undefined || u[c.b] === undefined) return; const r = Math.max(-0.95, Math.min(0.95, +c.r || 0)); u[c.b] = r * u[c.a] + Math.sqrt(1 - r * r) * u[c.b]; });
       const g = grp[i], vals = {};
       vars.forEach(v => { if (!['num', 'yn', 'cat'].includes(v.type)) return; const o = vals[v.id] = {};
@@ -56,6 +58,9 @@
       vars.filter(v => v.type === 'date').map((v, i) => [v, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(x => x[0]).forEach((v, di) => { const e = expect(v), gap = di === 0 && /enrol|admission|birth/i.test(v.label) ? 0 : Math.max(0, Math.round((+e.mean || 0) + (+e.sd || 0) * norm()));
         let t = prev + gap * 864e5; if (/birth/i.test(v.label)) t = prev - Math.round((target({ ...v, type: 'num', expect: { mean: 50 } }, 0, 'once') + 12 * norm()) * 365.25) * 864e5; else prev = t;
         vals[v.id] = { once: new Date(t).toISOString().slice(0, 10) }; });
+      // skip logic: not asked (empty) unless the other variable has the category
+      vars.forEach(v => { if (!v.when || !v.when.v || !vals[v.id]) return; const pv = D.vars.find(x => x.id === v.when.v); if (!pv) return; const pval = vals[pv.id] || {}, want = D.conv.catAs === 'codes' ? pv.cats.indexOf(v.when.cat) + 1 : v.when.cat;
+        Object.keys(vals[v.id]).forEach(key => { const x = pval[key] ?? pval.once ?? pval[D.visits[0].id]; if (x !== want) vals[v.id][key] = null; }); });
       P.push({ id: `${D.idPrefix || ''}${String(i + 1).padStart(+D.idDigits || 3, '0')}`, g, group: A.length >= 2 ? A[g] : null, vals });
     }
     // calculated columns (also written as Excel formulas)
