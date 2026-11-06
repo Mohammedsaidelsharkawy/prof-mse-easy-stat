@@ -35,6 +35,15 @@
       ['Preeclampsia', 'yn'], ['Gestational diabetes', 'yn'], ['Postpartum haemorrhage', 'yn'], ['Birth weight', 'num', 'g', 300, 6000, null, 0], ['Apgar score at 5 minutes', 'num', '', 0, 10, null, 0], ['NICU admission', 'yn']]],
     ['Intensive care', [['Mechanical ventilation', 'yn'], ['Vasopressors', 'yn'], ['Renal replacement therapy', 'yn'], ['Lactate', 'num', 'mmol/L', 0.1, 30, null, 1], ['PaO2/FiO2 ratio', 'num', '', 20, 700, null, 0],
       ['Days on the ventilator', 'num', 'days', 0, 120, null, 0], ['ICU length of stay', 'num', 'days', 0, 365, null, 0], ['QT interval', 'num', 'ms', 200, 700, null, 0]]],
+    ['Anaesthesia and analgesia', [['Duration of anaesthesia', 'num', 'min', 5, 1000, null, 0], ['Intraoperative fentanyl', 'num', 'µg', 0, 2000, null, 0], ['Onset of sensory block', 'num', 'min', 0, 60, null, 1], ['Onset of motor block', 'num', 'min', 0, 60, null, 1],
+      ['Duration of sensory block', 'num', 'min', 0, 2880, null, 0], ['Duration of motor block', 'num', 'min', 0, 2880, null, 0], ['Bromage score', 'num', '', 0, 3, null, 0], ['Time to first rescue analgesia', 'num', 'min', 0, 2880, null, 0],
+      ['Total morphine consumption (24 h)', 'num', 'mg', 0, 200, null, 1], ['Number of rescue analgesic doses', 'num', '', 0, 20, null, 0], ['Pain NRS on movement', 'num', '', 0, 10, null, 0], ['Mean arterial pressure', 'num', 'mmHg', 30, 180, null, 0],
+      ['Ramsay sedation score', 'num', '', 1, 6, null, 0], ['RASS', 'num', '', -5, 4, null, 0], ['Hypotension', 'yn'], ['Bradycardia', 'yn'], ['PONV', 'yn'], ['Pruritus', 'yn'], ['Shivering', 'yn'], ['Respiratory depression', 'yn'], ['Urinary retention', 'yn'],
+      ['Block-related complications', 'yn'], ['Vasopressor needed', 'yn'], ['Phenylephrine dose', 'num', 'µg', 0, 5000, null, 0], ['Shoulder tip pain', 'yn'], ['Emergence agitation', 'yn'], ['PAED scale', 'num', '', 0, 20, null, 0], ['FLACC score', 'num', '', 0, 10, null, 0],
+      ['Delirium (CAM-ICU)', 'yn'], ['Quality of recovery (QoR-15)', 'num', '', 0, 150, null, 0], ['Time to first flatus', 'num', 'h', 0, 120, null, 1], ['Time to ambulation', 'num', 'h', 0, 120, null, 1], ['Parental satisfaction', 'cat', '', null, null, ['Poor', 'Fair', 'Good', 'Excellent']]]],
+    ['Airway', [['Mallampati class', 'cat', '', null, null, ['I', 'II', 'III', 'IV']], ['Time to intubation', 'num', 's', 0, 600, null, 0], ['First-pass success', 'yn'], ['Number of intubation attempts', 'num', '', 1, 5, null, 0],
+      ['Cormack-Lehane grade', 'cat', '', null, null, ['I', 'II', 'III', 'IV']], ['Lowest SpO2', 'num', '%', 50, 100, null, 0], ['Postoperative sore throat', 'yn'], ['Airway or dental trauma', 'yn']]],
+    ['Neonatal', [['Apgar score at 1 minute', 'num', '', 0, 10, null, 0], ['Umbilical artery pH', 'num', '', 6.8, 7.5, null, 2]]],
     ['Study conduct', [['Site', 'text'], ['Date of randomisation', 'date'], ['Visit date', 'date'], ['Adherence', 'num', '%', 0, 100, null, 0], ['Adverse event', 'yn'], ['Withdrawn', 'yn'], ['Reason for withdrawal', 'text']]]];
   // normal (reference) ranges of the laboratory and vital-sign variables: values outside are shaded in Excel and counted in Analyse
   const NORMAL = { 'Haemoglobin': [12, 16], 'WBC': [4, 11], 'Platelets': [150, 450], 'Creatinine': [0.6, 1.2], 'Urea': [15, 45], 'ALT': [7, 56], 'AST': [10, 40], 'Albumin': [3.5, 5], 'Total bilirubin': [0.1, 1.2], 'Sodium': [135, 145],
@@ -87,12 +96,20 @@
     'Total bilirubin': [0.8, 0.45, 1], 'Sodium': [138, 3], 'Potassium': [4.2, 0.45], 'Fasting glucose': [110, 30, 1], 'HbA1c': [6.5, 1.3], 'CRP': [15, 20, 1], 'INR': [1.1, 0.2], 'Troponin': [20, 40, 1], 'D-dimer': [800, 600, 1],
     'Vitamin D': [22, 10], 'LDL cholesterol': [120, 35], 'Pain VAS': [6, 2], 'Pain NRS': [6, 2], 'WOMAC': [55, 15], 'Oswestry disability index': [40, 15], 'Barthel index': [70, 20], 'PHQ-9': [8, 5, 1], 'GAD-7': [7, 4, 1],
     'MMSE': [25, 4], 'APACHE II': [15, 7], 'SOFA': [6, 3], 'Operative time': [90, 30], 'Blood loss': [250, 150, 1], 'Length of stay': [5, 3, 1], 'Follow-up': [12, 4], 'Index test value': [50, 20], 'Gestational age': [38.5, 1.8], 'Gravidity': [2.5, 1.6, 1], 'Parity': [1.4, 1.2, 1], 'Birth weight': [3200, 500], 'Apgar score at 5 minutes': [9, 1],
-    'Lactate': [2.2, 1.5, 1], 'PaO2/FiO2 ratio': [250, 90], 'Days on the ventilator': [5, 4, 1], 'ICU length of stay': [7, 5, 1], 'QT interval': [400, 30], 'Adherence': [88, 12] };
+    'Lactate': [2.2, 1.5, 1], 'PaO2/FiO2 ratio': [250, 90], 'Days on the ventilator': [5, 4, 1], 'ICU length of stay': [7, 5, 1], 'QT interval': [400, 30], 'Adherence': [88, 12],
+    'Duration of anaesthesia': [120, 35], 'Intraoperative fentanyl': [150, 60], 'Onset of sensory block': [8, 3], 'Onset of motor block': [10, 4], 'Duration of sensory block': [480, 150], 'Duration of motor block': [300, 90], 'Bromage score': [1.5, 1],
+    'Time to first rescue analgesia': [360, 200, 1], 'Total morphine consumption (24 h)': [12, 8, 1], 'Number of rescue analgesic doses': [2, 1.4, 1], 'Pain NRS on movement': [5, 2], 'Mean arterial pressure': [88, 12], 'Ramsay sedation score': [2, 0.7], 'RASS': [-1, 1.3],
+    'Phenylephrine dose': [400, 250, 1], 'PAED scale': [8, 4], 'FLACC score': [3, 2], 'Quality of recovery (QoR-15)': [118, 15], 'Time to first flatus': [24, 10, 1], 'Time to ambulation': [12, 6, 1], 'Time to intubation': [35, 15, 1],
+    'Number of intubation attempts': [1.2, 0.5, 1], 'Lowest SpO2': [96, 3], 'Apgar score at 1 minute': [8, 1.2], 'Umbilical artery pH': [7.28, 0.06] };
+  // expected % "Yes" of the new yes/no outcomes
+  const YES_MORE = { 'Hypotension': 30, 'Bradycardia': 10, 'PONV': 25, 'Pruritus': 10, 'Shivering': 20, 'Respiratory depression': 3, 'Urinary retention': 8, 'Block-related complications': 3, 'Vasopressor needed': 35, 'Shoulder tip pain': 35, 'Emergence agitation': 25,
+    'Delirium (CAM-ICU)': 25, 'First-pass success': 85, 'Postoperative sore throat': 30, 'Airway or dental trauma': 4 };
   const YES_PCT = { 'Hypertension': 30, 'Diabetes': 20, 'Ischaemic heart disease': 10, 'Heart failure': 5, 'COPD': 8, 'Asthma': 7, 'Chronic kidney disease': 6, 'Chronic liver disease': 4, 'Stroke': 4, 'Dyslipidaemia': 25, 'Hypothyroidism': 6,
     'Cancer': 5, 'Previous surgery': 30, 'Intraoperative complications': 5, 'Conversion': 4, 'Complications': 15, 'Readmission': 8, 'Reoperation': 5, 'ICU admission': 10, 'Recurrence': 10, 'Mortality': 5 };
   const CAT_PCT = { 'Smoking': [55, 20, 25], 'ASA class': [30, 45, 20, 4, 1], 'Residence': [60, 40], 'Satisfaction': [10, 20, 40, 30], 'Index test result': [40, 60], 'Reference standard': [35, 65] };
   const DATE_GAP = { 'Date of surgery': [1, 1], 'Date of discharge': [4, 2], 'Date of death': [60, 40] };
   function expectOf(label, type, cats) {
+    if (type === 'yn' && YES_MORE[label] !== undefined) return { pct: [YES_MORE[label], 100 - YES_MORE[label]] };
     if (type === 'num' || type === 'calc') { const e = EXPECT[label]; return e ? { mean: e[0], sd: e[1], dist: e[2] ? 'skewed' : 'normal' } : { mean: '', sd: '', dist: 'normal' }; }
     if (type === 'yn') { const y = YES_PCT[label] ?? 30; return { pct: [y, 100 - y] }; }
     if (type === 'cat') { const c = CAT_PCT[label]; return { pct: c && c.length === cats.length ? [...c] : cats.map(() => +(100 / cats.length).toFixed(1)) }; }
@@ -104,31 +121,72 @@
 
   /* ---------- templates ---------- */
   const TEMPLATES = {
-    rct2: { name: 'Two-arm randomised trial', design: 'rct', arms: ['Intervention', 'Control'], visits: ['Baseline', 'Week 2', 'Month 3'], rand: true,
+    rct2: { cat: 'Trials', name: 'Two-arm randomised trial', design: 'rct', arms: ['Intervention', 'Control'], visits: ['Baseline', 'Week 2', 'Month 3'], rand: true,
       vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['Hypertension'], ['Diabetes'], ['Ischaemic heart disease'], ['Smoking'], ['Pain VAS', 'all'], ['Complications', 'last'], ['Satisfaction', 'last']] },
-    cohort: { name: 'Cohort with follow-up', design: 'cohort', arms: ['Exposed', 'Not exposed'], visits: ['Baseline', 'Month 6', 'Month 12'],
+    cohort: { cat: 'Observational', name: 'Cohort with follow-up', design: 'cohort', arms: ['Exposed', 'Not exposed'], visits: ['Baseline', 'Month 6', 'Month 12'],
       vars: [['Age'], ['Sex'], ['Smoking'], ['Hypertension'], ['Diabetes'], ['Chronic kidney disease'], ['Systolic BP', 'all'], ['HbA1c', 'all'], ['Mortality', 'last'], ['Readmission', 'last']] },
-    diag: { name: 'Diagnostic accuracy study', design: 'diagnostic', arms: [], visits: ['Baseline'],
+    diag: { cat: 'Diagnostic', name: 'Diagnostic accuracy study', design: 'diagnostic', arms: [], visits: ['Baseline'],
       vars: [['Age'], ['Sex'], ['Index test value'], ['Index test result'], ['Reference standard']] },
-    before: { name: 'One group, before and after', design: 'beforeafter', arms: [], visits: ['Before', 'After'],
+    before: { cat: 'Trials', name: 'One group, before and after', design: 'beforeafter', arms: [], visits: ['Before', 'After'],
       vars: [['Age'], ['Sex'], ['Weight', 'all'], ['Systolic BP', 'all'], ['Fasting glucose', 'all']] },
-    casecontrol: { name: 'Case-control study', design: 'casecontrol', arms: ['Cases', 'Controls'], visits: ['Baseline'],
+    casecontrol: { cat: 'Observational', name: 'Case-control study', design: 'casecontrol', arms: ['Cases', 'Controls'], visits: ['Baseline'],
       vars: [['Age'], ['Sex'], ['Residence'], ['Education'], ['Smoking'], ['Hypertension'], ['Diabetes'], ['Dyslipidaemia'], ['BMI*']] },
-    cross: { name: 'Cross-sectional survey', design: 'cross', arms: [], visits: ['Baseline'],
+    cross: { cat: 'Observational', name: 'Cross-sectional survey', design: 'cross', arms: [], visits: ['Baseline'],
       vars: [['Age'], ['Sex'], ['Residence'], ['Marital status'], ['Education'], ['Occupation'], ['Smoking'], ['Weight'], ['Height'], ['BMI*'], ['Hypertension'], ['Diabetes'], ['PHQ-9'], ['GAD-7']] },
-    crossover: { name: 'Crossover trial (AB / BA)', design: 'rct', arms: ['Sequence AB', 'Sequence BA'], visits: ['Period 1', 'Period 2'], rand: true,
+    crossover: { cat: 'Trials', name: 'Crossover trial (AB / BA)', design: 'rct', arms: ['Sequence AB', 'Sequence BA'], visits: ['Period 1', 'Period 2'], rand: true,
       vars: [['Age'], ['Sex'], ['Weight'], ['Systolic BP', 'all'], ['Pain NRS', 'all'], ['Adverse event', 'all']] },
-    noninf: { name: 'Non-inferiority trial', design: 'rct', arms: ['New treatment', 'Standard treatment'], visits: ['Baseline', 'Month 3'], rand: true,
+    noninf: { cat: 'Trials', name: 'Non-inferiority trial', design: 'rct', arms: ['New treatment', 'Standard treatment'], visits: ['Baseline', 'Month 3'], rand: true,
       vars: [['Age'], ['Sex'], ['Diabetes'], ['Hypertension'], ['HbA1c', 'all'], ['Adverse event', 'last'], ['Withdrawn', 'last']] },
-    cluster: { name: 'Cluster randomised trial', design: 'rct', arms: ['Intervention', 'Control'], visits: ['Baseline', 'Month 6'], rand: true, sites: ['Centre 1', 'Centre 2', 'Centre 3', 'Centre 4'],
+    cluster: { cat: 'Trials', name: 'Cluster randomised trial', design: 'rct', arms: ['Intervention', 'Control'], visits: ['Baseline', 'Month 6'], rand: true, sites: ['Centre 1', 'Centre 2', 'Centre 3', 'Centre 4'],
       vars: [['Age'], ['Sex'], ['Education'], ['Systolic BP', 'all'], ['Smoking', 'all'], ['Adherence', 'last']] },
-    diag2: { name: 'Diagnostic accuracy with two readers', design: 'diagnostic', arms: [], visits: ['Baseline'],
+    diag2: { cat: 'Diagnostic', name: 'Diagnostic accuracy with two readers', design: 'diagnostic', arms: [], visits: ['Baseline'],
       vars: [['Age'], ['Sex'], ['Index test value'], ['Reader 1 result'], ['Reader 2 result'], ['Reference standard']] },
-    icu: { name: 'ICU cohort', design: 'cohort', arms: ['Septic shock', 'No shock'], visits: ['Admission', 'Day 3', 'Day 7'],
+    icu: { cat: 'Observational', name: 'ICU cohort', design: 'cohort', arms: ['Septic shock', 'No shock'], visits: ['Admission', 'Day 3', 'Day 7'],
       vars: [['Age'], ['Sex'], ['Diabetes'], ['Chronic kidney disease'], ['APACHE II'], ['SOFA', 'all'], ['Lactate', 'all'], ['Creatinine', 'all'], ['Mechanical ventilation'], ['Vasopressors'], ['Renal replacement therapy'], ['ICU length of stay', 'last'], ['Mortality', 'last']] },
-    obstetric: { name: 'Obstetric cohort', design: 'cohort', arms: ['Induction', 'Expectant management'], visits: ['Booking', 'Delivery'],
+    obstetric: { cat: 'Observational', name: 'Obstetric cohort', design: 'cohort', arms: ['Induction', 'Expectant management'], visits: ['Booking', 'Delivery'],
       vars: [['Age'], ['Gravidity'], ['Parity'], ['Weight'], ['Height'], ['BMI*'], ['Gestational diabetes'], ['Preeclampsia', 'last'], ['Gestational age', 'last'], ['Mode of delivery', 'last'], ['Postpartum haemorrhage', 'last'], ['Birth weight', 'last'], ['Apgar score at 5 minutes', 'last'], ['NICU admission', 'last']] },
-    surgery: { name: 'Surgical outcomes study', design: 'cohort', arms: ['Technique A', 'Technique B'], visits: ['Pre-operative', 'Day 1', 'Month 1'],
+    // anaesthesia, analgesia and perioperative care
+    rarct3: { cat: 'Anaesthesia and pain', name: 'Three-arm regional anaesthesia RCT (block A vs block B vs control)', design: 'rct', arms: ['Block A', 'Block B', 'Control'], visits: ['Baseline', 'PACU', '2 h', '6 h', '12 h', '24 h'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['ASA class'], ['Operative time'], ['Duration of anaesthesia'], ['Intraoperative fentanyl'], ['Onset of sensory block'], ['Duration of sensory block'],
+        ['Total morphine consumption (24 h)'], ['Time to first rescue analgesia'], ['Number of rescue analgesic doses'], ['Pain NRS', 'post'], ['Pain NRS on movement', 'post'], ['Mean arterial pressure', 'all'], ['Heart rate', 'all'], ['Ramsay sedation score', 'post'],
+        ['PONV', 'last'], ['Pruritus', 'last'], ['Hypotension'], ['Bradycardia'], ['Block-related complications'], ['Satisfaction', 'last']],
+      primary: 'Total morphine consumption (24 h)', secondary: ['Time to first rescue analgesia', 'Pain NRS', 'Pain NRS on movement', 'Number of rescue analgesic doses'], ss: { m: 'anova', means: '12, 8, 8', sd: 6 } },
+    spinal2: { cat: 'Anaesthesia and pain', name: 'Spinal anaesthesia adjuvant RCT', design: 'rct', arms: ['Bupivacaine + adjuvant', 'Bupivacaine alone'], visits: ['Baseline', '5 min', '10 min', '20 min', '30 min', 'PACU'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['ASA class'], ['Operative time'], ['Onset of sensory block'], ['Onset of motor block'], ['Bromage score', [1, 2, 3, 4]], ['Duration of sensory block'], ['Duration of motor block'],
+        ['Time to first rescue analgesia'], ['Mean arterial pressure', 'all'], ['Heart rate', 'all'], ['Hypotension'], ['Bradycardia'], ['Shivering'], ['PONV'], ['Pruritus'], ['Ramsay sedation score', 'last'], ['Satisfaction', 'last']],
+      primary: 'Duration of sensory block', secondary: ['Time to first rescue analgesia', 'Duration of motor block', 'Onset of sensory block'], ss: { a: 480, b: 400, sd: 150 } },
+    analg3: { cat: 'Anaesthesia and pain', name: 'Three-arm analgesic drug RCT (placebo-controlled)', design: 'rct', arms: ['Drug A', 'Drug B', 'Placebo'], visits: ['Baseline', '1 h', '6 h', '12 h', '24 h', '48 h'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['ASA class'], ['Operative time'], ['Pain VAS', 'post'], ['Time to first rescue analgesia'], ['Total morphine consumption (24 h)'], ['Number of rescue analgesic doses'], ['Ramsay sedation score', 'post'],
+        ['PONV', 'last'], ['Pruritus', 'last'], ['Respiratory depression', 'last'], ['Quality of recovery (QoR-15)', 'last'], ['Satisfaction', 'last']],
+      primary: 'Pain VAS', secondary: ['Total morphine consumption (24 h)', 'Time to first rescue analgesia', 'Quality of recovery (QoR-15)'], ss: { m: 'anova', means: '4, 3, 3', sd: 1.8 } },
+    csection: { cat: 'Anaesthesia and pain', name: 'Caesarean section: spinal hypotension RCT', design: 'rct', arms: ['Norepinephrine', 'Phenylephrine'], visits: ['Baseline', 'After spinal', 'Delivery', 'End of surgery'], rand: true,
+      vars: [['Age'], ['Weight'], ['Height'], ['BMI*'], ['Gestational age'], ['Parity'], ['Mean arterial pressure', 'all'], ['Heart rate', 'all'], ['Hypotension'], ['Bradycardia'], ['Vasopressor needed'], ['Phenylephrine dose'], ['PONV'], ['Shivering'],
+        ['Apgar score at 1 minute'], ['Apgar score at 5 minutes'], ['Umbilical artery pH'], ['NICU admission'], ['Satisfaction', 'last']],
+      primary: 'Bradycardia', secondary: ['Hypotension', 'Umbilical artery pH', 'Apgar score at 1 minute'], ss: { a: 5, b: 20 } },
+    airway: { cat: 'Anaesthesia and pain', name: 'Airway: videolaryngoscope vs direct laryngoscope RCT', design: 'rct', arms: ['Videolaryngoscope', 'Direct laryngoscope'], visits: ['Baseline'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['ASA class'], ['Mallampati class'], ['Time to intubation'], ['First-pass success'], ['Number of intubation attempts'], ['Cormack-Lehane grade'], ['Lowest SpO2'], ['Heart rate'], ['Mean arterial pressure'],
+        ['Postoperative sore throat'], ['Airway or dental trauma']],
+      primary: 'Time to intubation', secondary: ['First-pass success', 'Cormack-Lehane grade', 'Postoperative sore throat'], ss: { a: 35, b: 28, sd: 12 } },
+    paeds: { cat: 'Anaesthesia and pain', name: 'Paediatric anaesthesia RCT (emergence agitation)', design: 'rct', arms: ['Intervention', 'Control'], visits: ['PACU arrival', '15 min', '30 min', '1 h'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['ASA class'], ['Operative time'], ['Duration of anaesthesia'], ['Emergence agitation'], ['PAED scale', 'all'], ['FLACC score', 'all'], ['Time to first rescue analgesia'], ['PONV'], ['Parental satisfaction', 'last']],
+      primary: 'Emergence agitation', secondary: ['PAED scale', 'FLACC score'], ss: { a: 40, b: 15 } },
+    icused: { cat: 'Anaesthesia and pain', name: 'ICU sedation RCT (dexmedetomidine vs propofol)', design: 'rct', arms: ['Dexmedetomidine', 'Propofol'], visits: ['Day 1', 'Day 3', 'Day 7'], rand: true,
+      vars: [['Age'], ['Sex'], ['APACHE II'], ['SOFA'], ['RASS', 'all'], ['Delirium (CAM-ICU)', 'all'], ['Mean arterial pressure', 'all'], ['Heart rate', 'all'], ['Bradycardia'], ['Hypotension'], ['Days on the ventilator', 'last'], ['ICU length of stay', 'last'], ['Mortality', 'last']],
+      primary: 'Delirium (CAM-ICU)', secondary: ['Days on the ventilator', 'ICU length of stay', 'Mortality'], ss: { a: 35, b: 20 } },
+    pain1: { cat: 'Anaesthesia and pain', name: 'Interventional pain procedure, before and after (one group)', design: 'beforeafter', arms: [], visits: ['Baseline', '1 month', '3 months', '6 months'],
+      vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['Pain NRS', 'all'], ['Oswestry disability index', 'all'], ['Adverse event', 'post'], ['Satisfaction', 'last']],
+      primary: 'Pain NRS', secondary: ['Oswestry disability index'], ss: { a: 7, b: 5, sd: 2.5 } },
+    lap2: { cat: 'Surgery', name: 'Laparoscopic surgery RCT (recovery and pain)', design: 'rct', arms: ['Technique A', 'Technique B'], visits: ['PACU', '6 h', '24 h'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['ASA class'], ['Operative time'], ['Pain VAS', 'all'], ['Shoulder tip pain', 'all'], ['PONV', 'last'], ['Total morphine consumption (24 h)'], ['Time to first flatus'], ['Time to ambulation'],
+        ['Quality of recovery (QoR-15)', 'last'], ['Complications', 'last'], ['Satisfaction', 'last']],
+      primary: 'Pain VAS', secondary: ['Shoulder tip pain', 'Quality of recovery (QoR-15)', 'Time to first flatus'], ss: { a: 4, b: 3, sd: 1.8 } },
+    retro: { cat: 'Observational', name: 'Retrospective chart review (cohort)', design: 'cohort', arms: ['Exposed', 'Not exposed'], visits: ['Admission', 'Discharge'],
+      vars: [['Age'], ['Sex'], ['Hypertension'], ['Diabetes'], ['Chronic kidney disease'], ['Charlson comorbidity index'], ['Date of admission'], ['Date of discharge'], ['LOS*'], ['ICU admission', 'last'], ['Complications', 'last'], ['Readmission', 'last'], ['Mortality', 'last']],
+      primary: 'Complications', secondary: ['Length of stay', 'Mortality'], ss: { a: 25, b: 12 } },
+    dose4: { cat: 'Trials', name: 'Dose-finding trial (three doses and placebo)', design: 'rct', arms: ['Low dose', 'Medium dose', 'High dose', 'Placebo'], visits: ['Baseline', 'Week 4', 'Week 12'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['Systolic BP', 'all'], ['Diastolic BP', 'all'], ['Heart rate', 'all'], ['Adverse event', 'post'], ['Withdrawn', 'last']],
+      primary: 'Systolic BP', secondary: ['Diastolic BP'], ss: { m: 'anova', means: '132, 128, 125, 135', sd: 12 } },
+    surgery: { cat: 'Surgery', name: 'Surgical outcomes study', design: 'cohort', arms: ['Technique A', 'Technique B'], visits: ['Pre-operative', 'Day 1', 'Month 1'],
       vars: [['Age'], ['Sex'], ['ASA class'], ['Hypertension'], ['Diabetes'], ['Date of surgery'], ['Operative time'], ['Blood loss'], ['Pain VAS', 'all'], ['Date of admission'], ['Date of discharge'], ['LOS*'], ['Complications', 'last'], ['Reoperation', 'last']] }
   };
   const blank = () => ({ title: '', design: 'rct', n: 60, arms: ['Group A', 'Group B'], idPrefix: 'P', idDigits: 3, visits: [{ id: 'v0', name: 'Baseline' }], sections: [],
@@ -138,7 +196,14 @@
     t.vars.forEach(([lab, vis]) => {
       if (lab === 'BMI*') { const w = D.vars.find(v => v.label === 'Weight'), h = D.vars.find(v => v.label === 'Height'); if (w && h) D.vars.push({ ...libVar('Demographics', ['BMI', 'calc', 'kg/m²', 10, 80, null, 1]), formula: { kind: 'bmi', a: w.id, b: h.id } }); return; }
       if (lab === 'LOS*') { const a = D.vars.find(v => v.label === 'Date of admission'), b = D.vars.find(v => v.label === 'Date of discharge'); if (a && b) D.vars.push({ ...libVar('Outcomes', ['Length of stay', 'calc', 'days', 0, 365, null, 0]), formula: { kind: 'days', a: a.id, b: b.id } }); return; }
-      const v = findLib(lab); if (!v) return; v.visits = vis === 'all' ? D.visits.map(x => x.id) : vis === 'last' ? [D.visits[D.visits.length - 1].id] : []; D.vars.push(v); });
+      const v = findLib(lab); if (!v) return; const ids = D.visits.map(x => x.id);
+      v.visits = vis === 'all' ? [...ids] : vis === 'last' ? [ids[ids.length - 1]] : vis === 'post' ? ids.slice(1) : Array.isArray(vis) ? vis.map(i => ids[i]).filter(Boolean) : [];
+      if (v.visits.length === 1 && v.visits[0] === ids[0]) v.visits = []; D.vars.push(v); });
+    (t.primary ? [t.primary] : []).forEach(l => { const v = D.vars.find(x => x.label === l); if (v) { v.role = 'primary'; v.required = true; } });
+    (t.secondary || []).forEach(l => { const v = D.vars.find(x => x.label === l); if (v && !v.role) v.role = 'secondary'; });
+    const BASE = /^(Operative time|Duration of anaesthesia|Intraoperative fentanyl|ASA class|Mallampati class|Gestational age|Parity|Gravidity|Charlson comorbidity index|APACHE II|SOFA|Date of .*)$/;
+    D.vars.forEach(v => { if (v.role) return; if (/^(Demographics|Medical history)$/.test(v.section) || BASE.test(v.label)) { if (!/^Date of (discharge|death)/.test(v.label)) v.role = 'baseline'; } else if (t.primary) v.role = 'outcome'; });
+    if (t.ss) { D.ss = { m: 'auto', alpha: 0.05, power: 0.8, drop: 10, ratio: 1, ...t.ss, v: (D.vars.find(x => x.label === t.primary) || {}).id || '' }; D.sections = [...new Set(D.vars.map(v => v.section))]; const r = ssCalc(D); if (r && !r.err) D.n = r.enrol; }
     if (key === 'surgery') D.checks.push({ a: D.vars.find(v => v.label === 'Date of discharge').id, op: '>=', b: D.vars.find(v => v.label === 'Date of admission').id });
     D.sections = [...new Set(D.vars.map(v => v.section))]; return D;
   }
@@ -205,9 +270,15 @@
   /* ---------- names and columns ---------- */
   const unitTag = u => String(u || '').replace(/×10⁹\/L/g, 'x10e9_L').replace(/²/g, '2').replace(/%/g, 'percent').replace(/°C/g, 'C').replace(/µ/g, 'u').replace(/\//g, '_').replace(/[^A-Za-z0-9_]+/g, '').replace(/^_+|_+$/g, '');
   const tagOf = s => String(s).trim().replace(/[^A-Za-z0-9]+/g, '') || 'V';
+  // short column names of long labels (SPSS keeps 64 characters, many programs 32)
+  const ABBR = { 'Mean arterial pressure': 'MAP', 'Total morphine consumption (24 h)': 'Morphine 24h', 'Time to first rescue analgesia': 'Time to rescue', 'Number of rescue analgesic doses': 'Rescue doses', 'Oswestry disability index': 'ODI',
+    'Apgar score at 1 minute': 'Apgar 1min', 'Apgar score at 5 minutes': 'Apgar 5min', 'Quality of recovery (QoR-15)': 'QoR15', 'Duration of sensory block': 'Sensory block duration', 'Duration of motor block': 'Motor block duration',
+    'Onset of sensory block': 'Sensory block onset', 'Onset of motor block': 'Motor block onset', 'Intraoperative fentanyl': 'Intraop fentanyl', 'Duration of anaesthesia': 'Anaesthesia duration', 'Number of intubation attempts': 'Intubation attempts',
+    'Postoperative sore throat': 'Sore throat', 'Block-related complications': 'Block complications', 'Charlson comorbidity index': 'Charlson index', 'Intraoperative complications': 'Intraop complications', 'Days on the ventilator': 'Ventilator days',
+    'Renal replacement therapy': 'RRT', 'Ischaemic heart disease': 'IHD', 'Chronic kidney disease': 'CKD', 'Chronic liver disease': 'CLD', 'Glasgow coma scale': 'GCS', 'Reason for withdrawal': 'Withdrawal reason' };
   function baseName(D, v) {
     if (v.name && v.name.trim()) return v.name.trim();
-    const words = String(v.label).replace(/[^A-Za-z0-9 ]+/g, ' ').trim().split(/\s+/).filter(Boolean), u = unitTag(v.unit);
+    const words = String(ABBR[v.label] || v.label).replace(/[^A-Za-z0-9 ]+/g, ' ').trim().split(/\s+/).filter(Boolean), u = ABBR[v.label] && /%|percent/.test(v.unit) ? '' : unitTag(v.unit);
     if (D.conv.naming === 'camel') return words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('') + (u ? u.charAt(0).toUpperCase() + u.slice(1).replace(/_/g, '') : '');
     const s = [...words, ...(u ? [u] : [])].join('_'); return D.conv.naming === 'lower' ? s.toLowerCase() : s;
   }
@@ -733,7 +804,7 @@
   function render() {
     const w = $('#mbWrap'); if (!w) return; const pr = problems(D);
     w.innerHTML = `<div class="mb-head"><b>🧱 Master sheet builder</b><span class="legend-note">${esc(D.title || 'Untitled study')} · ${D.vars.length} variables · ${columns(D).length} columns</span><span class="spacer"></span>
-      <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${opt(Object.entries(TEMPLATES).map(([k, t]) => [k, t.name]), '')}<option value="__blank">Empty design</option></select>
+      <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${['Anaesthesia and pain', 'Surgery', 'Trials', 'Observational', 'Diagnostic'].map(c => `<optgroup label="${c}">${opt(Object.entries(TEMPLATES).filter(([, t]) => (t.cat || 'Trials') === c).map(([k, t]) => [k, t.name]), '')}</optgroup>`).join('')}<option value="__blank">Empty design</option></select>
       <select id="mbMine" style="width:auto"><option value="">My designs…</option>${opt(Object.keys(ls.get('designs', {})).map(k => [k, k]), '')}</select>
       <button class="btn ghost small" id="mbUndo" type="button" title="Undo (Ctrl+Z)" ${undoS.length ? '' : 'disabled'}>↶</button><button class="btn ghost small" id="mbRedo" type="button" title="Redo (Ctrl+Y)" ${redoS.length ? '' : 'disabled'}>↷</button>
       <label class="btn ghost small" style="margin:0" title="Make the design from a sheet you already have: its columns, types, categories, ranges, visits (from suffixes such as _Baseline, _M3), groups — and its values as the expected values">⬆ From an existing sheet<input type="file" id="mbFromSheet" accept=".xlsx,.xls,.xlsm,.csv,.txt" hidden></label>

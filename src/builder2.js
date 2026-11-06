@@ -206,7 +206,7 @@
   }
 
   /* ---------- a guided start: six questions, then a design with its sample size ---------- */
-  const WIZ_DESIGNS = [['rct2', 'Randomised trial, two groups'], ['noninf', 'Non-inferiority trial'], ['crossover', 'Crossover trial'], ['cluster', 'Cluster trial (several centres)'], ['before', 'One group, before and after'], ['cohort', 'Cohort with follow-up'], ['surgery', 'Surgical outcomes'], ['icu', 'ICU cohort'], ['obstetric', 'Obstetric cohort'], ['casecontrol', 'Case-control'], ['cross', 'Cross-sectional survey'], ['diag', 'Diagnostic accuracy'], ['diag2', 'Diagnostic accuracy, two readers']];
+  const WIZ_DESIGNS = Object.entries(B.TEMPLATES).map(([k, x]) => [k, x.name]);
   let wizOpen = false, wizMsg = '';
   function studyTop(D) {
     const w = { design: 'rct2', groups: '', visits: '', outcome: '', a: '', b: '', sd: '', avail: '', ...ls.get('wiz', {}) }, t = B.TEMPLATES[w.design] || B.TEMPLATES.rct2;

@@ -2059,7 +2059,7 @@
       if (cs.length === 1) { let v = owner(cs[0].col);
         if (v && v.kind === 'repeated') { cfg.variables = cfg.variables.filter(y => y !== v); v = null; }
         if (!v) { v = { ...singleVariable(rows, cs[0].col, H.indexOf(cs[0].col), 'Demographic and baseline data'), id: 'mb' + Math.random().toString(36).slice(2, 9) }; cfg.variables.push(v); }
-        props(v, x); if (x.section) v.table = /outcome|operative|follow/i.test(x.section) ? 'Outcomes' : /demograph|history|baseline/i.test(x.section) ? 'Demographic and baseline data' : x.section; return; }
+        props(v, x); if (x.role === 'baseline') v.table = 'Demographic and baseline data'; else if (/primary|secondary|outcome|safety/.test(x.role || '')) v.table = 'Outcomes'; else if (x.section) v.table = /outcome|operative|follow/i.test(x.section) ? 'Outcomes' : /demograph|history|baseline/i.test(x.section) ? 'Demographic and baseline data' : x.section; return; }
       // the same variable at several visits: one repeated measure
       const pos = Math.min(...cs.map(c => H.indexOf(c.col)));
       cfg.variables = cfg.variables.filter(v => !v.cols.some(c => cs.some(y => y.col === c.col)));
