@@ -31,7 +31,8 @@
     const n = Math.max(2, +G.n || +D.n || 60), A = arms(D), k = K(D), rho = Math.min(0.95, Math.max(0, +G.visitR || 0));
     // groups: the randomisation list of the design, or the ratio (e.g. 1:1, 2:1), shuffled
     let grp = [];
-    if (A.length >= 2) { if (D.rand && D.rand.on && !(D.rand.strata || []).length) grp = B.randomisation({ ...D, n })[0].list.map(a => A.indexOf(a));
+    const sites = (D.sites || []).filter(x => x && x.name), per = sites.length ? Math.ceil(n / sites.length) : n;
+    if (A.length >= 2) { if (D.rand && D.rand.on && !(D.rand.strata || []).length) { const rl = B.randomisation({ ...D, n }); grp = (sites.length && rl.length === sites.length ? rl.flatMap(r => r.list.slice(0, per)).slice(0, n) : rl[0].list).map(a => A.indexOf(a)); }
       else { const r = String(G.ratio || A.map(() => 1).join(':')).split(/[:,/ ]+/).map(Number).map(x => x > 0 ? x : 1), tot = r.slice(0, A.length).reduce((a, b) => a + b, 0) || A.length;
         A.forEach((_, i) => { const m = Math.round(n * (r[i] || 1) / tot); for (let j = 0; j < m; j++) grp.push(i); }); while (grp.length < n) grp.push(grp.length % A.length); grp = grp.slice(0, n);
         for (let i = grp.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [grp[i], grp[j]] = [grp[j], grp[i]]; } } }
@@ -44,8 +45,9 @@
       if (vars.some(v => v.scale)) { const sh = {}; vars.forEach(v => { if (!v.scale) return; const s0 = sh[v.scale] ?? (sh[v.scale] = norm()); u[v.id] = Math.sqrt(0.6) * s0 + Math.sqrt(0.4) * u[v.id]; }); }
       (G.corr || []).forEach(c => { if (u[c.a] === undefined || u[c.b] === undefined) return; const r = Math.max(-0.95, Math.min(0.95, +c.r || 0)); u[c.b] = r * u[c.a] + Math.sqrt(1 - r * r) * u[c.b]; });
       const g = grp[i], vals = {};
-      vars.forEach(v => { if (!['num', 'yn', 'cat'].includes(v.type)) return; const o = vals[v.id] = {};
+      vars.forEach(v => { if (!['num', 'yn', 'cat', 'multi'].includes(v.type)) return; const o = vals[v.id] = {};
         const keys = visitKeys(D, v); keys.forEach(key => { const z = keys.length === 1 ? u[v.id] : Math.sqrt(rho) * u[v.id] + Math.sqrt(1 - rho) * norm(); // one measurement: the patient's own level
+          if (v.type === 'multi') { const pc = expect(v).pct || []; o[key] = v.cats.filter((c, ci) => rnd() * 100 < (isFinite(+pc[ci]) ? +pc[ci] : 20)); return; }
           if (v.type === 'num') { const m = target(v, g, key), sd = sdOf(v), e = expect(v); let x;
             if (e.dist === 'skewed' && m > 0) { const s2 = Math.log(1 + sd * sd / (m * m)); x = Math.exp(Math.log(m) - s2 / 2 + Math.sqrt(s2) * z); } else x = m + sd * z;
             if (v.min !== '' && isFinite(+v.min)) x = Math.max(+v.min, x); if (v.max !== '' && isFinite(+v.max)) x = Math.min(+v.max, x);
@@ -61,7 +63,8 @@
       // skip logic: not asked (empty) unless the other variable has the category
       vars.forEach(v => { if (!v.when || !v.when.v || !vals[v.id]) return; const pv = D.vars.find(x => x.id === v.when.v); if (!pv) return; const pval = vals[pv.id] || {}, want = D.conv.catAs === 'codes' ? pv.cats.indexOf(v.when.cat) + 1 : v.when.cat;
         Object.keys(vals[v.id]).forEach(key => { const x = pval[key] ?? pval.once ?? pval[D.visits[0].id]; if (x !== want) vals[v.id][key] = null; }); });
-      P.push({ id: `${D.idPrefix || ''}${String(i + 1).padStart(+D.idDigits || 3, '0')}`, g, group: A.length >= 2 ? A[g] : null, vals });
+      const si = sites.length ? Math.min(sites.length - 1, Math.floor(i / per)) : -1;
+      P.push({ id: si >= 0 ? `${sites[si].prefix || ''}${String(i - si * per + 1).padStart(+D.idDigits || 3, '0')}` : `${D.idPrefix || ''}${String(i + 1).padStart(+D.idDigits || 3, '0')}`, site: si >= 0 ? sites[si].name : undefined, g, group: A.length >= 2 ? A[g] : null, vals });
     }
     // calculated columns (also written as Excel formulas)
     const num = x => (typeof x === 'number' && isFinite(x) ? x : NaN), days = (a, b) => (Date.parse(b) - Date.parse(a)) / 864e5;
@@ -70,8 +73,10 @@
         if (f.kind === 'bmi') { const w = num(at(f.a, key)), h = num(at(f.b, key)); if (w > 0 && h > 0) r = +(w / (h / 100) ** 2).toFixed(1); }
         if (f.kind === 'days') { const a = at(f.a, key), b = at(f.b, key); if (a && b) r = Math.round(days(a, b)); }
         if (f.kind === 'age') { const a = at(f.a, key), b = f.b ? at(f.b, key) : new Date().toISOString().slice(0, 10); if (a && b) r = Math.floor(days(a, b) / 365.25); }
+        if (f.kind === 'pct') { const x = p.vals[f.a] || {}, ks = Object.keys(x); if (ks.length > 1) { const a = num(x[ks[0]]), b = num(x[ks[ks.length - 1]]); if (isFinite(a) && isFinite(b) && a !== 0) r = +((b - a) / a * 100).toFixed(1); } }
+        if (!['bmi', 'days', 'age', 'change', 'pct'].includes(f.kind) && !((f.kind === 'sum' || f.kind === 'mean') && !(f.rev || []).length)) { const r2 = B.calcValue(D, v, f, id => at(id, key)); if (r2 !== undefined) r = r2; }
         if (f.kind === 'change') { const x = p.vals[f.a] || {}, ks = Object.keys(x); if (ks.length > 1) { const a = num(x[ks[0]]), b = num(x[ks[ks.length - 1]]); if (isFinite(a) && isFinite(b)) r = +(b - a).toFixed(2); } }
-        if ((f.kind === 'sum' || f.kind === 'mean') && (f.list || []).length) { const xs = f.list.map(id => num(at(id, key))); if (xs.every(isFinite)) { const s = xs.reduce((a, b) => a + b, 0); r = +(f.kind === 'sum' ? s : s / xs.length).toFixed(2); } }
+        if ((f.kind === 'sum' || f.kind === 'mean') && (f.list || []).length && !(f.rev || []).length) { const xs = f.list.map(id => num(at(id, key))); if (xs.every(isFinite)) { const s = xs.reduce((a, b) => a + b, 0); r = +(f.kind === 'sum' ? s : s / xs.length).toFixed(2); } }
         o[key] = r; }); }));
     // rules between columns (e.g. discharge ≥ admission) are kept
     P.forEach(p => (D.checks || []).forEach(ch => { const a = p.vals[ch.a], b = p.vals[ch.b]; if (!a || !b) return; Object.keys(a).forEach(key => { const bv = b[key] ?? b.once; let av = a[key]; if (av == null || bv == null) return;
@@ -212,7 +217,7 @@
   function live(D) { if (!G.res.live || !last) return; clearTimeout(liveT); liveT = setTimeout(() => { try { last = generate(D); resStamp++; redrawOut(D); } catch (err) { console.error(err); } }, 500); }
   function preview(D) { const cols = B.columns(D).filter(c => D.layout !== 'long'), A = arms(D);
     return `<div class="tbl-wrap" style="max-height:260px"><table class="t mb-prev"><thead><tr><th>ID</th>${A.length >= 2 ? '<th>Group</th>' : ''}${cols.map(c => `<th>${esc(c.col)}</th>`).join('')}</tr></thead><tbody>${last.slice(0, 8).map(p => `<tr><td>${esc(p.id)}</td>${A.length >= 2 ? `<td>${esc(p.group)}</td>` : ''}${cols.map(c => { const o = p.vals[c.v.id] || {}, x = c.visit ? (o[c.visit.id] ?? (c.visit.id === D.visits[0].id ? o.once : null)) : (o.once ?? o[D.visits[0].id]); return `<td>${esc(x ?? '')}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`; }
-  function fill(D) { return { patients: last.map(p => ({ id: p.id, group: p.group, vals: p.vals })), simulated: { at: new Date().toISOString().slice(0, 10), seed: G.seed, n: last.length }, targets: targetsList(D).map(t => ({ ...t, cols: B.columns(D).filter(c => c.v.id === t.varId && (t.visit === 'once' ? !c.visit || c.visit.id === D.visits[0].id : c.visit && c.visit.id === t.visit)).map(c => c.col) })) }; }
+  function fill(D) { return { patients: last.map(p => ({ id: p.id, site: p.site, group: p.group, vals: p.vals })), simulated: { at: new Date().toISOString().slice(0, 10), seed: G.seed, n: last.length }, targets: targetsList(D).map(t => ({ ...t, cols: B.columns(D).filter(c => c.v.id === t.varId && (t.visit === 'once' ? !c.visit || c.visit.id === D.visits[0].id : c.visit && c.visit.id === t.visit)).map(c => c.col) })) }; }
   const fileName = D => `Simulated - ${B.fileBase()} - master sheet.xlsx`;
   async function send(D) { if (!last) { last = generate(D); } const blob = B.buildWorkbook(D, fill(D)), f = new File([blob], fileName(D)); B.setPhase('analyse'); U.go(1); await U.loadFile(f); }
   function onClick(e) {

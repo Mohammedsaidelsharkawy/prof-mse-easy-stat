@@ -23,6 +23,36 @@ Checked on 20,000 simulated patients: means, SDs, percentages, skewed (log-norma
 
 ## Master sheet builder
 
+**More in the builder**
+- **Templates** (14): two-arm trial, non-inferiority, crossover (AB/BA), cluster trial (with sites), cohort, surgical, ICU and obstetric cohorts, case-control, cross-sectional survey, before–after, diagnostic accuracy (one or two readers). The library adds obstetric, intensive-care and study-conduct variables, with **normal ranges** for laboratory values and vital signs.
+- **Sample size for more designs**: three or more groups (one-way ANOVA, from the noncentral F distribution), non-inferiority (means or success %, one-sided), survival (log-rank, events from the hazard ratio), correlation, one proportion with a margin, and yes/no before–after (McNemar). Checked against statsmodels and the textbook formulas: means 5, 6, 7 with SD 2 → 21 per group; non-inferiority SD 10, margin 5, 90% power → 85; 80% success, margin 10 → 252; HR 0.7 with 40% events → 247 events (618 patients); r = 0.3 → 85; 50% ± 5 → 385; McNemar 30% → 15% with 25% discordant → 85.
+- **Calculated columns** (Excel formulas, also computed by the generator): BMI, body surface area (Mosteller), ideal body weight (Devine), mean arterial pressure, QTc (Bazett), eGFR (CKD-EPI 2021), days between dates, age, change and % change between visits, categories from cut-offs, sum or mean of items with **reverse-scored items**, score as % of the maximum (Oswestry), 100 − % (KOOS), weighted points per item, "any of the items is Yes", and "Eligible". 16,200 cells recalculated in LibreOffice matched the generator's values exactly, and eGFR matched a Python CKD-EPI 2021.
+- **Questionnaires** (an item per column, totals, subscales and severity categories by formula): PHQ-9, GAD-7, HADS (anxiety and depression), EQ-5D-5L, Oswestry, WOMAC, KOOS (five subscales), Epworth, IPSS and any Likert scale. Licensed questionnaires carry a note, and their items are numbered rather than written out. **Clinical scores**: CHA₂DS₂-VASc, CURB-65, Wells (PE), Charlson, Child-Pugh (with class), SOFA and APACHE II. Simulated items of one scale answer together.
+- **Eligibility checklist**: inclusion and exclusion criteria as yes/no columns and "Eligible" by formula. They are listed in the protocol and left out of the shell tables.
+- **Several answers** ("tick all that apply"): one Yes/No column per option. Analyse treats the options as one item group; the CRF prints tick boxes, REDCap a checkbox field and the XLSForm a select_multiple.
+- **Units**: lab values convert between units (creatinine mg/dL ↔ µmol/L, glucose, urea, LDL, bilirubin, haemoglobin, albumin, vitamin D, CRP, lactate, weight, height), with their ranges, normal range and expected values. **Normal ranges** are shaded blue in Excel, listed in the codebook and read by Analyse (the % outside per group).
+- **Bulk edit** (tick variables: set section, visits, role, required, item group, or remove), **search and filter** (required, outcomes, skip logic, formulas, categories, numbers, by visit), and **☆ My variables**: save a variable to your own library for every new design.
+- **In the Excel file** (options on the Export tab):
+  - a **Dashboard** sheet: patients entered, complete patients, duplicated IDs, rule breaks, and % filled by column and by visit, live as data are typed;
+  - **Filled** and **Missing_required** columns on each row;
+  - **ID checks**: repeated IDs in red, wrong length in yellow;
+  - **visit windows**: each visit's day and ± window from an anchor date gives a **Due_** date, red when overdue, and a visit date outside its window is yellow;
+  - **protection** of the Data sheet (only the entry columns open, optional password);
+  - a **Patient** sheet showing one patient at a time;
+  - an **entry log** (entered by, date, checked by, verified);
+  - a **Schedule** sheet.
+- **Multi-centre**: sites with their ID prefixes, a Site column, a randomisation list per site (stratified), and **one file per site**. **Blinded labels**: Group A and Group B in the data, with a separate **blinding key**. **Minimisation** (Pocock–Simon): a sheet takes the next patient's factors and suggests the arm with the smallest imbalance; checked against counts in Python.
+- **Documents from the design** (Word):
+  - a **protocol and statistical analysis plan** draft: design, eligibility, allocation and blinding, outcomes with definitions, sample size, data management and the planned test of each variable, with the schedule as an appendix;
+  - the **schedule of assessments**;
+  - **shell tables**: baseline, outcomes and each repeated measure, with the groups and the P value;
+  - a **data dictionary** and a one-page **design summary**;
+  - **randomisation envelopes**: the number outside, the arm inside.
+- **Other ways to collect and analyse**: an **XLSForm** for KoBoToolbox / ODK, with choices, ranges, required fields, skip logic as relevant and some calculations (checked with pyxform); **SPSS syntax** with variable and value labels, missing values and levels; and Google Sheets, which opens the Excel file as it is.
+- **Versions**: save a version with a note, then **compare** two designs: what was added, removed or changed (labels, ranges, categories, visits, skip logic, formulas, groups, visits, planned number).
+- **🧭 Guided start** (step 1): six questions (design, groups, visits, main outcome, expected effect, patients available) give a design with the primary outcome at every visit, the sample size and the planned analysis. When fewer patients are available, it gives the power they reach (checked against statsmodels: d = 0.75 with 22 per group → 68%).
+
+
 **⬆ From an existing sheet** makes a design from a master sheet you already have (Excel or CSV): the ID column (and its format, e.g. K001), the group column and its arms, the visits from the column suffixes (Pain_Baseline, Pain_M3, Pain_M6 → one variable at three visits; a lone _m2 is a unit), each column's type (number, yes/no — also 0/1 —, categories, date, text), units from the names (Age (years), BMI_kg_m2), ranges and categories from the values, the library's sections and ranges when a name is known — and the values become the expected values for the generator. **↶ ↷ Undo / redo** (Ctrl+Z / Ctrl+Y) for every change of the design.
 
 **🧱 Master sheet builder** (step 1) designs the data collection sheet of a new study before any data exist, in six steps:

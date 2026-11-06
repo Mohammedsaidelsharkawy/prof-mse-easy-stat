@@ -379,7 +379,7 @@
       .map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? null])));
     state.sheet = name;
     const mbSetup = builderSetup();
-    if (mbSetup) { const lead = new Set([mbSetup.idCol, mbSetup.groupCol, 'Visit'].filter(Boolean)), mb999 = mbSetup.missing === '999';
+    if (mbSetup) { const lead = new Set([mbSetup.idCol, mbSetup.groupCol, 'Visit', mbSetup.siteCol, ...(mbSetup.helperCols || [])].filter(Boolean)), mb999 = mbSetup.missing === '999';
       if (mb999) rows.forEach(r => headers.forEach(h => { if (r[h] === 999 || r[h] === '999') r[h] = null; }));
       // the rows of patients not entered yet (only the pre-filled ID and group) are left out
       for (let i = rows.length - 1; i >= 0; i--) if (!headers.some(h => !lead.has(h) && !isMissing(rows[i][h]))) rows.splice(i, 1); }
@@ -2046,13 +2046,14 @@
   function applyBuilderSetup(cfg, S0, sandbox) {
     const H = state.data.headers, rows = state.data.rows, owner = col => cfg.variables.find(v => v.cols.some(c => c.col === col));
     if (S0.idCol && H.includes(S0.idCol)) { cfg.idCols = [S0.idCol]; const v = owner(S0.idCol); if (v) v.include = false; }
+    (S0.helperCols || []).forEach(c => { const v = owner(c); if (v) v.include = false; });
     if (S0.groupCol && H.includes(S0.groupCol)) { cfg.groupCol = S0.groupCol; cfg.noGroups = false; cfg.variables = cfg.variables.filter(v => !v.cols.some(c => c.col === S0.groupCol)); setGroups(cfg);
       const arms = (S0.arms || []).filter(a => cfg.groupOrder.includes(a)); if (arms.length) cfg.groupOrder = [...arms, ...cfg.groupOrder.filter(g => !arms.includes(g))]; }
     const tpl = cfg.tpLabels = cfg.tpLabels || {}; cfg.tpOrder = cfg.tpOrder || [];
     (S0.visits || []).forEach(x => { tpl[x.tag] = x.name; }); const vt = (S0.visits || []).map(x => x.tag); cfg.tpOrder = [...vt, ...cfg.tpOrder.filter(t => !vt.includes(t))]; // the visits in the design's order
     const typeOf = t => t === 'num' || t === 'calc' ? 'numeric' : t === 'cat' || t === 'yn' ? 'categorical' : null, codes = S0.catAs === 'codes';
-    const props = (v, x) => { const ty = typeOf(x.type); v.label = x.label; if (x.unit) { v.unit = x.unit; } if (x.group) v.group = x.group; if (x.role) v.role = x.role; if (x.definition) v.definition = x.definition;
-      if (ty) v.type = ty; if (ty === 'categorical') { v.levels = codes ? x.cats.map((_, i) => String(i + 1)) : [...x.cats]; if (codes) v.valueLabels = x.cats.map((c, i) => `${i + 1}=${c}`).join(', '); }
+    const props = (v, x) => { const ty = typeOf(x.type); v.label = x.label; if (x.unit) { v.unit = x.unit; } if (x.group) v.group = x.group; if (x.role) v.role = x.role; if (x.definition) v.definition = x.definition; if (x.refLo !== undefined && x.refLo !== '') v.refLo = x.refLo; if (x.refHi !== undefined && x.refHi !== '') v.refHi = x.refHi;
+      if (ty) v.type = ty; if (ty === 'categorical') { const cd = codes && !x.words; v.levels = cd ? x.cats.map((_, i) => String(i + 1)) : [...x.cats]; if (cd) v.valueLabels = x.cats.map((c, i) => `${i + 1}=${c}`).join(', '); }
       if (!ty) v.include = false; if (ty === 'numeric' && x.unit && !/\([^)]*\)\s*$/.test(v.label)) v.label = `${x.label} (${x.unit})`; };
     (S0.vars || []).forEach(x => { const cs = (x.cols || []).filter(c => H.includes(c.col)); if (!cs.length) return;
       if (cs.length === 1) { let v = owner(cs[0].col);
@@ -4367,7 +4368,7 @@
       const wmax = Math.max(0, ...aoa.slice(0, 30).map(filled)), hr = Math.max(0, aoa.slice(0, 20).findIndex(r => filled(r) >= Math.max(2, 0.6 * wmax)));
       const seen = {}, headers = (aoa[hr] || []).map((h, i) => { let n = h === null || String(h).trim() === '' ? `Column_${i + 1}` : String(h).trim(); if (seen[n]) n = `${n}_${++seen[n]}`; else seen[n] = 1; return n; });
       const rows = aoa.slice(hr + 1).map(r => Object.fromEntries(headers.map((h, i) => [h, r[i] ?? null])));
-      if (S0) { const lead = new Set([S0.idCol, S0.groupCol, 'Visit'].filter(Boolean));
+      if (S0) { const lead = new Set([S0.idCol, S0.groupCol, 'Visit', S0.siteCol, ...(S0.helperCols || [])].filter(Boolean));
         if (S0.missing === '999') rows.forEach(r => headers.forEach(h => { if (r[h] === 999 || r[h] === '999') r[h] = null; }));
         for (let i = rows.length - 1; i >= 0; i--) if (!headers.some(h => !lead.has(h) && !isMissing(rows[i][h]))) rows.splice(i, 1); }
       state.data = { headers, rows }; state.xpComments = new Map(); state.xpChanged = new Set(); state.xpOpen = new Set();
