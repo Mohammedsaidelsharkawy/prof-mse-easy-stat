@@ -3584,8 +3584,10 @@ const Analysis = (() => {
       sections.push({ kind: 'missing', title: 'Missing data of the studied variables', head: ['Variable', ...gl.map((g, i) => `${g} (n=${gN[i]})`), ...(k > 1 ? [`All (n=${rows.length})`] : [])], rows: rowsM,
         footnote: 'Number (%) of patients with no value.', comment: worst.length ? `Missing values were most frequent in ${listJoin(worst.slice(0, 3).map(([l, m]) => `${lowerFirst(l)} (${m} patients, ${fmt(100 * m / rows.length, 1)}%)`))}.` : 'There were no missing values in the studied variables.', figures: [], meta: {} }); }
     // the first table split by a second factor (e.g. sex): the groups compared within each of its categories
-    if (opts.twoFactor && data.headers.includes(opts.twoFactor) && k > 1) { const b0 = blocks.find(x => x.kind === 'single'), lv = levelsOf(cfg, rows, opts.twoFactor).slice(0, 4);
-      if (b0 && lv.length >= 2) { const used2 = new Set(), rowsF = [], fl = plain(columnLabel(cfg, opts.twoFactor));
+    const tfJobs = [...(opts.twoFactor && data.headers.includes(opts.twoFactor) ? [[blocks.find(x => x.kind === 'single'), opts.twoFactor, false]] : []),
+      ...blocks.filter(b => b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table] && cfg.tableOpts[b.table].twoFactor && data.headers.includes(cfg.tableOpts[b.table].twoFactor)).map(b => [b, cfg.tableOpts[b.table].twoFactor, true])];
+    if (k > 1) tfJobs.forEach(([b0, TF, own]) => { const opts2 = { ...opts, twoFactor: TF }, lv = levelsOf(cfg, rows, TF).slice(0, 4); const sectionsAt = sections.length;
+      ((opts) => { if (b0 && lv.length >= 2) { const used2 = new Set(), rowsF = [], fl = plain(columnLabel(cfg, opts.twoFactor));
         b0.vars.filter(v => !(v.cols[0].col === opts.twoFactor)).forEach(v => { const col = v.cols[0].col, per = lv.map(l => byGroup.map(rs => rs.filter(x => toCat(x[opts.twoFactor]) === l)));
           if (v.type === 'numeric') { const rr = per.map(G2 => { const gv = G2.map(rs => rs.map(x => toNum(x[col])).filter(isFinite)); return { gv, a: gv.every(x => x.length >= 2) ? analyzeNumeric(gv, v.dist, used2, opts, v.test) : null }; });
             rowsF.push([{ t: [v.label], b: true }, ...rr.flatMap(q => [...q.gv.map((g2, j) => ({ t: [q.a && g2.length ? (q.a.param ? msd(q.a.desc[j].mean, q.a.desc[j].sd, d) : medIqr(q.a.desc[j], d)) : '—'] })), { t: [q.a ? fmtP(q.a.p, alpha) : '—'] }])]); }
@@ -3593,7 +3595,9 @@ const Analysis = (() => {
             const rr = per.map(G2 => { const gv = G2.map(rs => rs.map(x => toCat(x[col])).filter(x => x !== null)); return { gv, a: gv.every(x => x.length) ? analyzeCategorical(gv, lvs, used2, opts, null, v.test) : null }; });
             sh.forEach((l, li) => rowsF.push([{ t: [two ? v.label : `${v.label}: ${l}`], b: li === 0 }, ...rr.flatMap(q => [...q.gv.map((g2, j) => ({ t: [q.a ? npc(q.a.table[lvs.indexOf(l)][j], q.a.pct[lvs.indexOf(l)][j], q.a.ns[j]) : '—'] })), { t: [li === 0 && q.a ? fmtP(q.a.p, alpha) : ''] }])])); } });
         sections.push({ kind: 'twofactor', title: `${b0.table} of the studied groups by ${lowerFirst(fl)}`, head: ['', ...lv.flatMap(l => [...gl.map(g => `${l}: ${g}`), `P (${l})`])], rows: rowsF,
-          footnote: `The study groups compared within each category of ${lowerFirst(fl)}; mean ± SD, median (IQR) or n (%).`, comment: '', figures: [], meta: {} }); used.add('twoFactor'); } }
+          footnote: `The study groups compared within each category of ${lowerFirst(fl)}; mean ± SD, median (IQR) or n (%).`, comment: '', figures: [], meta: {} }); used.add('twoFactor'); } })(opts2);
+      // a table's own split goes right after that table
+      if (own && sections.length > sectionsAt) { const sec = sections.pop(), at = sections.findIndex(x => x.kind === 'single' && x.title === `${b0.table} of the studied groups`); sections.splice(at >= 0 ? at + 1 : sections.length, 0, sec); } });
     if (opts.assumptions && ASSUME.length && k > 1) {
       const nn = opts.normality === 'ks' ? 'Kolmogorov-Smirnov' : 'Shapiro-Wilk';
       sections.push({ kind: 'assumptions', title: 'Assumption checks of the numeric variables', head: ['Variable', ...gl.map(g => `${nn} P (${g})`), "Levene's P", 'Test used'],

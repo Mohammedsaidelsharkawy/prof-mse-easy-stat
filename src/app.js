@@ -2740,6 +2740,58 @@
     cfg.variables.forEach((v, i) => { v.pos = i; });
     cfg.emptyTables = blocks.filter(b => !b.rep && !b.vars.length).map(b => b.name);
   }
+  // more of a table's own settings: split columns, tests, decimals, a note on a variable
+  function tbMorePanel(b) {
+    const cfg = state.cfg, nm = esc(b.name), own = (cfg.tableOpts || {})[b.name] || {}, cats = cfg.variables.filter(v => v.kind !== 'repeated' && v.type === 'categorical' && (v.levels || []).length >= 2 && (v.levels || []).length <= 4 && v.cols[0].col !== cfg.groupCol);
+    const nums = b.vars.filter(v => v.type !== 'categorical'), catsIn = b.vars.filter(v => v.type === 'categorical'), same = (arr, f) => arr.length && arr.every(v => f(v) === f(arr[0])) ? f(arr[0]) : '';
+    const VN = cfg.varNotes || {};
+    return `<div class="tb-own"><span class="legend-note">Split the columns by</span><select data-tbsplit="${nm}" style="width:auto;font-size:12px"><option value="">— (none)</option>${cats.map(v => `<option value="${esc(v.cols[0].col)}" ${own.twoFactor === v.cols[0].col ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select><span class="legend-note">(an extra table after it: the groups within each category)</span></div>
+      <div class="tb-own">${nums.length ? `<span class="legend-note">Numbers:</span><select data-tbtest="${nm}|num" style="width:auto;font-size:12px">${[['auto', 'test as detected (normality)'], ['param', 'parametric (t-test / ANOVA)'], ['nonparam', 'non-parametric (Mann-Whitney / Kruskal-Wallis)']].map(([k, l]) => `<option value="${k}" ${(same(nums, v => v.dist || 'auto') || '') === k ? 'selected' : ''}>${l}</option>`).join('')}${same(nums, v => v.dist || 'auto') ? '' : '<option value="" selected>mixed</option>'}</select>
+        <span class="legend-note">decimals</span><input type="number" min="0" max="4" data-tbdec="${nm}" value="${esc(same(nums, v => v.dec ?? '') ?? '')}" placeholder="report" style="width:60px">` : ''}
+        ${catsIn.length ? `<span class="legend-note">Categories:</span><select data-tbtest="${nm}|cat" style="width:auto;font-size:12px">${[['', 'Chi-square / Fisher as needed'], ['chi', 'Chi-square'], ['fisher', "Fisher's exact"]].map(([k, l]) => `<option value="${k}" ${(same(catsIn, v => ['fisher', 'ffh'].includes(v.test) ? 'fisher' : v.test || '') || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}</div>
+      <details class="tb-notes"><summary class="legend-note">Notes on variables (a letter after the name, the note under the table)${b.vars.some(v => VN[v.id]) ? ` — ${b.vars.filter(v => VN[v.id]).length} set` : ''}</summary>${b.vars.map(v => `<div class="row" style="gap:6px;align-items:center;margin:2px 0"><span style="min-width:180px">${esc(v.label)}</span><input type="text" data-tbvnote="${esc(v.id)}" value="${esc(VN[v.id] || '')}" placeholder="e.g. measured at 24 h" style="flex:1"></div>`).join('')}</details>`;
+  }
+  // T7: notes on variables — a letter after the variable's name in its table, the note under the table
+  function applyVarNotes(res) {
+    const VN = state.cfg.varNotes || {}; if (!Object.keys(VN).length) return; const SUPL = 'ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖ';
+    res.sections.forEach(sec => { if (sec.kind !== 'single' || !sec.meta || !sec.meta.res) return; const marks = [];
+      sec.meta.res.forEach(r => { const id = r && r.v && (r.v.copyOf || r.v.id), txt = id && VN[id]; if (!txt) return; const lab = r.v.label, row = sec.rows.find(rw => rw.some(c => cellTxt(c).trim() === lab.trim() || cellTxt(c).trim().startsWith(lab + ':'))); if (!row) return;
+        const cell = row.find(c => cellTxt(c).trim() === lab.trim() || cellTxt(c).trim().startsWith(lab + ':')), m = SUPL[marks.length % SUPL.length]; if (cell && typeof cell === 'object') { cell.t = [...(cell.t || [''])]; cell.t[0] = `${cell.t[0]}${m}`; } marks.push(`${m}: ${txt.trim().replace(/\\.$/, '')}`); });
+      if (marks.length) sec.footnote = `${(sec.footnote || '').trim()}${sec.footnote ? ' ' : ''}${marks.join('; ')}.`; });
+  }
+  // T3: tables merged into one (with sub-headings): the pairs by table name, turned into the sections' titles
+  const tbTitleOf = n => { const m = (state.cfg.tableMeta || {})[n]; return m && m.title && m.title.trim() ? m.title.trim().replace(/\\.$/, '') : `${n} of the studied groups`; };
+  const tbMergePairs = () => (state.cfg.tbMerge || []).map(([a, b]) => [tbTitleOf(a), tbTitleOf(b)]);
+  // T6: one table out: its section as the report makes it
+  function tbSection(name) { const cfg = state.cfg, ids = new Set(cfg.variables.filter(v => v.include && v.kind !== 'repeated' && ((v.table || '') === name || (v.alsoTables || []).includes(name))).map(v => v.id)); if (!ids.size) return null;
+    const res = Analysis.run(state.data, { ...cfg, variables: cfg.variables.map(v => ({ ...v, include: ids.has(v.id) })), advanced: [], options: { ...effOptions(), figures: 'none', correlation: false, summary: false } });
+    const sec = res.sections.find(x => x.kind === 'single' && tbTitleRe(name).test(x.title || '')); if (!sec) return null; applyTableMeta({ sections: [sec] }); applyVarNotes({ sections: [sec] }); return sec; }
+  // T9: what to check in the tables
+  function tbWarnings() { const cfg = state.cfg, blocks = tableModel(), w = [], gs = activeGroups(), nOf = g => state.data.rows.filter(r => Analysis.groupOf(cfg, r) === g).length;
+    blocks.forEach(b => { if (b.rep) return; const n = b.vars.length + (b.copies || []).length, rows = [...b.vars, ...(b.copies || [])].reduce((t, v) => t + tbRows(v), 0);
+      if (!n) w.push(`“${b.name || '(no name)'}” is empty`); else if (n === 1 && blocks.filter(x => !x.rep).length > 2) w.push(`“${b.name}” has one variable — join it to another table?`);
+      if (rows > 25) w.push(`“${b.name}” is long (≈ ${rows} rows) — split it?`); if (!b.name) w.push('A table has no name'); });
+    gs.forEach(g => { const n = nOf(g); if (n && n < 5) w.push(`The group “${cfg.groupLabels[g] || g}” has ${n} patient${n > 1 ? 's' : ''}: P values are unreliable`); });
+    cfg.variables.filter(v => v.include && (v.alsoTables || []).length).forEach(v => w.push(`“${v.label}” is in ${1 + v.alsoTables.length} tables`));
+    const ln = blocks.filter(b => !b.rep).map(b => b.name.toLowerCase()); ln.forEach((x, i) => { if (x && ln.indexOf(x) !== i) w.push(`Two tables are named “${x}”`); });
+    return w; }
+  // T10: the whole arrangement saved by name and used again (matched by the column names)
+  const TB_LS = 'easystat.tableLayouts', tbLayouts = () => { try { return JSON.parse(localStorage.getItem(TB_LS) || '{}'); } catch (e) { return {}; } };
+  function tbLayoutOf() { const cfg = state.cfg, keyOf = v => v.cols.map(c => c.col).join('|');
+    return { vars: cfg.variables.map((v, i) => ({ key: keyOf(v), table: v.table, include: v.include, alsoTables: v.alsoTables || [], pos: i, role: v.role || '' })), tableMeta: cfg.tableMeta || {}, tableOpts: cfg.tableOpts || {}, emptyTables: cfg.emptyTables || [], tbMerge: cfg.tbMerge || [], varNotes: Object.fromEntries(Object.entries(cfg.varNotes || {}).map(([id, t]) => { const v = cfg.variables.find(x => x.id === id); return v ? [keyOf(v), t] : null; }).filter(Boolean)) }; }
+  function tbLayoutApply(L) { const cfg = state.cfg, keyOf = v => v.cols.map(c => c.col).join('|'); let n = 0; const order = new Map(L.vars.map(x => [x.key, x]));
+    cfg.variables.forEach(v => { const x = order.get(keyOf(v)); if (!x) return; v.table = x.table; v.include = x.include; v.alsoTables = [...x.alsoTables]; if (x.role) v.role = x.role; n++; });
+    cfg.variables.sort((a, b) => ((order.get(keyOf(a)) || {}).pos ?? 1e6) - ((order.get(keyOf(b)) || {}).pos ?? 1e6)); cfg.variables.forEach((v, i) => { v.pos = i; });
+    cfg.tableMeta = JSON.parse(JSON.stringify(L.tableMeta || {})); cfg.tableOpts = JSON.parse(JSON.stringify(L.tableOpts || {})); cfg.emptyTables = [...(L.emptyTables || [])]; cfg.tbMerge = JSON.parse(JSON.stringify(L.tbMerge || []));
+    cfg.varNotes = Object.fromEntries(Object.entries(L.varNotes || {}).map(([k, t]) => { const v = cfg.variables.find(x => keyOf(x) === k); return v ? [v.id, t] : null; }).filter(Boolean)); return n; }
+  // T1: the usual tables in one click
+  const SAFETY_RE = /adverse|complication|harm|side effect|toxicit|ponv|nausea|vomit|pruritus|bleeding|infection|hypotension|bradycardia|respiratory depression|shivering|retention|reoperation|readmission/i;
+  function tbTemplate(kind) { const cfg = state.cfg; let n = 0; const set = (v, t) => { if (v.table !== t) { v.table = t; n++; } };
+    cfg.variables.filter(v => v.kind !== 'repeated' && v.include).forEach(v => { const isBase = v.role === 'baseline' || (!v.role && /demograph|baseline|history|characteristic/i.test(v.table || '')), isSafe = v.role === 'safety' || (!/primary|secondary/.test(v.role || '') && SAFETY_RE.test(v.label)), isOut = /primary|secondary|outcome/.test(v.role || '') || (!v.role && /outcome/i.test(v.table || ''));
+      if ((kind === 'baseline' || kind === 'set') && isBase) set(v, 'Baseline characteristics');
+      else if ((kind === 'safety' || kind === 'set') && isSafe) set(v, 'Safety outcomes');
+      else if ((kind === 'outcomes' || kind === 'set') && isOut && !isBase) set(v, 'Outcomes'); });
+    return n; }
   // the options a table can have of its own (the report's options otherwise)
   const TB_OPTS = [['totalCol', 'Total column'], ['nCol', 'n column'], ['missCol', 'Missing column'], ['effect', 'Effect size (MD / RR, 95% CI)'], ['showStat', 'Test column'], ['postLetters', 'Post hoc letters (3+ groups)'], ['groupTrend', 'P for trend (ordered groups)'], ['hideNs', 'Only significant rows']];
   const TB_SORT = [['', 'As listed'], ['p', 'Smallest P first'], ['effect', 'Largest effect first']];
@@ -2747,6 +2799,11 @@
     const box = $('#tablesBoard'); if (!box || !state.cfg) return; const cfg = state.cfg, blocks = tableModel(), out = cfg.variables.filter(v => !v.include && v.kind !== 'repeated'), O = cfg.options;
     let tn = 0; const sel = state.tbSel = state.tbSel || new Set(), M = cfg.tableMeta || {}, TO = cfg.tableOpts || {}, names = blocks.filter(b => !b.rep).map(b => b.name), k = activeGroups().length;
     // the options of every table (the report's), then each table's own
+    const ex = $('#tbExtra'); if (ex) { const rp = report(), L = tbLayouts(), cap = $('#optTableCaption');
+      ex.innerHTML = `<span class="legend-note">Numbering:</span><label class="legend-note" style="margin:0">chapter <input type="text" data-tbchap="1" value="${esc(rp.chapter || '')}" placeholder="e.g. 4 → Table 4.1" style="width:120px"></label>
+        <label class="legend-note" style="margin:0">caption <select data-tbcap="1" style="width:auto;font-size:12px">${cap ? [...cap.options].map(o2 => `<option value="${esc(o2.value)}" ${(cfg.options.tableCaption || cap.value) === o2.value ? 'selected' : ''}>${esc(o2.textContent)}</option>`).join('') : ''}</select></label>
+        <span class="legend-note" style="margin-left:12px">Layouts:</span><select data-tblayout="1" style="width:auto;font-size:12px"><option value="">Use a saved layout…</option>${Object.keys(L).map(k => `<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select><button class="btn ghost small" type="button" id="tbLayoutSave" title="Keep the tables, their order, options, titles and notes, to use again with another file of the study">💾 Save this layout…</button>`; }
+    const wr = $('#tbWarn'); if (wr) { const w = tbWarnings(); wr.innerHTML = w.length ? `<div class="tb-warn"><b>To check (${w.length}):</b> ${w.map(esc).join(' · ')}</div>` : ''; }
     const gbar = $('#tbGlobal'); if (gbar) gbar.innerHTML = `<b>Every table:</b>${TB_OPTS.filter(([x]) => k > 2 || !['postLetters', 'groupTrend'].includes(x)).map(([x, l]) => `<label class="check" style="margin:0"><input type="checkbox" data-tbglob="${x}" ${O[x] ? 'checked' : ''}><span>${l}</span></label>`).join('')}
       <label class="legend-note" style="margin:0">Rows <select data-tbglob="tableSort" style="width:auto;font-size:12px">${TB_SORT.map(([v, l]) => `<option value="${v}" ${(O.tableSort || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
     const chip = (v, from) => `<span class="role-chip tb-chip ${sel.has(v.id) ? 'tb-sel' : ''}" draggable="true" data-tvid="${esc(v.id)}" title="${esc(v.cols.map(c => c.col).join(', '))}${v.role ? ` · ${esc((ROLES.find(r => r[0] === v.role) || [])[1] || v.role)}` : ''} — click to select, drag to move">${v.role === 'primary' ? '★ ' : ''}${esc(v.label)}${v.type === 'categorical' ? ' <span class="legend-note">n (%)</span>' : ''}${v.group ? ` <span class="chip" style="font-size:10px">${esc(v.group)}</span>` : ''}<button type="button" class="tb-x" data-tbx="${esc(v.id)}" title="${from === '__out' ? 'Back into the report (its table)' : 'Leave out of the report'}">${from === '__out' ? '↩' : '×'}</button></span>`;
@@ -2766,10 +2823,13 @@
       return `<div class="tb-card ${prevOn ? 'tb-wide' : ''}" data-tbname="${nm}"><div class="tb-head"><b>Table ${++tn}</b> <span class="tb-name" data-tbren="${nm}" title="Click to rename">${esc(b.name || '(no name)')} ✎</span> <span class="legend-note">${b.vars.length} variable${b.vars.length === 1 ? '' : 's'} · <span class="${rows > 25 ? 'tb-long' : ''}" title="${rows > 25 ? 'A long table: think of splitting it (select variables, then move them to a new table)' : 'Rows of the table'}">≈ ${rows} rows${rows > 25 ? ' ⚠' : ''}</span></span>${m.title || m.note ? ' <span class="chip" title="Own title or note">title/note</span>' : ''}${nOwn ? ` <span class="chip info" title="Options of its own">${nOwn} own option${nOwn > 1 ? 's' : ''}</span>` : ''}</div>
         <div class="tb-tools">${mv}<button class="btn ghost small ${prevOn ? 'on' : ''}" type="button" data-tbprev="${nm}" title="Preview the table as in the report">👁 Preview</button><button class="btn ghost small ${setOn ? 'on' : ''}" type="button" data-tbset="${nm}" title="Title, note, columns and order of this table">⚙ Options</button>
           <select data-tbsort="${nm}" title="Order the variables of this table" style="width:auto;padding:1px 4px;font-size:12px"><option value="">⇅ Sort</option><option value="sheet">As in the sheet</option><option value="az">A → Z</option><option value="num">Numbers first</option><option value="cat">Categories first</option><option value="sig">Significant first</option></select>
-          <button class="btn ghost small" type="button" data-tbdel="${nm}" title="Remove the table (its variables leave the report)">✕</button></div>
+          <button class="btn ghost small" type="button" data-tbdel="${nm}" title="Remove the table (its variables leave the report)">✕</button>
+          ${(() => { const M2 = state.cfg.tbMerge || [], mine = M2.find(x => x[0] === b.name), nextB = blocks.slice(i + 1).find(x => !x.rep); return mine ? `<button class="btn ghost small" type="button" data-tbunmerge="${nm}" title="Back to two tables">⇹ Separate from “${esc(mine[1])}”</button>` : nextB && !M2.some(x => x[1] === b.name) ? `<button class="btn ghost small" type="button" data-tbmerge="${nm}|${esc(nextB.name)}" title="One table with two sub-headings">⇲ Merge with the next</button>` : M2.some(x => x[1] === b.name) ? '<span class="legend-note">merged with the one before</span>' : ''; })()}
+          <span class="tb-out-tools"><button class="btn ghost small" type="button" data-tbcopy="${nm}" title="Copy the table (paste into Word or Excel)">⧉</button><button class="btn ghost small" type="button" data-tbword="${nm}" title="This table alone in Word">W</button><button class="btn ghost small" type="button" data-tbxlsx="${nm}" title="This table alone in Excel">X</button></span></div>
         ${setOn ? `<div class="tb-set"><div class="grid g2"><div><label class="f">Title in the report</label><input type="text" data-tbmeta="${nm}|title" value="${esc(m.title || '')}" placeholder="${esc(b.name)} of the studied groups"></div><div><label class="f">Note under the table</label><input type="text" data-tbmeta="${nm}|note" value="${esc(m.note || '')}" placeholder="e.g. Laboratory values at admission."></div></div>
           <div class="tb-own"><span class="legend-note">This table:</span>${TB_OPTS.filter(([x]) => k > 2 || !['postLetters', 'groupTrend'].includes(x)).map(([x, l]) => `<label class="check ${own[x] !== undefined ? 'tb-ownon' : ''}" style="margin:0" title="${own[x] !== undefined ? 'Its own setting' : 'As every table'}"><input type="checkbox" data-tbown="${nm}|${x}" ${eff(x) ? 'checked' : ''}><span>${l}</span></label>`).join('')}
-            <label class="legend-note" style="margin:0">Rows <select data-tbown="${nm}|tableSort" style="width:auto;font-size:12px">${TB_SORT.map(([v, l]) => `<option value="${v}" ${(eff('tableSort') || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>${nOwn ? `<button class="btn ghost small" type="button" data-tbreset="${nm}">As every table</button>` : ''}</div></div>` : ''}
+            <label class="legend-note" style="margin:0">Rows <select data-tbown="${nm}|tableSort" style="width:auto;font-size:12px">${TB_SORT.map(([v, l]) => `<option value="${v}" ${(eff('tableSort') || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>${nOwn ? `<button class="btn ghost small" type="button" data-tbreset="${nm}">As every table</button>` : ''}</div>
+          ${tbMorePanel(b)}</div>` : ''}
         <div class="tb-body">${b.vars.length ? `<label class="tb-all" title="Select every variable of this table"><input type="checkbox" data-tbselall="${nm}" ${b.vars.every(v => sel.has(v.id)) ? 'checked' : ''}></label>` : ''}${b.vars.map(v => chip(v, b.name)).join('')}${(b.copies || []).map(v => `<span class="role-chip tb-chip tb-copy" title="Also shown here — its own table is “${esc(v.table || '(no name)')}”">⧉ ${esc(v.label)}<button type="button" class="tb-x" data-tbxcopy="${esc(v.id)}|${nm}" title="Remove this copy (it stays in its own table)">×</button></span>`).join('')}${b.vars.length || (b.copies || []).length ? '' : '<span class="legend-note">Empty — add variables below or drag them here</span>'}</div><div class="tb-foot">${addSel(b.name)}<button class="btn ghost small" type="button" data-tbaddm="${nm}" title="Choose several variables to move or show here">+ Several…</button></div>${state.tbAddOpen === b.name ? addMany(b.name) : ''}${prevOn ? `<div class="tb-prev">${tbPreview(b.name)}</div>` : ''}</div>`; }).join('')}
       <div class="tb-card tb-out" data-tbname="__out"><div class="tb-head"><b>Not in the report</b> <span class="legend-note">${out.length}</span></div><div class="tb-body">${out.map(v => chip(v, '__out')).join('') || '<span class="legend-note">Drop a variable here (or press × on it) to leave it out</span>'}</div></div></div>`;
   }
@@ -2787,7 +2847,7 @@
   function tbPreview(name) {
     const cfg = state.cfg, ids = new Set(cfg.variables.filter(v => v.include && v.kind !== 'repeated' && ((v.table || '') === name || (v.alsoTables || []).includes(name))).map(v => v.id)); if (!ids.size) return '<span class="legend-note">No variables.</span>';
     try { const res = Analysis.run(state.data, { ...cfg, variables: cfg.variables.map(v => ({ ...v, include: ids.has(v.id) })), advanced: [], options: { ...effOptions(), figures: 'none', correlation: false, summary: false } });
-      const sec = res.sections.find(x => x.kind === 'single' && tbTitleRe(name).test(x.title || '')) || res.sections.find(x => x.kind === 'single'); if (!sec) return '<span class="legend-note">Nothing to show.</span>'; applyTableMeta({ sections: [sec] });
+      const sec = res.sections.find(x => x.kind === 'single' && tbTitleRe(name).test(x.title || '')) || res.sections.find(x => x.kind === 'single'); if (!sec) return '<span class="legend-note">Nothing to show.</span>'; applyTableMeta({ sections: [sec] }); applyVarNotes({ sections: [sec] });
       return `<div class="xw-title">${esc(sec.title)}</div>${htmlTable(sec.head, sec.rows)}${sec.footnote ? `<div class="legend-note" style="margin-top:4px">${esc(sec.footnote)}</div>` : ''}`; }
     catch (err) { console.error(err); return `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; }
   }
@@ -2857,6 +2917,19 @@
     tableCommit(blocks); renderVariables(); $('#tablesBox').open = true; toast(`${v.label} → ${name}`); });
   $('#tablesBoard').addEventListener('dragend', () => { tbDrag = null; document.querySelectorAll('#tablesBoard .over,#tablesBoard .dropto,#tablesBoard .dragging').forEach(x => x.classList.remove('over', 'dropto', 'dragging')); });
   $('#tablesBox').addEventListener('click', e => {
+    const tbtn = e.target.closest('[data-tbtpl],[data-tbmerge],[data-tbunmerge],[data-tbcopy],[data-tbword],[data-tbxlsx],#tbLayoutSave');
+    if (tbtn && state.cfg) { const d = tbtn.dataset, cfg = state.cfg; readUiIntoCfg();
+      if (d.tbtpl) { if (d.tbtpl === 'visit') { cfg.options.rmLayout = cfg.options.rmLayout === 'cols' ? 'rows' : 'cols'; renderOptions(); renderTablesBoard(); toast(cfg.options.rmLayout === 'cols' ? 'Repeated measures: timepoints as columns' : 'Repeated measures: timepoints as rows'); return; }
+        const n = tbTemplate(d.tbtpl); renderVariables(); toast(n ? `${n} variable${n > 1 ? 's' : ''} placed` : 'Nothing to move (mark roles in 🎭 Roles for better results)'); return; }
+      if (d.tbmerge) { const [a, b2] = d.tbmerge.split('|'); cfg.tbMerge = [...(cfg.tbMerge || []).filter(x => x[0] !== a && x[1] !== b2), [a, b2]]; renderTablesBoard(); toast(`“${a}” and “${b2}” will be one table`); return; }
+      if (d.tbunmerge) { cfg.tbMerge = (cfg.tbMerge || []).filter(x => x[0] !== d.tbunmerge); renderTablesBoard(); return; }
+      if (tbtn.id === 'tbLayoutSave') { const nm = (prompt('Name of this layout:', cfg.study.title || 'My tables') || '').trim(); if (!nm) return; const L = tbLayouts(); L[nm] = tbLayoutOf(); try { localStorage.setItem(TB_LS, JSON.stringify(L)); } catch (err) { toast('Could not keep it in this browser'); return; } renderTablesBoard(); toast(`Layout “${nm}” saved`); return; }
+      const name = d.tbcopy ?? d.tbword ?? d.tbxlsx, sec = tbSection(name); if (!sec) { toast('Nothing to export'); return; }
+      if (d.tbcopy !== undefined) { const html = `<p><b>${esc(sec.title)}</b></p>${htmlTable(sec.head, sec.rows)}${sec.footnote ? `<p>${esc(sec.footnote)}</p>` : ''}`; try { navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([[sec.title, ...sec.rows.map(r => r.map(cellTxt).join('\t'))].join('\n')], { type: 'text/plain' }) })]).then(() => toast('Table copied — paste into Word or Excel')); } catch (err) { toast('Copy is not allowed here'); } return; }
+      if (d.tbxlsx !== undefined) { const head = []; sec.head.forEach(h0 => { head.push(typeof h0 === 'string' ? h0 : cellTxt(h0)); for (let q = 1; q < ((typeof h0 === 'object' && h0.span) || 1); q++) head.push(''); });
+        const ws = XLSX.utils.aoa_to_sheet([[sec.title], head, ...sec.rows.map(r => r.map(cellTxt)), [], [sec.footnote || '']]), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Table'); XLSX.writeFile(wb, `${baseName()} - ${safeName(name || 'table')}.xlsx`); return; }
+      if (d.tbword !== undefined) { (async () => { const o = wordOptions(); let blob = await Report.build({ methods: '', intro: '', sections: [{ ...sec, comment: '', figures: [] }], consort: null, summary: '' }, { ...o, cover: null, toc: false, front: [], refs: null, abstract: false, listTF: false, bare: true, title: sec.title });
+        if (state.wordTemplate) blob = await applyTemplate(blob, state.wordTemplate.bytes); saveUrl(URL.createObjectURL(blob), `${baseName()} - ${safeName(name || 'table')}.docx`); toast('Table saved in Word'); })().catch(err => { console.error(err); toast('Could not make it: ' + err.message); }); return; } }
     const xc = e.target.closest('[data-tbxcopy]'); if (xc && state.cfg) { readUiIntoCfg(); const [id, name] = xc.dataset.tbxcopy.split('|'), v = state.cfg.variables.find(y => y.id === id); if (v) { v.alsoTables = (v.alsoTables || []).filter(t => t !== name); renderVariables(); toast(`The copy of ${v.label} was removed from “${name}”`); } return; }
     const am = e.target.closest('[data-tbaddm]'); if (am && state.cfg) { state.tbAddOpen = state.tbAddOpen === am.dataset.tbaddm ? null : am.dataset.tbaddm; state.tbPick = new Set(); readUiIntoCfg(); renderTablesBoard(); return; }
     const pa = e.target.closest('[data-tbpickall]'); if (pa) { const P0 = state.tbPick = state.tbPick || new Set(), ids = pa.dataset.tbpickall.split(','), on = ids.some(id => !P0.has(id)); ids.forEach(id => on ? P0.add(id) : P0.delete(id)); renderTablesBoard(); return; }
@@ -2902,6 +2975,14 @@
   }
   // the selection moved, the order of a table, the title and note of a table
   $('#tablesBox').addEventListener('change', e => { const t = e.target, cfg = state.cfg; if (!cfg) return;
+    if (t.dataset.tbsplit !== undefined) { readUiIntoCfg(); const TO = cfg.tableOpts = cfg.tableOpts || {}, own = TO[t.dataset.tbsplit] = TO[t.dataset.tbsplit] || {}; if (t.value) own.twoFactor = t.value; else delete own.twoFactor; if (!Object.keys(own).length) delete TO[t.dataset.tbsplit]; renderTablesBoard(); toast(t.value ? 'An extra table, split by that variable, follows this one' : 'No split'); return; }
+    if (t.dataset.tbtest) { readUiIntoCfg(); const [name, kind] = t.dataset.tbtest.split('|'), b0 = tableModel().find(x => !x.rep && x.name === name); if (!b0) return;
+      b0.vars.forEach(v => { if (kind === 'num' && v.type !== 'categorical') v.dist = t.value || 'auto'; if (kind === 'cat' && v.type === 'categorical') v.test = t.value === 'fisher' ? ((v.levels || []).length === 2 ? 'fisher' : 'ffh') : t.value; }); renderVariables(); toast(`${name}: tests set`); return; }
+    if (t.dataset.tbdec !== undefined) { readUiIntoCfg(); const b0 = tableModel().find(x => !x.rep && x.name === t.dataset.tbdec); if (!b0) return; b0.vars.forEach(v => { if (v.type !== 'categorical') v.dec = t.value === '' ? '' : +t.value; }); toast(`${t.dataset.tbdec}: ${t.value === '' ? 'decimals as the report' : t.value + ' decimals'}`); return; }
+    if (t.dataset.tbvnote) { const VN = cfg.varNotes = cfg.varNotes || {}; if (t.value.trim()) VN[t.dataset.tbvnote] = t.value; else delete VN[t.dataset.tbvnote]; return; }
+    if (t.dataset.tbchap) { report().chapter = t.value.trim(); const fc = $('#fmtChapter'); if (fc) fc.value = report().chapter; return; }
+    if (t.dataset.tbcap) { cfg.options.tableCaption = t.value; renderOptions(); return; }
+    if (t.dataset.tblayout && t.value) { const L = tbLayouts()[t.value]; if (!L) return; if (!confirm(`Use the layout “${t.value}”? The tables of this file are arranged as saved (variables matched by their column names).`)) { t.value = ''; return; } readUiIntoCfg(); const n = tbLayoutApply(L); renderVariables(); toast(`Layout “${t.value}”: ${n} variables placed`); return; }
     if (t.dataset.tbpick) { const P0 = state.tbPick = state.tbPick || new Set(); if (t.checked) P0.add(t.dataset.tbpick); else P0.delete(t.dataset.tbpick); const card = t.closest('.tb-card'); const n = P0.size; card.querySelectorAll('[data-tbaddgo^="move"],[data-tbaddgo^="copy"]').forEach(btn => { btn.disabled = !n; btn.textContent = btn.textContent.replace(/\(\d+\)/, `(${n})`); }); return; }
     if (t.dataset.tbselall !== undefined) { const sel = state.tbSel = state.tbSel || new Set(), b0 = tableModel().find(b => !b.rep && b.name === t.dataset.tbselall); if (b0) b0.vars.forEach(v => t.checked ? sel.add(v.id) : sel.delete(v.id)); renderTablesBoard(); renderTbSel(); return; }
     if (t.id === 'tbSelCopy' && t.value) { readUiIntoCfg(); const ids = [...(state.tbSel || [])], n = tbCopy(ids, t.value); if (n) { state.tbSel = new Set(); renderVariables(); renderTbSel(); toast(`${n} also shown in “${t.value}”`); } else t.value = ''; return; }
@@ -5170,8 +5251,8 @@ document.querySelectorAll('table').forEach(function(t){var hs=t.querySelectorAll
 document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';im.onclick=function(){var o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:9;cursor:zoom-out';var b=im.cloneNode();b.style.cssText='max-width:95vw;max-height:95vh;background:#fff';o.appendChild(b);o.onclick=function(){o.remove();};document.body.appendChild(o);};});})();<\/script>`;
   /* ---------- report and writing tools: tables merged, citations in the text, full methods, SAP, reviewer responses ---------- */
   // two tables merged into one (same columns), the second introduced by a sub-heading row; chosen with "⇲ Merge with the next table"
-  function mergeTables(res) {
-    const pairs = state.cfg.mergeTables || []; if (!pairs.length) return;
+  function mergeTables(res, extra) {
+    const pairs = [...(state.cfg.mergeTables || []), ...(extra || [])]; if (!pairs.length) return;
     pairs.forEach(([k1, k2]) => { const i = res.sections.findIndex(s => s.title === k1), j = res.sections.findIndex(s => s.title === k2); if (i < 0 || j < 0) return;
       const a = res.sections[i], b = res.sections[j], nc = h => h.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0); if (nc(a.head) !== nc(b.head)) return;
       const sub = t => [{ t: [t], b: true, span: nc(a.head) }];
@@ -5351,7 +5432,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
           res.sections.forEach(s => { if (!s.footnote) return; const parts = s.footnote.replace(/\.\s*$/, '').split(/, (?=[^,]{1,8}: )/), keep = [];
             parts.forEach(p => { if (isAb(p.trim())) { const [k2, ...v2] = p.trim().split(': '); if (!ab.has(k2)) ab.set(k2, v2.join(': ')); } else keep.push(p); }); s.footnote = keep.length ? keep.join(', ') + '.' : ''; });
           res.abbrev = ab.size ? [...ab.entries()].sort((a2, b2) => a2[0].localeCompare(b2[0])).map(([k2, v2]) => `${k2}: ${v2.replace(/\.$/, '')}`).join('; ') + '.' : ''; }
-        mergeTables(res);
+        mergeTables(res, tbMergePairs());
         applyCellNotes(res);
         writeExtras(res, cfg);
         styleTexts(res, cfg.options);
@@ -5373,7 +5454,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         { const defs = state.cfg.variables.filter(v => v.include && v.definition).map(v => { const d0 = v.definition.trim().replace(/\.$/, ''); return /\bdefined\b/i.test(d0) ? d0 + '.' : `${v.label.replace(/\s*\([^)]*\)\s*$/, '')} was defined as ${/^[A-Z][a-z]+\b/.test(d0) ? d0.charAt(0).toLowerCase() + d0.slice(1) : d0}.`; });
           if (defs.length && res.methods) res.methods = `${res.methods.trim()} Definitions: ${defs.join(' ')}`; }
         if (state.cfg.simulated && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The data were simulated (Prof MSE Easy Stat data generator, seed ${state.cfg.simulated.seed}) and do not describe real patients.`;
-        applyTableMeta(res);
+        applyTableMeta(res); applyVarNotes(res);
         placeFigures(res, cfg.options);
         if (report().forestAll) { const ff = forestFigure(res); if (ff) res.sections.push({ kind: 'figonly', figOnly: true, title: ff.caption, key: 'fig:' + ff.caption, head: [], rows: [], footnote: '', comment: '', figures: [ff], meta: {} }); }
         state.figTables = res.sections.filter(s => !s.figOnly).map(s => s.title).filter(Boolean);
