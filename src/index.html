@@ -72,6 +72,7 @@ html.ph-build #stepper,html.ph-build #presetBar,html.ph-build main>.panel,html.p
 .roles-box{margin:6px 0;border:1px solid var(--line);border-radius:10px;padding:6px 10px}.roles-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:8px}
 .tb-card.tb-wide{grid-column:1/-1}.tb-wide .tb-prev .rt{font-size:12px}
 .tb-own .check,.tb-global .check{display:inline-flex;width:auto;gap:4px;white-space:nowrap;align-items:center}.tb-own .check input,.tb-global .check input{margin:0}
+.cl-ok td:first-child{color:#2E7D32;font-weight:700}.cl-miss td:first-child{color:#B45309;font-weight:700}.cl-write td:first-child{color:#555}.cmp-flip td{background:#FFF3CD}
 .tb-copy{border-style:dashed;background:#FBF8FF;color:#555}.tb-all{display:inline-flex;align-items:center;margin:2px 4px 2px 0}.tb-all input{margin:0}
 .tb-foot{display:flex;gap:6px;align-items:center}.tb-foot .tb-add{flex:1}.tb-many{margin:0 6px 8px;padding:8px;border:1px solid #C9B6E4;border-radius:8px;background:#FBF8FF;max-height:320px;overflow:auto;font-size:12px}.tb-pickg{margin-bottom:6px}.tb-pickg>div{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:2px}.tb-pickg .check{display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
 .tb-global{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(123,47,190,.05);border:1px solid var(--line);font-size:13px}
@@ -964,6 +965,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="grid g2" style="margin-top:6px">
         <div>
           <label class="check"><input type="checkbox" id="optFdr"><span><b>False discovery rate</b> — Benjamini-Hochberg adjustment of all between-group P values of the report</span></label>
+          <div class="row" style="gap:6px;align-items:center;margin:2px 0 6px"><span class="legend-note">or adjust them all by</span><select id="optPadj" style="width:auto"><option value="">— (none)</option><option value="holm">Holm (family-wise error)</option><option value="bonferroni">Bonferroni</option></select></div>
           <label class="check"><input type="checkbox" id="optCltRule"><span><b>Large-sample rule</b> — parametric tests when every group has n ≥ 30, even if normality is rejected</span></label>
           <label class="check"><input type="checkbox" id="optExactSmall"><span><b>Exact Mann-Whitney</b> P value for small samples (n ≤ 50; permutation when tied)</span></label>
         </div>
@@ -1602,7 +1604,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <button class="btn ghost small" id="arPrev" type="button">🌐 Arabic text — check and edit…</button></div>
         <div id="arOut"></div>
         <label class="f" style="margin-top:6px">Appendix</label>
-        <div class="row" style="gap:14px"><label class="check" style="margin:0"><input type="checkbox" data-rx="appCodebook"><span>Codebook of the variables</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appPlan"><span>Test plan (test of each variable)</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appFull"><span>Every test of each variable (step 10)</span></label></div>
+        <div class="row" style="gap:14px"><label class="check" style="margin:0"><input type="checkbox" data-rx="forestAll"><span>Forest plot of the outcomes (end of the results)</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appCodebook"><span>Codebook of the variables</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appPlan"><span>Test plan (test of each variable)</span></label><label class="check" style="margin:0"><input type="checkbox" data-rx="appFull"><span>Every test of each variable (step 10)</span></label></div>
         <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">
           <button class="btn ghost small" id="btnMd" type="button">⬇ Markdown</button><button class="btn ghost small" id="btnTex" type="button">⬇ LaTeX</button><button class="btn ghost small" id="btnHtml" type="button">⬇ HTML page (to share)</button>
           <button class="btn ghost small" id="btnReview" type="button" title="The report text with your edits as tracked changes and the 💬 comments as Word comments">⬇ Review copy (tracked changes)</button>
@@ -1613,6 +1615,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <button class="btn ghost small" id="btnGdocs" type="button" title="Copy the report with its tables, to paste into Google Docs">⧉ Copy for Google Docs</button>
           <button class="btn ghost small" id="btnAbs" type="button" title="Background, methods, results and conclusion with word counts">Structured abstract</button>
           <button class="btn ghost small" id="btnLay" type="button" title="The results in plain words, for patients and the public">Plain-language summary</button>
+          <button class="btn ghost small" id="btnChecklist" type="button" title="CONSORT, STROBE or STARD: what the report covers and what is missing">✓ Reporting checklist</button>
+          <button class="btn ghost small" id="btnForestAll" type="button" title="The effect of every outcome (two groups) in one figure">Forest plot of the outcomes</button>
+          <button class="btn ghost small" id="btnRScript" type="button" title="An R script that repeats the main tests, for reproducibility">⬇ R script</button>
+          <button class="btn ghost small" id="btnDeck" type="button" title="Title, statistical analysis, one slide per table and figure, key findings">⬇ Results slides (.pptx)</button>
+          <button class="btn ghost small" id="btnResSnap" type="button" title="Keep the P values and effects now, to compare after cleaning, at the final analysis or in another population">📸 Keep the results</button><select id="resSnapList" style="width:auto" title="Compare the results now with kept results"><option value="">Compare with…</option></select>
           <button class="btn ghost small" id="btnMethFull" type="button" title="Design and setting, participants, sample size, outcomes and statistical analysis">Full methods section</button>
           <button class="btn ghost small" id="btnSap" type="button" title="A statistical analysis plan from the setup (kept in the project)">⬇ SAP</button><button class="btn ghost small" id="btnSapCmp" type="button" title="The analysis now against the SAP">Compare with the SAP</button>
           <button class="btn ghost small" id="btnRvResp" type="button" title="Reviewer comments split into points, a response for each, and a response letter">Response to reviewers</button>

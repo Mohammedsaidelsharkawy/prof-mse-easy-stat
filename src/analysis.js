@@ -11,6 +11,9 @@ const Analysis = (() => {
   const hookP = p => { if (!P_HOOK || !isFinite(p)) return p; if (P_HOOK.mode === 'record') { P_HOOK.list.push(p); return p; } const q = P_HOOK.q[P_HOOK.i++]; return q === undefined ? p : q; };
   const benjaminiHochberg = ps => { const m = ps.length, o = ps.map((p, i) => [p, i]).sort((a, b) => a[0] - b[0]), q = new Array(m); let mn = 1;
     for (let r = m - 1; r >= 0; r--) { mn = Math.min(mn, o[r][0] * m / (r + 1)); q[o[r][1]] = Math.min(1, mn); } return q; };
+  // Holm's step-down adjustment (strong control of the family-wise error)
+  const holmAdj = ps => { const m = ps.length, o = ps.map((p, i) => [p, i]).sort((a, b) => a[0] - b[0]), q = new Array(m); let mx = 0;
+    o.forEach(([p, i], r) => { mx = Math.max(mx, Math.min(1, p * (m - r))); q[i] = mx; }); return q; };
   let normality = S.shapiroWilk;
   const NUMW =['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 
@@ -2690,9 +2693,10 @@ const Analysis = (() => {
   }
   function run(data, cfg) {
     // false discovery rate: run once to collect the P values, then again with the adjusted ones
-    if (cfg.options.fdr && !cfg.__fdr) {
+    if ((cfg.options.fdr || cfg.options.padj) && !cfg.__fdr) {
       P_HOOK = { mode: 'record', list: [] }; let first;
-      try { first = run(data, { ...cfg, __fdr: 1 }); } finally { const ps = P_HOOK.list; P_HOOK = { mode: 'apply', q: benjaminiHochberg(ps), i: 0 }; }
+      try { first = run(data, { ...cfg, __fdr: 1 }); } finally { const ps = P_HOOK.list, m = ps.length, pa = cfg.options.padj;
+        P_HOOK = { mode: 'apply', q: pa === 'holm' ? holmAdj(ps) : pa === 'bonferroni' ? ps.map(p => Math.min(1, p * m)) : benjaminiHochberg(ps), i: 0 }; }
       try { return run(data, { ...cfg, __fdr: 2 }); } finally { P_HOOK = null; }
     }
     S.setConf((+cfg.options.confLevel || 95) / 100);
@@ -4280,7 +4284,9 @@ const Analysis = (() => {
     if (used.has('ffh')) s.push('Tables larger than 2 × 2 with small expected counts were analysed with the Fisher-Freeman-Halton exact test (Monte Carlo, 50,000 tables).');
     if (used.has('groupTrend')) s.push('A trend across the ordered groups was tested with the Jonckheere-Terpstra test (numeric variables), the Cochran-Armitage test (two categories) or the linear-by-linear association test.');
     if (o.completeCase) s.push('Only patients with complete data in every analysed variable were included (complete-case analysis).');
-    if (o.fdr) s.push('P values between the groups were adjusted for multiple comparisons across the report with the Benjamini-Hochberg false discovery rate.');
+    if (o.padj === 'holm') s.push('P values between the groups were adjusted for multiple comparisons across the report with the Holm method.');
+    else if (o.padj === 'bonferroni') s.push('P values between the groups were adjusted for multiple comparisons across the report with the Bonferroni method.');
+    else if (o.fdr) s.push('P values between the groups were adjusted for multiple comparisons across the report with the Benjamini-Hochberg false discovery rate.');
     if (+o.confLevel && +o.confLevel !== 95) s.push(`Confidence intervals are ${o.confLevel}%.`);
     s.push(`A ${used.has('oneSided') ? 'one' : 'two'} tailed P value ≤ ${o.alpha} was considered statistically significant${used.has('oneSided') ? ` (testing whether the first group was ${o.alternative === 'greater' ? 'greater' : 'less'} than the second)` : ''}.`);
     return s.join(' ');
