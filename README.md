@@ -247,3 +247,60 @@ python src/build.py
 ```
 
 This writes `Prof_MSE_Easy_Stat.html` at the repository root.
+
+## Newest additions
+
+**🧱 Build**
+- **Offline data-entry form (.html)**: one file from the design, one patient per screen. It has drop-down lists, ranges (out of range in red), required fields (missing in yellow) and skip logic. It works in any browser without the internet, keeps the data in that browser, and exports and imports CSV with the master sheet's column names.
+- **Repeating forms**: any section can be "⟳ per event", e.g. adverse events or medications. It goes on a sheet of its own, several rows per patient, linked by the ID (drop-down of the Data sheet's IDs).
+  - **+ Adverse-event log**: term, dates, CTCAE grade, serious, relation to the treatment, action and outcome (role: safety).
+  - **+ Concomitant medications**.
+- **⬆ From REDCap / XLSForm**: a REDCap data dictionary or a KoBoToolbox / ODK XLSForm becomes a design, with types, choices, ranges, required fields, sections and skip logic. Checked by round trip with the app's own exports.
+- **Documents** (Word): an **information sheet and consent form**, an **ethics application summary** and a **data management plan**, all from the design. Also a **study timeline (Gantt)** from the sample size, the recruitment rate per month and the lengths of the phases.
+- **Visit calendar**: upload the filled master sheet to get each patient's visit due dates and windows, as an Excel list and a calendar file (.ics).
+- **Patient labels**: A4 sheets of 3 × 8 (L7160) with the study, ID, site and visit, and a **Code 128 barcode**. The barcodes were checked with a barcode reader (zxing).
+
+**🎲 Generate**
+- **Time to event**: exponential times with a hazard ratio, the % with the event, the follow-up and early censoring, filling the event, the time and the date of the event. Over six seeds the hazard ratio averaged 0.61 for 0.6 asked.
+- **Risk factors**: a yes/no outcome from predictors with odds ratios (per unit for numbers), each group keeping its own %. Logistic regression recovered OR 1.51 and 3.26 for 1.5 and 3.
+- **Regression**: a number built from its predictors (b per unit). OLS recovered 0.297 and 5.0 for 0.3 and 5.
+- **Confounding**: one group gets more of a baseline variable (odds ratio), so crude and adjusted results differ.
+- **More shapes**: two subpopulations (bimodal), many zeros (zero-inflated, % chosen), piling at the maximum or minimum (ceiling / floor).
+- **Patient slopes** over the visits, and **Cronbach's α** of a scale's items (within ±0.02 from 0.6 to 0.95).
+- **Diagnostic accuracy**: prevalence, sensitivity, specificity and the AUC of a numeric index (25.5 / 79.9 / 89.5% and AUC 0.849 for 25 / 80 / 90% and 0.85).
+- **Agreement**: two readers with a kappa (0.605 for 0.6); two methods with a bias and an SD of the differences (Bland-Altman).
+- **Recruitment**: steady, slow start, fast start or seasonal, and the patients per site by weights.
+- **Protocol deviations and the flowchart**: % excluded at screening (with reasons), lost (later visits empty, Withdrawn and a reason), not adherent, crossed over. The counts go to the flowchart in Analyse with the file.
+- **Errors to plant** (messy mode): choose units in cells, × 10 typing, 999, decimal commas, mixed spelling, spelling mistakes, extra spaces, impossible dates and duplicated rows. **⬇ Error key** lists each one (ID, column, correct value, wrong value).
+- **Dataset code** (e.g. SIM-4U7-L4X), shown after generating and written in the file's instructions with the simulated-data notice.
+- **Free text**: plausible words for complication types, reasons for withdrawal, occupations and comments.
+- **Power by more tests**: Mann-Whitney / Kruskal-Wallis, change from the first visit, ANCOVA adjusted for the first visit, and log-rank.
+- **Several outcomes at once**: the chance that all or any are significant, with Holm or Bonferroni.
+- **Interim analyses** with O'Brien-Fleming boundaries (2–4 looks): power, early stopping and expected size, and the type I error under no difference (3% in the check).
+- **Run it many times**: the spread of every variable's P value and difference over 100 studies.
+- **Compare the scenarios**: the saved scenarios with their power, side by side.
+- **CSV**: one row per patient, or one per patient and visit.
+- **Methods (.docx)**: the settings of the simulation.
+- **Truth vs estimate**: in Analyse step 10, each true difference against the estimate, its 95% CI, and whether the CI covers it.
+
+**🗂 Tables of the report**
+- **Templates**: Table 1 (baseline), Outcomes, Safety, the standard set, and by visit (timepoints as columns).
+- **Numbering**: the chapter number and caption style.
+- **Saved layouts**: the whole arrangement saved by name and used again for another file of the study, matched by column names.
+- **Checks**: empty or long tables, one-variable tables, small groups, copies and duplicate names.
+- **⚙ Options of a table**:
+  - **columns split by a second variable** (an extra table right after it: the groups within each category);
+  - the **tests** (as detected, parametric or non-parametric; Chi-square or Fisher);
+  - the **decimals**;
+  - **notes on variables** (a letter after the name, the note under the table).
+- On each card:
+  - **⇲ Merge with the next table** (one table with sub-headings) and ⇹ Separate;
+  - **⧉ copy**, **W** (Word) and **X** (Excel) for that table alone.
+
+**📊 Report**
+- **✓ Reporting checklist**: CONSORT, STROBE or STARD, chosen from the design, each item marked ✓ covered, ⚠ can be added in the app (with where), or ✎ to write yourself.
+- **Forest plot of the outcomes**: the standardised mean differences and relative risks of every outcome (two groups) in one figure, also at the end of the Word results.
+- **P values adjusted across the report** by **Holm** or **Bonferroni**, besides the false discovery rate.
+- **⬇ R script**: R code repeating the main tests (t-test, Mann-Whitney, ANOVA, Kruskal-Wallis, Chi-square, Fisher).
+- **⬇ Results slides (.pptx)**: title, statistical analysis, each table as a native PowerPoint table, each figure, and the key findings.
+- **📸 Keep the results**, then **compare** after cleaning, at the final analysis or in another population: n, P before and now, effects before and now, changes of significance shaded.
