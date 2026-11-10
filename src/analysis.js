@@ -3821,9 +3821,9 @@ const Analysis = (() => {
           return { ...base, type: 'bar', ...(cf.labels !== false ? { labels: true, labelDec: d } : {}), series: [{ name: r.v.label, values: r.ds.map(x => med ? x.median : x.mean), ...(med ? { lo: r.ds.map(x => x.q1), hi: r.ds.map(x => x.q3) } : { err: r.ds.map(x => x.n ? errOf(x) : null) }) }] }; };
         const allBar = rows.every(r => chartOf(r) === 'bar'), med = cf.stat === 'median';
         let spec;
-        if (cf.axes === 'shared' && allBar) spec = { type: cf.type === 'hbar' ? 'hbar' : 'bar', labels: cf.labels !== false, labelDec: d, categories: rows.map(r => plain(r.v.label) + (stars && r.p <= alpha ? sym : '')), yLabel: cf.yLabel || (med ? 'Median' : 'Mean'),
+        if ((cf.axes || 'shared') === 'shared' && allBar) spec = { type: cf.type === 'hbar' ? 'hbar' : 'bar', labels: cf.labels !== false, labelDec: d, categories: rows.map(r => plain(r.v.label) + (stars && r.p <= alpha ? sym : '')), yLabel: cf.yLabel || (med ? 'Median' : 'Mean'),
           series: cats.map((g, gi) => med ? { name: g, values: rows.map(r => r.ds[gi].median ?? NaN), lo: rows.map(r => r.ds[gi].q1), hi: rows.map(r => r.ds[gi].q3) } : { name: g, values: rows.map(r => r.ds[gi].mean ?? NaN), err: rows.map(r => r.ds[gi].n ? errOf(r.ds[gi]) : null) }) };
-        else spec = { type: 'panels', cols: +cf.cols || Math.min(3, rows.length), letters: cf.letters === true, sharedY: cf.axes === 'shared' || cf.axes === 'samey', panels: rows.map(panel) };
+        else spec = { type: 'panels', cols: +cf.cols || Math.min(3, rows.length), letters: cf.letters === true, sharedY: (cf.axes || 'shared') === 'shared' || cf.axes === 'samey', panels: rows.map(panel) };
         const kinds = [...new Set(rows.map(chartOf))], how = kinds.length === 1 ? { bar: med ? ' (bars show the median; error bars show the IQR)' : allBar && rows.every(r => r.param || cf.stat === 'mean') ? ` (bars show the mean; error bars show ${{ sem: 'the SEM', ci: 'the 95% CI' }[opts.errorBar] || '±1 SD'})` : '', box: ' (box plots)', violin: ' (violin plots)', rain: ' (raincloud plots)', dot: ' (every patient)', dotci: ' (every patient, mean with 95% CI)', meanci: ' (mean with 95% CI)' }[kinds[0]] || '' : '';
         fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what: '', how };
       }

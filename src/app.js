@@ -3068,7 +3068,7 @@
     if (!on) return;
     groups.forEach((vs, name) => { const num = vs.filter(v => v.type === 'numeric').length > vs.length / 2, items = vs.filter(v => v.kind === 'single' && v.cols.length === 1 && v.type === (num ? 'numeric' : 'categorical')).map(v => v.id);
       let cf = L.find(x => x.auto && x.group === name);
-      if (!cf) { cf = { id: 'g' + Date.now().toString(36) + L.length, auto: true, group: name, groupName: name, kind: num ? 'num' : 'cat', title: '', items, layout: 'item', type: 'bar', sort: '', stars: true, labels: true, hide: true, axes: 'panels', chart: 'asVar', place: 'home' }; L.push(cf); }
+      if (!cf) { cf = { id: 'g' + Date.now().toString(36) + L.length, auto: true, group: name, groupName: name, kind: num ? 'num' : 'cat', title: '', items, layout: 'item', type: 'bar', sort: '', stars: true, labels: true, hide: true, axes: 'shared', chart: 'asVar', place: 'home' }; L.push(cf); }
       else { cf.items = items; cf.groupName = name; cf.kind = num ? 'num' : 'cat'; } });
   }
   // suggested groups from the names of yes/no columns: co-morbidities, symptoms, complications, risk factors
@@ -3136,7 +3136,7 @@
           <div style="flex:1;min-width:200px"><label class="f">Caption (optional)</label><input type="text" data-cfk="title" value="${esc(cf.title || '')}" placeholder="${esc(cf.groupName ? cf.groupName + ' of the studied groups' : num ? 'e.g. Age, weight and height of the studied groups' : 'e.g. Co-morbidities of the studied groups')}"></div>
           ${num ? `<div><label class="f">Chart</label>${sel2('chart', cf.chart || 'asVar', [['asVar', 'As in Figures by variable'], ['bar', 'Bar'], ['box', 'Box plot'], ['violin', 'Violin'], ['rain', 'Raincloud'], ['dot', 'Dot plot (every patient)'], ['dotci', 'Dots + mean 95% CI'], ['meanci', 'Mean with 95% CI']])}</div>
               <div><label class="f">Bars show</label>${sel2('stat', cf.stat || '', [['', 'Mean or median (as the data)'], ['mean', 'Mean (error bar of the figure options)'], ['median', 'Median (IQR)']])}</div>
-              <div><label class="f">Axes</label>${sel2('axes', cf.axes || 'panels', [['panels', 'One panel per item (own axis)'], ['samey', 'One panel per item, the same Y axis'], ['shared', 'One shared axis']])}</div>
+              <div><label class="f">Axes</label>${sel2('axes', cf.axes || 'shared', [['panels', 'One panel per item (own axis)'], ['samey', 'One panel per item, the same Y axis'], ['shared', 'One shared axis']])}</div>
               <div><label class="f">Panels per row</label>${sel2('cols', String(cf.cols || ''), [['', 'Auto'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']])}</div>`
             : cf.kind === 'rep' ? `<div><label class="f">Category shown</label><input type="text" data-cfk="level" value="${esc(cf.level || '')}" placeholder="Yes (first category)" style="width:140px"></div>`
             : `<div><label class="f">Chart</label>${sel2('ctype', cf.ctype || 'bars', [['bars', 'Bars'], ['heat', 'Heat map (items × groups)'], ['dots', 'Dot plot of the %'], ['stacked', '100% stacked bars (all categories)'], ['upset', 'Combinations (which items occur together)'], ['forest', 'Forest plot: RR or OR of each item (two groups)']])}</div>
@@ -3181,7 +3181,7 @@
       box.innerHTML = `<div class="legend-note" style="margin:6px 0 4px"><b>${esc(f.caption)}</b>${f.note ? ' — ' + esc(f.note) : ''}</div><img src="${url}" alt="${esc(f.caption)}">`;
     } catch (err) { console.error(err); box.innerHTML = `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; } }
   $('#cfAdd').onclick = () => { if (!state.cfg) return; readUiIntoCfg(); const list = state.cfg.combFigs = state.cfg.combFigs || [];
-    list.push({ id: 'cf' + Date.now().toString(36), kind: 'cat', title: '', items: [], layout: 'item', type: 'bar', sort: '', stars: true, labels: true, hide: true, axes: 'panels', chart: 'asVar', place: 'home' }); renderCombFigs(); };
+    list.push({ id: 'cf' + Date.now().toString(36), kind: 'cat', title: '', items: [], layout: 'item', type: 'bar', sort: '', stars: true, labels: true, hide: true, axes: 'shared', chart: 'asVar', place: 'home' }); renderCombFigs(); };
   // every change redraws the preview: ticks and lists at once, typing after a short pause
   $('#cfList').addEventListener('input', e => { const box = e.target.closest('[data-cf]'); if (!box) return; const i = +box.dataset.cf, cf = state.cfg.combFigs[i], t = e.target;
     if (t.dataset.cfv !== undefined) { cf.items = (cf.items || []).filter(x => x !== t.dataset.cfv); if (t.checked) cf.items.push(t.dataset.cfv); renderCombFigs(); return; }
