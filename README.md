@@ -292,6 +292,16 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 - **Journal figure rules** in Export figures: Elsevier, Springer Nature and PLOS presets (format, dpi, width, text size), and more widths (8.4, 9, 13.2, 14, 19, 19.05 cm).
 - **🔎 Text against the tables**: every decimal or % written in a table's comment is looked for in that table; the ones not found are listed with their sentence (no false alarm on three example reports; a planted 99.9 was caught).
 
+**⚙ The whole app**
+- **One project file for the three phases**: 💾 Save project now also holds the design (phase 1) and the generator's settings (phase 2) with the data, the analysis setup and the report edits; a design alone can be saved too. Opening it restores every phase.
+- **Autosave** (already kept the data and the setup): now keeps the edits of the report text as well.
+- **🎓 Course** (☰ More): five lessons — design a study, simulate the data, clean messy data, analyse, write the report — 16 steps, each with **Do it** (the app goes there) and a tick, with the progress kept.
+- **🔍 Find (Ctrl+K)** now reaches the three phases, every document of the builder's Export tab, the builder's tabs, the generator's actions and its special designs.
+- **The data against their design**: a master sheet opened in Analyse is checked against its own design: columns missing or added, categories not in the lists, numbers outside the allowed range or not numbers (it caught every kind of planted error in a messy simulated sheet).
+- **📚 Study binder** (Build › Export): protocol, schedule, CRF, information and consent, dictionary, ethics summary, data management plan and (optionally, with a warning) the allocation list in one Word file with a cover and contents, each part on its own pages (landscape where needed).
+- **🎁 Pack for the supervisor** (report tools): the Word report, the interactive results page, the data dictionary (.xlsx), the R script and a README in one zip.
+- **Dark mode** already covered the three phases; the new elements (grey rows, the editable preview, version differences, figures in panels) have dark colours too.
+
 ## Earlier additions
 
 **🧱 Build**

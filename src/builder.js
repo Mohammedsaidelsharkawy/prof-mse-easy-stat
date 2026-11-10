@@ -811,14 +811,14 @@
       sampleSize: (r => r && !r.err ? r.text : '')(ssCalc(D)),
       plan: (r => r && !r.err && r.v ? { label: r.v.label, num: !!r.num, a: r.a, b: r.b, sd: r.sd, alpha: r.alpha, power: r.power, drop: r.drop, n: r.total, enrol: r.enrol } : undefined)(ssCalc(D)),
       vars: D.vars.flatMap(v => { const rb = refRules(D, v), SA = refSexAge(D), colOf = x => x ? (columns(D).find(c => c.v.id === x.id && (!c.visit || c.visit.id === D.visits[0].id)) || {}).col : undefined;
-        const base = { unit: v.unit, role: v.role, definition: v.definition, section: v.section, when: whenTxt(D, v) || undefined, refLo: v.refLo, refHi: v.refHi, ...(rb.length ? { refBy: rb, refSexCol: colOf(SA.sex), refAgeCol: colOf(SA.age), refSexCats: SA.sex ? SA.sex.cats : undefined } : {}) },
+        const base = { unit: v.unit, role: v.role, definition: v.definition, section: v.section, when: whenTxt(D, v) || undefined, refLo: v.refLo, refHi: v.refHi, ...(v.type === 'num' && (v.min !== '' || v.max !== '') ? { min: v.min, max: v.max } : {}), ...(rb.length ? { refBy: rb, refSexCol: colOf(SA.sex), refAgeCol: colOf(SA.age), refSexCats: SA.sex ? SA.sex.cats : undefined } : {}) },
         colsOf = o => long ? [{ col: o === undefined ? baseName(D, v) : `${baseName(D, v)}_${tagOf(o)}` }] : cols.filter(c => c.v.id === v.id && c.opt === o).map(c => ({ col: c.col, visit: c.visit ? tagOf(c.visit.name) : '', visitName: c.visit ? c.visit.name : '' }));
         if (v.type === 'multi') return v.cats.map((o, i) => ({ ...base, id: `${v.id}_${i}`, label: `${v.label}: ${o}`, type: 'yn', cats: [...YN], group: v.group || v.label, cols: colsOf(o) }));
         const cc = calcCats(v); return [{ ...base, id: v.id, label: v.label, type: cc ? 'cat' : v.type, cats: cc || v.cats, words: cc ? true : undefined, group: v.group, cols: colsOf(undefined) }]; }) };
   }
 
   /* ---------- case report form (Word) ---------- */
-  async function buildCrf(D) {
+  async function buildCrf(D, raw) {
     const d = window.docx, { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType } = d, kids = [];
     const order = secOrder(D), font = 'Calibri';
     const P = (t, o = {}) => new Paragraph({ spacing: { after: o.after ?? 60 }, alignment: o.align, children: [new TextRun({ text: t, bold: o.bold, size: o.size || 21, font, color: o.color })] });
@@ -835,6 +835,7 @@
           ...rep.map(v => new TableRow({ children: [cell(v.label + (v.unit ? ` (${v.unit})` : '') + (whenParent(D, v) ? ` (if ${whenTxt(D, v)})` : ''), 38, true), ...vis.map(x => cell((v.visits || []).includes(x.id) ? (v.type === 'cat' || v.type === 'yn' || v.type === 'multi' ? v.cats.map(c => `☐ ${c}`).join('  ') : '') : '—', w))] }))] })); }
       const defs = vs.filter(v => v.definition); if (defs.length) kids.push(P(defs.map(v => `${v.label}: ${v.definition}`).join(' · '), { size: 18, color: '555555', after: 120 })); });
     kids.push(P(''), P('Investigator: ____________________     Signature: ____________     Date: __ / __ / ____', { after: 0 }));
+    if (raw) return kids;
     return Packer.toBlob(new Document({ creator: 'Prof MSE Easy Stat', title: (D.title || 'CRF') + ' — case report form', sections: [{ properties: { page: { margin: { top: 900, bottom: 900, left: 900, right: 900 } } }, children: kids }] }));
   }
 
@@ -1205,5 +1206,5 @@ Date of surgery">${esc(pasteTxt)}</textarea>
   // the entry on step 1
   const anchor = $('#btnTemplate'); if (anchor) { const b = document.createElement('button'); b.className = 'btn ghost small'; b.type = 'button'; b.id = 'btnBuilder'; b.title = 'Design the master sheet of a new study: variables, visits, groups, ranges, randomisation — then an Excel sheet, a case report form and a REDCap dictionary'; b.textContent = '🧱 Master sheet builder'; anchor.parentNode.insertBefore(b, anchor); b.onclick = open; }
   setPhase('analyse');
-  window.EasyBuilder = { open, close, setPhase, get phase() { return phase; }, buildWorkbook: (d, fill) => buildWorkbook(d || D, fill), setupFor, columns, visitsOf: v => visitsOf(D, v), baseName: v => baseName(D, v), tagOf, expectOf, prng, randomisation, redcap, fromTemplate, fileBase, save, render: () => render(), designFromDict, isRepeating: v => isRepeating(D, v), X, colL, sheetXml, xlsxBlob, secOrder, whenTxt, whenParent, xlOpts, SS_METHODS, LIB, TEMPLATES, findLib, uid, calcValue, calcCats, addSpec, addEligibility, SCALES, FK, nAnova, convert, ssCalc: d => ssCalc(d || D), designFromSheet, fromLine: (l, sec) => fromLine(D, l, sec || 'Other'), addScale: (n, it, lo, hi, def) => addScale(D, n, it, lo, hi, def), problems: d => problems(d || D), undo, get design() { return D; }, set design(x) { D = x; save(); } };
+  window.EasyBuilder = { buildCrf: (d, raw) => buildCrf(d || D, raw), open, close, setPhase, get phase() { return phase; }, buildWorkbook: (d, fill) => buildWorkbook(d || D, fill), setupFor, columns, visitsOf: v => visitsOf(D, v), baseName: v => baseName(D, v), tagOf, expectOf, prng, randomisation, redcap, fromTemplate, fileBase, save, render: () => render(), designFromDict, isRepeating: v => isRepeating(D, v), X, colL, sheetXml, xlsxBlob, secOrder, whenTxt, whenParent, xlOpts, SS_METHODS, LIB, TEMPLATES, findLib, uid, calcValue, calcCats, addSpec, addEligibility, SCALES, FK, nAnova, convert, ssCalc: d => ssCalc(d || D), designFromSheet, fromLine: (l, sec) => fromLine(D, l, sec || 'Other'), addScale: (n, it, lo, hi, def) => addScale(D, n, it, lo, hi, def), problems: d => problems(d || D), undo, get design() { return D; }, set design(x) { D = x; save(); } };
 })();

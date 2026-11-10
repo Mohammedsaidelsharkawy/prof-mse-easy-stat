@@ -394,6 +394,7 @@
     if (state.savMeta) applySavMeta(state.cfg, state.savMeta);
     setTimeout(renderSimBanner, 50);
     if (mbSetup && !prevCfg) { applyBuilderSetup(state.cfg, mbSetup); setTimeout(() => toast(`Master sheet “${mbSetup.title || 'study'}”: its setup was applied (labels, units, categories, groups, visits)`), 700); }
+    if (mbSetup) { state.phaseIssues = phaseCheck(mbSetup, state.data); renderPhaseIssues(); }
     renderGrid();
     $('#to2').disabled = false;
     renderStepper(); renderPrep();
@@ -2049,6 +2050,21 @@
       const yes = (r, n) => /^yes$/i.test(String(r[ix(n)] ?? '').trim()), no = (r, n) => /^no$/i.test(String(r[ix(n)] ?? '').trim()), why = r => String(r[ix('Reason not enrolled')] ?? '').trim();
       const notElig = rows.filter(r => no(r, 'Eligible') || why(r) === 'Not eligible').length, declined = rows.filter(r => !no(r, 'Eligible') && why(r) !== 'Not eligible' && (why(r) === 'Declined' || no(r, 'Consented'))).length, rand = rows.filter(r => yes(r, 'Randomised')).length;
       return { assessed: rows.length, randomised: rand, reasons: [['Not meeting inclusion criteria', notElig], ['Declined to participate', declined], ['Other reasons', Math.max(0, rows.length - rand - notElig - declined)]] }; } catch (e) { console.error(e); return null; } }
+  // X5: the data against the design of its master sheet: columns missing or added, categories not in the lists, numbers outside the allowed range
+  function phaseCheck(S0, data) { const H = new Set(data.headers), out = [], designCols = new Set(), skip = /^(Filled|Missing_required|Entered_by|Entry_date|Checked_by|Verified|Due_.*)$/;
+    (S0.vars || []).forEach(x => (x.cols || []).forEach(c => { designCols.add(c.col); if (!H.has(c.col)) out.push({ kind: 'missing', col: c.col, msg: `Column “${c.col}” (${x.label}) of the design is not in the data` }); }));
+    [S0.idCol, S0.groupCol, S0.siteCol, 'Site'].filter(Boolean).forEach(c => designCols.add(c));
+    data.headers.forEach(h => { if (!designCols.has(h) && !skip.test(h)) out.push({ kind: 'extra', col: h, msg: `Column “${h}” is not in the design` }); });
+    (S0.vars || []).forEach(x => (x.cols || []).forEach(c => { if (!H.has(c.col)) return; const vals = data.rows.map(r => r[c.col]).filter(v => v !== null && v !== undefined && String(v).trim() !== '');
+      if ((x.type === 'cat' || x.type === 'yn') && (x.cats || []).length) { const ok = new Set([...x.cats.map(t => String(t).trim().toLowerCase()), ...x.cats.map((_, i) => String(i + 1))]), bad = [...new Set(vals.map(v => String(v).trim()).filter(v => !ok.has(v.toLowerCase())))];
+        if (bad.length) out.push({ kind: 'cats', col: c.col, msg: `“${c.col}”: ${bad.length} value${bad.length > 1 ? 's' : ''} not in its list (${bad.slice(0, 5).map(v => `“${v}”`).join(', ')}${bad.length > 5 ? ' …' : ''})` }); }
+      if (x.type === 'num' && (x.min !== undefined && x.min !== '' || x.max !== undefined && x.max !== '')) { const lo = x.min === '' || x.min === undefined ? -Infinity : +x.min, hi = x.max === '' || x.max === undefined ? Infinity : +x.max, nums = vals.map(v => Analysis.toNum(v)), out1 = nums.filter(v => isFinite(v) && (v < lo || v > hi)).length, txt = nums.filter(v => !isFinite(v)).length;
+        if (out1) out.push({ kind: 'range', col: c.col, msg: `“${c.col}”: ${out1} value${out1 > 1 ? 's' : ''} outside ${isFinite(lo) ? lo : '…'} to ${isFinite(hi) ? hi : '…'}` });
+        if (txt) out.push({ kind: 'text', col: c.col, msg: `“${c.col}”: ${txt} entr${txt > 1 ? 'ies are' : 'y is'} not a number` }); } }));
+    return out; }
+  function renderPhaseIssues() { const L = state.phaseIssues || [], box0 = document.getElementById('phaseIssues'); if (box0) box0.remove(); if (!L.length) return; const box = document.createElement('div'); box.id = 'phaseIssues'; box.className = 'report-sec'; box.style.margin = '10px 0';
+    box.innerHTML = `<details ${L.length <= 8 ? 'open' : ''}><summary><b>⚠ The data against its design</b> <span class="legend-note">— ${L.length} point${L.length > 1 ? 's' : ''} to check before analysing (the master sheet's own lists and ranges)</span></summary><ul style="margin:6px 0 0 18px">${L.map(x => `<li>${esc(x.msg)}</li>`).join('')}</ul><p class="legend-note">Fix them in the sheet (step 1, cleaning) or in Excel, then open the file again.</p></details>`;
+    const p1 = $('#p1'); if (p1) { const ref = p1.querySelector('.restore-bar'); p1.insertBefore(box, ref ? ref.nextSibling : p1.firstChild); } setTimeout(() => toast(`${L.length} point${L.length > 1 ? 's' : ''} where the data differ from the design — see step 1`), 1400); }
   function applyBuilderSetup(cfg, S0, sandbox) {
     const H = state.data.headers, rows = state.data.rows, owner = col => cfg.variables.find(v => v.cols.some(c => c.col === col));
     if (S0.idCol && H.includes(S0.idCol)) { cfg.idCols = [S0.idCol]; const v = owner(S0.idCol); if (v) v.include = false; }
@@ -6598,6 +6614,20 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   };
   $('#flowPng').onclick = () => { readConsort(); openFigExport([flowItem(state.cfg.consort, activeGroups().map(g => state.cfg.groupLabels[g]), `${baseName()} - Flowchart`)]); };
 
+  // the Word report as a file (the same as ⬇ Word)
+  async function reportBlob() { syncEdits(); const r = exportModel(state.result); if (effOptions().figPanels) await panelize(r); const o = effOptions(), rp = report(), wo = wordOptions(); if (rp.citeText && rp.refs && r.methods) { const c2 = citeMethods(r.methods, rp.citeText); r.methods = c2.text; wo.refs = c2.refs; }
+    let blob = await Report.build(r, wo); if (state.wordTemplate) blob = await applyTemplate(blob, state.wordTemplate.bytes); if (o.pageMirror && !state.wordTemplate) blob = await mirrorMargins(blob); return blob; }
+  // X7: a pack for the supervisor: the report, the results page, the data dictionary, the R script and a README, in one zip
+  async function sharePack() { if (!state.result) return; busy(true); try { const z = XLSX.CFB.utils.cfb_new(), base = baseName(), add = (n, d) => XLSX.CFB.utils.cfb_add(z, n, d), enc = t => new TextEncoder().encode(t), cfg = state.cfg;
+      add(`${base} - report.docx`, new Uint8Array(await (await reportBlob()).arrayBuffer())); add(`${base} - results.html`, enc(resultsPage()));
+      const dict = [['Column(s)', 'Label', 'Type', 'Categories / unit', 'Role', 'Table', 'In the report', 'Definition'], ...cfg.variables.map(v => [v.cols.map(c => c.col).join(', '), v.label, v.kind === 'repeated' ? `repeated (${v.cols.length} timepoints)` : v.type, v.type === 'categorical' ? (v.levels || []).join(' / ') : v.unit || '', v.role || '', v.table || '', v.include ? 'Yes' : 'No', v.definition || ''])];
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dict), 'Variables'); add(`${base} - data dictionary.xlsx`, new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' })));
+      try { add(`${base} - analysis.R`, enc(rScript())); } catch (e) { console.error(e); }
+      const n = state.data.rows.length, gs = activeGroups(), readme = [`${(cfg.study && cfg.study.title) || base}`, '', `Made with Prof MSE Easy Stat on ${new Date().toISOString().slice(0, 10)}.`, `${n} patients${gs.length >= 2 ? `, ${gs.length} groups (${gs.map(g => cfg.groupLabels[g] || g).join(', ')})` : ''}; ${state.result.sections.length} tables and figures.`, '',
+        'In this folder:', `- ${base} - report.docx: the statistical report (Word).`, `- ${base} - results.html: the same results to browse: open it in any browser (search, significant only).`, `- ${base} - data dictionary.xlsx: every variable, its type, categories, role and table.`, `- ${base} - analysis.R: R code repeating the main tests (put the data file next to it).`, '', cfg.simulated ? 'NOTE: these data are simulated (Prof MSE Easy Stat data generator) and do not describe real patients.' : ''].join('\r\n');
+      add('README.txt', enc(readme)); saveUrl(URL.createObjectURL(new Blob([XLSX.CFB.write(z, { fileType: 'zip', type: 'array', compression: true })], { type: 'application/zip' })), `${base} - for the supervisor.zip`); toast('Supervisor pack saved'); }
+    catch (err) { console.error(err); toast('Could not make the pack: ' + err.message); } finally { busy(false); } }
+  $('#btnSharePack') && ($('#btnSharePack').onclick = sharePack);
   $('#btnDocx').onclick = async () => {
     if (!state.result) return;
     busy(true);
@@ -6738,14 +6768,16 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       s.figures.forEach(f => { const y = (e.figures || {})[f.key]; if (y) { f.caption = y.caption ?? f.caption; if (y.note !== undefined) f.note = y.note; } });
     });
   }
+  // the design (phase 1) and the generator's settings (phase 2) go in the project too
+  const phaseParts = () => { const out = {}; try { const D = window.EasyBuilder && window.EasyBuilder.design; if (D && D.vars && D.vars.length) out.design = JSON.parse(JSON.stringify(D)); } catch (e) { /* none */ } try { if (window.EasyGen) out.gen = JSON.parse(JSON.stringify(window.EasyGen.settings)); } catch (e) { /* none */ } return out; };
   $('#btnSaveProj').onclick = () => {
-    if (!state.data) { toast('Nothing to save yet — load an Excel file or an example'); return; }
-    readUiIntoCfg();
-    const proj = { app: 'ProfMSE-EasyStat-project', version: 1, steps: STEPS.length, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step,
-      data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], snapshots: state.snapshots || [] };
+    const ph = phaseParts(); if (!state.data && !ph.design) { toast('Nothing to save yet — design a master sheet, or load an Excel file or an example'); return; }
+    if (state.data) readUiIntoCfg();
+    const proj = { app: 'ProfMSE-EasyStat-project', version: 2, steps: STEPS.length, saved: new Date().toISOString(), file: state.file || (ph.design && ph.design.title) || 'study', sheet: state.sheet, step: state.step,
+      phase: window.EasyBuilder ? window.EasyBuilder.phase : 'analyse', ...ph, ...(state.data ? { data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], snapshots: state.snapshots || [] } : {}) };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(proj)], { type: 'application/json' }));
-    a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - project.easystat.json';
+    a.download = String(proj.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - project.easystat.json';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     toast('Project saved — open it later with 📂 Open project');
   };
@@ -6753,11 +6785,12 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     try {
       const j = JSON.parse(await f.text());
-      if (j.app !== 'ProfMSE-EasyStat-project' || !j.data || !j.cfg) throw new Error(j.app === 'ProfMSE-EasyStat' ? 'this is a setup file — use Load setup' : 'not an Easy Stat project');
-      if (state.data && !confirm('Open this project? Unsaved changes to the current one are lost.')) return;
-      openProject(j, f.name);
+      if (j.app !== 'ProfMSE-EasyStat-project' || (!(j.data && j.cfg) && !j.design)) throw new Error(j.app === 'ProfMSE-EasyStat' ? 'this is a setup file — use Load setup' : 'not an Easy Stat project');
+      if ((state.data || (window.EasyBuilder && window.EasyBuilder.design && window.EasyBuilder.design.vars.length)) && !confirm('Open this project? Unsaved changes to the current one are lost.')) return;
+      openPhases(j); if (j.data && j.cfg) openProject(j, f.name); else { toast(`Project opened: the design “${j.design.title || 'study'}”${j.gen ? ' and the generator settings' : ''}`); if (window.EasyBuilder) window.EasyBuilder.setPhase(j.phase === 'generate' ? 'generate' : 'build'); }
     } catch (err) { toast('Could not open the project: ' + err.message); }
   };
+  function openPhases(j) { try { if (j.design && window.EasyBuilder) { window.EasyBuilder.design = j.design; } if (j.gen && window.EasyGen) window.EasyGen.settings = j.gen; } catch (e) { console.error(e); } }
   function openProject(j, fname) {
     {
       const cfg = j.cfg;
@@ -6782,7 +6815,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     autosaveTimer = setTimeout(() => {
       if (!state.data || !state.cfg) return;
       try {
-        const txt = JSON.stringify({ app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step, steps: STEPS.length, data: state.data, cfg: state.cfg });
+        let edits = null; try { edits = state.result ? reportEdits() : state.pendingEdits || null; } catch (e) { /* none */ }
+        const txt = JSON.stringify({ app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step, steps: STEPS.length, data: state.data, cfg: state.cfg, edits });
         if (txt.length < 4.5e6) localStorage.setItem(AUTOSAVE_KEY, txt);
       } catch (e) { /* storage full or blocked: nothing kept */ }
     }, 1500);

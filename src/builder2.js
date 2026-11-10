@@ -36,7 +36,9 @@
     const cell = (t, h, i) => new TableCell({ shading: h ? { type: ShadingType.CLEAR, fill: 'D9D9D9', color: 'auto' } : undefined, children: [new Paragraph({ alignment: i && o.center ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: String(t ?? ''), bold: h || (o.boldFirst && i === 0), size: o.size || 18, font: FONT, color: o.grey && !h && i ? '808080' : undefined })] })] });
     return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [new TableRow({ tableHeader: true, children: head.map((t, i) => cell(t, true, i)) }), ...rows.map(r => new TableRow({ children: r.map((t, i) => cell(t, false, i)) }))] });
   }
+  let CAP = null; // the binder: documents collected instead of saved
   async function saveDoc(children, name, title, landscape) {
+    if (CAP) { CAP.push({ children, title, landscape }); return; }
     const { Document, Packer, PageOrientation } = X();
     const doc = new Document({ creator: 'Prof MSE Easy Stat', title, sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 }, ...(landscape ? { size: { orientation: PageOrientation.LANDSCAPE } } : {}) } }, children }] });
     U.saveUrl(URL.createObjectURL(await Packer.toBlob(doc)), `${B.fileBase()} - ${name}.docx`); toast(`${title} saved`);
@@ -422,11 +424,25 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
   function reviewHtml(D) { const it = designReview(D), n = it.filter(x => x[1]).length;
     return `<details class="mb-exp" style="margin-top:10px" ${n < it.length ? 'open' : ''}><summary><b>🔍 Design review: ${n} of ${it.length}</b> <span class="legend-note">— checked before the export</span></summary><table class="t" style="margin-top:6px"><tbody>${it.map(([t, ok, fix]) => `<tr class="cl-${ok ? 'ok' : 'miss'}"><td>${ok ? '✓' : '⚠'}</td><td>${esc(t)}</td><td class="legend-note">${ok ? '' : esc(fix)}</td></tr>`).join('')}</tbody></table></details>`; }
 
+  /* ---------- X6: the study binder: the chosen documents in one Word file, each part on its own pages ---------- */
+  const BINDER = [['protocol', 'Protocol and analysis plan', true], ['schedule', 'Schedule of assessments', true], ['crf', 'Case report form', true], ['consent', 'Information sheet and consent form', true], ['dict', 'Data dictionary', true], ['ethics', 'Ethics application summary', false], ['dmp', 'Data management plan', false], ['alloc', 'Allocation list (keep apart from the investigators!)', false]];
+  async function binder(D) { const want = (D.binder && D.binder.parts) || BINDER.filter(x => x[2]).map(x => x[0]), { Document, Packer, PageOrientation, Paragraph, PageBreak } = X(), parts = [];
+    CAP = []; try { for (const k of want) { const n0 = CAP.length;
+        if (k === 'protocol') await protocol(D); else if (k === 'schedule') await schedule(D); else if (k === 'dict') await dictionary(D); else if (k === 'consent') await consentDoc(D); else if (k === 'ethics') await ethicsDoc(D); else if (k === 'dmp') await dmpDoc(D);
+        else if (k === 'crf') CAP.push({ children: await B.buildCrf(D, true), title: 'Case report form' });
+        else if (k === 'alloc' && K(D) >= 2 && D.rand && D.rand.on) { const shown = shownArms(D); CAP.push({ title: 'Allocation list', children: [P(`${D.title || 'Study'} — allocation list`, { bold: true, size: 28 }), P('Confidential: to be kept by a person independent of the recruitment, or in sealed envelopes.', { it: true, after: 120 }), ...B.randomisation(D).flatMap(s0 => [P(s0.stratum, { bold: true, before: 120 }), T(['No.', 'Allocation', 'Patient ID', 'Date'], s0.list.map((a, i) => [String(i + 1), shown[arms(D).indexOf(a)] ?? a, '', '']), { size: 18 })])] }); }
+        if (CAP.length > n0) parts.push(CAP[CAP.length - 1].title); } } finally { var got = CAP; CAP = null; }
+    if (!got.length) { toast('Nothing to put in the binder'); return; }
+    const cover = [P(D.title || 'Study', { bold: true, size: 40, center: true, before: 2400 }), P('Study binder', { size: 30, center: true, after: 400 }), P(`Version ${(D.versionNote || {}).v || '1.0'} · ${today()}`, { center: true, after: 600 }), P('Contents', { bold: true, size: 26 }), ...parts.map((t, i) => P(`${i + 1}. ${t}`, { size: 22 }))];
+    const doc = new Document({ creator: 'Prof MSE Easy Stat', title: `${D.title || 'Study'} — binder`, sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } }, children: cover }, ...got.map(g => ({ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 }, ...(g.landscape ? { size: { orientation: PageOrientation.LANDSCAPE } } : {}) } }, children: g.children }))] });
+    void Paragraph; void PageBreak; U.saveUrl(URL.createObjectURL(await Packer.toBlob(doc)), `${B.fileBase()} - study binder.docx`); toast(`Binder saved: ${parts.length} parts`); return parts; }
+
   /* ---------- the cards on the export tab ---------- */
   function exportCards(D) {
     const mine = Object.keys(ls.get('designs', {})), vers = mine.filter(n => n.startsWith((D.title || 'Design') + ' — v'));
     const card = (icon, t, note, btns) => `<div class="mb-exp"><b>${icon} ${t}</b><p class="legend-note">${note}</p>${btns}</div>`, btn = (k, l, pr) => `<button class="btn ${pr ? 'primary' : 'ghost'}" type="button" data-bx="${k}">${l}</button>`;
-    return `${reviewHtml(D)}<h3 style="margin-top:18px">Documents from the design</h3><div class="grid g3">
+    const bp = (D.binder && D.binder.parts) || BINDER.filter(x => x[2]).map(x => x[0]);
+    return `${reviewHtml(D)}<h3 style="margin-top:18px">Documents from the design</h3><div class="mb-exp" style="margin-bottom:10px"><b>📚 Study binder</b> <span class="legend-note">— the chosen documents in one Word file to print, with a cover and contents</span><div class="row" style="gap:10px;flex-wrap:wrap;margin:6px 0">${BINDER.filter(x => x[0] !== 'alloc' || (K(D) >= 2 && D.rand && D.rand.on)).map(([k2, l]) => `<label class="check" style="margin:0"><input type="checkbox" data-bxbind="${k2}" ${bp.includes(k2) ? 'checked' : ''}><span>${esc(l)}</span></label>`).join('')}</div>${btn('binder', '⬇ Binder (.docx)', true)}</div><div class="grid g3">
       ${card('📑', 'Protocol and analysis plan', 'A Word draft: design, participants (the eligibility checklist), allocation and blinding, outcomes with their definitions, sample size, data management and the planned analysis of each variable, with the schedule as an appendix.', btn('protocol', '⬇ Protocol (.docx)', true))}
       ${card('🗓', 'Schedule of assessments', 'The visits × assessments grid (✓), with each visit\'s day and window — also a sheet of the Excel file.', btn('schedule', '⬇ Schedule (.docx)'))}
       ${card('▦', 'Shell tables', 'The empty tables of the results: baseline characteristics, outcomes, and each repeated measure by visit, with the groups and the P value.', btn('shells', '⬇ Shell tables (.docx)'))}
@@ -495,7 +511,7 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
       if (k === 'protocol') await protocol(D); else if (k === 'schedule') await schedule(D); else if (k === 'shells') await shells(D); else if (k === 'dict') await dictionary(D); else if (k === 'summary') await summary(D);
       else if (k === 'env') await envelopes(D); else if (k === 'form') entryForm(D); else if (k === 'consent') await consentDoc(D); else if (k === 'ethics') await ethicsDoc(D); else if (k === 'dmp') await dmpDoc(D); else if (k === 'gantt') await gantt(D);
       else if (k === 'labels' || k === 'labelsVisit') labels(D, k === 'labelsVisit' ? 'visit' : 'patient'); else if (k === 'labelsQr' || k === 'labelsQrVisit') labels(D, k === 'labelsQrVisit' ? 'visit' : 'patient', 'qr');
-      else if (k === 'alloc') await allocationTool(D); else if (k === 'sdv') sdvPlan(D); else if (k === 'budget') budget(D); else if (k === 'key') blindKey(D); else if (k === 'xlsform') xlsform(D); else if (k === 'spss') spss(D);
+      else if (k === 'binder') await binder(D); else if (k === 'alloc') await allocationTool(D); else if (k === 'sdv') sdvPlan(D); else if (k === 'budget') budget(D); else if (k === 'key') blindKey(D); else if (k === 'xlsform') xlsform(D); else if (k === 'spss') spss(D);
       else if (k === 'saveVer') { const note = prompt('What changed in this version?', 'Amendment: '); if (note === null) return true; const all = ls.get('designs', {}), base = (D.title || 'Design') + ' — v', n = Object.keys(all).filter(x => x.startsWith(base)).length + 1;
         D.versionNote = { v: `${n}.0`, date: today(), note }; all[`${base}${n} (${today()})`] = JSON.parse(JSON.stringify(D)); ls.set('designs', all); B.save(); B.render(); toast(`Version ${n} saved: ${note}`); }
       else if (k === 'wizGo') { if (D.vars.length && !confirm('Replace the current design with a new one from these answers? (Undo brings it back)')) return true; wizMake(D); B.render(); toast('Design made from your answers'); }
@@ -506,11 +522,12 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
   function onChange(e, D) { const t = e.target, d = t.dataset;
     if (d.bxcal && t.files[0]) { const f = t.files[0]; t.value = ''; calendar(D, f).catch(err => { console.error(err); toast('Could not read it: ' + err.message); }); return true; }
     if (d.bxtl) { D.timeline = { ...(D.timeline || {}), [d.bxtl]: t.value === '' ? '' : +t.value }; B.save(); return true; }
+    if (d.bxbind) { const cur = new Set((D.binder && D.binder.parts) || BINDER.filter(x => x[2]).map(x => x[0])); if (t.checked) cur.add(d.bxbind); else cur.delete(d.bxbind); D.binder = { parts: BINDER.map(x => x[0]).filter(x => cur.has(x)) }; B.save(); return true; }
     if (d.bxsdv) { D.sdv = { ...(D.sdv || {}), [d.bxsdv]: t.value === '' ? '' : +t.value }; B.save(); return true; }
     if (d.bxw) return onInput(e);
     if (d.bxcmp && t.value) { const o = ls.get('designs', {})[t.value]; if (o) { cmpOut = diffHtml(diff(o, D), t.value, 'this design'); B.render(); } return true; }
     if (d.bxcmpf && t.files[0]) { t.files[0].text().then(txt => { try { const j = JSON.parse(txt), o = j.design || j; if (!Array.isArray(o.vars)) throw new Error('not a design file'); cmpOut = diffHtml(diff(o, D), t.files[0].name, 'this design'); B.render(); } catch (err) { toast('Could not read it: ' + err.message); } }); return true; }
     return false; }
   window.EasyBuilderExt = { exportCards, studyTop, onClick, onInput, onChange };
-  window.EasyBuilderDocs = { qrMatrix, qrSvg, allocationTool, sdvPlan, budget, designReview, code128, ganttPhases, entryForm, labels, plannedTest, shellTables, scheduleRows, diff, xlsform, spss, protocol, wizMake };
+  window.EasyBuilderDocs = { binder, qrMatrix, qrSvg, allocationTool, sdvPlan, budget, designReview, code128, ganttPhases, entryForm, labels, plannedTest, shellTables, scheduleRows, diff, xlsform, spss, protocol, wizMake };
 })();

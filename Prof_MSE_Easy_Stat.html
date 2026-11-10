@@ -204,7 +204,7 @@ table.xd td.out{background:rgba(224,138,46,.22);font-weight:600}table.xd td.miss
 .gtool{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 10px;background:var(--card)}
 .chk-item{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)}.chk-item:first-of-type{border-top:0}
 .chk-item .ico{font-size:16px;line-height:1.3}.chk-item .txt{flex:1;font-size:13px}.chk-item .txt b{font-weight:600}
-.rt td.hl{background:#FFF2CC}.rt td.grey{background:#EDEDED;color:#666}table.vdiff ins{background:#DDF4DD;text-decoration:none}table.vdiff del{background:#FBDADA}.tb-prev td[data-tbrl]{white-space:nowrap}.tb-rh{cursor:grab;color:#999;margin-right:4px;user-select:none}.tb-rl{outline:none;border-bottom:1px dashed transparent}.tb-rl:hover,.tb-rl:focus{border-bottom-color:#7B2FBE;background:#F6EFFC}.tb-rx{border:0;background:none;color:#B00;cursor:pointer;font-size:13px;margin-left:4px;opacity:.35}td:hover>.tb-rx{opacity:1}.tb-prev td.dropto{box-shadow:inset 0 2px 0 #7B2FBE}
+.rt td.hl{background:#FFF2CC}.rt td.grey{background:#EDEDED;color:#666}:root[data-theme="dark"] .rt td.grey{background:#3a3a44;color:#bbb}:root[data-theme="dark"] .tb-rl:hover,:root[data-theme="dark"] .tb-rl:focus{background:#3a2a55}:root[data-theme="dark"] table.vdiff ins{background:#1f4a2a;color:#dfe}:root[data-theme="dark"] table.vdiff del{background:#5a2026;color:#fdd}:root[data-theme="dark"] .gen-forced{color:#d9b8ff}:root[data-theme="dark"] #accOut img{background:#fff}table.vdiff ins{background:#DDF4DD;text-decoration:none}table.vdiff del{background:#FBDADA}.tb-prev td[data-tbrl]{white-space:nowrap}.tb-rh{cursor:grab;color:#999;margin-right:4px;user-select:none}.tb-rl{outline:none;border-bottom:1px dashed transparent}.tb-rl:hover,.tb-rl:focus{border-bottom-color:#7B2FBE;background:#F6EFFC}.tb-rx{border:0;background:none;color:#B00;cursor:pointer;font-size:13px;margin-left:4px;opacity:.35}td:hover>.tb-rx{opacity:1}.tb-prev td.dropto{box-shadow:inset 0 2px 0 #7B2FBE}
 table.xp-ov tbody tr{cursor:pointer}table.xp-ov tbody tr:hover td{background:var(--hover)}table.xp-ov td.sig{color:var(--bad);font-weight:700}
 input.mini{width:64px!important;min-width:0!important;padding:4px 6px}
 .fl-style{margin:4px 0 10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.fl-style summary{cursor:pointer}
@@ -1629,6 +1629,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <button class="btn ghost small" id="btnDiscussion" type="button" title="A draft of the discussion from the results and the design">✍ Discussion draft</button>
           <button class="btn ghost small" id="btnResPage" type="button" title="One HTML page of the results to send: search, significant only, every table and figure">⬇ Interactive results page</button>
           <button class="btn ghost small" id="btnVersions" type="button" title="Every Word export kept in this browser, and what changed between two">🕘 Report versions</button>
+          <button class="btn ghost small" id="btnSharePack" type="button" title="The report, the results page, the data dictionary, the R script and a README in one zip">🎁 Pack for the supervisor</button>
           <button class="btn ghost small" id="btnForestAll" type="button" title="The effect of every outcome (two groups) in one figure">Forest plot of the outcomes</button>
           <button class="btn ghost small" id="btnRScript" type="button" title="An R script that repeats the main tests, for reproducibility">⬇ R script</button>
           <button class="btn ghost small" id="btnDeck" type="button" title="Title, statistical analysis, one slide per table and figure, key findings">⬇ Results slides (.pptx)</button>
@@ -32392,6 +32393,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (state.savMeta) applySavMeta(state.cfg, state.savMeta);
     setTimeout(renderSimBanner, 50);
     if (mbSetup && !prevCfg) { applyBuilderSetup(state.cfg, mbSetup); setTimeout(() => toast(`Master sheet “${mbSetup.title || 'study'}”: its setup was applied (labels, units, categories, groups, visits)`), 700); }
+    if (mbSetup) { state.phaseIssues = phaseCheck(mbSetup, state.data); renderPhaseIssues(); }
     renderGrid();
     $('#to2').disabled = false;
     renderStepper(); renderPrep();
@@ -34047,6 +34049,21 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const yes = (r, n) => /^yes$/i.test(String(r[ix(n)] ?? '').trim()), no = (r, n) => /^no$/i.test(String(r[ix(n)] ?? '').trim()), why = r => String(r[ix('Reason not enrolled')] ?? '').trim();
       const notElig = rows.filter(r => no(r, 'Eligible') || why(r) === 'Not eligible').length, declined = rows.filter(r => !no(r, 'Eligible') && why(r) !== 'Not eligible' && (why(r) === 'Declined' || no(r, 'Consented'))).length, rand = rows.filter(r => yes(r, 'Randomised')).length;
       return { assessed: rows.length, randomised: rand, reasons: [['Not meeting inclusion criteria', notElig], ['Declined to participate', declined], ['Other reasons', Math.max(0, rows.length - rand - notElig - declined)]] }; } catch (e) { console.error(e); return null; } }
+  // X5: the data against the design of its master sheet: columns missing or added, categories not in the lists, numbers outside the allowed range
+  function phaseCheck(S0, data) { const H = new Set(data.headers), out = [], designCols = new Set(), skip = /^(Filled|Missing_required|Entered_by|Entry_date|Checked_by|Verified|Due_.*)$/;
+    (S0.vars || []).forEach(x => (x.cols || []).forEach(c => { designCols.add(c.col); if (!H.has(c.col)) out.push({ kind: 'missing', col: c.col, msg: `Column “${c.col}” (${x.label}) of the design is not in the data` }); }));
+    [S0.idCol, S0.groupCol, S0.siteCol, 'Site'].filter(Boolean).forEach(c => designCols.add(c));
+    data.headers.forEach(h => { if (!designCols.has(h) && !skip.test(h)) out.push({ kind: 'extra', col: h, msg: `Column “${h}” is not in the design` }); });
+    (S0.vars || []).forEach(x => (x.cols || []).forEach(c => { if (!H.has(c.col)) return; const vals = data.rows.map(r => r[c.col]).filter(v => v !== null && v !== undefined && String(v).trim() !== '');
+      if ((x.type === 'cat' || x.type === 'yn') && (x.cats || []).length) { const ok = new Set([...x.cats.map(t => String(t).trim().toLowerCase()), ...x.cats.map((_, i) => String(i + 1))]), bad = [...new Set(vals.map(v => String(v).trim()).filter(v => !ok.has(v.toLowerCase())))];
+        if (bad.length) out.push({ kind: 'cats', col: c.col, msg: `“${c.col}”: ${bad.length} value${bad.length > 1 ? 's' : ''} not in its list (${bad.slice(0, 5).map(v => `“${v}”`).join(', ')}${bad.length > 5 ? ' …' : ''})` }); }
+      if (x.type === 'num' && (x.min !== undefined && x.min !== '' || x.max !== undefined && x.max !== '')) { const lo = x.min === '' || x.min === undefined ? -Infinity : +x.min, hi = x.max === '' || x.max === undefined ? Infinity : +x.max, nums = vals.map(v => Analysis.toNum(v)), out1 = nums.filter(v => isFinite(v) && (v < lo || v > hi)).length, txt = nums.filter(v => !isFinite(v)).length;
+        if (out1) out.push({ kind: 'range', col: c.col, msg: `“${c.col}”: ${out1} value${out1 > 1 ? 's' : ''} outside ${isFinite(lo) ? lo : '…'} to ${isFinite(hi) ? hi : '…'}` });
+        if (txt) out.push({ kind: 'text', col: c.col, msg: `“${c.col}”: ${txt} entr${txt > 1 ? 'ies are' : 'y is'} not a number` }); } }));
+    return out; }
+  function renderPhaseIssues() { const L = state.phaseIssues || [], box0 = document.getElementById('phaseIssues'); if (box0) box0.remove(); if (!L.length) return; const box = document.createElement('div'); box.id = 'phaseIssues'; box.className = 'report-sec'; box.style.margin = '10px 0';
+    box.innerHTML = `<details ${L.length <= 8 ? 'open' : ''}><summary><b>⚠ The data against its design</b> <span class="legend-note">— ${L.length} point${L.length > 1 ? 's' : ''} to check before analysing (the master sheet's own lists and ranges)</span></summary><ul style="margin:6px 0 0 18px">${L.map(x => `<li>${esc(x.msg)}</li>`).join('')}</ul><p class="legend-note">Fix them in the sheet (step 1, cleaning) or in Excel, then open the file again.</p></details>`;
+    const p1 = $('#p1'); if (p1) { const ref = p1.querySelector('.restore-bar'); p1.insertBefore(box, ref ? ref.nextSibling : p1.firstChild); } setTimeout(() => toast(`${L.length} point${L.length > 1 ? 's' : ''} where the data differ from the design — see step 1`), 1400); }
   function applyBuilderSetup(cfg, S0, sandbox) {
     const H = state.data.headers, rows = state.data.rows, owner = col => cfg.variables.find(v => v.cols.some(c => c.col === col));
     if (S0.idCol && H.includes(S0.idCol)) { cfg.idCols = [S0.idCol]; const v = owner(S0.idCol); if (v) v.include = false; }
@@ -38596,6 +38613,20 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   };
   $('#flowPng').onclick = () => { readConsort(); openFigExport([flowItem(state.cfg.consort, activeGroups().map(g => state.cfg.groupLabels[g]), `${baseName()} - Flowchart`)]); };
 
+  // the Word report as a file (the same as ⬇ Word)
+  async function reportBlob() { syncEdits(); const r = exportModel(state.result); if (effOptions().figPanels) await panelize(r); const o = effOptions(), rp = report(), wo = wordOptions(); if (rp.citeText && rp.refs && r.methods) { const c2 = citeMethods(r.methods, rp.citeText); r.methods = c2.text; wo.refs = c2.refs; }
+    let blob = await Report.build(r, wo); if (state.wordTemplate) blob = await applyTemplate(blob, state.wordTemplate.bytes); if (o.pageMirror && !state.wordTemplate) blob = await mirrorMargins(blob); return blob; }
+  // X7: a pack for the supervisor: the report, the results page, the data dictionary, the R script and a README, in one zip
+  async function sharePack() { if (!state.result) return; busy(true); try { const z = XLSX.CFB.utils.cfb_new(), base = baseName(), add = (n, d) => XLSX.CFB.utils.cfb_add(z, n, d), enc = t => new TextEncoder().encode(t), cfg = state.cfg;
+      add(`${base} - report.docx`, new Uint8Array(await (await reportBlob()).arrayBuffer())); add(`${base} - results.html`, enc(resultsPage()));
+      const dict = [['Column(s)', 'Label', 'Type', 'Categories / unit', 'Role', 'Table', 'In the report', 'Definition'], ...cfg.variables.map(v => [v.cols.map(c => c.col).join(', '), v.label, v.kind === 'repeated' ? `repeated (${v.cols.length} timepoints)` : v.type, v.type === 'categorical' ? (v.levels || []).join(' / ') : v.unit || '', v.role || '', v.table || '', v.include ? 'Yes' : 'No', v.definition || ''])];
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dict), 'Variables'); add(`${base} - data dictionary.xlsx`, new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' })));
+      try { add(`${base} - analysis.R`, enc(rScript())); } catch (e) { console.error(e); }
+      const n = state.data.rows.length, gs = activeGroups(), readme = [`${(cfg.study && cfg.study.title) || base}`, '', `Made with Prof MSE Easy Stat on ${new Date().toISOString().slice(0, 10)}.`, `${n} patients${gs.length >= 2 ? `, ${gs.length} groups (${gs.map(g => cfg.groupLabels[g] || g).join(', ')})` : ''}; ${state.result.sections.length} tables and figures.`, '',
+        'In this folder:', `- ${base} - report.docx: the statistical report (Word).`, `- ${base} - results.html: the same results to browse: open it in any browser (search, significant only).`, `- ${base} - data dictionary.xlsx: every variable, its type, categories, role and table.`, `- ${base} - analysis.R: R code repeating the main tests (put the data file next to it).`, '', cfg.simulated ? 'NOTE: these data are simulated (Prof MSE Easy Stat data generator) and do not describe real patients.' : ''].join('\r\n');
+      add('README.txt', enc(readme)); saveUrl(URL.createObjectURL(new Blob([XLSX.CFB.write(z, { fileType: 'zip', type: 'array', compression: true })], { type: 'application/zip' })), `${base} - for the supervisor.zip`); toast('Supervisor pack saved'); }
+    catch (err) { console.error(err); toast('Could not make the pack: ' + err.message); } finally { busy(false); } }
+  $('#btnSharePack') && ($('#btnSharePack').onclick = sharePack);
   $('#btnDocx').onclick = async () => {
     if (!state.result) return;
     busy(true);
@@ -38736,14 +38767,16 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       s.figures.forEach(f => { const y = (e.figures || {})[f.key]; if (y) { f.caption = y.caption ?? f.caption; if (y.note !== undefined) f.note = y.note; } });
     });
   }
+  // the design (phase 1) and the generator's settings (phase 2) go in the project too
+  const phaseParts = () => { const out = {}; try { const D = window.EasyBuilder && window.EasyBuilder.design; if (D && D.vars && D.vars.length) out.design = JSON.parse(JSON.stringify(D)); } catch (e) { /* none */ } try { if (window.EasyGen) out.gen = JSON.parse(JSON.stringify(window.EasyGen.settings)); } catch (e) { /* none */ } return out; };
   $('#btnSaveProj').onclick = () => {
-    if (!state.data) { toast('Nothing to save yet — load an Excel file or an example'); return; }
-    readUiIntoCfg();
-    const proj = { app: 'ProfMSE-EasyStat-project', version: 1, steps: STEPS.length, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step,
-      data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], snapshots: state.snapshots || [] };
+    const ph = phaseParts(); if (!state.data && !ph.design) { toast('Nothing to save yet — design a master sheet, or load an Excel file or an example'); return; }
+    if (state.data) readUiIntoCfg();
+    const proj = { app: 'ProfMSE-EasyStat-project', version: 2, steps: STEPS.length, saved: new Date().toISOString(), file: state.file || (ph.design && ph.design.title) || 'study', sheet: state.sheet, step: state.step,
+      phase: window.EasyBuilder ? window.EasyBuilder.phase : 'analyse', ...ph, ...(state.data ? { data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], snapshots: state.snapshots || [] } : {}) };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(proj)], { type: 'application/json' }));
-    a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - project.easystat.json';
+    a.download = String(proj.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - project.easystat.json';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     toast('Project saved — open it later with 📂 Open project');
   };
@@ -38751,11 +38784,12 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     try {
       const j = JSON.parse(await f.text());
-      if (j.app !== 'ProfMSE-EasyStat-project' || !j.data || !j.cfg) throw new Error(j.app === 'ProfMSE-EasyStat' ? 'this is a setup file — use Load setup' : 'not an Easy Stat project');
-      if (state.data && !confirm('Open this project? Unsaved changes to the current one are lost.')) return;
-      openProject(j, f.name);
+      if (j.app !== 'ProfMSE-EasyStat-project' || (!(j.data && j.cfg) && !j.design)) throw new Error(j.app === 'ProfMSE-EasyStat' ? 'this is a setup file — use Load setup' : 'not an Easy Stat project');
+      if ((state.data || (window.EasyBuilder && window.EasyBuilder.design && window.EasyBuilder.design.vars.length)) && !confirm('Open this project? Unsaved changes to the current one are lost.')) return;
+      openPhases(j); if (j.data && j.cfg) openProject(j, f.name); else { toast(`Project opened: the design “${j.design.title || 'study'}”${j.gen ? ' and the generator settings' : ''}`); if (window.EasyBuilder) window.EasyBuilder.setPhase(j.phase === 'generate' ? 'generate' : 'build'); }
     } catch (err) { toast('Could not open the project: ' + err.message); }
   };
+  function openPhases(j) { try { if (j.design && window.EasyBuilder) { window.EasyBuilder.design = j.design; } if (j.gen && window.EasyGen) window.EasyGen.settings = j.gen; } catch (e) { console.error(e); } }
   function openProject(j, fname) {
     {
       const cfg = j.cfg;
@@ -38780,7 +38814,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     autosaveTimer = setTimeout(() => {
       if (!state.data || !state.cfg) return;
       try {
-        const txt = JSON.stringify({ app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step, steps: STEPS.length, data: state.data, cfg: state.cfg });
+        let edits = null; try { edits = state.result ? reportEdits() : state.pendingEdits || null; } catch (e) { /* none */ }
+        const txt = JSON.stringify({ app: 'ProfMSE-EasyStat-project', version: 1, saved: new Date().toISOString(), file: state.file, sheet: state.sheet, step: state.step, steps: STEPS.length, data: state.data, cfg: state.cfg, edits });
         if (txt.length < 4.5e6) localStorage.setItem(AUTOSAVE_KEY, txt);
       } catch (e) { /* storage full or blocked: nothing kept */ }
     }, 1500);
@@ -38916,7 +38951,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
 
   /* ---------- header tools: palette, tour, view settings, messages, export centre, autosave time ---------- */
   const keys = $('#btnKeys'), bar = el('span', 'ux-hbar');
-  bar.innerHTML = `<button class="btn light small" id="uxPal" title="Find any action or setting (Ctrl+K)">🔍 Find</button><button class="btn light small" id="uxTour" title="A short guided tour">❓ Tour</button>
+  bar.innerHTML = `<button class="btn light small" id="uxPal" title="Find any action or setting (Ctrl+K)">🔍 Find</button><button class="btn light small" id="uxTour" title="A short guided tour">❓ Tour</button><button class="btn light small" id="uxCourse" title="Step-by-step lessons: design, simulate, clean, analyse, report">🎓 Course</button>
     <button class="btn light small" id="uxView" title="Display: text size, density, contrast, font, motion, layout">👁 View</button><button class="btn light small" id="uxBell" title="Recent messages">🔔 <span id="uxBellN"></span></button>
     <button class="btn light small" id="uxExport" title="Every export in one place">📦 Exports</button><span class="ux-saved" id="uxSaved" title="Your work is kept in this browser automatically"></span>`;
   if (keys) keys.parentNode.insertBefore(bar, keys.nextSibling);
@@ -38924,7 +38959,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   (function tidyHeader() { const top = $('.top-actions'); if (!top) return;
     const more = el('div', 'ux-more'), mb = el('button', 'btn light small', '☰ <span class="tl">More</span>'); mb.type = 'button'; mb.id = 'uxMore'; mb.title = 'Tour, display settings, setups'; mb.setAttribute('aria-haspopup', 'true'); mb.setAttribute('aria-expanded', 'false');
     const menu = el('div', 'ux-menu'); menu.setAttribute('role', 'menu'); more.append(mb, menu);
-    ['#uxTour', '#uxView', '#btnSaveCfg'].forEach(q => { const b = $(q); if (b) menu.appendChild(b); });
+    ['#uxTour', '#uxCourse', '#uxView', '#btnSaveCfg'].forEach(q => { const b = $(q); if (b) menu.appendChild(b); });
     const load = $('#cfgFile') && $('#cfgFile').closest('label'); if (load) menu.appendChild(load);
     const wordBtn = el('button', 'btn small ux-word', '⬇ <span class="tl">Word</span>'); wordBtn.type = 'button'; wordBtn.id = 'uxWord'; wordBtn.title = 'Download the Word report (Alt+W)'; wordBtn.onclick = () => downloadWord();
     const order = [wordBtn, '#btnNew', () => $('#projFile') && $('#projFile').closest('label'), '#btnSaveProj', '#btnTheme', '#btnKeys', '#uxPal', '#uxExport', '#uxBell', '#uxSaved'];
@@ -38958,6 +38993,29 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const panel = (id, title, html) => { $$('.ux-pop.open').forEach(x => { if (x.id !== id) x.classList.remove('open'); }); let p = document.getElementById(id); if (!p) { p = el('div', 'ux-pop'); p.id = id; document.body.appendChild(p); }
     const toggledOff = p._off && Date.now() - p._off < 600; p._off = 0; p._opener = lastDown && lastDown.closest ? lastDown.closest('button,.btn,[role="button"]') : null;
     p.innerHTML = `<div class="ux-pop-h"><b>${title}</b><span class="spacer"></span><button class="btn ghost small" data-uxclose type="button" aria-label="Close">✕</button></div><div class="ux-pop-b">${html}</div>`; if (!toggledOff) p.classList.add('open'); p.querySelector('[data-uxclose]').onclick = () => p.classList.remove('open'); return p; };
+  /* ---------- X3: the guided course: five lessons through the three phases, each step with a "Do it" and a tick ---------- */
+  const COURSE = [
+    ['1. Design a study', [['Open the two-arm randomised trial template.', () => { const B = window.EasyBuilder; if (!B) return; B.design = B.fromTemplate('rct2'); B.setPhase('build'); }],
+      ['Look at the groups and visits, then the variables and their sections (tabs 2 and 3).', () => { window.EasyBuilder.setPhase('build'); setTimeout(() => { const t = document.querySelector('[data-mbtab="vars"]'); if (t) t.click(); }, 150); }],
+      ['Read the sample size on the Study tab: which difference, SD, power and α give it?', () => { window.EasyBuilder.setPhase('build'); setTimeout(() => { const t = document.querySelector('[data-mbtab="study"]'); if (t) t.click(); }, 150); }],
+      ['Open the Export tab: read the design review and fix one ⚠.', () => { window.EasyBuilder.setPhase('build'); setTimeout(() => { const t = document.querySelector('[data-mbtab="export"]'); if (t) t.click(); }, 150); }]]],
+    ['2. Simulate the data', [['Go to Generate and press 🎲 Generate (120 patients).', () => { const G = window.EasyGen; if (!G) return; G.settings = { ...G.settings, n: 120 }; window.EasyBuilder.setPhase('generate'); setTimeout(() => { const b = document.getElementById('genGo'); if (b) b.click(); }, 300); }],
+      ['Make the primary outcome “Significant” (its card, Difference between groups) and watch its P value.', () => window.EasyBuilder.setPhase('generate')],
+      ['Run the power of the planned study (200 simulated studies): is it near the 80% planned?', () => { window.EasyBuilder.setPhase('generate'); setTimeout(() => flash(document.getElementById('genPower')), 300); }]]],
+    ['3. Clean messy data', [['Open the messy hypertension example (Analyse, step 1).', () => { window.EasyBuilder && window.EasyBuilder.setPhase('analyse'); U.go(1); setTimeout(() => { const b = document.querySelector('[data-exopen="messy-htn"]'); if (b) b.click(); }, 200); }],
+      ['Use the cleaning tools of step 1: units in cells, typing errors, duplicated IDs. Each fix is logged.', () => U.go(1)],
+      ['Check the variables and their types (step 2).', () => U.go(2)]]],
+    ['4. Analyse', [['Choose the tests (step 4): normality, parametric or not.', () => U.go(4)], ['Arrange the tables (step 2, Tables): a Table 1, outcomes and safety.', () => U.go(2)], ['Look at each variable\'s results (step 10).', () => U.go(10)]]],
+    ['5. Write the report', [['Open the report (step 12).', () => U.go(U.REPORT_STEP)], ['Run 🧐 Statistical review (SAMPL) and 🔎 Text against the tables (report tools).', () => { U.go(U.REPORT_STEP); setTimeout(() => { const b = document.getElementById('btnSampl'); if (b) { let e = b; while (e) { if (e.tagName === 'DETAILS') e.open = true; e = e.parentElement; } flash(b); } }, 400); }],
+      ['Download the Word report.', () => { U.go(U.REPORT_STEP); setTimeout(() => flash(document.getElementById('btnDocx')), 400); }]]]];
+  function openCourse() { const done = ls.get('course', {}), total = COURSE.reduce((a, l) => a + l[1].length, 0), n = Object.values(done).filter(Boolean).length;
+    const p = panel('uxCoursePop', '🎓 Course — from a design to a report', `<p class="legend-note">${n} of ${total} steps done. Each step has <b>Do it</b> (the app goes there for you) and a tick when you have done it. The data are simulated, for learning.</p><div style="height:6px;background:var(--line);border-radius:4px;margin:6px 0 10px"><div style="height:6px;width:${Math.round(100 * n / total)}%;background:#7B2FBE;border-radius:4px"></div></div>
+      ${COURSE.map(([t, steps], li) => `<details ${steps.some((_, si) => !done[`${li}.${si}`]) && COURSE.slice(0, li).every((c, lj) => c[1].every((_, sj) => done[`${lj}.${sj}`])) ? 'open' : ''}><summary><b>${esc(t)}</b> <span class="legend-note">${steps.filter((_, si) => done[`${li}.${si}`]).length}/${steps.length}</span></summary><ol style="margin:6px 0 8px 18px;padding:0">${steps.map(([txt], si) => `<li style="margin:4px 0"><label class="check" style="margin:0;display:inline-flex"><input type="checkbox" data-crs="${li}.${si}" ${done[`${li}.${si}`] ? 'checked' : ''}><span>${esc(txt)}</span></label> <button class="btn ghost small" type="button" data-crsgo="${li}.${si}">Do it</button></li>`).join('')}</ol></details>`).join('')}
+      <button class="btn ghost small" type="button" data-crsreset="1">Start again</button>`);
+    p.classList.add('ux-center'); p.onclick = e => { const g = e.target.closest('[data-crsgo]'); if (g) { const [li, si] = g.dataset.crsgo.split('.').map(Number); try { COURSE[li][1][si][1](); } catch (err) { console.error(err); } const d = ls.get('course', {}); d[g.dataset.crsgo] = true; ls.set('course', d); setTimeout(openCourse, 50); return; }
+      if (e.target.closest('[data-crsreset]')) { ls.set('course', {}); openCourse(); } };
+    p.onchange = e => { const k = e.target.dataset && e.target.dataset.crs; if (!k) return; const d = ls.get('course', {}); d[k] = e.target.checked; ls.set('course', d); openCourse(); }; }
+  $('#uxCourse').onclick = openCourse;
   $('#uxBell').onclick = () => panel('uxMsgs', 'Recent messages', msgs.length ? `<ul class="ux-list">${msgs.map(m => `<li><span class="legend-note">${new Date(m.at).toLocaleTimeString()}</span> ${esc(m.t)}</li>`).join('')}</ul>` : '<p class="legend-note">No messages yet.</p>');
 
   /* ---------- 36. autosave indicator ---------- */
@@ -39010,6 +39068,15 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
         const lab = (el.closest('label.check') ? el.closest('label.check').textContent : (el.parentNode.querySelector('label.f') || {}).textContent || id).replace(/\s+/g, ' ').trim().slice(0, 100);
         out.push({ kind: 'Changed', label: lab, where: `Step ${stepOf(el)} · now ${valueOf(el)}`, run: () => goTo(stepOf(el), () => { const d = el.closest('details'); if (d) d.open = true; flash(el.closest('label.check') || el.parentNode); el.focus(); }) }); });
     }
+    // the three phases, the documents of the builder and the actions of the generator
+    const EB = window.EasyBuilder, inPhase = (ph, then) => { if (EB && EB.phase !== ph) EB.setPhase(ph); setTimeout(() => then && then(), 150); };
+    if (EB) { [['build', '🧱 Build the master sheet'], ['generate', '🎲 Generate the data'], ['analyse', '📊 Analyse']].forEach(([ph, l]) => out.push({ kind: 'Phase', label: l, where: 'Phases', run: () => inPhase(ph) }));
+      const exportTab = k => inPhase('build', () => { const t = document.querySelector('[data-mbtab="export"]'); if (t) t.click(); setTimeout(() => { const b = document.querySelector(`[data-bx="${k}"]`) || document.getElementById(k); flash(b); }, 150); });
+      [['mbXlsx', 'Excel master sheet (.xlsx)'], ['mbCrf', 'Case report form (.docx)'], ['mbRedcap', 'REDCap data dictionary (.csv)'], ['binder', 'Study binder (.docx)'], ['protocol', 'Protocol and analysis plan (.docx)'], ['schedule', 'Schedule of assessments (.docx)'], ['shells', 'Shell tables (.docx)'], ['dict', 'Data dictionary (.docx)'], ['summary', 'Design summary (.docx)'], ['env', 'Randomisation envelopes (.docx)'], ['consent', 'Information sheet and consent form'], ['ethics', 'Ethics application summary'], ['dmp', 'Data management plan'], ['gantt', 'Study timeline (Gantt)'], ['alloc', 'Digital allocation tool (.html)'], ['sdv', 'Source data verification plan'], ['budget', 'Study budget (.xlsx)'], ['form', 'Offline data-entry form (.html)'], ['labels', 'Patient labels (barcodes)'], ['labelsQr', 'Patient labels (QR codes)'], ['xlsform', 'XLSForm (KoBoToolbox / ODK)'], ['spss', 'SPSS syntax']]
+        .forEach(([k, l]) => out.push({ kind: 'Build', label: l, where: 'Phase 1 · Export', run: () => exportTab(k) }));
+      [['Study', 'study'], ['Groups & visits', 'visits'], ['Variables', 'vars'], ['Rules', 'rules'], ['Preview', 'preview'], ['Export', 'export']].forEach(([l, k]) => out.push({ kind: 'Build', label: `Builder tab: ${l}`, where: 'Phase 1', run: () => inPhase('build', () => { const t = document.querySelector(`[data-mbtab="${k}"]`); if (t) t.click(); }) }));
+      [['genGo', '🎲 Generate the data'], ['genPower', 'Power of the planned study'], ['genCurve', 'Power curve'], ['genEx', 'Practice exercises (.docx)'], ['genMethods', 'Simulation methods (.docx)'], ['genCsv', 'Simulated data as CSV'], ['genPack', 'Several datasets with an answer key'], ['genXlsx', 'Simulated master sheet (.xlsx)']].forEach(([id, l]) => out.push({ kind: 'Generate', label: l, where: 'Phase 2', run: () => inPhase('generate', () => flash(document.getElementById(id))) }));
+      ['Time to event', 'Risk factors', 'Regression', 'Confounding', 'Diagnostic accuracy', 'Agreement', 'Recruitment', 'Protocol deviations', 'Operator effect', 'Matched case-control', 'From a published table'].forEach(t => out.push({ kind: 'Generate', label: t, where: 'Phase 2 · special designs', run: () => inPhase('generate', () => { const d = [...document.querySelectorAll('.gen-det')].find(x => (x.querySelector('summary') || {}).textContent && x.querySelector('summary').textContent.includes(t)); if (d) { d.open = true; flash(d); } }) })); }
     // tables and figures of the report
     if (st.result) st.result.sections.forEach((s, i) => { if (!s.title) return; out.push({ kind: 'Report', label: s.title, where: `Step ${U.REPORT_STEP} · ${s.kind}${s.figures && s.figures.length ? ` · ${s.figures.length} figure${s.figures.length > 1 ? 's' : ''}` : ''}`,
       run: () => goTo(U.REPORT_STEP, () => { const t = document.querySelector(`[data-ttl="${i}"]`); flash(t ? t.closest('.report-sec') || t : null); }) }); });
@@ -40514,14 +40581,14 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       sampleSize: (r => r && !r.err ? r.text : '')(ssCalc(D)),
       plan: (r => r && !r.err && r.v ? { label: r.v.label, num: !!r.num, a: r.a, b: r.b, sd: r.sd, alpha: r.alpha, power: r.power, drop: r.drop, n: r.total, enrol: r.enrol } : undefined)(ssCalc(D)),
       vars: D.vars.flatMap(v => { const rb = refRules(D, v), SA = refSexAge(D), colOf = x => x ? (columns(D).find(c => c.v.id === x.id && (!c.visit || c.visit.id === D.visits[0].id)) || {}).col : undefined;
-        const base = { unit: v.unit, role: v.role, definition: v.definition, section: v.section, when: whenTxt(D, v) || undefined, refLo: v.refLo, refHi: v.refHi, ...(rb.length ? { refBy: rb, refSexCol: colOf(SA.sex), refAgeCol: colOf(SA.age), refSexCats: SA.sex ? SA.sex.cats : undefined } : {}) },
+        const base = { unit: v.unit, role: v.role, definition: v.definition, section: v.section, when: whenTxt(D, v) || undefined, refLo: v.refLo, refHi: v.refHi, ...(v.type === 'num' && (v.min !== '' || v.max !== '') ? { min: v.min, max: v.max } : {}), ...(rb.length ? { refBy: rb, refSexCol: colOf(SA.sex), refAgeCol: colOf(SA.age), refSexCats: SA.sex ? SA.sex.cats : undefined } : {}) },
         colsOf = o => long ? [{ col: o === undefined ? baseName(D, v) : `${baseName(D, v)}_${tagOf(o)}` }] : cols.filter(c => c.v.id === v.id && c.opt === o).map(c => ({ col: c.col, visit: c.visit ? tagOf(c.visit.name) : '', visitName: c.visit ? c.visit.name : '' }));
         if (v.type === 'multi') return v.cats.map((o, i) => ({ ...base, id: `${v.id}_${i}`, label: `${v.label}: ${o}`, type: 'yn', cats: [...YN], group: v.group || v.label, cols: colsOf(o) }));
         const cc = calcCats(v); return [{ ...base, id: v.id, label: v.label, type: cc ? 'cat' : v.type, cats: cc || v.cats, words: cc ? true : undefined, group: v.group, cols: colsOf(undefined) }]; }) };
   }
 
   /* ---------- case report form (Word) ---------- */
-  async function buildCrf(D) {
+  async function buildCrf(D, raw) {
     const d = window.docx, { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType } = d, kids = [];
     const order = secOrder(D), font = 'Calibri';
     const P = (t, o = {}) => new Paragraph({ spacing: { after: o.after ?? 60 }, alignment: o.align, children: [new TextRun({ text: t, bold: o.bold, size: o.size || 21, font, color: o.color })] });
@@ -40538,6 +40605,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
           ...rep.map(v => new TableRow({ children: [cell(v.label + (v.unit ? ` (${v.unit})` : '') + (whenParent(D, v) ? ` (if ${whenTxt(D, v)})` : ''), 38, true), ...vis.map(x => cell((v.visits || []).includes(x.id) ? (v.type === 'cat' || v.type === 'yn' || v.type === 'multi' ? v.cats.map(c => `☐ ${c}`).join('  ') : '') : '—', w))] }))] })); }
       const defs = vs.filter(v => v.definition); if (defs.length) kids.push(P(defs.map(v => `${v.label}: ${v.definition}`).join(' · '), { size: 18, color: '555555', after: 120 })); });
     kids.push(P(''), P('Investigator: ____________________     Signature: ____________     Date: __ / __ / ____', { after: 0 }));
+    if (raw) return kids;
     return Packer.toBlob(new Document({ creator: 'Prof MSE Easy Stat', title: (D.title || 'CRF') + ' — case report form', sections: [{ properties: { page: { margin: { top: 900, bottom: 900, left: 900, right: 900 } } }, children: kids }] }));
   }
 
@@ -40908,7 +40976,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
   // the entry on step 1
   const anchor = $('#btnTemplate'); if (anchor) { const b = document.createElement('button'); b.className = 'btn ghost small'; b.type = 'button'; b.id = 'btnBuilder'; b.title = 'Design the master sheet of a new study: variables, visits, groups, ranges, randomisation — then an Excel sheet, a case report form and a REDCap dictionary'; b.textContent = '🧱 Master sheet builder'; anchor.parentNode.insertBefore(b, anchor); b.onclick = open; }
   setPhase('analyse');
-  window.EasyBuilder = { open, close, setPhase, get phase() { return phase; }, buildWorkbook: (d, fill) => buildWorkbook(d || D, fill), setupFor, columns, visitsOf: v => visitsOf(D, v), baseName: v => baseName(D, v), tagOf, expectOf, prng, randomisation, redcap, fromTemplate, fileBase, save, render: () => render(), designFromDict, isRepeating: v => isRepeating(D, v), X, colL, sheetXml, xlsxBlob, secOrder, whenTxt, whenParent, xlOpts, SS_METHODS, LIB, TEMPLATES, findLib, uid, calcValue, calcCats, addSpec, addEligibility, SCALES, FK, nAnova, convert, ssCalc: d => ssCalc(d || D), designFromSheet, fromLine: (l, sec) => fromLine(D, l, sec || 'Other'), addScale: (n, it, lo, hi, def) => addScale(D, n, it, lo, hi, def), problems: d => problems(d || D), undo, get design() { return D; }, set design(x) { D = x; save(); } };
+  window.EasyBuilder = { buildCrf: (d, raw) => buildCrf(d || D, raw), open, close, setPhase, get phase() { return phase; }, buildWorkbook: (d, fill) => buildWorkbook(d || D, fill), setupFor, columns, visitsOf: v => visitsOf(D, v), baseName: v => baseName(D, v), tagOf, expectOf, prng, randomisation, redcap, fromTemplate, fileBase, save, render: () => render(), designFromDict, isRepeating: v => isRepeating(D, v), X, colL, sheetXml, xlsxBlob, secOrder, whenTxt, whenParent, xlOpts, SS_METHODS, LIB, TEMPLATES, findLib, uid, calcValue, calcCats, addSpec, addEligibility, SCALES, FK, nAnova, convert, ssCalc: d => ssCalc(d || D), designFromSheet, fromLine: (l, sec) => fromLine(D, l, sec || 'Other'), addScale: (n, it, lo, hi, def) => addScale(D, n, it, lo, hi, def), problems: d => problems(d || D), undo, get design() { return D; }, set design(x) { D = x; save(); } };
 })();
 
 /* Prof MSE Easy Stat — phase 1, more from the design: a protocol and statistical analysis plan, the schedule of assessments,
@@ -40949,7 +41017,9 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     const cell = (t, h, i) => new TableCell({ shading: h ? { type: ShadingType.CLEAR, fill: 'D9D9D9', color: 'auto' } : undefined, children: [new Paragraph({ alignment: i && o.center ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: String(t ?? ''), bold: h || (o.boldFirst && i === 0), size: o.size || 18, font: FONT, color: o.grey && !h && i ? '808080' : undefined })] })] });
     return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [new TableRow({ tableHeader: true, children: head.map((t, i) => cell(t, true, i)) }), ...rows.map(r => new TableRow({ children: r.map((t, i) => cell(t, false, i)) }))] });
   }
+  let CAP = null; // the binder: documents collected instead of saved
   async function saveDoc(children, name, title, landscape) {
+    if (CAP) { CAP.push({ children, title, landscape }); return; }
     const { Document, Packer, PageOrientation } = X();
     const doc = new Document({ creator: 'Prof MSE Easy Stat', title, sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 }, ...(landscape ? { size: { orientation: PageOrientation.LANDSCAPE } } : {}) } }, children }] });
     U.saveUrl(URL.createObjectURL(await Packer.toBlob(doc)), `${B.fileBase()} - ${name}.docx`); toast(`${title} saved`);
@@ -41335,11 +41405,25 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
   function reviewHtml(D) { const it = designReview(D), n = it.filter(x => x[1]).length;
     return `<details class="mb-exp" style="margin-top:10px" ${n < it.length ? 'open' : ''}><summary><b>🔍 Design review: ${n} of ${it.length}</b> <span class="legend-note">— checked before the export</span></summary><table class="t" style="margin-top:6px"><tbody>${it.map(([t, ok, fix]) => `<tr class="cl-${ok ? 'ok' : 'miss'}"><td>${ok ? '✓' : '⚠'}</td><td>${esc(t)}</td><td class="legend-note">${ok ? '' : esc(fix)}</td></tr>`).join('')}</tbody></table></details>`; }
 
+  /* ---------- X6: the study binder: the chosen documents in one Word file, each part on its own pages ---------- */
+  const BINDER = [['protocol', 'Protocol and analysis plan', true], ['schedule', 'Schedule of assessments', true], ['crf', 'Case report form', true], ['consent', 'Information sheet and consent form', true], ['dict', 'Data dictionary', true], ['ethics', 'Ethics application summary', false], ['dmp', 'Data management plan', false], ['alloc', 'Allocation list (keep apart from the investigators!)', false]];
+  async function binder(D) { const want = (D.binder && D.binder.parts) || BINDER.filter(x => x[2]).map(x => x[0]), { Document, Packer, PageOrientation, Paragraph, PageBreak } = X(), parts = [];
+    CAP = []; try { for (const k of want) { const n0 = CAP.length;
+        if (k === 'protocol') await protocol(D); else if (k === 'schedule') await schedule(D); else if (k === 'dict') await dictionary(D); else if (k === 'consent') await consentDoc(D); else if (k === 'ethics') await ethicsDoc(D); else if (k === 'dmp') await dmpDoc(D);
+        else if (k === 'crf') CAP.push({ children: await B.buildCrf(D, true), title: 'Case report form' });
+        else if (k === 'alloc' && K(D) >= 2 && D.rand && D.rand.on) { const shown = shownArms(D); CAP.push({ title: 'Allocation list', children: [P(`${D.title || 'Study'} — allocation list`, { bold: true, size: 28 }), P('Confidential: to be kept by a person independent of the recruitment, or in sealed envelopes.', { it: true, after: 120 }), ...B.randomisation(D).flatMap(s0 => [P(s0.stratum, { bold: true, before: 120 }), T(['No.', 'Allocation', 'Patient ID', 'Date'], s0.list.map((a, i) => [String(i + 1), shown[arms(D).indexOf(a)] ?? a, '', '']), { size: 18 })])] }); }
+        if (CAP.length > n0) parts.push(CAP[CAP.length - 1].title); } } finally { var got = CAP; CAP = null; }
+    if (!got.length) { toast('Nothing to put in the binder'); return; }
+    const cover = [P(D.title || 'Study', { bold: true, size: 40, center: true, before: 2400 }), P('Study binder', { size: 30, center: true, after: 400 }), P(`Version ${(D.versionNote || {}).v || '1.0'} · ${today()}`, { center: true, after: 600 }), P('Contents', { bold: true, size: 26 }), ...parts.map((t, i) => P(`${i + 1}. ${t}`, { size: 22 }))];
+    const doc = new Document({ creator: 'Prof MSE Easy Stat', title: `${D.title || 'Study'} — binder`, sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } }, children: cover }, ...got.map(g => ({ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 }, ...(g.landscape ? { size: { orientation: PageOrientation.LANDSCAPE } } : {}) } }, children: g.children }))] });
+    void Paragraph; void PageBreak; U.saveUrl(URL.createObjectURL(await Packer.toBlob(doc)), `${B.fileBase()} - study binder.docx`); toast(`Binder saved: ${parts.length} parts`); return parts; }
+
   /* ---------- the cards on the export tab ---------- */
   function exportCards(D) {
     const mine = Object.keys(ls.get('designs', {})), vers = mine.filter(n => n.startsWith((D.title || 'Design') + ' — v'));
     const card = (icon, t, note, btns) => `<div class="mb-exp"><b>${icon} ${t}</b><p class="legend-note">${note}</p>${btns}</div>`, btn = (k, l, pr) => `<button class="btn ${pr ? 'primary' : 'ghost'}" type="button" data-bx="${k}">${l}</button>`;
-    return `${reviewHtml(D)}<h3 style="margin-top:18px">Documents from the design</h3><div class="grid g3">
+    const bp = (D.binder && D.binder.parts) || BINDER.filter(x => x[2]).map(x => x[0]);
+    return `${reviewHtml(D)}<h3 style="margin-top:18px">Documents from the design</h3><div class="mb-exp" style="margin-bottom:10px"><b>📚 Study binder</b> <span class="legend-note">— the chosen documents in one Word file to print, with a cover and contents</span><div class="row" style="gap:10px;flex-wrap:wrap;margin:6px 0">${BINDER.filter(x => x[0] !== 'alloc' || (K(D) >= 2 && D.rand && D.rand.on)).map(([k2, l]) => `<label class="check" style="margin:0"><input type="checkbox" data-bxbind="${k2}" ${bp.includes(k2) ? 'checked' : ''}><span>${esc(l)}</span></label>`).join('')}</div>${btn('binder', '⬇ Binder (.docx)', true)}</div><div class="grid g3">
       ${card('📑', 'Protocol and analysis plan', 'A Word draft: design, participants (the eligibility checklist), allocation and blinding, outcomes with their definitions, sample size, data management and the planned analysis of each variable, with the schedule as an appendix.', btn('protocol', '⬇ Protocol (.docx)', true))}
       ${card('🗓', 'Schedule of assessments', 'The visits × assessments grid (✓), with each visit\'s day and window — also a sheet of the Excel file.', btn('schedule', '⬇ Schedule (.docx)'))}
       ${card('▦', 'Shell tables', 'The empty tables of the results: baseline characteristics, outcomes, and each repeated measure by visit, with the groups and the P value.', btn('shells', '⬇ Shell tables (.docx)'))}
@@ -41408,7 +41492,7 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
       if (k === 'protocol') await protocol(D); else if (k === 'schedule') await schedule(D); else if (k === 'shells') await shells(D); else if (k === 'dict') await dictionary(D); else if (k === 'summary') await summary(D);
       else if (k === 'env') await envelopes(D); else if (k === 'form') entryForm(D); else if (k === 'consent') await consentDoc(D); else if (k === 'ethics') await ethicsDoc(D); else if (k === 'dmp') await dmpDoc(D); else if (k === 'gantt') await gantt(D);
       else if (k === 'labels' || k === 'labelsVisit') labels(D, k === 'labelsVisit' ? 'visit' : 'patient'); else if (k === 'labelsQr' || k === 'labelsQrVisit') labels(D, k === 'labelsQrVisit' ? 'visit' : 'patient', 'qr');
-      else if (k === 'alloc') await allocationTool(D); else if (k === 'sdv') sdvPlan(D); else if (k === 'budget') budget(D); else if (k === 'key') blindKey(D); else if (k === 'xlsform') xlsform(D); else if (k === 'spss') spss(D);
+      else if (k === 'binder') await binder(D); else if (k === 'alloc') await allocationTool(D); else if (k === 'sdv') sdvPlan(D); else if (k === 'budget') budget(D); else if (k === 'key') blindKey(D); else if (k === 'xlsform') xlsform(D); else if (k === 'spss') spss(D);
       else if (k === 'saveVer') { const note = prompt('What changed in this version?', 'Amendment: '); if (note === null) return true; const all = ls.get('designs', {}), base = (D.title || 'Design') + ' — v', n = Object.keys(all).filter(x => x.startsWith(base)).length + 1;
         D.versionNote = { v: `${n}.0`, date: today(), note }; all[`${base}${n} (${today()})`] = JSON.parse(JSON.stringify(D)); ls.set('designs', all); B.save(); B.render(); toast(`Version ${n} saved: ${note}`); }
       else if (k === 'wizGo') { if (D.vars.length && !confirm('Replace the current design with a new one from these answers? (Undo brings it back)')) return true; wizMake(D); B.render(); toast('Design made from your answers'); }
@@ -41419,13 +41503,14 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
   function onChange(e, D) { const t = e.target, d = t.dataset;
     if (d.bxcal && t.files[0]) { const f = t.files[0]; t.value = ''; calendar(D, f).catch(err => { console.error(err); toast('Could not read it: ' + err.message); }); return true; }
     if (d.bxtl) { D.timeline = { ...(D.timeline || {}), [d.bxtl]: t.value === '' ? '' : +t.value }; B.save(); return true; }
+    if (d.bxbind) { const cur = new Set((D.binder && D.binder.parts) || BINDER.filter(x => x[2]).map(x => x[0])); if (t.checked) cur.add(d.bxbind); else cur.delete(d.bxbind); D.binder = { parts: BINDER.map(x => x[0]).filter(x => cur.has(x)) }; B.save(); return true; }
     if (d.bxsdv) { D.sdv = { ...(D.sdv || {}), [d.bxsdv]: t.value === '' ? '' : +t.value }; B.save(); return true; }
     if (d.bxw) return onInput(e);
     if (d.bxcmp && t.value) { const o = ls.get('designs', {})[t.value]; if (o) { cmpOut = diffHtml(diff(o, D), t.value, 'this design'); B.render(); } return true; }
     if (d.bxcmpf && t.files[0]) { t.files[0].text().then(txt => { try { const j = JSON.parse(txt), o = j.design || j; if (!Array.isArray(o.vars)) throw new Error('not a design file'); cmpOut = diffHtml(diff(o, D), t.files[0].name, 'this design'); B.render(); } catch (err) { toast('Could not read it: ' + err.message); } }); return true; }
     return false; }
   window.EasyBuilderExt = { exportCards, studyTop, onClick, onInput, onChange };
-  window.EasyBuilderDocs = { qrMatrix, qrSvg, allocationTool, sdvPlan, budget, designReview, code128, ganttPhases, entryForm, labels, plannedTest, shellTables, scheduleRows, diff, xlsform, spss, protocol, wizMake };
+  window.EasyBuilderDocs = { binder, qrMatrix, qrSvg, allocationTool, sdvPlan, budget, designReview, code128, ganttPhases, entryForm, labels, plannedTest, shellTables, scheduleRows, diff, xlsform, spss, protocol, wizMake };
 })();
 
 /* Prof MSE Easy Stat — phase 2, the data generator: fills the master sheet designed in phase 1 with simulated patients
