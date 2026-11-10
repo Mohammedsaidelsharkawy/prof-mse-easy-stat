@@ -250,6 +250,11 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Fixes**
+- **A yes/no variable with one answer only** (all No, all 0, all Yes): the table and the figure now show the “Yes” row (e.g. 0 (0%) in each group) instead of switching to “No”. No test is run (P “—”), and the comment says that none (or all) of the patients had it.
+- **A group without data**: its cells show “—” (n = 0) instead of 0 (0%), the P value is “—”, the figure writes “no data” instead of a bar, and the comment says the variable could not be compared because there were no data in that group (also for repeated measures). Before, a figure with a missing value stopped the whole analysis.
+- **An arm of the design with no patients yet**: a master sheet from phase 1 keeps the planned arm (shown with “—”) instead of becoming a one-group report.
+
 **🧱 Build**
 - **🔐 Digital allocation tool (.html)**: one offline page with the randomisation list encrypted by a password (AES-GCM). The next allocation appears only after the patient ID, the person's initials and the ticks for eligibility and signed consent; an ID cannot be allocated twice; each allocation is logged with the date and time and a chained SHA-256 check, so a changed log is detected (**Verify the log**); the log exports as CSV. Strata and sites have their own lists. Checked: wrong password refused, allocations as on the list, an edited entry caught.
 - **Screening log** (Excel option): every patient screened, each inclusion and exclusion criterion, Eligible worked out by formula, consented, randomised and the reason when not, with the counts at the top. Uploaded to Analyse, its counts fill the flowchart (assessed, not eligible, declined, other reasons).

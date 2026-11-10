@@ -715,7 +715,7 @@
     const cur = []; state.data.rows.forEach(r => { const g = Analysis.groupOf(cfg, r); if (g !== null && !cur.includes(g)) cur.push(g); });
     const before = cfg.groupOrder.join('|');
     cur.forEach(g => { if (!cfg.groupOrder.includes(g)) { cfg.groupOrder.push(g); cfg.groupLabels[g] = groupName(g); cfg.groupInclude[g] = true; } });
-    cfg.groupOrder = cfg.groupOrder.filter(g => cur.includes(g));
+    cfg.groupOrder = cfg.groupOrder.filter(g => cur.includes(g) || (cfg.plannedGroups || []).includes(g));
     if (cfg.groupOrder.join('|') !== before) cfg.consort = null;
   }
   const replaceCol = (cfg, from, to) => {
@@ -2070,6 +2070,8 @@
     if (S0.idCol && H.includes(S0.idCol)) { cfg.idCols = [S0.idCol]; const v = owner(S0.idCol); if (v) v.include = false; }
     (S0.helperCols || []).forEach(c => { const v = owner(c); if (v) v.include = false; });
     if (S0.groupCol && H.includes(S0.groupCol)) { cfg.groupCol = S0.groupCol; cfg.noGroups = false; cfg.variables = cfg.variables.filter(v => !v.cols.some(c => c.col === S0.groupCol)); setGroups(cfg);
+      // an arm of the design without any patient yet is kept: the tables show it empty ("—") instead of becoming a one-group report
+      const planned = (S0.arms || []).filter(Boolean).filter(a => !cfg.groupOrder.includes(a)); if (planned.length && (S0.arms || []).filter(Boolean).length >= 2) { planned.forEach(a => { cfg.groupOrder.push(a); cfg.groupLabels[a] = cfg.groupLabels[a] || groupName(a); cfg.groupInclude[a] = true; }); cfg.plannedGroups = planned; if (!sandbox) setTimeout(() => toast(`No patients yet in ${planned.join(', ')}: kept as planned, shown with “—” (untick it in step 2 to leave it out)`), 1600); }
       const arms = (S0.arms || []).filter(a => cfg.groupOrder.includes(a)); if (arms.length) cfg.groupOrder = [...arms, ...cfg.groupOrder.filter(g => !arms.includes(g))]; }
     const tpl = cfg.tpLabels = cfg.tpLabels || {}; cfg.tpOrder = cfg.tpOrder || [];
     (S0.visits || []).forEach(x => { tpl[x.tag] = x.name; }); const vt = (S0.visits || []).map(x => x.tag); cfg.tpOrder = [...vt, ...cfg.tpOrder.filter(t => !vt.includes(t))]; // the visits in the design's order
@@ -6915,7 +6917,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     // keep any new group values found in this file
     const cur = []; state.data.rows.forEach(r => { const g = Analysis.groupOf(saved, r); if (g !== null && !cur.includes(g)) cur.push(g); });
     cur.forEach(g => { if (!saved.groupOrder.includes(g)) { saved.groupOrder.push(g); saved.groupLabels[g] = groupName(g); saved.groupInclude[g] = true; } });
-    saved.groupOrder = saved.groupOrder.filter(g => cur.includes(g));
+    saved.groupOrder = saved.groupOrder.filter(g => cur.includes(g) || (saved.plannedGroups || []).includes(g));
     state.pendingCfg = null;
   }
 

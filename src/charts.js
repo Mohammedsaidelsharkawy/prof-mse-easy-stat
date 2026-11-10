@@ -418,17 +418,17 @@ const Charts = (() => {
     // y range
     let lo = Infinity, hi = -Infinity;
     if (spec.type === 'box' || spec.type === 'dot' || spec.type === 'violin') {
-      spec.series.forEach(s => s.data.forEach(arr => arr.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); })));
+      spec.series.forEach(s => s.data.forEach(arr => (arr || []).forEach(v => { if (isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } })));
     } else if (spec.type === 'stacked') { lo = 0; hi = 100; } else {
       (spec.individual || []).flat(2).forEach(v => { if (isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
-      spec.series.forEach(s => s.values.forEach((v, i) => {
-        const up = s.err && s.err[i] != null ? v + s.err[i] : s.hi ? s.hi[i] : v;
-        const dn = s.err && s.err[i] != null ? v - s.err[i] : s.lo ? s.lo[i] : v;
+      spec.series.forEach(s => (s.values || []).forEach((v, i) => { if (v == null || !isFinite(v)) return;
+        const up = s.err && s.err[i] != null && isFinite(s.err[i]) ? v + s.err[i] : s.hi && isFinite(s.hi[i]) ? s.hi[i] : v;
+        const dn = s.err && s.err[i] != null && isFinite(s.err[i]) ? v - s.err[i] : s.lo && isFinite(s.lo[i]) ? s.lo[i] : v;
         hi = Math.max(hi, up); lo = Math.min(lo, dn);
       }));
     }
     if (spec.percent) { lo = 0; hi = Math.max(10, Math.min(100, hi * 1.1)); }
-    if (!isFinite(lo)) { lo = 0; hi = 1; }
+    if (!isFinite(lo) || !isFinite(hi)) { lo = 0; hi = 1; }
     // y axis: auto = bars and box plots from zero, lines fitted; 'zero' / 'fit' apply to lines and box plots (bars always start at zero)
     const fit = spec._log || (spec.type !== 'bar' && !spec.percent && (st.yAxis === 'fit' || (st.yAxis !== 'zero' && spec.type === 'line')));
     if (!fit && lo > 0) lo = 0;
@@ -526,6 +526,8 @@ const Charts = (() => {
       spec.series.forEach((s, si) => s.values.forEach((v, ci) => {
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
+        // a group without data: no bar, "no data" at its place
+        if (v == null || !isFinite(v)) { ctx.fillStyle = '#777'; ctx.font = F(600, 24 * VL); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('no data', x0 + w / 2, y(Math.max(sc.min, 0)) - 6); return; }
         fillBar(ctx, st, color, perGroup ? ci : si, x0, y(v), w, y(Math.max(sc.min, 0)) - y(v));
         const cx = x0 + w / 2; hit(cx, y(v), `${perGroup ? spec.categories[ci] : `${s.name} · ${spec.categories[ci]}`}: ${+v.toPrecision(4)}${spec.percent ? '%' : ''}`);
         if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4), v, color);
@@ -548,14 +550,14 @@ const Charts = (() => {
       spec.series.forEach((s, si) => {
         const color = pal[si % pal.length], off = (si - (ns - 1) / 2) * Math.min(14, cw * 0.05);
         const xs = s.values.map((_, ci) => xAt(ci) + off);
-        s.values.forEach((v, ci) => {
+        s.values.forEach((v, ci) => { if (v == null || !isFinite(v)) return;
           if (s.err && s.err[ci] != null) errBar(xs[ci], v - s.err[ci], v + s.err[ci], 9, v, color);
           else if (s.lo && s.hi) errBar(xs[ci], s.lo[ci], s.hi[ci], 9, v, color);
         });
         // error plot (noLine): means and their error bars only, coloured by group when the categories are the groups
         if (!spec.noLine) {
           ctx.strokeStyle = color; ctx.lineWidth = 5 * lw(st); ctx.setLineDash(shapes ? DASHES[si % 6].map(d => d * lw(st)) : si === 2 ? [16, 10] : []);
-          ctx.beginPath(); s.values.forEach((v, ci) => ci ? ctx.lineTo(xs[ci], y(v)) : ctx.moveTo(xs[ci], y(v))); ctx.stroke();
+          ctx.beginPath(); { let pen = false; s.values.forEach((v, ci) => { if (v == null || !isFinite(v)) { pen = false; return; } if (pen) ctx.lineTo(xs[ci], y(v)); else ctx.moveTo(xs[ci], y(v)); pen = true; }); } ctx.stroke();
         }
         if (spec.noLine && spec.perGroup && ns === 1) {
           ctx.setLineDash([]);
@@ -563,9 +565,9 @@ const Charts = (() => {
           return;
         }
         ctx.setLineDash([]); ctx.fillStyle = color;
-        s.values.forEach((v, ci) => hit(xs[ci], y(v), `${s.name} · ${spec.categories[ci]}: ${spec._log ? +(10 ** v).toPrecision(4) : +(+v).toPrecision(4)}`));
-        if (shapes) s.values.forEach((v, ci) => marker(ctx, si, xs[ci], y(v), 12 * Math.sqrt(lw(st))));
-        else s.values.forEach((v, ci) => { ctx.beginPath(); ctx.arc(xs[ci], y(v), 10, 0, Math.PI * 2); ctx.fill(); });
+        s.values.forEach((v, ci) => (v == null || !isFinite(v)) ? null : hit(xs[ci], y(v), `${s.name} · ${spec.categories[ci]}: ${spec._log ? +(10 ** v).toPrecision(4) : +(+v).toPrecision(4)}`));
+        if (shapes) s.values.forEach((v, ci) => { if (v != null && isFinite(v)) marker(ctx, si, xs[ci], y(v), 12 * Math.sqrt(lw(st))); });
+        else s.values.forEach((v, ci) => { if (v == null || !isFinite(v)) return; ctx.beginPath(); ctx.arc(xs[ci], y(v), 10, 0, Math.PI * 2); ctx.fill(); });
       });
     } else if (spec.type === 'stacked') {
       // one 100% bar per group, segments = categories
@@ -645,7 +647,7 @@ const Charts = (() => {
       const slots = perGroup ? 1 : ns;
       const gw = cw * widthOf(st, perGroup ? 0.36 : 0.8), bw = gw / slots;
       spec.series.forEach((s, si) => s.data.forEach((arr, ci) => {
-        if (!arr.length) return;
+        if (!arr.length) { ctx.fillStyle = '#777'; ctx.font = F(600, 24 * VL); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('no data', L + cw * ci + (cw - gw) / 2 + bw * (si + 0.5), y(sc.min) - 6); return; }
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const b = boxStats(arr), w = bw * 0.62, cx = L + cw * ci + (cw - gw) / 2 + bw * (si + 0.5);
         ctx.setLineDash(perGroup ? [] : shapes ? DASHES[si % 6] : si === 2 ? [12, 7] : []);

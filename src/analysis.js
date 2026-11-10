@@ -2,6 +2,15 @@
 const Analysis = (() => {
   const S = Stats;
   const POSITIVE = /^(yes|y|true|positive|present|1|done|completed|pos)$/i;
+  const NEG_OF = { yes: 'No', y: 'N', true: 'False', positive: 'Negative', present: 'Absent', 1: '0', done: 'Not done', pos: 'Neg' }, POS_OF = { no: 'Yes', n: 'Y', false: 'True', negative: 'Positive', absent: 'Present', 0: '1', 'not done': 'Done', neg: 'Pos' };
+  const NEGATIVE = /^(no|n|false|negative|absent|0|not done|neg)$/i;
+  function catLevels(v, present) { const declared = v.levels && v.levels.length ? v.levels : [], levels = declared.filter(l => present.includes(l)); present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
+    // a yes/no variable whose data hold only one answer (all No, all 0, all Yes …): the other answer is kept with 0 patients
+    const pair = declared.length === 2 && declared.some(l => POSITIVE.test(String(l))) && declared.some(l => NEGATIVE.test(String(l)));
+    if (pair) { const pos = declared.find(l => POSITIVE.test(String(l))), neg = declared.find(l => NEGATIVE.test(String(l))); if (levels.length <= 2 && levels.every(l => l === pos || l === neg)) return [pos, neg]; }
+    if (levels.length === 1) { const l = String(levels[0]), k = l.toLowerCase(); if (NEGATIVE.test(l) && POS_OF[k]) { const pos = /^[a-z]/.test(l) ? POS_OF[k].toLowerCase() : l === l.toUpperCase() && l.length > 1 ? POS_OF[k].toUpperCase() : POS_OF[k]; return [pos, levels[0]]; }
+      if (POSITIVE.test(l) && NEG_OF[k]) { const neg = /^[a-z]/.test(l) ? NEG_OF[k].toLowerCase() : l === l.toUpperCase() && l.length > 1 ? NEG_OF[k].toUpperCase() : NEG_OF[k]; return [levels[0], neg]; } }
+    return levels; }
   const NONNORMAL_SHARE = 0.25;
   // normality test for the current run: Shapiro–Wilk (default) or Kolmogorov–Smirnov with Lilliefors correction
   const normalityTest = name => name === 'ks' ? S.lilliefors : name === 'skewkurt' ? S.skewKurtZ : S.shapiroWilk;
@@ -53,7 +62,7 @@ const Analysis = (() => {
   const medIqr = (dd, d) => FMT.iqr === 'bracket' ? `${fmt(dd.median, d)} ${iqrTxt(dd.q1, dd.q3, d)}` : `${fmt(dd.median, d)} (${iqrTxt(dd.q1, dd.q3, d)})`;
   const pctTxt = v => fmt(v, FMT.pct);
   // a count in a table cell: 19 (63.3%), 19 (63.3), 19/30 (63.3%) or 63.3% (19)
-  const npc = (cnt, pc, n) => { const p = pctTxt(pc);
+  const npc = (cnt, pc, n) => { if (n === 0) return '—'; const p = pctTxt(pc);
     const ci = FMT.ci && n > 0 ? (([l, h]) => ` [${pctTxt(100 * l)}-${pctTxt(100 * h)}]`)(FMT.ci === 'exact' ? S.clopperPearson(cnt, n) : wilsonPair(cnt, n)) : '';
     return (FMT.cat === 'npctNoSign' ? `${cnt} (${p})` : FMT.cat === 'nN' ? `${cnt}/${n} (${p}%)` : FMT.cat === 'pctN' ? `${p}% (${cnt})` : `${cnt} (${p}%)`) + ci; };
   const wilsonPair = (x, n) => { const z = S.ZC(), ph = x / n, den = 1 + z * z / n, c = (ph + z * z / (2 * n)) / den, h = z * Math.sqrt(ph * (1 - ph) / n + z * z / (4 * n * n)) / den; return [Math.max(0, c - h), Math.min(1, c + h)]; };
@@ -266,7 +275,7 @@ const Analysis = (() => {
         // larger tables with small expected counts: the Fisher-Freeman-Halton exact test (Monte Carlo)
         p = S.fisherRxC(nonEmpty).p; test = 'Fisher-Freeman-Halton'; used.add('ffh'); stat = 'FFH';
       }
-    } else if (nonEmpty.length === 1) { p = 1; test = 'Chi-square'; used.add('chi'); }
+    } else if (nonEmpty.length === 1) { p = NaN; test = '—'; stat = '—'; }
     used.add('cat');
     const binary = levels.length === 2;
     const rrRow = binary ? 0 : -1;
@@ -392,14 +401,18 @@ const Analysis = (() => {
 
   function repeatedComment(label, tps, results, gl, alpha, detailed) {
     const k = gl.length, sentences = [];
-    const nsIdx = tps.map((_, t) => t).filter(t => !(results[t].p <= alpha));
+    // timepoints that could not be tested (a group without data there)
+    const naIdx = tps.map((_, t) => t).filter(t => !isFinite(results[t].p)), naTxt = naIdx.length ? (() => { const empty = gl.filter((g, i) => naIdx.every(t => !(results[t].desc[i] || {}).n)); return `${cap(label)} could not be compared ${amongTxt(k)} at ${naIdx.length === tps.length ? 'any measurement' : tpGroup(naIdx.map(t => tps[t]))}${empty.length ? `, as there were no data in ${listJoin(empty)}` : ''}.`; })() : '';
+    if (naIdx.length === tps.length) return naTxt;
+    const nsIdx = tps.map((_, t) => t).filter(t => !(results[t].p <= alpha) && !naIdx.includes(t));
     const nsTps = nsIdx.map(t => tps[t]);
+    if (naTxt) sentences.push(naTxt);
     const sigIdx = tps.map((_, t) => t).filter(t => results[t].p <= alpha);
     const tpList = tpGroup;
     // detailed style quotes the P values of the insignificant timepoints too
     const nsPs = nsIdx.map(t => results[t].p).filter(isFinite);
     const nsP = detailed && nsPs.length ? ` (P value ${pList(nsPs)})` : '';
-    if (!sigIdx.length) return `${cap(label)} at all measurements was insignificantly different ${amongTxt(k)}${nsP}.`;
+    if (!sigIdx.length) return [...sentences, naIdx.length ? `${cap(label)} at ${tpGroup(nsTps)} was insignificantly different ${amongTxt(k)}${nsP}.` : `${cap(label)} at all measurements was insignificantly different ${amongTxt(k)}${nsP}.`].join(' ');
     if (nsTps.length) sentences.push(`${cap(label)} at ${tpList(nsTps)} was insignificantly different ${amongTxt(k)}${nsP}.`);
     // merge consecutive significant timepoints with an identical description
     const descs = sigIdx.map(t => ({ t, ...pairDescription(results[t], gl, alpha) }));
@@ -2443,8 +2456,7 @@ const Analysis = (() => {
         it.summary = res ? `Report: ${res.param ? 'parametric' : 'non-parametric'} (${v.dist === 'auto' ? 'from the normality test' : 'set by you'}), ${TEST_NAME[res.test] || res.test}, P ${pTxt(res.p)}.` : `Distribution: ${gv.flat().length >= 3 && normality(gv.flat()) && normality(gv.flat()).p <= 0.05 ? 'non-normal' : 'normal'} by ${nName}.`;
       } else if (v.kind !== 'repeated') {
         const col = v.cols[0].col, gv = byGroup.map(rs => rs.map(r => toCat(r[col])).filter(x => x !== null));
-        const present = [...new Set(gv.flat())], levels = (v.levels && v.levels.length ? v.levels.filter(l => present.includes(l)) : []);
-        present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
+        const present = [...new Set(gv.flat())], levels = catLevels(v, present);
         const tab = levels.map(l => gv.map(x => x.filter(y => y === l).length)), ns = gv.map(x => x.length), N = S.sum(ns);
         const cell = (c, n) => npc(c, n ? 100 * c / n : 0, n);
         it.tables.push({ cat: 'desc', title: 'Frequencies', head: ['', ...gl.map((g, i) => `${g} (n=${ns[i]})`), ...(k > 1 ? [`Total (n=${N})`] : [])],
@@ -2879,8 +2891,7 @@ const Analysis = (() => {
           figures.push({ sig: true, vid: v.id, ...f, ...(v.caption ? { caption: v.caption } : {}) });
         } else {
           const vals = all.map(r => toCat(r[col])).filter(x => x !== null), present = [...new Set(vals)];
-          const levels = (v.levels && v.levels.length ? v.levels.filter(l => present.includes(l)) : []);
-          present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
+          const levels = catLevels(v, present);
           used.add('desc1Cat'); flags.cat = true;
           const n = vals.length, cnt = levels.map(l => vals.filter(x => x === l).length), pc = cnt.map(c => n ? 100 * c / n : 0);
           const compact = isCompact({ cat: true, levels });
@@ -3225,8 +3236,7 @@ const Analysis = (() => {
           }
           const gv = byGroup.map(rs => rs.map(r => toCat(r[v.cols[0].col])).filter(x => x !== null));
           const present = [...new Set(gv.flat())];
-          let levels = (v.levels && v.levels.length ? v.levels.filter(l => present.includes(l)) : []);
-          present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
+          const levels = catLevels(v, present);
           return { v, cat: analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null, v.test), levels, gv };
         });
         // CONSORT: a baseline table of a randomised trial is described without P values
@@ -3299,7 +3309,7 @@ const Analysis = (() => {
           if (trendOn) cells.push({ t: [fmtP(r.trend, alpha)], rs: span });
           if (opts.showStat) cells.push({ t: [(r.num || r.cat).stat], rs: span, small: true });
           if (showPost) cells.push({ t: r.num && r.num.p <= alpha ? postHocLines(r.num) : r.cat && r.cat.pairs ? postHocLines(r.cat) : ['---'], rs: span, small: true });
-          if (effOn) cells.push({ t: r.num ? (effNum ? effectLines(r.num) : ['---']) : (r.cat.binary && effCat ? rrLines(r.cat) : ['---']), rs: span, small: true });
+          if (effOn) cells.push({ t: !isFinite(x.p) ? ['—'] : r.num ? (effNum ? effectLines(r.num) : ['---']) : (r.cat.binary && effCat ? rrLines(r.cat) : ['---']), rs: span, small: true });
           const ex = r.extra || {};
           if (cluCol) cells.push({ t: [isFinite(ex.clu) ? fmtP(ex.clu, alpha) : '—'], rs: span });
           if (strCol) cells.push({ t: [isFinite(ex.str) ? fmtP(ex.str, alpha) : '—'], rs: span });
@@ -3379,7 +3389,9 @@ const Analysis = (() => {
         const effTxtAny = r => { if (k !== 2) return '';
           if (r.num) { const q = r.num.pairs[0], u = U(r.v); return q && isFinite(q.diff) ? `MD = ${fmt(q.diff, d)}${u}, 95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}${u}` : ''; }
           const q = r.cat.rr && r.cat.rr[0]; return q && q.rr !== null && q.rr !== undefined ? `${EF} = ${fmt(q.rr, 2)}, 95% CI ${fmt(q.lo, 2)} to ${fmt(q.hi, 2)}` : ''; };
-        const nsRes = res.filter(r => !((r.num || r.cat).p <= alpha));
+        // variables that could not be tested: a group without data, or one answer for every patient
+        const untested = noP ? [] : res.filter(r => !isFinite((r.num || r.cat).p));
+        const nsRes = res.filter(r => !((r.num || r.cat).p <= alpha) && !untested.includes(r));
         const sent = [];
         if (noP) { const vals = r => r.num ? r.num.desc.map((dd, i) => `${gl[i]}: ${r.num.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)}${U(r.v)}`).join(', ')
             : isCompact(r) ? r.cat.pct[0].map((p, i) => `${gl[i]}: ${fmt(p, 1)}%`).join(', ') : r.levels.map((lv, li) => `${lv} ${r.cat.pct[li].map(p => fmt(p, 1) + '%').join(' vs ')}`).join('; ');
@@ -3399,6 +3411,15 @@ const Analysis = (() => {
           if (rest.length) { const nsLabels = rest.map(r => lowerFirst(plain(r.v.label)));
             sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`); }
         }
+        if (untested.length && !descriptive) { const lab = r => lowerFirst(plain(r.v.label)), ns0 = r => r.num ? r.num.desc.map(dd => dd.n) : r.cat.ns;
+          const noData = untested.filter(r => ns0(r).some(n => !n) && ns0(r).some(n => n > 0)), none = untested.filter(r => !noData.includes(r) && ns0(r).every(n => !n));
+          const one = untested.filter(r => r.cat && !noData.includes(r) && !none.includes(r)), other = untested.filter(r => !noData.includes(r) && !none.includes(r) && !one.includes(r));
+          const byMissing = new Map(); noData.forEach(r => { const g = listJoin(ns0(r).map((n, i) => n ? '' : gl[i]).filter(Boolean)); byMissing.set(g, [...(byMissing.get(g) || []), r]); });
+          byMissing.forEach((rs, g) => sent.push(`${cap(listJoin(rs.map(lab)))} could not be compared ${amongTxt(k)}, as there were no data in ${g}.`));
+          if (none.length) sent.push(`${cap(listJoin(none.map(lab)))} had no recorded values.`);
+          one.forEach(r => { const c = r.cat, li = c.table.findIndex(row => S.sum(row) > 0), lv = r.levels[li], compact = isCompact(r);
+            sent.push(compact ? (li === 0 ? `All the studied patients had ${lab(r)}, so it was not compared ${amongTxt(k)}.` : `None of the studied patients had ${lab(r)}, so it was not compared ${amongTxt(k)}.`) : `All the studied patients had the same ${lab(r)} (${lv}), so it was not compared ${amongTxt(k)}.`); });
+          if (other.length) sent.push(`${cap(listJoin(other.map(lab)))} could not be tested ${amongTxt(k)} (too few values).`); }
         // optional: non-significant two-group results with their estimate and 95% CI, not only the P value
         if (k === 2 && !noP) res.forEach(r => {
           const lab = lowerFirst(plain(r.v.label));
@@ -3474,9 +3495,9 @@ const Analysis = (() => {
               }
             }
           }
-          const sigL = res.filter(r => (r.num || r.cat).p <= alpha).map(r => lowerFirst(plain(r.v.label))), nsL = res.filter(r => !((r.num || r.cat).p <= alpha)).map(r => lowerFirst(plain(r.v.label)));
-          if (res.length > 1) out.push(!sigL.length ? `Overall, the groups were comparable in all the studied variables.`
-            : !nsL.length ? `Overall, the groups differed significantly in all the studied variables.`
+          const sigL = res.filter(r => (r.num || r.cat).p <= alpha).map(r => lowerFirst(plain(r.v.label))), nsL = res.filter(r => isFinite((r.num || r.cat).p) && !((r.num || r.cat).p <= alpha)).map(r => lowerFirst(plain(r.v.label)));
+          if (res.length > 1 && (sigL.length || nsL.length)) out.push(!sigL.length ? (nsL.length === res.length ? `Overall, the groups were comparable in all the studied variables.` : `Overall, the groups were comparable in ${listJoin(nsL)}.`)
+            : !nsL.length ? (sigL.length === res.length ? `Overall, the groups differed significantly in all the studied variables.` : `Overall, the groups differed significantly in ${listJoin(sigL)}.`)
             : `Overall, the groups differed significantly in ${listJoin(sigL)}, whereas they were comparable in ${listJoin(nsL)}.`);
           return out;
         }
@@ -3518,6 +3539,8 @@ const Analysis = (() => {
         };
         const figures = res.filter(r => r.v.chart !== 'none').map(r => {
           const f = { sig: (r.num || r.cat).p <= alpha, vid: r.v.id, ...figureFor(r) };
+          // a group without data: no bar (the chart writes "no data"), not a bar at 0%
+          if (r.cat && f.spec && ['bar', 'line'].includes(f.spec.type) && r.cat.ns.some(n => !n)) f.spec.series = f.spec.series.map(s0 => Array.isArray(s0.values) && s0.values.length === k ? { ...s0, values: s0.values.map((x, j) => r.cat.ns[j] ? x : null) } : s0);
           if (r.v.caption) f.caption = r.v.caption;
           return f;
         });
