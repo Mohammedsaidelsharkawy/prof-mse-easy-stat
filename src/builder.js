@@ -780,6 +780,7 @@
     return { app: 'ProfMSE-EasyStat-mastersheet', version: 1, title: D.title, design: D.design, groupCol: ar.length >= 2 ? 'Group' : '', idCol: 'ID', arms: D.blind ? ar.map((_, i) => `Group ${String.fromCharCode(65 + i)}`) : D.arms, blind: !!D.blind, siteCol: (D.sites || []).filter(x => x && x.name).length ? 'Site' : '', helperCols: helpers, layout: D.layout, catAs: D.conv.catAs, missing: D.conv.missing,
       visits: D.visits.map(x => ({ tag: tagOf(x.name), name: x.name })),
       sampleSize: (r => r && !r.err ? r.text : '')(ssCalc(D)),
+      plan: (r => r && !r.err && r.v ? { label: r.v.label, num: !!r.num, a: r.a, b: r.b, sd: r.sd, alpha: r.alpha, power: r.power, drop: r.drop, n: r.total, enrol: r.enrol } : undefined)(ssCalc(D)),
       vars: D.vars.flatMap(v => { const base = { unit: v.unit, role: v.role, definition: v.definition, section: v.section, when: whenTxt(D, v) || undefined, refLo: v.refLo, refHi: v.refHi },
         colsOf = o => long ? [{ col: o === undefined ? baseName(D, v) : `${baseName(D, v)}_${tagOf(o)}` }] : cols.filter(c => c.v.id === v.id && c.opt === o).map(c => ({ col: c.col, visit: c.visit ? tagOf(c.visit.name) : '', visitName: c.visit ? c.visit.name : '' }));
         if (v.type === 'multi') return v.cats.map((o, i) => ({ ...base, id: `${v.id}_${i}`, label: `${v.label}: ${o}`, type: 'yn', cats: [...YN], group: v.group || v.label, cols: colsOf(o) }));

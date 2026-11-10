@@ -272,6 +272,14 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 - **Highlight rules**: significant rows in bold, rows with more than 20% missing in grey, large effects (d ≥ 0.8, RR ≥ 2 or ≤ 0.5) highlighted, each explained in the footnote when used.
 
 **📊 Report**
+- **🌲 Subgroup forest plot**: the primary outcome's mean difference (Welch CI) or relative risk within each category of the chosen subgroups, square sizes by weight, and the **P for interaction** (Cochran's Q across the subgroups). Matches scipy to the third decimal (e.g. Sex: −0.24 and 0.90, P interaction 0.115). Can be added at the end of the results.
+- **🧐 Statistical review (SAMPL)**: 14 items of the SAMPL guidelines (primary outcome, sample size, tests named, assumptions, summaries, effect sizes with CIs, exact P values, α, multiple comparisons, missing data, paired data, software, covariates, subgroups), each ✓ or ⚠ with what to do.
+- **⚖ Sensitivity analyses**: the primary outcome as analysed, per protocol (when set), without outliers (Tukey fences), with missing values imputed, and adjusted for the baseline variables (linear or logistic regression) in one table. The adjusted estimate matches statsmodels OLS (0.375, −0.256 to 1.007, P 0.241).
+- **📐 Planned vs actual**: patients, dropout, SD and difference of the primary outcome, planned against observed, and the power for the planned difference with the patients analysed. The plan comes with a master sheet made in phase 1, or is typed in.
+- **✍ Discussion draft**: main finding, against what was expected, strengths and limitations from the design and the data (design, sample size reached, missing data, centres, small sample, unadjusted comparisons), and a conclusion, with [brackets] for what only you can write.
+- **⬇ Interactive results page (.html)**: one file to send to a supervisor: search, significant only, open / close each table, every figure.
+- **🕘 Report versions**: every Word export is kept in this browser with its text; download any of them again, or compare two (words added and removed, P values that changed).
+- **Journal figure rules** in Export figures: Elsevier, Springer Nature and PLOS presets (format, dpi, width, text size), and more widths (8.4, 9, 13.2, 14, 19, 19.05 cm).
 - **🔎 Text against the tables**: every decimal or % written in a table's comment is looked for in that table; the ones not found are listed with their sentence (no false alarm on three example reports; a planted 99.9 was caught).
 
 ## Earlier additions
