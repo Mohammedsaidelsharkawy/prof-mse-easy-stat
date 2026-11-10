@@ -262,6 +262,18 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 - **From a published table**: paste a paper's Table 1 (mean (SD), mean ± SD, median [IQR], n (%), a category per row), choose where the Total column is, and the rows are matched to the design's variables; exact match is switched on. The data stay marked as simulated.
 - **⬇ Practice exercises (.docx)**: questions on the dataset (patients and duplicates, each comparison with its test, missing values, the planted errors, survival), and the model answers worked out from the data on a second page.
 
+**🗂 Tables of the report** (⚙ Options of a table)
+- **Pairwise P columns** (3+ groups): A vs B, A vs C, B vs C as columns — the table's post hoc test for numbers, Chi-square / Fisher (Bonferroni) for categories. Checked against scipy (Sex, Control vs Dexmedetomidine: 0.763).
+- **Groups in this table**: tick the groups to show (e.g. the two active arms without control); the table is analysed again with only them, and the footnote says so. Also the **order** of the groups for that table.
+- **Sub-headings inside a table**: a heading row above any variable (e.g. Vital signs, Laboratory) without splitting the table.
+- **Risk difference and NNT** (two groups, yes/no rows): RD in percentage points with the Newcombe CI (matches statsmodels: −10.9 to 39.9) and the number needed to treat; when the CI includes 0 it runs through ∞ (Altman), the negative end being the other direction.
+- **Style per table**: APA, NEJM, Lancet or compact for one table only, in the preview and in Word.
+- **Edit in the preview**: click a row name to rename it, drag ⠿ to move it, × to leave it out.
+- **Highlight rules**: significant rows in bold, rows with more than 20% missing in grey, large effects (d ≥ 0.8, RR ≥ 2 or ≤ 0.5) highlighted, each explained in the footnote when used.
+
+**📊 Report**
+- **🔎 Text against the tables**: every decimal or % written in a table's comment is looked for in that table; the ones not found are listed with their sentence (no false alarm on three example reports; a planted 99.9 was caught).
+
 ## Earlier additions
 
 **🧱 Build**

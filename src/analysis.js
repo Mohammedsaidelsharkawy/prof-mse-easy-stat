@@ -2975,7 +2975,7 @@ const Analysis = (() => {
     }
 
     // the options of a table (step 2, Tables): its columns and order, for that table only
-    const TB_KEYS = ['totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort'];
+    const TB_KEYS = ['totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort', 'pairCols', 'nntCol', 'tableGroupOrder', 'hlSig', 'hlMiss', 'hlEff'];
     let tbSaved = null; const tbRestore = () => { if (tbSaved) { Object.assign(opts, tbSaved); tbSaved = null; } };
     for (const b of blocks) {
       tbRestore(); { const o2 = b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table]; if (o2) { const ks = TB_KEYS.filter(x => o2[x] !== undefined); if (ks.length) { tbSaved = Object.fromEntries(ks.map(x => [x, opts[x]])); ks.forEach(x => { opts[x] = o2[x]; }); } } }
@@ -3277,6 +3277,18 @@ const Analysis = (() => {
         if (effOn) head.push(effHead);
         if (!noP && cluCol) head.push(`P (adjusted for clustering by ${cluCol})`); if (!noP && strCol) head.push(`P (stratified by ${strCol})`); if (!noP && powOn) head.push('Power (n per group for 80%)');
         if (opts.esCol && !noP) head.push('Effect size'); if (opts.refCol) head.push('Reference range'); if (opts.noteCol) head.push('Notes');
+        // pairwise columns (3+ groups): the P value of each pair of groups, as columns
+        const pairOn = !noP && !!opts.pairCols && k > 2, prs = pairOn ? pairs(k).map(([i, j]) => [ord.indexOf(i) < ord.indexOf(j) ? i : j, ord.indexOf(i) < ord.indexOf(j) ? j : i]) : [];
+        if (pairOn) { prs.forEach(([i, j]) => head.push(`${headName(gl[i], i)} vs ${headName(gl[j], j)}`)); used.add('pairCols'); }
+        const pairP = r => { if (r.num) return r.num.pairs || []; if (!r.pairColsCache) r.pairColsCache = r.cat.pairs || S.chiSquarePairwise(r.cat.table, opts.fisher, opts.chiAdjust || 'bonferroni'); return r.pairColsCache; };
+        // the risk difference and the number needed to treat (two groups, yes/no rows)
+        const nntOn = !noP && !!opts.nntCol && k === 2 && hasCat && res.some(r => r.cat && r.cat.binary);
+        if (nntOn) { head.push('RD, % (95% CI)', 'NNT (95% CI)'); used.add('nntCol'); }
+        const nntCells = (r, span) => { if (!(r.cat && r.cat.binary)) return [{ t: ['—'], rs: span }, { t: ['—'], rs: span }]; const c = r.cat, i0 = ord[0], i1 = ord[1];
+          if (!c.ns[i0] || !c.ns[i1]) return [{ t: ['—'], rs: span }, { t: ['—'], rs: span }]; const nc = S.newcombeDiff(c.table[0][i0], c.ns[i0], c.table[0][i1], c.ns[i1], CONF_OF(opts)), inv = x => Math.abs(x) < 1e-9 ? '∞' : fmt(1 / Math.abs(x), 1);
+          const nnt = Math.abs(nc.d) < 1e-9 ? '∞' : fmt(1 / Math.abs(nc.d), 1), ci = nc.lo > 0 || nc.hi < 0 ? `${inv(nc.lo > 0 ? nc.hi : nc.lo)} to ${inv(nc.lo > 0 ? nc.lo : nc.hi)}` : `${inv(nc.d >= 0 ? nc.hi : nc.lo)} to ∞ to −${inv(nc.d >= 0 ? nc.lo : nc.hi)}`;
+          return [{ t: [`${fmt(100 * nc.d, 1)} (${fmt(100 * nc.lo, 1)} to ${fmt(100 * nc.hi, 1)})`], rs: span, small: true }, { t: [`${nnt} (${ci})`], rs: span, small: true }]; };
+        const ncolsOf = () => head.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0), rowStart = new Map();
         const refTxt = v => { const lo = toNum(v.refLo), hi = toNum(v.refHi); return isFinite(lo) && isFinite(hi) ? `${fmt(lo, d0)}–${fmt(hi, d0)}` : isFinite(lo) ? `≥ ${fmt(lo, d0)}` : isFinite(hi) ? `≤ ${fmt(hi, d0)}` : '—'; };
         const extraCells = (r, span) => [...(opts.esCol && !noP ? [{ t: [effectMagnitude(r, k, opts) || '—'], rs: span, small: true }] : []), ...(opts.refCol ? [{ t: [r.num ? refTxt(r.v) : '—'], rs: span }] : []), ...(opts.noteCol ? [{ t: [r.v.rowNote || ''], rs: span, small: true }] : [])];
         res.forEach(r => { r.extra = cluCol || strCol || powOn ? extraTests(r) : {}; }); if (!noP) ASSUME.push(...res.filter(r => r.num));
@@ -3292,9 +3304,12 @@ const Analysis = (() => {
           if (cluCol) cells.push({ t: [isFinite(ex.clu) ? fmtP(ex.clu, alpha) : '—'], rs: span });
           if (strCol) cells.push({ t: [isFinite(ex.str) ? fmtP(ex.str, alpha) : '—'], rs: span });
           if (powOn) cells.push({ t: [isFinite(ex.pow) ? `${fmt(100 * ex.pow, 0)}% (${isFinite(ex.need) ? ex.need : '—'})` : '—'], rs: span, small: true });
-          return [...cells, ...extraCells(r, span)];
+          return [...cells, ...extraCells(r, span), ...(pairOn ? prs.map(([i, j]) => { const q = pairP(r).find(x => (x.i === i && x.j === j) || (x.i === j && x.j === i)); return { t: [q && isFinite(q.p) ? fmtP(q.p, alpha) : '—'], rs: span }; }) : []), ...(nntOn ? nntCells(r, span) : [])];
         };
         for (const r of resRows) {
+          // a sub-heading row above the variable (e.g. "Vital signs", "Laboratory")
+          if (r.v.subhead && String(r.v.subhead).trim()) trows.push([{ t: [String(r.v.subhead).trim()], b: true, left: true, sub: false, subhead: true, span: ncolsOf() }]);
+          rowStart.set(r, trows.length);
           if (r.num) {
             const n = r.num, P = n.param, d = r.v.dec !== undefined && r.v.dec !== null && r.v.dec !== '' ? +r.v.dec : d0; // decimals: the variable's own, else the report's
             const cen = n.desc.map(dd => P ? dd.mean : dd.median), maxJ = opts.boldMax && cen.some(isFinite) ? cen.indexOf(Math.max(...cen.filter(isFinite))) : -1;
@@ -3338,6 +3353,14 @@ const Analysis = (() => {
             if (totRow) trows.push([indent ? { t: ['\u2003Total'], span: twoCol ? 2 : 1, ind: true } : { t: ['Total'] }, ...O(c.ns.map(n => ({ t: [npc(n, 100, n)] }))), ...tot(true, () => { const n = S.sum(c.ns); return npc(n, 100, n); })]);
           }
         }
+        // highlight rules of the table: significant rows in bold, rows with much missing in grey, large effects marked
+        let hlMissUsed = false, hlEffUsed = false;
+        if (opts.hlSig || opts.hlMiss || opts.hlEff) { const starts = [...rowStart.entries()].sort((a, c) => a[1] - c[1]);
+          starts.forEach(([r, st], q) => { const en = q + 1 < starts.length ? starts[q + 1][1] - (starts[q + 1][0].v.subhead ? 1 : 0) : trows.length, R = trows.slice(st, en), x = r.num || r.cat;
+            if (opts.hlSig && !noP && x.p <= alpha) R.forEach(row => row.forEach(c => { c.b = true; }));
+            if (opts.hlMiss) { const nAll = byGroup.reduce((t, g) => t + g.length, 0), m = missingIn(r.v.cols[0].col, !!r.num); if (nAll && m / nAll > 0.2) { hlMissUsed = true; R.forEach(row => row.forEach(c => { c.grey = true; })); } }
+            if (opts.hlEff && !noP) { const m = /= (-?[\d.]+)/.exec(effectMagnitude(r, k, opts) || ''), es = m ? Math.abs(+m[1]) : NaN, big = r.num ? es >= 0.8 : (r.cat.rr || []).some(q => q.rr !== null && EF !== 'RD' && (q.rr >= 2 || q.rr <= 0.5)) || es >= 0.5;
+              if (big && R[0] && R[0][0]) { R[0][0].hl = true; hlEffUsed = true; } } }); }
         // comment
         // detailed style: "Age (Group A: 45.2 ± 8.1, Group B: 44.9 ± 7.6)" with P values on every sentence
         const values = r => {
@@ -3482,7 +3505,10 @@ const Analysis = (() => {
         const notes = [noP ? '' : tm.note, lettersUsed ? `Values in a row with no superscript letter in common differ significantly (post hoc, P value ≤ ${alpha})` : '', ...b.vars.map(v => v.note),
           !noP && cluCol ? `P adjusted for clustering by ${cluCol}: linear regression (numeric) or GEE logistic regression (yes/no) with cluster-robust standard errors, t with ${new Set(byGroup.flat().map(x => x[cluCol]).filter(x => !isMissing(x))).size - 1} df for numeric variables` : '',
           !noP && strCol ? `P stratified by ${strCol}: van Elteren test (numeric) or Cochran-Mantel-Haenszel test (yes/no)` : '',
-          !noP && powOn ? 'Power: of the two-group test at the observed difference and α, with the n per group needed for 80% power (post hoc power is descriptive)' : ''].filter(Boolean).join(', ');
+          !noP && powOn ? 'Power: of the two-group test at the observed difference and α, with the n per group needed for 80% power (post hoc power is descriptive)' : '',
+          pairOn ? `Pair columns: P value of each pair of groups (numbers: the post hoc test of the table; categories: Chi-square or Fisher's exact${(opts.chiAdjust || 'bonferroni') === 'bonferroni' ? ', Bonferroni-adjusted' : ''})` : '',
+          nntOn ? `RD: risk difference of the first category (${headName(gl[ord[0]], ord[0])} − ${headName(gl[ord[1]], ord[1])}, percentage points, Newcombe CI); NNT: number needed to treat (1 / |RD|; when the RD's CI includes 0, the CI runs through ∞ and its negative end is in the other direction)` : '',
+          hlMissUsed ? 'Grey rows: more than 20% missing values' : '', hlEffUsed ? 'Highlighted names: large effect (d ≥ 0.8, RR ≥ 2 or ≤ 0.5)' : ''].filter(Boolean).join(', ');
         if (!noP && cluCol) used.add('cluster'); if (!noP && strCol) used.add('strata'); if (!noP && powOn) used.add('power');
         // significance brackets between groups: pairwise P values once the overall test is significant
         const brackets = x => {
