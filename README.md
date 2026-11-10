@@ -11,7 +11,7 @@ A bar at the top of the app moves between the three phases of a study; each can 
 Fills the master sheet designed in phase 1 with **simulated patients** — for teaching, for testing the analysis plan before the data exist, and for checking the sample size:
 
 - **Patients and groups**: the number of patients, the groups from the design's randomisation list or a ratio (1:1, 2:1 …), and a seed (the same seed gives the same data).
-- **Expected values for each group and visit**: the mean of each number (with its SD, normal or skewed / log-normal), the % “Yes” of each yes/no item and the % of each category — empty cells use the expected values set in the design (each library variable has sensible defaults, e.g. age 50 ± 12, hypertension 30%). Different values between the groups make a treatment effect; different values over the visits make a change over time; the correlation of a patient's visits is set too.
+- **Expected values for each group and visit**: the mean of each number (with its SD — one for the variable, or its own for any group and visit — normal or skewed / log-normal), the % “Yes” of each yes/no item and the % of each category — empty cells use the expected values set in the design (each library variable has sensible defaults, e.g. age 50 ± 12, hypertension 30%). Different values between the groups make a treatment effect; different values over the visits make a change over time; the correlation of a patient's visits is set too.
 - **How numbers are made**, for each variable:
   - **Mean & SD**;
   - **Min & Max**: the values spread between them, centred, with a min–max for each group and visit if you wish;
@@ -249,6 +249,20 @@ python src/build.py
 This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
+
+**🎲 Generate**
+- **SD for each group and visit**: a ± box beside every mean. Empty, it uses the variable's SD. Checked on 3,000 patients: 5.02 and 14.87 for 5 and 15.
+- **Exact match**: each group's mean, SD and % come out exactly as typed (numbers rescaled, categories given out by largest remainders, the mean corrected after rounding), for tidy worked examples. The power simulation still draws freely. With 20 patients per group: means 40.00 and 50.00, 30% and 45% exactly; SDs within the rounding of whole years.
+- **Counts**: Poisson (mean 2.03, SD 1.44 for 2 and √2) and negative binomial with the SD asked (SD 3.10 for 3), always whole numbers.
+- **Ordinal outcomes**: the other groups' categories from the first group's by a proportional odds ratio. An ordinal logistic regression (statsmodels) recovered 2.46 for 2.5.
+- **Measurements that go together**: laboratory panels and vital signs linked when both are in the design: urea with creatinine (r 0.69 for 0.7), ALT with AST (0.79 for 0.8), haemoglobin with haematocrit (0.90), systolic with diastolic, height with weight, glucose with HbA1c and others.
+- **Operator effect**: patients of the same surgeon or anaesthetist (any column) alike, on every number or one. A mixed model (statsmodels) gave an ICC of 0.21 for 0.2.
+- **Harder survival**: hazards that change after half the follow-up (crossing curves: Cox HR 0.47 then 2.0 for 0.5 then 2), and a **competing event** (e.g. death from other causes) that ends the follow-up.
+- **Matched case-control pairs**: a control for each case with the same matching categories and numbers within ± a tolerance, a pair number, and the exposure from an odds ratio. Conditional logistic regression recovered 3.4 for 3 (1,000 pairs).
+- **From a published table**: paste a paper's Table 1 (mean (SD), mean ± SD, median [IQR], n (%), a category per row), choose where the Total column is, and the rows are matched to the design's variables; exact match is switched on. The data stay marked as simulated.
+- **⬇ Practice exercises (.docx)**: questions on the dataset (patients and duplicates, each comparison with its test, missing values, the planted errors, survival), and the model answers worked out from the data on a second page.
+
+## Earlier additions
 
 **🧱 Build**
 - **Offline data-entry form (.html)**: one file from the design, one patient per screen. It has drop-down lists, ranges (out of range in red), required fields (missing in yellow) and skip logic. It works in any browser without the internet, keeps the data in that browser, and exports and imports CSV with the master sheet's column names.
