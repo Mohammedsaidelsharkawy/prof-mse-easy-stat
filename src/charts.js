@@ -309,7 +309,7 @@ const Charts = (() => {
   function drawPanels(spec, paletteName, style) {
     if (VECTOR) throw new Error('panels have no vector version');
     let ps = spec.panels || [];
-    if (spec.sharedY) { const rng = ps.map(p => { const v = []; (p.series || []).forEach(sr => { (sr.values || []).forEach((x, i) => { if (isFinite(x)) { v.push(x); if (sr.err && isFinite(sr.err[i])) v.push(x + sr.err[i]); if (sr.hi && isFinite(sr.hi[i])) v.push(sr.hi[i]); if (sr.lo && isFinite(sr.lo[i])) v.push(sr.lo[i]); } }); (sr.data || []).forEach(a => a.forEach(x => { if (isFinite(x)) v.push(x); })); }); return v; }).flat();
+    if (spec.sharedY) { const rng = ps.map(p => { const v = []; (p.series || []).forEach(sr => { (sr.data || []).forEach(arr => (arr || []).forEach(x => { if (isFinite(x)) v.push(x); })); (sr.values || []).forEach((x, i) => { if (isFinite(x)) { v.push(x); if (sr.err && isFinite(sr.err[i])) v.push(x + sr.err[i]); if (sr.hi && isFinite(sr.hi[i])) v.push(sr.hi[i]); if (sr.lo && isFinite(sr.lo[i])) v.push(sr.lo[i]); } }); (sr.data || []).forEach(a => a.forEach(x => { if (isFinite(x)) v.push(x); })); }); return v; }).flat();
       if (rng.length) { const lo = Math.min(0, ...rng), hi = Math.max(...rng); ps = ps.map(p => ({ ...p, yMin: lo, yMax: hi + (hi - lo) * 0.08 })); } }
     // legends: on every panel, on the first only (shared), or none; equal heights: every panel drawn with the same shape
     const subs = ps.map((p, i) => draw(spec.legend === 'none' || (spec.legend === 'first' && i > 0) ? { ...p, legend: false } : p, paletteName, spec.equal ? { ...style, aspect: spec.equal } : style)); if (!subs.length) return makeCanvas(10, 10);

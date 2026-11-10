@@ -14,7 +14,7 @@
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, clinWord: false, testInText: false, tableIntro: false, limits: false, discuss: false, conclusion: false, subSummary: false, formerLatter: false, numWords: false, spelling: '', hedge: '', voice: '', tense: '', esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, clinWord: false, testInText: false, tableIntro: false, limits: false, discuss: false, conclusion: false, subSummary: false, formerLatter: false, numWords: false, spelling: '', hedge: '', voice: '', tense: '', esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, abbrFoot: true, figNoteParts: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figWidthCm: '15', figPerRow: 1, valueLabels: false,
     chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
@@ -33,7 +33,7 @@
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], clinWord: ['optClinWord', true], testInText: ['optTestInText', true], tableIntro: ['optTableIntro', true], limits: ['optLimits', true], discuss: ['optDiscuss', true], conclusion: ['optConclusion', true], subSummary: ['optSubSummary', true], formerLatter: ['optFormerLatter', true], numWords: ['optNumWords', true], spelling: ['optSpelling'], hedge: ['optHedge'], voice: ['optVoice'], tense: ['optTense'], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], clinWord: ['optClinWord', true], testInText: ['optTestInText', true], tableIntro: ['optTableIntro', true], limits: ['optLimits', true], discuss: ['optDiscuss', true], conclusion: ['optConclusion', true], subSummary: ['optSubSummary', true], formerLatter: ['optFormerLatter', true], numWords: ['optNumWords', true], spelling: ['optSpelling'], hedge: ['optHedge'], voice: ['optVoice'], tense: ['optTense'], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], abbrFoot: ['optAbbrFoot', true], figNoteParts: ['optFigNoteParts', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figWidthCm: ['optFigWidthCm'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], flowSameStyle: ['optFlowSame', true], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
@@ -3118,7 +3118,7 @@
   /* ---------- step 7: combined figures (several categorical or numeric items in one chart), with a live preview, copy, export and placement ---------- */
   const cfVars = cf => state.cfg.variables.filter(v => cf.kind === 'rep' ? v.kind === 'repeated' && v.type === 'categorical' : v.type === (cf.kind === 'num' ? 'numeric' : 'categorical') && v.kind === 'single' && v.cols.length === 1)
     .sort((a, b) => (cf.listOrder === 'sheet' ? state.data.headers.indexOf(a.cols[0].col) - state.data.headers.indexOf(b.cols[0].col) : 0));
-  const isYesNo = v => (v.levels || []).length === 2 && (v.levels || []).some(l => Analysis.POSITIVE.test(String(l).trim()));
+  const isYesNo = v => ((v.levels || []).length === 2 && (v.levels || []).some(l => Analysis.POSITIVE.test(String(l).trim()))) || ((v.levels || []).length === 1 && /^(yes|y|no|n|true|false|positive|negative|present|absent|0|1)$/i.test(String(v.levels[0]).trim()));
   const sel2 = (k, cur, opts2, attrs = '') => `<select data-cfk="${k}" style="width:auto" ${attrs}>${opts2.map(([v, l]) => `<option value="${esc(v)}" ${String(cur ?? '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   // where a figure goes: after the table of its first item, after / before a chosen table, at the end of the results, or in the appendix
   const placeSel = (cur, home) => { const T = state.figTables || []; return `<select data-cfk="place" style="width:auto;max-width:280px">${[[home ? 'home' : 'end', home ? 'After the table of its first item' : 'At the end of the results'], ...(home ? [['end', 'At the end of the results']] : []), ['appendix', 'In the appendix']].map(([v, l]) => `<option value="${v}" ${(cur || (home ? 'home' : 'end')) === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}
@@ -3136,7 +3136,7 @@
           <div style="flex:1;min-width:200px"><label class="f">Caption (optional)</label><input type="text" data-cfk="title" value="${esc(cf.title || '')}" placeholder="${esc(cf.groupName ? cf.groupName + ' of the studied groups' : num ? 'e.g. Age, weight and height of the studied groups' : 'e.g. Co-morbidities of the studied groups')}"></div>
           ${num ? `<div><label class="f">Chart</label>${sel2('chart', cf.chart || 'asVar', [['asVar', 'As in Figures by variable'], ['bar', 'Bar'], ['box', 'Box plot'], ['violin', 'Violin'], ['rain', 'Raincloud'], ['dot', 'Dot plot (every patient)'], ['dotci', 'Dots + mean 95% CI'], ['meanci', 'Mean with 95% CI']])}</div>
               <div><label class="f">Bars show</label>${sel2('stat', cf.stat || '', [['', 'Mean or median (as the data)'], ['mean', 'Mean (error bar of the figure options)'], ['median', 'Median (IQR)']])}</div>
-              <div><label class="f">Axes</label>${sel2('axes', cf.axes || 'panels', [['panels', 'One panel per item (own axis)'], ['shared', 'One shared axis']])}</div>
+              <div><label class="f">Axes</label>${sel2('axes', cf.axes || 'panels', [['panels', 'One panel per item (own axis)'], ['samey', 'One panel per item, the same Y axis'], ['shared', 'One shared axis']])}</div>
               <div><label class="f">Panels per row</label>${sel2('cols', String(cf.cols || ''), [['', 'Auto'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']])}</div>`
             : cf.kind === 'rep' ? `<div><label class="f">Category shown</label><input type="text" data-cfk="level" value="${esc(cf.level || '')}" placeholder="Yes (first category)" style="width:140px"></div>`
             : `<div><label class="f">Chart</label>${sel2('ctype', cf.ctype || 'bars', [['bars', 'Bars'], ['heat', 'Heat map (items × groups)'], ['dots', 'Dot plot of the %'], ['stacked', '100% stacked bars (all categories)'], ['upset', 'Combinations (which items occur together)'], ['forest', 'Forest plot: RR or OR of each item (two groups)']])}</div>
@@ -3151,6 +3151,7 @@
         <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:6px;align-items:center">
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="stars" ${cf.stars !== false ? 'checked' : ''}><span>* on significant items</span></label>
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="labels" ${cf.labels !== false ? 'checked' : ''}><span>Values on the bars</span></label>
+          ${!num ? `<label class="legend-note" style="margin:0" title="An item that no patient has (Yes 0%)">When no patient has it ${sel2('zeroYes', cf.zeroYes || 'zero', [['zero', 'show Yes 0%'], ['other', 'show its other answer']])}</label>` : ''}
           ${num ? `<label class="check" style="margin:0"><input type="checkbox" data-cfk="letters" ${cf.letters ? 'checked' : ''}><span>Panel letters A, B …</span></label>` : ''}
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="hide" ${cf.hide !== false ? 'checked' : ''}><span>Leave out the items' own figures</span></label>
           <span class="spacer"></span><span class="legend-note" data-cfn>${(cf.items || []).length} items</span>
@@ -3215,6 +3216,7 @@
           <div><label class="f">Panels per row</label><select data-pfk="cols" style="width:auto">${['2', '3', '1', '4'].map(c => `<option ${String(pf.cols || 2) === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
           <div><label class="f">Place in the report</label>${placeSel(pf.place, false).replace(/data-cfk=/g, 'data-pfk=')}</div>
           <div><label class="f">Legends</label><select data-pfk="legend" style="width:auto"><option value="each" ${!pf.legend || pf.legend === 'each' ? 'selected' : ''}>On every panel</option><option value="first" ${pf.legend === 'first' ? 'selected' : ''}>Shared (first panel only)</option><option value="none" ${pf.legend === 'none' ? 'selected' : ''}>None</option></select></div>
+          <div><label class="f">Y axis</label><select data-pfk="sameY" style="width:auto"><option value="" ${!pf.sameY ? 'selected' : ''}>Each panel its own</option><option value="1" ${pf.sameY ? 'selected' : ''}>The same for every panel (numbers)</option></select></div>
           <div><label class="f">Panel shape</label><select data-pfk="equal" style="width:auto"><option value="" ${!pf.equal ? 'selected' : ''}>As each figure</option><option value="standard" ${pf.equal === 'standard' ? 'selected' : ''}>Equal heights (4:3)</option><option value="wide" ${pf.equal === 'wide' ? 'selected' : ''}>Equal heights (wide)</option><option value="square" ${pf.equal === 'square' ? 'selected' : ''}>Equal heights (square)</option></select></div>
           <div><label class="f">Width in Word (cm)</label><input type="number" min="4" max="30" step="0.5" data-pfk="widthCm" value="${esc(pf.widthCm || '')}" placeholder="as figures" style="width:90px"></div>
           <label class="check" style="margin:0 0 6px"><input type="checkbox" data-pfk="hide" ${pf.hide ? 'checked' : ''}><span>Leave out the figures it combines</span></label>
@@ -3238,7 +3240,7 @@
     } catch (err) { console.error(err); box.innerHTML = `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; } }
   const panelFigure = (pf, src) => src.length < 2 ? null : { comb: true, panelFig: true, place: pf.place || 'end', sig: true, vid: 'pf_' + pf.id, note: '',
     caption: pf.caption || `Combined figure: ${src.map((f, k) => `(${String.fromCharCode(65 + k)}) ${f.caption}`).join('; ')}`,
-    spec: { type: 'panels', cols: +pf.cols || 2, letters: true, legend: pf.legend || 'each', equal: pf.equal || '', panels: src.map(f => ({ ...f.spec, title: null })) }, widthCm: +pf.widthCm || undefined, srcKeys: src.map(f => f.caption), hideSrc: !!pf.hide };
+    spec: { type: 'panels', cols: +pf.cols || 2, letters: true, legend: pf.legend || 'each', equal: pf.equal || '', sharedY: !!pf.sameY && pf.sameY !== '0', panels: src.map(f => ({ ...f.spec, title: null })) }, widthCm: +pf.widthCm || undefined, srcKeys: src.map(f => f.caption), hideSrc: !!pf.hide };
   $('#pfAdd').onclick = () => { if (!state.cfg) return; (state.cfg.panelFigs = state.cfg.panelFigs || []).push({ id: 'pf' + Date.now().toString(36), caption: '', cols: 2, keys: [], place: 'end', hide: false }); renderPanelFigs(); };
   $('#pfList').addEventListener('input', e => { const box = e.target.closest('[data-pf]'); if (!box) return; const i = +box.dataset.pf, pf = state.cfg.panelFigs[i], t = e.target;
     if (t.dataset.pfv !== undefined) { pf.keys = (pf.keys || []).filter(x => x !== t.dataset.pfv); if (t.checked) pf.keys.push(t.dataset.pfv); renderPanelFigs(); return; }
@@ -5683,7 +5685,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         res.auto = { methods: res.methods || '', sections: res.sections.map(s => ({ title: s.title, comment: s.comment || '' })) }; state.rephraseBase = {}; state.rephraseK = {};
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
           f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options); const own = f.comb ? f.note || '' : '';
-          f.note = [own, cfg.options.figNotes ? figNote(f.spec, cfg.options) : ''].filter(Boolean).join(' ');
+          f.note = [own, cfg.options.figNotes || cfg.options.figNoteParts ? figNote(f.spec, cfg.options) : ''].filter(Boolean).join(' ');
           if (cfg.options.midDot) f.note = dot(f.note);
         }); });
         const pal = chartPalette(cfg.options);
@@ -5722,7 +5724,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   }
   // the caption's explanation of what the chart shows: bars, error bars, boxes, markers and significance stars
   function figNote(spec, o) {
-    const P = o.pWord === 'p' ? 'p' : 'P', out = [], series = spec.series || [];
+    const P = o.pWord === 'p' ? 'p' : 'P', out = [], sym = [], series = spec.series || [];
     const err = { sem: 'the standard error of the mean (SEM)', ci: 'the 95% CI of the mean' }[spec.errKind || o.errorBar] || '±1 standard deviation (SD)';
     if ((spec.type === 'bar' || spec.type === 'line') && !spec.percent && !spec.integer) {
       const what = spec.type === 'bar' ? 'Bars' : 'Points';
@@ -5730,7 +5732,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
       else if (series.some(s => s.lo)) out.push(`${what} show the median; error bars show the interquartile range (IQR)${o.errBars === 'up' ? ', drawn upward only (to the 75th percentile)' : ''}.`);
     }
     if (spec.individual) out.push('Thin lines show individual patients.');
-    if (isFinite(spec.refLine)) out.push(`The dashed red line marks ${spec.refLabel ? `${spec.refLabel} (${spec.refLine})` : `the value ${spec.refLine}`}.`);
+    if (isFinite(spec.refLine)) sym.push(`The dashed red line marks ${spec.refLabel ? `${spec.refLabel} (${spec.refLine})` : `the value ${spec.refLine}`}.`);
     if (spec.type === 'box') {
       out.push('Boxes show the median and interquartile range (IQR); whiskers extend to the most extreme values within 1.5 × IQR, and points beyond them are outliers.');
       if (o.boxMean) out.push('◆ marks the mean.');
@@ -5747,15 +5749,16 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     if (['bar', 'line', 'box', 'dot', 'violin'].includes(spec.type)) {
       const ps = [...(spec.sig || []).map(q => q.p), ...(spec.sigCat || [])].filter(p => p <= spec.alpha);
       const what = spec.sig ? 'brackets: comparison between the groups' : spec.sigWhat ? `compared with ${spec.sigWhat}` : 'difference between the groups at that time';
-      if (ps.length && o.sigLabel === 'p') out.push(`Exact ${P} values are shown for significant differences (${what}).`);
+      if (ps.length && o.sigLabel === 'p') sym.push(`Exact ${P} values are shown for significant differences (${what}).`);
       else if (ps.length) {
         const lv = [`*${P} ≤ ${+o.pLead === 0 ? String(spec.alpha).replace(/^0\./, '.') : spec.alpha}`];
         if (ps.some(p => p <= 0.01)) lv.push(`**${P} ≤ 0.01`);
         if (ps.some(p => p <= 0.001)) lv.push(`***${P} ≤ 0.001`);
-        out.push(`${lv.join(', ')} (${what}).`);
+        sym.push(`${lv.join(', ')} (${what}).`);
       }
     }
-    return Analysis.relabelCI(out.filter(Boolean).join(' '), o.confLevel);
+    // by default only the symbols (*, **, ***, the dashed line); the parts of the chart (bars, error bars, boxes, markers) when asked
+    return Analysis.relabelCI([...(o.figNoteParts ? out : []), ...(o.figNotes !== false ? sym : [])].filter(Boolean).join(' '), o.confLevel);
   }
   // per-variable figure settings of step 7: y-axis range and a reference line
   function figVarProps(f) {

@@ -3407,9 +3407,9 @@ const Analysis = (() => {
           const trendR = opts.trendWord ? nsRes.filter(r => (r.num || r.cat).p < 0.1) : [];
           const base = nsRes.filter(r => r.v.role === 'baseline' && !trendR.includes(r)), rest = nsRes.filter(r => r.v.role !== 'baseline' && !trendR.includes(r));
           trendR.forEach(r => sent.push(`${cap(plain(r.v.label))} showed a non-significant trend towards a difference ${amongTxt(k)} (P value ${pTxt((r.num || r.cat).p)}).`));
-          if (base.length) sent.push(`The groups were comparable regarding ${listJoin(base.map(r => lowerFirst(plain(r.v.label))))} (P value > ${opts.alpha}).`);
-          if (rest.length) { const nsLabels = rest.map(r => lowerFirst(plain(r.v.label)));
-            sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)}.`); }
+          // every non-significant variable of the table in one sentence, with one wording (baseline or outcome alike)
+          const nsAll = [...base, ...rest].sort((x, y) => res.indexOf(x) - res.indexOf(y)), nsLabels = nsAll.map(r => lowerFirst(plain(r.v.label)));
+          if (nsLabels.length) sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)} (P value > ${opts.alpha}).`);
         }
         if (untested.length && !descriptive) { const lab = r => lowerFirst(plain(r.v.label)), ns0 = r => r.num ? r.num.desc.map(dd => dd.n) : r.cat.ns;
           const noData = untested.filter(r => ns0(r).some(n => !n) && ns0(r).some(n => n > 0)), none = untested.filter(r => !noData.includes(r) && ns0(r).every(n => !n));
@@ -3417,8 +3417,11 @@ const Analysis = (() => {
           const byMissing = new Map(); noData.forEach(r => { const g = listJoin(ns0(r).map((n, i) => n ? '' : gl[i]).filter(Boolean)); byMissing.set(g, [...(byMissing.get(g) || []), r]); });
           byMissing.forEach((rs, g) => sent.push(`${cap(listJoin(rs.map(lab)))} could not be compared ${amongTxt(k)}, as there were no data in ${g}.`));
           if (none.length) sent.push(`${cap(listJoin(none.map(lab)))} had no recorded values.`);
-          one.forEach(r => { const c = r.cat, li = c.table.findIndex(row => S.sum(row) > 0), lv = r.levels[li], compact = isCompact(r);
-            sent.push(compact ? (li === 0 ? `All the studied patients had ${lab(r)}, so it was not compared ${amongTxt(k)}.` : `None of the studied patients had ${lab(r)}, so it was not compared ${amongTxt(k)}.`) : `All the studied patients had the same ${lab(r)} (${lv}), so it was not compared ${amongTxt(k)}.`); });
+          // grouped: the items no patient had, the items every patient had, then those with one category for everyone
+          const liOf = r => r.cat.table.findIndex(row => S.sum(row) > 0), noneHad = one.filter(r => isCompact(r) && liOf(r) !== 0), allHad = one.filter(r => isCompact(r) && liOf(r) === 0), same = one.filter(r => !isCompact(r)), orJoin = a => a.length < 2 ? (a[0] || '') : `${a.slice(0, -1).join(', ')} or ${a[a.length - 1]}`;
+          if (noneHad.length) sent.push(`None of the studied patients had ${orJoin(noneHad.map(lab))}, so ${noneHad.length > 1 ? 'they were' : 'it was'} not compared ${amongTxt(k)}.`);
+          if (allHad.length) sent.push(`All the studied patients had ${listJoin(allHad.map(lab))}, so ${allHad.length > 1 ? 'they were' : 'it was'} not compared ${amongTxt(k)}.`);
+          same.forEach(r => sent.push(`All the studied patients had the same ${lab(r)} (${r.levels[liOf(r)]}), so it was not compared ${amongTxt(k)}.`));
           if (other.length) sent.push(`${cap(listJoin(other.map(lab)))} could not be tested ${amongTxt(k)} (too few values).`); }
         // optional: non-significant two-group results with their estimate and 95% CI, not only the P value
         if (k === 2 && !noP) res.forEach(r => {
@@ -3436,7 +3439,25 @@ const Analysis = (() => {
           if (r.num) { const q = r.num.pairs[0]; if (q && isFinite(q.lo)) sent.push(`The ${r.num.param ? 'mean' : 'median'} difference in ${lowerFirst(plain(r.v.label))} was ${fmt(q.diff, d)}${U(r.v)} (95% CI ${fmt(q.lo, d)} to ${fmt(q.hi, d)}${U(r.v)}).`); }
           else { const q = r.cat.rr && r.cat.rr[0]; if (q && q.rr !== null && q.rr !== undefined && isFinite(q.lo)) sent.push(`For ${lowerFirst(plain(r.v.label))}, the ${EF} was ${fmt(q.rr, 2)} (95% CI ${fmt(q.lo, 2)} to ${fmt(q.hi, 2)}).`); }
         });
-        for (const r of res.filter(r => !descriptive && !noP && (r.num || r.cat).p <= alpha)) {
+        // the significant variables grouped: two groups, numbers and yes/no items together by the group that was higher, in one wording
+        const sigAll = res.filter(r => !descriptive && !noP && (r.num || r.cat).p <= alpha), testInG = r2 => opts.testInText ? `; ${TEST_NAME[(r2.num || r2.cat).test] || (r2.num || r2.cat).test}` : '';
+        const grouped = new Set();
+        if (k === 2) { const items = sigAll.filter(r => r.num || isCompact(r)).map(r => { const x = r.num || r.cat;
+            const hi = r.num ? (() => { const loc = i => r.num.param ? r.num.desc[i].mean : r.num.desc[i].median, lo = loc(0) < loc(1) || (loc(0) === loc(1) && r.num.desc[0].mean < r.num.desc[1].mean) ? 0 : 1; return 1 - lo; })() : (r.cat.pct[0][0] >= r.cat.pct[0][1] ? 0 : 1);
+            const vals = r.num ? '' : `${pctTxt(r.cat.pct[0][hi])}% vs ${pctTxt(r.cat.pct[0][1 - hi])}%, `;
+            return { r, hi, lab: isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label)), detail: `${vals}P value ${pTxt(x.p)}${effTxt(r)}${testInG(r)}` }; });
+          [0, 1].forEach(hi => { const its = items.filter(x => x.hi === hi); if (!its.length) return; its.forEach(x => grouped.add(x.r));
+            if (its.length === 1) sent.push(`${cap(its[0].lab)} was significantly higher in ${gl[hi]} than ${gl[1 - hi]} (${its[0].detail}).`);
+            else sent.push(`${cap(listJoin(its.map((x, i) => i ? lowerFirst(x.lab) : x.lab)))} were significantly higher in ${gl[hi]} than ${gl[1 - hi]} (${its.map(x => `${lowerFirst(x.lab)}: ${x.detail}`).join('; ')}).`);
+            its.forEach(x => { const r = x.r; if (!r.num) return;
+              if (opts.clinWord) { const em = effectMagnitude(r, k, opts); if (/negligible|very small|small/.test(em)) sent.push(`Although statistically significant, the difference in ${lowerFirst(plain(r.v.label))} was ${/negligible/.test(em) ? 'negligible' : 'small'} in size (${em.replace(/, [a-z ]+$/, '')}) and may be of limited clinical importance.`); }
+              const mc = Math.abs(toNum(r.v.mcid)), q = r.num.pairs[0]; if (mc > 0 && q && isFinite(q.diff)) sent.push(`The difference in ${lowerFirst(plain(r.v.label))} (${fmt(Math.abs(q.diff), d)}${U(r.v)}) ${Math.abs(q.diff) >= mc ? 'exceeded' : 'was smaller than'} the minimal clinically important difference of ${fmt(mc, d)}${U(r.v)}.`); }); }); }
+        // three groups or more: numbers with the same pattern of pairwise differences together, yes/no items highest in the same group together
+        if (k > 2) { const keyed = new Map(); sigAll.filter(r => r.num && !opts.clinWord && !(Math.abs(toNum(r.v.mcid)) > 0)).forEach(r => { const pd = pairDescription(r.num, gl, alpha); if ((pd.key.match(/\{P\}/g) || []).length !== 1 || pd.ps.length !== 1) return; keyed.set(pd.key, [...(keyed.get(pd.key) || []), { r, p: pd.ps[0] }]); });
+          keyed.forEach((its, key) => { if (its.length < 2) return; its.forEach(x => grouped.add(x.r)); sent.push(`${cap(listJoin(its.map(x => lowerFirst(withValues(x.r, plain(x.r.v.label))))))} were ${key.replace('{P}', `${its.map(x => pTxt(x.p)).join(', ')}, respectively`)}.`); });
+          const byBest = new Map(); sigAll.filter(r => r.cat && isCompact(r) && !r.cat.pairs).forEach(r => { const best = r.cat.pct[0].indexOf(Math.max(...r.cat.pct[0])); byBest.set(best, [...(byBest.get(best) || []), r]); });
+          byBest.forEach((rs, best) => { if (rs.length < 2) return; rs.forEach(r => grouped.add(r)); sent.push(`${cap(listJoin(rs.map((r, i) => i ? lowerFirst(plain(r.v.label)) : plain(r.v.label))))} were significantly different ${amongTxt(k)}, being highest in ${gl[best]} (${rs.map(r => `${lowerFirst(plain(r.v.label))}: ${pctTxt(r.cat.pct[0][best])}%, P value ${pTxt(r.cat.p)}`).join('; ')}).`); }); }
+        for (const r of sigAll.filter(r => !grouped.has(r))) {
           // compact categorical sentences already quote their percentages
           const lab = isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label));
           const testIn = r2 => opts.testInText ? `; ${TEST_NAME[(r2.num || r2.cat).test] || (r2.num || r2.cat).test}` : '';
@@ -3741,7 +3762,7 @@ const Analysis = (() => {
       if (!num) {
         let rows = [];
         items.forEach(v => { const vals = byGroup.map(rs => rs.map(r => toCat(r[v.cols[0].col])).filter(x => x !== null)), all = [...new Set(vals.flat())];
-          const lv = [...(v.levels && v.levels.length ? v.levels.map(String) : []), ...all.filter(x => !(v.levels || []).map(String).includes(x))].filter(l => all.includes(l));
+          const lv0 = [...(v.levels && v.levels.length ? v.levels.map(String) : []), ...all.filter(x => !(v.levels || []).map(String).includes(x))].filter(l => all.includes(l)), lv = cf.zeroYes === 'other' ? lv0 : catLevels(v, all).map(String);
           const yn = lv.length === 2 && lv.some(yesLike), legacy = cf.catMode === 'all' ? 'all' : cf.catMode === 'list' ? 'list' : '';
           let mode = (cf.itemCats || {})[v.id] || legacy || (yn ? 'first' : 'all');
           const want = String(cf.level || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
@@ -3802,13 +3823,13 @@ const Analysis = (() => {
         let spec;
         if (cf.axes === 'shared' && allBar) spec = { type: cf.type === 'hbar' ? 'hbar' : 'bar', labels: cf.labels !== false, labelDec: d, categories: rows.map(r => plain(r.v.label) + (stars && r.p <= alpha ? sym : '')), yLabel: cf.yLabel || (med ? 'Median' : 'Mean'),
           series: cats.map((g, gi) => med ? { name: g, values: rows.map(r => r.ds[gi].median ?? NaN), lo: rows.map(r => r.ds[gi].q1), hi: rows.map(r => r.ds[gi].q3) } : { name: g, values: rows.map(r => r.ds[gi].mean ?? NaN), err: rows.map(r => r.ds[gi].n ? errOf(r.ds[gi]) : null) }) };
-        else spec = { type: 'panels', cols: +cf.cols || Math.min(3, rows.length), letters: cf.letters === true, sharedY: cf.axes === 'shared', panels: rows.map(panel) };
+        else spec = { type: 'panels', cols: +cf.cols || Math.min(3, rows.length), letters: cf.letters === true, sharedY: cf.axes === 'shared' || cf.axes === 'samey', panels: rows.map(panel) };
         const kinds = [...new Set(rows.map(chartOf))], how = kinds.length === 1 ? { bar: med ? ' (bars show the median; error bars show the IQR)' : allBar && rows.every(r => r.param || cf.stat === 'mean') ? ` (bars show the mean; error bars show ${{ sem: 'the SEM', ci: 'the 95% CI' }[opts.errorBar] || '±1 SD'})` : '', box: ' (box plots)', violin: ' (violin plots)', rain: ' (raincloud plots)', dot: ' (every patient)', dotci: ' (every patient, mean with 95% CI)', meanci: ' (mean with 95% CI)' }[kinds[0]] || '' : '';
         fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what: '', how };
       }
       const capList = listJoin(items.map(v => lowerFirst(plain(v.label))).map((t, i2) => i2 ? t : t.charAt(0).toUpperCase() + t.slice(1)));
       const out = { sig: fig.anySig || k === 1, vid: 'cf_' + (cf.id || items.map(v => v.id).join('_')), comb: true, place: cf.place || 'home', widthCm: +cf.widthCm || undefined,
-        caption: (cf.title || `${cf.groupName || capList}${fig.what} of the studied ${k > 1 ? 'groups' : 'patients'}`) + (fig.how || ''),
+        caption: (cf.title || `${cf.groupName || capList}${fig.what} of the studied ${k > 1 ? 'groups' : 'patients'}`) + (opts.figNoteParts ? fig.how || '' : ''),
         note: stars && fig.anySig ? `${sym} significant difference between the groups (P ≤ ${alpha}).` : '', spec: fig.spec };
       // the figure goes with the table of its first item (other places are set by the app); the items' own figures are left out (unless asked to keep them)
       const ids = new Set(items.map(v => v.id)), home = sections.find(sec => (sec.meta && ((sec.meta.res || []).some(x => x.v && ids.has(x.v.id)) || (sec.meta.rawVars || []).some(x => ids.has(x)))) || (sec.figures || []).some(f => ids.has(f.vid))) || sections[sections.length - 1];
@@ -4478,6 +4499,19 @@ const Analysis = (() => {
   const sentencesOf = t => (String(t || '').match(/[^.!?]+(?:\.(?=\d)[^.!?]*)*[.!?]+(?:\s+|$)|[^.!?]+$/g) || []).map(x => x.trim()).filter(Boolean);
   const trimWords = (t, n) => { if (!n || !t) return t; const ss = sentencesOf(t), out = []; let w = 0;
     for (const x of ss) { const c = x.split(/\s+/).length; if (out.length && w + c > n) break; out.push(x); w += c; } return out.join(' '); };
+  // the common abbreviations used in a table (its row names and headings), defined in its footnote
+  const TAB_ABBR = [['BMI', 'Body mass index'], ['ASA', 'American Society of Anesthesiologists physical status'], ['Hb', 'Haemoglobin'], ['HbA1c', 'Glycated haemoglobin'], ['Hct', 'Haematocrit'], ['WBCs', 'White blood cells'], ['WBC', 'White blood cells'], ['RBCs', 'Red blood cells'], ['RBC', 'Red blood cells'], ['PLT', 'Platelets'],
+    ['CRP', 'C-reactive protein'], ['ESR', 'Erythrocyte sedimentation rate'], ['PCT', 'Procalcitonin'], ['IL-6', 'Interleukin-6'], ['IL6', 'Interleukin-6'], ['NLR', 'Neutrophil-to-lymphocyte ratio'], ['ALT', 'Alanine aminotransferase'], ['AST', 'Aspartate aminotransferase'], ['ALP', 'Alkaline phosphatase'], ['GGT', 'Gamma-glutamyl transferase'],
+    ['INR', 'International normalised ratio'], ['PT', 'Prothrombin time'], ['aPTT', 'Activated partial thromboplastin time'], ['BUN', 'Blood urea nitrogen'], ['eGFR', 'Estimated glomerular filtration rate'], ['FBG', 'Fasting blood glucose'], ['RBG', 'Random blood glucose'], ['LDL', 'Low-density lipoprotein'], ['HDL', 'High-density lipoprotein'], ['TG', 'Triglycerides'],
+    ['TSH', 'Thyroid-stimulating hormone'], ['SBP', 'Systolic blood pressure'], ['DBP', 'Diastolic blood pressure'], ['MAP', 'Mean arterial pressure'], ['HR', 'Heart rate'], ['SpO2', 'Peripheral oxygen saturation'], ['SpO₂', 'Peripheral oxygen saturation'], ['ETCO2', 'End-tidal carbon dioxide'], ['GCS', 'Glasgow Coma Scale'],
+    ['VAS', 'Visual analogue scale'], ['NRS', 'Numeric rating scale'], ['SOFA', 'Sequential Organ Failure Assessment'], ['APACHE', 'Acute Physiology and Chronic Health Evaluation'], ['ICU', 'Intensive care unit'], ['LOS', 'Length of stay'], ['PONV', 'Postoperative nausea and vomiting'], ['PACU', 'Post-anaesthesia care unit'],
+    ['IHD', 'Ischaemic heart disease'], ['DM', 'Diabetes mellitus'], ['HTN', 'Hypertension'], ['COPD', 'Chronic obstructive pulmonary disease'], ['CKD', 'Chronic kidney disease'], ['CHF', 'Congestive heart failure'], ['AF', 'Atrial fibrillation'], ['DVT', 'Deep vein thrombosis'], ['PE', 'Pulmonary embolism'], ['UTI', 'Urinary tract infection'], ['SSI', 'Surgical site infection'],
+    ['NYHA', 'New York Heart Association'], ['EF', 'Ejection fraction'], ['LVEF', 'Left ventricular ejection fraction'], ['ECOG', 'Eastern Cooperative Oncology Group'], ['PHQ-9', 'Patient Health Questionnaire-9'], ['GAD-7', 'Generalised Anxiety Disorder-7'], ['HADS', 'Hospital Anxiety and Depression Scale'], ['QoR-15', 'Quality of Recovery-15'], ['TAP', 'Transversus abdominis plane'], ['ESP', 'Erector spinae plane']];
+  function abbrFootnotes(r, o) { if (o.abbrFoot === false) return r;
+    (r.sections || []).forEach(s0 => { if (!s0.rows || !s0.rows.length) return; const txt = [...(s0.head || []).map(h => typeof h === 'string' ? h : [].concat(h.t || '').join(' ')), ...s0.rows.map(rw => rw[0] ? [].concat(rw[0].t || '').join(' ') : ''), ...s0.rows.map(rw => rw[1] ? [].concat(rw[1].t || '').join(' ') : ''), s0.title || ''].join(' | '), foot = s0.footnote || '';
+      const seen = new Set(), add = []; TAB_ABBR.forEach(([a, full]) => { if (seen.has(full)) return; const re = new RegExp(`(^|[^A-Za-z0-9])${a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}(?![A-Za-z0-9])`); if (re.test(txt) && !new RegExp(`(^|[ ,(])${a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}: `).test(foot)) { seen.add(full); add.push(`${a}: ${full}`); } });
+      if (add.length) s0.footnote = foot.trim() ? `${foot.trim().replace(/\.\s*$/, '')}, ${add.join(', ')}.` : `${add.join(', ')}.`; });
+    return r; }
   function polish(r, o) {
     if (!r || !r.sections) return r;
     const dict = String(o.phraseDict || '').split(/\n/).map(l => l.split(/\s*(?:=>|→)\s*/)).filter(x => x.length === 2 && x[0].trim()).map(([a, b]) => [a.trim(), b.trim()]);
@@ -4525,7 +4559,7 @@ const Analysis = (() => {
     }
     return r;
   }
-  const run2 = (data, cfg) => polish(figExtras(relabelCI(run(data, cfg), cfg.options.confLevel), cfg), cfg.options), explore2 = (data, cfg, xo) => relabelCI(explore(data, cfg, xo), cfg.options.confLevel);
+  const run2 = (data, cfg) => abbrFootnotes(polish(figExtras(relabelCI(run(data, cfg), cfg.options.confLevel), cfg), cfg.options), cfg.options), explore2 = (data, cfg, xo) => relabelCI(explore(data, cfg, xo), cfg.options.confLevel);
   // repeated-measures tables with the timepoints as columns: each group (or the group's value, its change and P) becomes a row;
   // "P (within group)" becomes a last column, "P (time vs first)" a row per group, and an overall test a row across the timepoints
   function timepointsAsColumns(s) {

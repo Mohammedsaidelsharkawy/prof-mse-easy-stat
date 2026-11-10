@@ -1105,6 +1105,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optTranspose"><span><b>Groups as rows</b> — variables as columns (useful with many groups)</span></label>
           <label class="check"><input type="checkbox" id="optMissTable"><span><b>Missing-data table</b> — missing values of every variable per group</span></label>
           <label class="check"><input type="checkbox" id="optAutoFit"><span><b>Column widths fitted to the content</b> in Word</span></label>
+          <label class="check"><input type="checkbox" id="optAbbrFoot" checked><span><b>Common abbreviations in the footnote</b> — BMI, ASA, Hb, WBCs, CRP, SBP and others found in a table are defined under it</span></label>
           <label class="check"><input type="checkbox" id="optAbbrEnd"><span><b>One abbreviation list</b> at the end of the results instead of under each table</span></label>
           <div class="row" style="gap:8px;margin-top:6px"><div><label class="f">Order of the rows</label><select id="optTableSort" style="width:auto"><option value="">As in step 2</option><option value="p">By P value (smallest first)</option><option value="effect">By effect size (largest first)</option></select></div>
             <div><label class="f">Baseline table split by</label><select id="optTwoFactor" style="width:auto"></select></div>
@@ -1299,7 +1300,8 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optCapAbove"><span><b>Captions above the figures</b> in Word</span></label>
           <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
           <label class="check"><input type="checkbox" id="optFigFrame"><span><b>Frame</b> around each figure</span></label>
-          <label class="check"><input type="checkbox" id="optFigNotes" checked><span><b>Explain the symbols in the caption</b> — what *, **, ***, the bars, error bars, boxes and markers show</span></label>
+          <label class="check"><input type="checkbox" id="optFigNotes" checked><span><b>Explain the symbols in the caption</b> — the *, **, *** and dashed lines used in the figure</span></label>
+          <label class="check"><input type="checkbox" id="optFigNoteParts"><span><b>Also explain the bars, error bars, boxes and markers</b> — what each part of the chart shows (mean ± SD, median and IQR, outliers …)</span></label>
         </div>
       </div>
     </div>
