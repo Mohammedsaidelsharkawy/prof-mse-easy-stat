@@ -2043,6 +2043,12 @@
     const ws = wb && wb.Sheets && wb.Sheets._EasyStatSetup; if (!ws) return null;
     try { const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true }); const j = JSON.parse(aoa.map(r => r[0] || '').join('')); return j && j.app === 'ProfMSE-EasyStat-mastersheet' ? j : null; } catch (e) { return null; }
   }
+  // B2: the screening log sheet of a master sheet: screened, not eligible, declined, other reasons, randomised
+  function screenLog(wb) { const ws = wb && wb.Sheets && wb.Sheets.Screening; if (!ws) return null; try { const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }), hr = aoa.findIndex(r => r && r[0] === 'Screening no.'); if (hr < 0) return null;
+      const H = aoa[hr], ix = n => H.indexOf(n), rows = aoa.slice(hr + 1).filter(r => r && (r[1] !== null && r[1] !== '' || r[2] !== null && r[2] !== '')); if (!rows.length) return null;
+      const yes = (r, n) => /^yes$/i.test(String(r[ix(n)] ?? '').trim()), no = (r, n) => /^no$/i.test(String(r[ix(n)] ?? '').trim()), why = r => String(r[ix('Reason not enrolled')] ?? '').trim();
+      const notElig = rows.filter(r => no(r, 'Eligible') || why(r) === 'Not eligible').length, declined = rows.filter(r => !no(r, 'Eligible') && why(r) !== 'Not eligible' && (why(r) === 'Declined' || no(r, 'Consented'))).length, rand = rows.filter(r => yes(r, 'Randomised')).length;
+      return { assessed: rows.length, randomised: rand, reasons: [['Not meeting inclusion criteria', notElig], ['Declined to participate', declined], ['Other reasons', Math.max(0, rows.length - rand - notElig - declined)]] }; } catch (e) { console.error(e); return null; } }
   function applyBuilderSetup(cfg, S0, sandbox) {
     const H = state.data.headers, rows = state.data.rows, owner = col => cfg.variables.find(v => v.cols.some(c => c.col === col));
     if (S0.idCol && H.includes(S0.idCol)) { cfg.idCols = [S0.idCol]; const v = owner(S0.idCol); if (v) v.include = false; }
@@ -2052,7 +2058,7 @@
     const tpl = cfg.tpLabels = cfg.tpLabels || {}; cfg.tpOrder = cfg.tpOrder || [];
     (S0.visits || []).forEach(x => { tpl[x.tag] = x.name; }); const vt = (S0.visits || []).map(x => x.tag); cfg.tpOrder = [...vt, ...cfg.tpOrder.filter(t => !vt.includes(t))]; // the visits in the design's order
     const typeOf = t => t === 'num' || t === 'calc' ? 'numeric' : t === 'cat' || t === 'yn' ? 'categorical' : null, codes = S0.catAs === 'codes';
-    const props = (v, x) => { const ty = typeOf(x.type); v.label = x.label; if (x.unit) { v.unit = x.unit; } if (x.group) v.group = x.group; if (x.role) v.role = x.role; if (x.definition) v.definition = x.definition; if (x.refLo !== undefined && x.refLo !== '') v.refLo = x.refLo; if (x.refHi !== undefined && x.refHi !== '') v.refHi = x.refHi;
+    const props = (v, x) => { const ty = typeOf(x.type); v.label = x.label; if (x.unit) { v.unit = x.unit; } if (x.group) v.group = x.group; if (x.role) v.role = x.role; if (x.definition) v.definition = x.definition; if (x.refLo !== undefined && x.refLo !== '') v.refLo = x.refLo; if (x.refHi !== undefined && x.refHi !== '') v.refHi = x.refHi; if (x.refBy && x.refBy.length) { v.refBy = x.refBy; v.refSexCol = x.refSexCol; v.refAgeCol = x.refAgeCol; v.refSexCats = x.refSexCats; }
       if (ty) v.type = ty; if (ty === 'categorical') { const cd = codes && !x.words; v.levels = cd ? x.cats.map((_, i) => String(i + 1)) : [...x.cats]; if (cd) v.valueLabels = x.cats.map((c, i) => `${i + 1}=${c}`).join(', '); }
       if (!ty) v.include = false; if (ty === 'numeric' && x.unit && !/\([^)]*\)\s*$/.test(v.label)) v.label = `${x.label} (${x.unit})`; };
     (S0.vars || []).forEach(x => { const cs = (x.cols || []).filter(c => H.includes(c.col)); if (!cs.length) return;
@@ -2069,6 +2075,7 @@
     // the sample size calculated in the builder, for the methods section
     if (S0.sampleSize) { const mi = cfg.methodsInfo = cfg.methodsInfo || {}; if (!mi.sampleSize) mi.sampleSize = S0.sampleSize; }
     if (S0.plan) cfg.plan = { ...S0.plan };
+    if (!sandbox) { const sl = screenLog(state.wb); if (sl) cfg.screenLog = sl; }
     if (S0.simulated) { cfg.simulated = S0.simulated; cfg.simTargets = S0.targets || null; }
     if (S0.title && !cfg.study.title && !sandbox) { cfg.study.title = S0.title; const t = $('#studyTitle'); if (t && !t.value) t.value = S0.title; }
   }
@@ -3864,6 +3871,7 @@
     c.type = c.type || 'consort';
     c.stard = c.stard || { tested: total, branches: [branch('Positive'), branch('Negative'), branch('Inconclusive')] };
     // a simulated file brings its flowchart counts (screened, excluded with reasons, lost) — used once
+    { const sl = cfg.screenLog; if (sl && !cfg.screenLogUsed && c.groups.length) { cfg.screenLogUsed = true; c.assessed = sl.assessed; c.excluded = sl.reasons.filter(r => r[1] > 0).map(([text, n]) => ({ text, n })); } }
     { const sc = cfg.simulated && cfg.simulated.consort; if (sc && !cfg.simConsortUsed && c.groups.length) { cfg.simConsortUsed = true; c.assessed = sc.assessed; c.excluded = sc.reasons.filter(r => r[1] > 0).map(([text, n]) => ({ text, n }));
       groups.forEach((g, i) => { const s0 = sc.groups.find(x => x.name === g || x.name === (cfg.groupLabels || {})[g] || `${x.name} group` === (cfg.groupLabels || {})[g]); if (s0 && c.groups[i]) { c.groups[i].lost = s0.lost; c.groups[i].lostReason = s0.lost ? 'Lost to follow-up, withdrew consent or moved away' : ''; } }); } }
     c.steps = c.steps || [{ text: 'Assessed for eligibility', n: total, exText: 'Excluded', exN: 0 }, { text: 'Included in the study', n: total, exText: '', exN: 0 }];

@@ -250,6 +250,16 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🧱 Build**
+- **🔐 Digital allocation tool (.html)**: one offline page with the randomisation list encrypted by a password (AES-GCM). The next allocation appears only after the patient ID, the person's initials and the ticks for eligibility and signed consent; an ID cannot be allocated twice; each allocation is logged with the date and time and a chained SHA-256 check, so a changed log is detected (**Verify the log**); the log exports as CSV. Strata and sites have their own lists. Checked: wrong password refused, allocations as on the list, an edited entry caught.
+- **Screening log** (Excel option): every patient screened, each inclusion and exclusion criterion, Eligible worked out by formula, consented, randomised and the reason when not, with the counts at the top. Uploaded to Analyse, its counts fill the flowchart (assessed, not eligible, declined, other reasons).
+- **Data queries** (Excel option): a Queries sheet — patient (drop-down of the IDs), column, value, question, answer, open / answered / closed, open ones in yellow and the counts at the top.
+- **🔎 Source data verification plan (.xlsx)**: a random sample of the patients (the % chosen, by site), and a checklist for each: consent, every eligibility criterion, the allocation, each key outcome at each visit, adverse events and withdrawals.
+- **Normal ranges by sex and age**: rules on any number (e.g. haemoglobin 13.5–17.5 for men and 12–15.5 for women from 18 years; ♂/♀ fills the usual adult values for haemoglobin, haematocrit, creatinine, ferritin and uric acid). Excel shades each value against its own rule, and Analyse reports the % outside the sex- and age-specific ranges (matches pandas: 33% and 41%).
+- **💰 Study budget (.xlsx)**: cost per visit, per test (the investigations of the design) and per patient, fixed costs, times the patients to enrol, with the totals by year from the recruitment rate — all Excel formulas (checked by LibreOffice).
+- **QR codes on labels**: ⬇ QR codes / QR per visit (ID and visit), for phone scanning. Every code tested decodes with zxing (short IDs, Unicode, 120 characters).
+- **🔍 Design review**: at the top of the Export tab: primary outcome, sample size, outcome definitions, ranges, units, skip logic, visits used, eligibility, allocation concealment and a required primary outcome, each ✓ or ⚠ with what to do.
+
 **🎲 Generate**
 - **SD for each group and visit**: a ± box beside every mean. Empty, it uses the variable's SD. Checked on 3,000 patients: 5.02 and 14.87 for 5 and 15.
 - **Exact match**: each group's mean, SD and % come out exactly as typed (numbers rescaled, categories given out by largest remainders, the mean corrected after rounding), for tidy worked examples. The power simulation still draws freely. With 20 patients per group: means 40.00 and 50.00, 30% and 45% exactly; SDs within the rounding of whole years.

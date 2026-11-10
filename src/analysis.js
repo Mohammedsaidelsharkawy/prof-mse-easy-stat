@@ -3289,7 +3289,7 @@ const Analysis = (() => {
           const nnt = Math.abs(nc.d) < 1e-9 ? '∞' : fmt(1 / Math.abs(nc.d), 1), ci = nc.lo > 0 || nc.hi < 0 ? `${inv(nc.lo > 0 ? nc.hi : nc.lo)} to ${inv(nc.lo > 0 ? nc.lo : nc.hi)}` : `${inv(nc.d >= 0 ? nc.hi : nc.lo)} to ∞ to −${inv(nc.d >= 0 ? nc.lo : nc.hi)}`;
           return [{ t: [`${fmt(100 * nc.d, 1)} (${fmt(100 * nc.lo, 1)} to ${fmt(100 * nc.hi, 1)})`], rs: span, small: true }, { t: [`${nnt} (${ci})`], rs: span, small: true }]; };
         const ncolsOf = () => head.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0), rowStart = new Map();
-        const refTxt = v => { const lo = toNum(v.refLo), hi = toNum(v.refHi); return isFinite(lo) && isFinite(hi) ? `${fmt(lo, d0)}–${fmt(hi, d0)}` : isFinite(lo) ? `≥ ${fmt(lo, d0)}` : isFinite(hi) ? `≤ ${fmt(hi, d0)}` : '—'; };
+        const refTxt = v => { if (v.refBy && v.refBy.length) return v.refBy.map(x => `${x.sex ? x.sex.charAt(0).toUpperCase() : 'All'}${x.ageMin !== '' && x.ageMin !== undefined || x.ageMax !== '' && x.ageMax !== undefined ? ` ${x.ageMin !== '' && x.ageMin !== undefined ? x.ageMin : ''}–${x.ageMax !== '' && x.ageMax !== undefined ? x.ageMax : ''}y` : ''}: ${x.lo !== '' && x.lo !== undefined ? fmt(+x.lo, d0) : ''}–${x.hi !== '' && x.hi !== undefined ? fmt(+x.hi, d0) : ''}`).join('; '); const lo = toNum(v.refLo), hi = toNum(v.refHi); return isFinite(lo) && isFinite(hi) ? `${fmt(lo, d0)}–${fmt(hi, d0)}` : isFinite(lo) ? `≥ ${fmt(lo, d0)}` : isFinite(hi) ? `≤ ${fmt(hi, d0)}` : '—'; };
         const extraCells = (r, span) => [...(opts.esCol && !noP ? [{ t: [effectMagnitude(r, k, opts) || '—'], rs: span, small: true }] : []), ...(opts.refCol ? [{ t: [r.num ? refTxt(r.v) : '—'], rs: span }] : []), ...(opts.noteCol ? [{ t: [r.v.rowNote || ''], rs: span, small: true }] : [])];
         res.forEach(r => { r.extra = cluCol || strCol || powOn ? extraTests(r) : {}; }); if (!noP) ASSUME.push(...res.filter(r => r.num));
         const trows = [];
@@ -3577,7 +3577,12 @@ const Analysis = (() => {
             spec: { type: 'bar', percent: true, labels: true, categories: withN(gl, c.ns), yLabel: r.v.ylabel || '% of the studied patients', series: r.levels.map((lv, li) => ({ name: lv, values: c.pct[li] })) }
           };
         }
-        res.filter(r => r.num && (r.v.refLo !== undefined && r.v.refLo !== '' || r.v.refHi !== undefined && r.v.refHi !== '')).forEach(r => {
+        // normal ranges by sex and age: each patient against the rule that fits them
+        res.filter(r => r.num && r.v.refBy && r.v.refBy.length).forEach(r => { const R = r.v.refBy, sc = r.v.refSexCol, ac = r.v.refAgeCol, cats = r.v.refSexCats || [], sexOf = row => { const x = sc ? row[sc] : null; if (x === null || x === undefined || x === '') return ''; const t = String(x).trim(); return /^\d+$/.test(t) && cats[+t - 1] ? cats[+t - 1] : t; };
+          const rule = row => R.find(x => (!x.sex || String(x.sex).toLowerCase() === sexOf(row).toLowerCase()) && (x.ageMin === '' || x.ageMin === undefined || toNum(row[ac]) >= +x.ageMin) && (x.ageMax === '' || x.ageMax === undefined || toNum(row[ac]) <= +x.ageMax));
+          const pc = byGroup.map(rs => { const ok = rs.map(row => [toNum((row.__o || row)[r.v.cols[0].col]), rule(row.__o || row)]).filter(([x, ru]) => isFinite(x) && ru); return ok.length ? 100 * ok.filter(([x, ru]) => (ru.lo !== '' && ru.lo !== undefined && x < +ru.lo) || (ru.hi !== '' && ru.hi !== undefined && x > +ru.hi)).length / ok.length : NaN; });
+          sent.push(`Values of ${lowerFirst(plain(r.v.label))} outside the sex- and age-specific reference ranges were found in ${listJoin(pc.map((p, i) => `${fmt(p, 1)}% of ${gl[i]}`))}.`); });
+        res.filter(r => r.num && !(r.v.refBy && r.v.refBy.length) && (r.v.refLo !== undefined && r.v.refLo !== '' || r.v.refHi !== undefined && r.v.refHi !== '')).forEach(r => {
           const lo = toNum(r.v.refLo), hi = toNum(r.v.refHi), out = x => (isFinite(lo) && x < lo) || (isFinite(hi) && x > hi), rng = isFinite(lo) && isFinite(hi) ? `${fmt(lo, d)}–${fmt(hi, d)}${U(r.v)}` : isFinite(lo) ? `≥ ${fmt(lo, d)}${U(r.v)}` : `≤ ${fmt(hi, d)}${U(r.v)}`;
           // the original values (before any transformation or exclusion of the variable)
           const raw = byGroup.map(rs => rs.map(x => toNum((x.__o || x)[r.v.cols[0].col])).filter(isFinite)), pc = raw.map(g => g.length ? 100 * g.filter(out).length / g.length : NaN);
