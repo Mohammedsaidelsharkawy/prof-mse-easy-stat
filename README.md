@@ -253,6 +253,8 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 **Fixes**
 - **A yes/no variable with one answer only** (all No, all 0, all Yes): the table and the figure now show the “Yes” row (e.g. 0 (0%) in each group) instead of switching to “No”. No test is run (P “—”), and the comment says that none (or all) of the patients had it.
 - **A group without data**: its cells show “—” (n = 0) instead of 0 (0%), the P value is “—”, the figure writes “no data” instead of a bar, and the comment says the variable could not be compared because there were no data in that group (also for repeated measures). Before, a figure with a missing value stopped the whole analysis.
+- **Combined figures**: the panel letters (A, B, C …) now sit in a band of their own above each panel, with space between the panels, instead of covering the axis numbers (also for “figures as panels” in Word).
+- **Long legends**: a legend above or below a chart that is wider than the chart now wraps onto a second line instead of being cut at both edges (single charts, panels, PNG and SVG). The default figures are unchanged.
 - **An arm of the design with no patients yet**: a master sheet from phase 1 keeps the planned arm (shown with “—”) instead of becoming a one-group report.
 
 **🧱 Build**

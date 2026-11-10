@@ -70,7 +70,7 @@ const Charts = (() => {
   const makeCanvas = (w, h) => { if (VECTOR) return new SvgCanvas(w, h); const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
   const xmlEsc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const n2 = v => +(+v).toFixed(2);
-  function SvgCanvas(w, h) { this.width = w; this.height = h; this._svg = true; const ctx = new SvgCtx(); this.getContext = () => ctx; this._ctx = ctx; }
+  function SvgCanvas(w, h) { this.width = w; this.height = h; this._svg = true; const ctx = new SvgCtx(); ctx.canvas = this; this.getContext = () => ctx; this._ctx = ctx; }
   SvgCanvas.prototype.toSVG = function () {
     const x = this._ctx;
     return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${this.width}" height="${this.height}" viewBox="0 0 ${this.width} ${this.height}">`
@@ -262,7 +262,11 @@ const Charts = (() => {
     ctx.font = tfont;
     const tw = st.legendTitle ? ctx.measureText(st.legendTitle).width : 0;
     const pos = items.length ? st.legend || 'bottom' : 'none', vertical = pos === 'right' || pos === 'inside', rowH = 40 * ls;
-    return { pos, vertical, ls, q, font, tfont, names, tw, rowH,
+    // a legend above or below the chart that is wider than the chart goes on several lines (no name cut at the edges)
+    const tr = ctx.getTransform ? ctx.getTransform() : { a: 1 }, avail = ctx.canvas && ctx.canvas.width ? ctx.canvas.width / ((tr && tr.a) || 1) - 60 : (ctx.W || Infinity) - 60, lines = [[]]; let used = tw ? tw + 30 * q : 0;
+    names.forEach((nw, i) => { const w = 60 * q + nw + 40 * ts; if (lines[lines.length - 1].length && used + w > avail) { lines.push([]); used = 0; } lines[lines.length - 1].push(i); used += w; });
+    const band = 70 * ls + (vertical ? 0 : (lines.length - 1) * rowH);
+    return { pos, vertical, ls, q, font, tfont, names, tw, rowH, lines, band,
       w: vertical ? Math.max(tw, 58 * q + Math.max(...names)) + 16 : 0, h: (items.length + (st.legendTitle ? 1 : 0)) * rowH + 16 };
   }
   function drawLegend(ctx, items, kind, st, m, g) {
@@ -279,14 +283,13 @@ const Charts = (() => {
     const frame = (x, y, w, h) => { ctx.strokeStyle = '#999'; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.strokeRect(x, y, w, h); };
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     if (!m.vertical) {
-      const widths = items.map((_, i) => 60 * m.q + m.names[i] + 40 * g.ts), titleW = m.tw ? m.tw + 30 * m.q : 0;
-      const total = titleW + widths.reduce((a, b) => a + b, 0);
-      let x = (g.W - total) / 2;
-      const yy = m.pos === 'top' ? 40 * g.ts : g.H - 45 * g.ts;
-      if (st.legendFrame) frame(x - 16, yy - m.rowH / 2 - 4, total - 40 * g.ts + 32, m.rowH + 8);
-      if (m.tw) { ctx.font = m.tfont; ctx.fillStyle = '#333'; ctx.fillText(st.legendTitle, x, yy); x += titleW; }
-      ctx.font = m.font;
-      items.forEach((it, i) => { swatch(it, i, x, yy); ctx.fillStyle = '#333'; ctx.textBaseline = 'middle'; ctx.fillText(it.name, x + 58 * m.q, yy); x += widths[i]; });
+      const widths = items.map((_, i) => 60 * m.q + m.names[i] + 40 * g.ts), titleW = m.tw ? m.tw + 30 * m.q : 0, lines = m.lines && m.lines.length ? m.lines : [items.map((_, i) => i)], nL = lines.length;
+      const lineW = (L0, k) => (k === 0 ? titleW : 0) + L0.reduce((a, i) => a + widths[i], 0), maxW = Math.max(...lines.map(lineW));
+      const y0 = m.pos === 'top' ? 40 * g.ts : g.H - 45 * g.ts - (nL - 1) * m.rowH;
+      if (st.legendFrame) frame((g.W - maxW) / 2 - 16, y0 - m.rowH / 2 - 4, maxW - 40 * g.ts + 32, nL * m.rowH + 8);
+      lines.forEach((L0, k) => { let x = (g.W - lineW(L0, k)) / 2; const yy = y0 + k * m.rowH;
+        if (k === 0 && m.tw) { ctx.font = m.tfont; ctx.fillStyle = '#333'; ctx.fillText(st.legendTitle, x, yy); x += titleW; }
+        ctx.font = m.font; L0.forEach(i => { const it = items[i]; swatch(it, i, x, yy); ctx.fillStyle = '#333'; ctx.textBaseline = 'middle'; ctx.fillText(it.name, x + 58 * m.q, yy); x += widths[i]; }); });
       return;
     }
     const x0 = m.pos === 'right' ? g.L + g.pw + 40 : g.L + g.pw - m.w - 20, y0 = g.T + 12;
@@ -311,10 +314,12 @@ const Charts = (() => {
     // legends: on every panel, on the first only (shared), or none; equal heights: every panel drawn with the same shape
     const subs = ps.map((p, i) => draw(spec.legend === 'none' || (spec.legend === 'first' && i > 0) ? { ...p, legend: false } : p, paletteName, spec.equal ? { ...style, aspect: spec.equal } : style)); if (!subs.length) return makeCanvas(10, 10);
     const cols = Math.max(1, Math.min(+spec.cols || 2, subs.length)), Wd = Math.max(...subs.map(c => c.width)), hs = subs.map(c => c.height * Wd / c.width), rowsN = Math.ceil(subs.length / cols);
-    const rowH = Array.from({ length: rowsN }, (_, k) => Math.max(...hs.slice(k * cols, k * cols + cols))), c = makeCanvas(Wd * cols, rowH.reduce((a, b) => a + b, 0)), x = c.getContext('2d');
+    // the letters sit in a band of their own above each panel, and the panels are apart: no letter over an axis, a legend or a label
+    const lettered = spec.letters !== false && subs.length > 1, LS = Math.round(Wd / 20), band = lettered ? Math.round(LS * 1.35) : 0, gap = Math.round(Wd * 0.03);
+    const rowH = Array.from({ length: rowsN }, (_, k) => band + Math.max(...hs.slice(k * cols, k * cols + cols))), c = makeCanvas(Wd * cols + gap * (cols - 1), rowH.reduce((a, b) => a + b, 0) + gap * (rowsN - 1)), x = c.getContext('2d');
     x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); let y0 = 0;
-    subs.forEach((im, i) => { const col = i % cols, row = Math.floor(i / cols); if (col === 0 && i) y0 += rowH[row - 1]; x.drawImage(im, col * Wd, y0, Wd, hs[i]);
-      if (spec.letters !== false && subs.length > 1) { x.fillStyle = '#111'; x.font = `800 ${Math.round(Wd / 20)}px Arial, sans-serif`; x.textBaseline = 'top'; x.textAlign = 'left'; x.fillText(String.fromCharCode(65 + i), col * Wd + Wd * 0.015, y0 + Wd * 0.012); } });
+    subs.forEach((im, i) => { const col = i % cols, row = Math.floor(i / cols); if (col === 0 && i) y0 += rowH[row - 1] + gap; const x0 = col * (Wd + gap); x.drawImage(im, x0, y0 + band, Wd, hs[i]);
+      if (lettered) { x.fillStyle = '#111'; x.font = `800 ${LS}px Arial, sans-serif`; x.textBaseline = 'top'; x.textAlign = 'left'; x.fillText(String.fromCharCode(65 + i), x0 + Wd * 0.012, y0 + Math.round(LS * 0.15)); } });
     HITS = []; return c;
   }
   function draw(spec, paletteName = 'brand', style = {}) {
@@ -412,7 +417,7 @@ const Charts = (() => {
     const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0);
     // blocks: an item's categories (e.g. Male and Female) with the item's name (Sex) under a bracket below them — over categories (catBlocks) or over the named bars (barBlocks)
     const catBlocks = spec.type === 'bar' && !twoLev ? (spec.catBlocks || []).filter(b => b.to > b.from) : [], barBlocks = twoLev ? (spec.barBlocks || []).filter(b => b.to > b.from) : [];
-    const T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (twoLev ? 56 * ts : 0) + (catBlocks.length || barBlocks.length ? 52 * ts : 0) + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    const T = 50 + (lm.pos === 'top' ? lm.band : 0), B = 120 * ts + (twoLev ? 56 * ts : 0) + (catBlocks.length || barBlocks.length ? 52 * ts : 0) + (lm.pos === 'bottom' ? lm.band : 0);
     const pw = W - L - R, ph = H - T - B;
 
     // y range
@@ -764,7 +769,7 @@ const Charts = (() => {
     const bars = spec.bars.filter(b => isFinite(b.v)).sort((a, b) => b.v - a.v);
     const items = spec.groups.length > 1 ? spec.groups.map((g, i) => ({ name: g, color: pal[i % pal.length] })) : [];
     const lm = legendMetrics(ctx, items, st, ts);
-    const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 80 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0), pw = W - L - R, ph = H - T - B;
+    const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? lm.band : 0), B = 80 * ts + (lm.pos === 'bottom' ? lm.band : 0), pw = W - L - R, ph = H - T - B;
     const vs = bars.map(b => b.v), sc = niceScale(Math.min(0, ...vs, ...(spec.lines || [])), Math.max(0, ...vs, ...(spec.lines || [])), 6), Y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
     ctx.font = F(600, 24); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) { if (st.grid) { gridPen(ctx, st); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]); } ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sc.step) + (spec.percent ? '%' : ''), L - 12, Y(v)); }
@@ -783,7 +788,7 @@ const Charts = (() => {
     const rows = spec.rows.filter(r => isFinite(r.t)).sort((a, b) => b.t - a.t).slice(0, 80);
     const items = [...(spec.groups.length > 1 ? spec.groups.map((g, i) => ({ name: g, color: pal[i % pal.length] })) : [])];
     const lm = legendMetrics(ctx, items, st, ts);
-    const L = 60, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 30, B = 110 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0), pw = W - L - R, ph = H - T - B;
+    const L = 60, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 30, B = 110 * ts + (lm.pos === 'bottom' ? lm.band : 0), pw = W - L - R, ph = H - T - B;
     const sc = niceScale(0, Math.max(...rows.map(r => r.t), 1), 6), X = v => L + v / sc.max * pw, rh = ph / Math.max(1, rows.length);
     ctx.font = F(600, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for (let v = 0; v <= sc.max + 1e-9; v += sc.step) { if (st.grid) { gridPen(ctx, st); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), T + ph); ctx.stroke(); ctx.setLineDash([]); } ctx.fillStyle = '#444'; ctx.fillText(fmtTick(v, sc.step), X(v), T + ph + 10); }
@@ -847,7 +852,7 @@ const Charts = (() => {
     });
     const items = spec.legend === false ? [] : sets.map(x => ({ name: x.name, color: x.color }));
     const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'inside' ? 'bottom' : st.legend }, ts);
-    const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? lm.band : 0), B = 120 * ts + (lm.pos === 'bottom' ? lm.band : 0);
     const pw = W - L - R, ph = H - T - B;
     const zs = sets.flatMap(x => x.pts.map(q => q[0])), vs = sets.flatMap(x => x.pts.map(q => q[1]));
     if (!zs.length) return c;
@@ -884,7 +889,7 @@ const Charts = (() => {
     const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'inside' ? 'bottom' : st.legend }, ts);
     ctx.font = F(700, 26);
     const labW = Math.min(W * 0.32, Math.max(...spec.categories.map(t => ctx.measureText(t).width)) + 30);
-    const L = 30 + labW, R = 90 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 100 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    const L = 30 + labW, R = 90 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? lm.band : 0), B = 100 * ts + (lm.pos === 'bottom' ? lm.band : 0);
     const pw = W - L - R, ph = H - T - B, nc = spec.categories.length, ns = spec.series.length, rh = ph / nc;
     const all = spec.series.flatMap(s => s.values), max = spec.percent === false ? Math.max(1, ...all) * 1.1 : Math.min(100, Math.max(10, Math.max(...all) * 1.15));
     const sc = niceScale(0, max, 6), x = v => L + v / sc.max * pw;
@@ -917,7 +922,7 @@ const Charts = (() => {
     const { c, ctx, W, H, ts, F } = setup(st);
     const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length] }));
     const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'inside' ? 'bottom' : st.legend }, ts);
-    const T = 30 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 80 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0), R = 30 + (lm.pos === 'right' ? lm.w + 40 : 0);
+    const T = 30 + (lm.pos === 'top' ? lm.band : 0), B = 80 * ts + (lm.pos === 'bottom' ? lm.band : 0), R = 30 + (lm.pos === 'right' ? lm.w + 40 : 0);
     const k = spec.categories.length, cw = (W - 30 - R) / k, r = Math.min(cw * 0.42, (H - T - B) / 2 - 10), r0 = spec.full ? 0 : r * 0.52; // full pie or donut
     spec.categories.forEach((cat, ci) => {
       const cx = 30 + cw * (ci + 0.5), cy = T + (H - T - B) / 2;
@@ -989,7 +994,7 @@ const Charts = (() => {
     const { c, ctx, W, H, ts, F } = setup(st);
     const ser = spec.series.filter(s => s.x && s.x.length), colOf = (s, i) => s.color || pal[(s.pi ?? i) % pal.length], items = ser.filter(s => s.name).map(s => ({ name: s.name, color: colOf(s, ser.indexOf(s)), dash: !!s.dash }));
     const lm = legendMetrics(ctx, spec.legend === false ? [] : items, st, ts);
-    const L = 120 + 40 * ts, R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0), pw = W - L - R, ph = H - T - B;
+    const L = 120 + 40 * ts, R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? lm.band : 0), B = 120 * ts + (lm.pos === 'bottom' ? lm.band : 0), pw = W - L - R, ph = H - T - B;
     const fx = v => isFinite(v), xs = ser.flatMap(s => s.x).filter(fx), ys = ser.flatMap(s => s.y).filter(fx).concat(spec.hline != null ? [spec.hline] : []);
     // named categories on the x axis (e.g. visits): one tick per category
     const sx = spec.xcats ? { min: -0.3, max: spec.xcats.length - 0.7, step: 1 } : niceScale(spec.xmin ?? Math.min(...xs), spec.xmax ?? Math.max(...xs)), sy = niceScale(spec.ymin ?? Math.min(...ys), spec.ymax ?? Math.max(...ys));
@@ -1028,7 +1033,7 @@ const Charts = (() => {
     const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: i === 2, ...(st.series === 'shapes' ? { dashArr: DASHES[i % 6] } : {}) }));
     const lm = legendMetrics(ctx, items, st, ts);
     const rk = spec.riskTable, rkH = rk ? (rk.rows.length + 1) * 38 * ts + 20 : 0, labW = rk ? (ctx.font = F(700, 22), Math.min(W * 0.35, Math.max(...rk.rows.map(r => ctx.measureText(r.name).width)) + 40)) : 0;
-    const L = Math.max(110 + 40 * ts, labW), R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0) + rkH;
+    const L = Math.max(110 + 40 * ts, labW), R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? lm.band : 0), B = 120 * ts + (lm.pos === 'bottom' ? lm.band : 0) + rkH;
     const pw = W - L - R, ph = H - T - B;
     const tMax = Math.max(1, ...spec.series.flatMap(s => [...s.steps.map(q => q.t), ...s.censored.map(q => q.t)]));
     const sx = niceScale(0, tMax), X = v => L + v / sx.max * pw, Y = v => T + ph - v * ph;
@@ -1214,7 +1219,7 @@ const Charts = (() => {
     const { c, ctx, W, H, ts, F } = setup({ ...st, aspect: st.aspect === 'wide' ? 'standard' : st.aspect });
     const items = spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length], dash: i === 2, ...(st.series === 'shapes' ? { dashArr: DASHES[i % 6] } : {}) }));
     const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'bottom' || st.legend === 'top' || st.legend === 'none' || st.legend === 'right' ? st.legend : 'inside' }, ts);
-    const L = 110 + 40 * ts, R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? 70 * lm.ls : 0), B = 120 * ts + (lm.pos === 'bottom' ? 70 * lm.ls : 0);
+    const L = 110 + 40 * ts, R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? lm.band : 0), B = 120 * ts + (lm.pos === 'bottom' ? lm.band : 0);
     const pw = W - L - R, ph = H - T - B;
     const X = v => L + v * pw, Y = v => T + ph - v * ph;
     ctx.font = F(600, 26); ctx.lineWidth = 1.5;

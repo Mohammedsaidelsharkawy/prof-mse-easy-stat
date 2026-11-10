@@ -6026,11 +6026,13 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     for (const s of r.sections) {
       const fs = s.figures.filter(f => f.url); if (fs.length < 2) continue;
       const ims = await Promise.all(fs.map(f => load(f.url))), cols = 2, W = Math.max(...ims.map(i => i.width)), rows = Math.ceil(ims.length / cols);
-      const hs = ims.map(i => i.height * W / i.width), rowH = Array.from({ length: rows }, (_, k) => Math.max(...hs.slice(k * cols, k * cols + cols)));
-      const c = document.createElement('canvas'); c.width = W * cols; c.height = rowH.reduce((a, b) => a + b, 0); const x = c.getContext('2d');
+      // each letter in its own band above its panel, the panels apart (no letter over the axis numbers)
+      const LS = Math.round(W * 0.045), band = Math.round(LS * 1.35), gap = Math.round(W * 0.03);
+      const hs = ims.map(i => i.height * W / i.width), rowH = Array.from({ length: rows }, (_, k) => band + Math.max(...hs.slice(k * cols, k * cols + cols)));
+      const c = document.createElement('canvas'); c.width = W * cols + gap * (cols - 1); c.height = rowH.reduce((a, b) => a + b, 0) + gap * (rows - 1); const x = c.getContext('2d');
       x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); let y0 = 0;
-      ims.forEach((im, i) => { const col = i % cols, row = Math.floor(i / cols); if (col === 0 && i) y0 += rowH[row - 1];
-        x.drawImage(im, col * W, y0, W, hs[i]); x.fillStyle = '#111'; x.font = `700 ${Math.round(W * 0.045)}px Arial, sans-serif`; x.textBaseline = 'top'; x.fillText(String.fromCharCode(65 + i), col * W + W * 0.015, y0 + W * 0.012); });
+      ims.forEach((im, i) => { const col = i % cols, row = Math.floor(i / cols); if (col === 0 && i) y0 += rowH[row - 1] + gap; const x0 = col * (W + gap);
+        x.drawImage(im, x0, y0 + band, W, hs[i]); x.fillStyle = '#111'; x.font = `700 ${LS}px Arial, sans-serif`; x.textBaseline = 'top'; x.textAlign = 'left'; x.fillText(String.fromCharCode(65 + i), x0 + W * 0.012, y0 + Math.round(LS * 0.15)); });
       const L = i => String.fromCharCode(65 + i);
       const merged = { ...fs[0], url: c.toDataURL('image/png'), w: c.width, h: c.height, caption: fs.map((f, i) => `(${L(i)}) ${f.caption}`).join('; '),
         note: fs.map((f, i) => f.note ? `${L(i)}: ${f.note}` : '').filter(Boolean).join(' ') };
