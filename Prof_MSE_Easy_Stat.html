@@ -35133,7 +35133,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (!on) return;
     groups.forEach((vs, name) => { const num = vs.filter(v => v.type === 'numeric').length > vs.length / 2, items = vs.filter(v => v.kind === 'single' && v.cols.length === 1 && v.type === (num ? 'numeric' : 'categorical')).map(v => v.id);
       let cf = L.find(x => x.auto && x.group === name);
-      if (!cf) { cf = { id: 'g' + Date.now().toString(36) + L.length, auto: true, group: name, groupName: name, kind: num ? 'num' : 'cat', title: '', items, layout: 'group', type: 'bar', sort: '', stars: true, labels: true, hide: true, axes: 'panels', chart: 'asVar', place: 'home' }; L.push(cf); }
+      if (!cf) { cf = { id: 'g' + Date.now().toString(36) + L.length, auto: true, group: name, groupName: name, kind: num ? 'num' : 'cat', title: '', items, layout: 'item', type: 'bar', sort: '', stars: true, labels: true, hide: true, axes: 'panels', chart: 'asVar', place: 'home' }; L.push(cf); }
       else { cf.items = items; cf.groupName = name; cf.kind = num ? 'num' : 'cat'; } });
   }
   // suggested groups from the names of yes/no columns: co-morbidities, symptoms, complications, risk factors
@@ -35246,7 +35246,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       box.innerHTML = `<div class="legend-note" style="margin:6px 0 4px"><b>${esc(f.caption)}</b>${f.note ? ' — ' + esc(f.note) : ''}</div><img src="${url}" alt="${esc(f.caption)}">`;
     } catch (err) { console.error(err); box.innerHTML = `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; } }
   $('#cfAdd').onclick = () => { if (!state.cfg) return; readUiIntoCfg(); const list = state.cfg.combFigs = state.cfg.combFigs || [];
-    list.push({ id: 'cf' + Date.now().toString(36), kind: 'cat', title: '', items: [], layout: 'group', type: 'bar', sort: '', stars: true, labels: true, hide: true, axes: 'panels', chart: 'asVar', place: 'home' }); renderCombFigs(); };
+    list.push({ id: 'cf' + Date.now().toString(36), kind: 'cat', title: '', items: [], layout: 'item', type: 'bar', sort: '', stars: true, labels: true, hide: true, axes: 'panels', chart: 'asVar', place: 'home' }); renderCombFigs(); };
   // every change redraws the preview: ticks and lists at once, typing after a short pause
   $('#cfList').addEventListener('input', e => { const box = e.target.closest('[data-cf]'); if (!box) return; const i = +box.dataset.cf, cf = state.cfg.combFigs[i], t = e.target;
     if (t.dataset.cfv !== undefined) { cf.items = (cf.items || []).filter(x => x !== t.dataset.cfv); if (t.checked) cf.items.push(t.dataset.cfv); renderCombFigs(); return; }
