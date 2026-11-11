@@ -2905,9 +2905,10 @@ const Analysis = (() => {
             if (levels.length) sent.push(`Regarding ${lowerFirst(lab)}, ${listJoin(levels.map((lv, li) => `${cnt[li]} patients (${pctTxt(pc[li])}%) were ${/^[A-Z][a-z]/.test(lv) ? lv.toLowerCase() : lv}`))}.`);
           }
           if (chart === 'none' || !levels.length) continue;
-          const ct = chart === 'pie' || chart === 'piefull' ? 'pie' : chart === 'hbar' ? 'hbar' : 'bar';
+          // one group: a pie by default (bars when there are more than 8 categories)
+          const ch1 = chart === 'auto' ? (levels.length <= 8 ? 'piefull' : 'bar') : chart, ct = ch1 === 'pie' || ch1 === 'piefull' ? 'pie' : ch1 === 'hbar' ? 'hbar' : 'bar';
           figures.push({ sig: true, vid: v.id, caption: v.caption || `${v.label} of the studied patients`,
-            spec: ct === 'pie' ? { type: 'pie', ...(chart === 'piefull' ? { full: true } : {}), categories: [G], yLabel: '% of the studied patients', series: levels.map((lv, li) => ({ name: lv, values: [pc[li]] })) }
+            spec: ct === 'pie' ? { type: 'pie', ...(ch1 === 'piefull' ? { full: true } : {}), categories: [G], yLabel: '% of the studied patients', series: levels.map((lv, li) => ({ name: lv, values: [pc[li]] })) }
               : ct === 'hbar' ? { type: 'hbar', perGroup: true, categories: levels, yLabel: v.ylabel || '% of the studied patients', series: [{ name: v.label, values: pc }] }
               : { type: 'bar', perGroup: true, percent: true, labels: true, categories: levels, yLabel: v.ylabel || '% of the studied patients', series: [{ name: v.label, values: pc }] } });
         }

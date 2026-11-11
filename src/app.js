@@ -2719,7 +2719,7 @@
   const CHART_TYPES = {
     repeated: [['auto', 'Auto (chart style)'], ['bar', 'Bars'], ['line', 'Lines over time'], ['meanci', 'Means with 95% CI over time'], ['box', 'Box plots'], ['dot', 'Box plots + every patient'], ['violin', 'Violin plots'], ['rain', 'Raincloud plots'], ['spaghetti', 'Spaghetti (each patient, unusual ones marked)'], ['waterfall', 'Waterfall (each patient, first → last)'], ['none', 'No figure']],
     numeric: [['auto', 'Auto'], ['bar', 'Bars (mean ± error / median, IQR)'], ['box', 'Box plot'], ['violin', 'Violin plot'], ['dot', 'Dot plot (every patient)'], ['meanci', 'Mean with 95% CI (error plot)'], ['dotci', 'Every patient + mean with 95% CI'], ['rain', 'Raincloud plot'], ['hist', 'Histogram'], ['none', 'No figure']],
-    categorical: [['auto', 'Auto (bars)'], ['hbar', 'Horizontal bars'], ['stacked', '100% stacked bar'], ['diverging', 'Diverging bars (Likert scales)'], ['pie', 'Donut'], ['piefull', 'Pie'], ['mosaic', 'Mosaic (widths = group sizes)'], ['none', 'No figure']]
+    categorical: [['auto', 'Auto (bars; a pie for one group)'], ['hbar', 'Horizontal bars'], ['stacked', '100% stacked bar'], ['diverging', 'Diverging bars (Likert scales)'], ['pie', 'Donut'], ['piefull', 'Pie'], ['mosaic', 'Mosaic (widths = group sizes)'], ['none', 'No figure']]
   };
   const chartKind = v => v.kind === 'repeated' ? 'repeated' : v.type;
   // one chart type for every variable of a kind

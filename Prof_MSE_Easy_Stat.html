@@ -27142,9 +27142,10 @@ const Analysis = (() => {
             if (levels.length) sent.push(`Regarding ${lowerFirst(lab)}, ${listJoin(levels.map((lv, li) => `${cnt[li]} patients (${pctTxt(pc[li])}%) were ${/^[A-Z][a-z]/.test(lv) ? lv.toLowerCase() : lv}`))}.`);
           }
           if (chart === 'none' || !levels.length) continue;
-          const ct = chart === 'pie' || chart === 'piefull' ? 'pie' : chart === 'hbar' ? 'hbar' : 'bar';
+          // one group: a pie by default (bars when there are more than 8 categories)
+          const ch1 = chart === 'auto' ? (levels.length <= 8 ? 'piefull' : 'bar') : chart, ct = ch1 === 'pie' || ch1 === 'piefull' ? 'pie' : ch1 === 'hbar' ? 'hbar' : 'bar';
           figures.push({ sig: true, vid: v.id, caption: v.caption || `${v.label} of the studied patients`,
-            spec: ct === 'pie' ? { type: 'pie', ...(chart === 'piefull' ? { full: true } : {}), categories: [G], yLabel: '% of the studied patients', series: levels.map((lv, li) => ({ name: lv, values: [pc[li]] })) }
+            spec: ct === 'pie' ? { type: 'pie', ...(ch1 === 'piefull' ? { full: true } : {}), categories: [G], yLabel: '% of the studied patients', series: levels.map((lv, li) => ({ name: lv, values: [pc[li]] })) }
               : ct === 'hbar' ? { type: 'hbar', perGroup: true, categories: levels, yLabel: v.ylabel || '% of the studied patients', series: [{ name: v.label, values: pc }] }
               : { type: 'bar', perGroup: true, percent: true, labels: true, categories: levels, yLabel: v.ylabel || '% of the studied patients', series: [{ name: v.label, values: pc }] } });
         }
@@ -34883,7 +34884,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const CHART_TYPES = {
     repeated: [['auto', 'Auto (chart style)'], ['bar', 'Bars'], ['line', 'Lines over time'], ['meanci', 'Means with 95% CI over time'], ['box', 'Box plots'], ['dot', 'Box plots + every patient'], ['violin', 'Violin plots'], ['rain', 'Raincloud plots'], ['spaghetti', 'Spaghetti (each patient, unusual ones marked)'], ['waterfall', 'Waterfall (each patient, first → last)'], ['none', 'No figure']],
     numeric: [['auto', 'Auto'], ['bar', 'Bars (mean ± error / median, IQR)'], ['box', 'Box plot'], ['violin', 'Violin plot'], ['dot', 'Dot plot (every patient)'], ['meanci', 'Mean with 95% CI (error plot)'], ['dotci', 'Every patient + mean with 95% CI'], ['rain', 'Raincloud plot'], ['hist', 'Histogram'], ['none', 'No figure']],
-    categorical: [['auto', 'Auto (bars)'], ['hbar', 'Horizontal bars'], ['stacked', '100% stacked bar'], ['diverging', 'Diverging bars (Likert scales)'], ['pie', 'Donut'], ['piefull', 'Pie'], ['mosaic', 'Mosaic (widths = group sizes)'], ['none', 'No figure']]
+    categorical: [['auto', 'Auto (bars; a pie for one group)'], ['hbar', 'Horizontal bars'], ['stacked', '100% stacked bar'], ['diverging', 'Diverging bars (Likert scales)'], ['pie', 'Donut'], ['piefull', 'Pie'], ['mosaic', 'Mosaic (widths = group sizes)'], ['none', 'No figure']]
   };
   const chartKind = v => v.kind === 'repeated' ? 'repeated' : v.type;
   // one chart type for every variable of a kind

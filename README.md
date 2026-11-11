@@ -250,6 +250,8 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Figures** — with one group (no comparison), a categorical variable is drawn as a pie by default (bars when it has more than 8 categories); bars, donut and the others stay available for each variable.
+
 **📊 Analyse (round 3)** — report tools
 - **🧩 Missing data and imputation**: the missing values by group, their patterns (which go missing together), and for each outcome of two groups the complete-case effect against multiple imputation (chained equations, 20 datasets, the baseline variables in the imputation model, Rubin's rules) with the fraction of missing information, and a methods paragraph.
 - **📎 Assumption appendix**: Shapiro-Wilk in each group with the skewness (as SPSS), Levene's test and the test each suggests, for every numeric variable and every time point, with the Q-Q plots; copy the table or save the appendix as Word with the plots.
