@@ -264,6 +264,18 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 - **Empty states** that say what to do (no data, nothing to report).
 - **📱 Review mode**: read the report and approve each comment or send it back to the automatic text, with a note; on a phone it turns on by itself. (Display density and the dark theme were already there: 👁 View and ◐ Theme.)
 
+**📊 Report tools (round 4)** — step 12, in the tabs
+- **⬇ Review sheet (two columns)**: each comment beside an empty column for the supervisor's own wording (.xlsx); **⬆ Apply the review sheet** puts their wording in place (⇄ Changes shows it).
+- **Why each test** (step 6 option): the footnote says which test each variable had and why, e.g. “Mann-Whitney U test for VAS (not normally distributed in the HA group)”.
+- **🧐 Reviewer mode**: wide confidence intervals, small groups, chi-square with expected counts below 5, P values between 0.04 and 0.05, many tests without a correction, no primary outcome.
+- **⚖ Multiplicity**: every P value with Bonferroni, Holm and Benjamini-Hochberg corrections and what survives, with a methods sentence (checked against statsmodels: identical).
+- **🔍 Sensitivity to outliers**: each numeric outcome again without the values beyond 3 SD of its group, and whether the conclusion changes.
+- **👥 ITT vs per-protocol**: the outcomes in all patients and without those with a protocol deviation (the column is guessed: withdrawal, deviation, crossover …; any column and value can be chosen).
+- **📖 Story order of the tables**: baseline, primary outcome, secondary, safety, then the rest; numbers and references follow.
+- **🔢 Numbers across the report**: the n of each group in the headings against the data, the flowchart, and percentages that do not add up to 100 after rounding.
+- **⚖ Balance plot (Love plot)**: the SMD of every baseline variable, ±0.1 lines, added to the Word report in one click.
+- **⚠ Limitations draft**, **✨ Highlights** and **📰 Journal style** (AMA, APA 7, ICMJE/Vancouver, thesis: P value style and captions in one click, and the word limit). The cover letter was already there.
+
 **🗂 Organisation (round 4)**
 - **📁 Projects** (header): a dashboard of every study kept in this browser — phase, patients, dataset version, the primary result, open tasks — with tags, a filter, rename, archive, download and delete.
 - **🗂 Dataset versions** (☰ More): keep Raw, Cleaned, Interim, Final with a date and a note, go back to any; the statistical analysis states the version used.

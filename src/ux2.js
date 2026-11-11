@@ -45,8 +45,8 @@ html.ux2-review #report textarea{border-color:transparent;background:transparent
   window.EasyUX2.undoToast = undoToast;
 
   /* ---------- U1, U2, U3: the report tools in tabs, a preview card, favourites ---------- */
-  const TABS = [['check', '🩺 Check', ['btnHealth', 'btnTextCheck', 'btnSampl', 'btnChecklist', 'btnAccess', 'btnSapCmp', 'btnPlanned', 'btnTrySet', 'wsFile', 'btnReviewer', 'btnConsist', 'btnHandoff']],
-    ['write', '✍ Write', ['btnAbs', 'btnLay', 'btnDiscussion', 'btnMethFull', 'btnThesisCh', 'btnRvResp', 'clJournal', 'btnLetter', 'btnAbsTable', 'btnLimits', 'btnHighlights', 'btnTwoCol']],
+  const TABS = [['check', '🩺 Check', ['btnHealth', 'btnTextCheck', 'btnSampl', 'btnChecklist', 'btnAccess', 'btnSapCmp', 'btnPlanned', 'btnTrySet', 'wsFile', 'btnReviewer', 'btnConsist', 'btnHandoff', 'btnStory']],
+    ['write', '✍ Write', ['btnAbs', 'btnLay', 'btnDiscussion', 'btnMethFull', 'btnThesisCh', 'btnRvResp', 'clJournal', 'btnLetter', 'btnAbsTable', 'btnLimits', 'btnHighlights', 'btnTwoCol', 'rvBackFile', 'btnJournal']],
     ['explore', '🔬 Explore', ['btnSubForest', 'btnSensDash', 'btnMissRep', 'btnAssume', 'btnEffSize', 'btnBayesRead', 'btnForestAll', 'btnResSnap', 'resSnapList', 'btnMultiplicity', 'btnOutSens', 'btnItt', 'btnLove']],
     ['export', '⬇ Export', ['btnMd', 'btnTex', 'btnHtml', 'btnReview', 'btnSupp', 'btnOnePage', 'gaLayout', 'btnGA', 'btnRis', 'btnGdocs', 'btnResPage', 'btnSharePack', 'btnRScript', 'btnDeck', 'btnSap', 'btnVersions']]];
   const OUT = { btnMd: 'a file (.md)', btnTex: 'a file (.tex)', btnHtml: 'a web page file', btnReview: 'a Word file', btnSupp: 'a Word file', btnOnePage: 'a Word file', btnGA: 'an image', btnRis: 'a file (.ris)', btnResPage: 'a web page file', btnSharePack: 'a zip file', btnRScript: 'an R script', btnDeck: 'a PowerPoint file', btnSap: 'a Word file', btnThesisCh: 'a Word file', btnGdocs: 'the clipboard' };

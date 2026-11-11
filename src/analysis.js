@@ -134,6 +134,14 @@ const Analysis = (() => {
   // test names as written in the descriptive comments
   const TEST_NAME = { 't-test': 'independent t-test', 'Welch t-test': "Welch's t-test", ANOVA: 'one-way ANOVA', 'Welch ANOVA': "Welch's ANOVA", 'Mann-Whitney': 'Mann-Whitney U test',
     'Kruskal-Wallis': 'Kruskal-Wallis test', 'Chi-square': 'Chi-square test', "Fisher's exact": "Fisher's exact test", 'Fisher-Freeman-Halton': 'Fisher-Freeman-Halton exact test', 'Linear-by-linear': 'Chi-square test for trend (linear-by-linear association)', "Mood's median": "Mood's median test", Permutation: 'permutation test', 'Huber robust regression': 'Huber robust regression' };
+  // R2: why each test: the reason in plain words, the variables with the same test and reason together
+  function whyText(res, gl) { const by = new Map();
+    res.forEach(r => { const t = r && (r.num || r.cat); if (!t || !t.test || t.test === '—') return; const forced = r.v && r.v.test && !/^(auto)?$/.test(r.v.test); let why;
+      if (r.num) { const bad = (t.sw || []).map((x, i) => x && x.p <= 0.05 ? gl[i] : null).filter(Boolean), np = /Mann|Kruskal|Mood|Permutation/.test(t.test);
+        why = forced ? 'as chosen for this variable' : np ? (bad.length ? `not normally distributed in ${listJoin(bad)}` : 'non-parametric, as set') : bad.length ? (t.desc && t.desc.every(dd => dd.n >= 30) ? '30 or more patients in each group' : 'parametric, as set') : /Welch/.test(t.test) ? 'normally distributed; unequal variances or group sizes' : 'normally distributed in each group'; }
+      else why = forced ? 'as chosen for this variable' : /Fisher/.test(t.test) ? 'an expected count below 5' : /Linear/.test(t.test) ? 'ordered categories' : 'expected counts of 5 or more';
+      const key = `${TEST_NAME[t.test] || t.test}|${why}`; by.set(key, [...(by.get(key) || []), lowerFirst(plain(r.v.label))]); });
+    return by.size ? `Tests: ${[...by].map(([k2, vs]) => { const [t, w] = k2.split('|'); return `${t} for ${listJoin(vs)} (${w})`; }).join('; ')}.` : ''; }
   const testNames = rs => listJoin([...new Set(rs.map(r => TEST_NAME[r.test]).filter(Boolean))]);
   const amongTxt = k => k === 2 ? 'between the two groups' : `among the ${nWord(k)} groups`;
 
@@ -3681,6 +3689,7 @@ const Analysis = (() => {
         const notesAll = [notes, ...notes2].filter(Boolean).join(', ');
         sections.push({ kind: 'single', title: `${b.table} of the studied groups`, head: headT, rows: rowsT, footnote: roleNote ? (fn0 => `${fn0 ? fn0.replace(/\.?\s*$/, '.') + ' ' : ''}${roleNote}.`)(footnote(flags, notesAll)) : footnote(flags, notesAll), comment: wording(sent.join(' ')), figures, twoCol, meta: { res },
           brief: opts.paperStyle ? wording(briefSingle(res, gl, alpha, d)) : '', briefSig: anySig });
+        if (opts.whyTest && k > 1) { const w = whyText(res, gl); if (w) sections[sections.length - 1].why = w; }
       }
     }
     tbRestore(); setStyle();
@@ -4622,7 +4631,8 @@ const Analysis = (() => {
     }
     return r;
   }
-  const run2 = (data, cfg) => abbrFootnotes(polish(figExtras(relabelCI(run(data, cfg), cfg.options.confLevel), cfg), cfg.options), cfg.options), explore2 = (data, cfg, xo) => relabelCI(explore(data, cfg, xo), cfg.options.confLevel);
+  const whyLast = r => { (r.sections || []).forEach(s => { if (s.why) { s.footnote = `${String(s.footnote || '').trim().replace(/([^.])$/, '$1.')} ${s.why}`.trim(); delete s.why; } }); return r; };
+  const run2 = (data, cfg) => whyLast(abbrFootnotes(polish(figExtras(relabelCI(run(data, cfg), cfg.options.confLevel), cfg), cfg.options), cfg.options)), explore2 = (data, cfg, xo) => relabelCI(explore(data, cfg, xo), cfg.options.confLevel);
   // repeated-measures tables with the timepoints as columns: each group (or the group's value, its change and P) becomes a row;
   // "P (within group)" becomes a last column, "P (time vs first)" a row per group, and an overall test a row across the timepoints
   function timepointsAsColumns(s) {
