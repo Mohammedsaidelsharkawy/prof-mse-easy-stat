@@ -250,6 +250,14 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**📊 Analyse (round 3)** — report tools
+- **🧩 Missing data and imputation**: the missing values by group, their patterns (which go missing together), and for each outcome of two groups the complete-case effect against multiple imputation (chained equations, 20 datasets, the baseline variables in the imputation model, Rubin's rules) with the fraction of missing information, and a methods paragraph.
+- **📎 Assumption appendix**: Shapiro-Wilk in each group with the skewness (as SPSS), Levene's test and the test each suggests, for every numeric variable and every time point, with the Q-Q plots; copy the table or save the appendix as Word with the plots.
+- **📏 Effect sizes**: each outcome's difference (95% CI), Hedges' g or Cohen's h (95% CI), its size and its clinical importance against the MCID (clearly beyond, beyond but the CI includes smaller effects, below); RD, RR and NNT for yes/no outcomes.
+- **🎲 A Bayesian reading**: the Bayes factor of each outcome with its wording (moderate, strong … evidence for a difference, or for none), the posterior difference with its 95% credible interval, the probability of a difference in the direction seen and of a difference beyond the MCID.
+- **📚 Thesis chapters (.docx)**: Patients and Methods (design, participants, sample size, outcomes, statistical analysis), Results and a draft of the Discussion in one Word file.
+- Checked against Python: the CI and Hedges' g of an outcome, its Bayes factor (12.73 by numerical integration), the probability beyond the MCID (73.4%), Shapiro-Wilk, Levene and the skewness.
+
 **🎲 Generate (round 3)** — Special designs and relations unless said
 - **Cluster randomised trial**: whole clusters (the sites, or clusters made here) are given one group each; the patients of a cluster are alike (intraclass correlation asked); an optional cluster column; the design effect, the effective number of patients and the ICC found in the data (checked: ICC 0.10 asked, 0.102 by a mixed model in Python).
 - **Stepped-wedge**: every cluster starts on the control and moves to the intervention at its own step over the visits; effect, time trend a visit, ICC; an optional yes/no column "on the intervention"; the schedule of the steps.

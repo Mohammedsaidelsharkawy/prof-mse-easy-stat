@@ -309,7 +309,9 @@ const Report = (() => {
       children.push(heading('Results for the abstract', brand));
       children.push(para(model.abstract));
     }
-    if (model.methods) {
+    // the thesis chapters: Patients and Methods with its parts
+    if (model.methodsParts) { children.push(H1('Patients and Methods', brand)); model.methodsParts.forEach(([h, t]) => { children.push(para(h, { bold: true, after: 60 })); String(t).split(/\n+/).forEach(x => children.push(opts.abbrFoot ? abbrPara(x, footnotes) : para(x))); }); }
+    else if (model.methods) {
       children.push(H1(opts.paper ? 'Statistical analysis' : 'Statistical Analysis', brand));
       children.push(opts.abbrFoot ? abbrPara(model.methods, footnotes) : para(model.methods)); arAfter(model.methods);
     }
@@ -424,6 +426,7 @@ const Report = (() => {
       // figures placed in the appendix (step 7): Figure A1, A2 …
       apFigs.forEach((f, i) => { const lab = `Figure A${i + 1}${opts.captionStyle === 'period' ? '.' : opts.captionStyle === 'apa' ? '' : ':'}`;
         children.push(image(f.url, f.w, f.h, Math.min(FIG_W.full[0], Math.floor(PAGE_W / 15)), true, f.caption), caption(`${lab} ${f.caption}`, f.note ? { note: f.note, noteSize: 20 } : {})); }); }
+    if (model.discussionParts && model.discussionParts.length) { children.push(H1('Discussion (draft)', brand)); model.discussionParts.forEach(([h, t]) => { children.push(para(h, { bold: true, after: 60 })); String(t).split(/\n+/).forEach(x => children.push(para(x))); }); }
     if (opts.refs && opts.refs.length) { children.push(heading('References', brand)); opts.refs.forEach((r, i) => children.push(para(`${i + 1}. ${r}`, { line: 276, after: 80, align: AlignmentType.LEFT }))); }
     if (opts.listTF && (listTabs.length || listFigs.length)) {
       const lst = [];
