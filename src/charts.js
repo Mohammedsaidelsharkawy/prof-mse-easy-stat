@@ -447,10 +447,18 @@ const Charts = (() => {
       if (b > a) { const ns = niceScale(a, b, 6, spec.integer); sc = { min: a, max: b, step: ns.step }; }
     }
     let y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
+    // F3: a break in the y axis when one bar is much taller than the others (asked per figure): the lower part keeps its scale
+    let brk = null;
+    if (spec.yBreak && spec.type === 'bar' && !spec.percent && !fixY && !spec._log && lo >= 0) { const tops = []; spec.series.forEach(s0 => (s0.values || []).forEach((v, i) => { if (v != null && isFinite(v)) tops.push(v + (s0.err && isFinite(s0.err[i]) ? s0.err[i] : 0)); })); tops.sort((a, b) => b - a);
+      // the largest jump between a few tall bars (a third of them at most) and the rest
+      let cut = -1; for (let i = 0; i < tops.length - 1 && i + 1 <= Math.max(1, Math.floor(tops.length / 3)); i++) if (tops[i + 1] > 0 && tops[i] > 2.5 * tops[i + 1] && (cut < 0 || tops[i] / tops[i + 1] > tops[cut] / tops[cut + 1])) cut = i;
+      if (cut >= 0) { const lowS = niceScale(0, tops[cut + 1] * 1.15, 4, spec.integer), upS = niceScale(tops[cut] * 0.85, tops[0] * 1.1, 3, spec.integer);
+        if (upS.min > lowS.max) { const f1 = 0.7, gf = 0.07, uf = 1 - f1 - gf; brk = { low: lowS, up: upS }; sc = { min: 0, max: upS.max, step: lowS.step };
+          y = v => v <= lowS.max ? T + ph - v / lowS.max * f1 * ph : v >= upS.min ? T + uf * ph - (v - upS.min) / (upS.max - upS.min) * uf * ph : T + ph - f1 * ph - (v - lowS.max) / (upS.min - lowS.max) * gf * ph; } } }
     // room above the data for stacked significance brackets / stars
     const dataHi = hi, BR0 = (spec.labels ? 70 : 34) * ts, BRSTEP = 50 * ts;
     const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 * ts : 0;
-    for (let top = hi, tries = 0; !fixY && need && y(dataHi) - need < T && tries < 12; tries++) {
+    for (let top = hi, tries = 0; !fixY && !brk && need && y(dataHi) - need < T && tries < 12; tries++) {
       top += (top - sc.min) * 0.12;
       sc = niceScale(lo, top, 6, spec.integer);
       y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
@@ -461,7 +469,8 @@ const Charts = (() => {
     // panel: classic (default), grey background with white gridlines, or minimal (no axis lines)
     if (st.panel === 'grey') { ctx.fillStyle = '#EBEBEB'; ctx.fillRect(L, T, pw, ph); }
     ctx.font = F(600, 26 * AX);
-    for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) {
+    const tickList = s0 => { const a = []; for (let v = s0.min; v <= s0.max + 1e-9; v += s0.step) a.push(+v.toFixed(10)); return a; };
+    for (const v of brk ? [...tickList(brk.low), ...tickList(brk.up)] : tickList(sc)) {
       if (spec.percent && v > 100 + 1e-9) break;
       const yy = y(v);
       ctx.strokeStyle = st.grid ? '#E6E1EC' : '#333'; ctx.lineWidth = st.grid ? 1.5 : 3; ctx.setLineDash([]);
@@ -714,6 +723,8 @@ const Charts = (() => {
     if (letters) { ctx.font = F(700, 30); letters.forEach((t, ci) => { if (t) ctx.fillText(t, xAt(ci), y(dataHi) - 24); }); }
     else catStars.forEach((s, ci) => { if (s) fillSig(ctx, sigMark(spec.sigCat[ci], spec.alpha, st), xAt(ci), y(dataHi) - 24); });
 
+    // the break: a white band across the plot and two slanted strokes on the axis
+    if (brk) { const yc = (y(brk.low.max) + y(brk.up.min)) / 2; ctx.fillStyle = '#fff'; ctx.fillRect(L - 14, yc - 7, pw + 14, 14); ctx.strokeStyle = '#333'; ctx.lineWidth = 3; [-7, 7].forEach(dy => { ctx.beginPath(); ctx.moveTo(L - 16, yc + dy + 6); ctx.lineTo(L + 16, yc + dy - 6); ctx.stroke(); }); }
     drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2, ...(shapes ? { dashArr: DASHES[i % 6], marker: spec.type === 'line' ? i : null } : {}) })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
     return c;
   }
@@ -888,7 +899,9 @@ const Charts = (() => {
     const items = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length] }));
     const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'inside' ? 'bottom' : st.legend }, ts);
     ctx.font = F(700, 26);
-    const labW = Math.min(W * 0.32, Math.max(...spec.categories.map(t => ctx.measureText(t).width)) + 30);
+    // a long name goes on two lines (at the space nearest its middle) instead of being cut
+    const maxLab = W * 0.32 - 30, split = t => { t = String(t); if (ctx.measureText(t).width <= maxLab || !/ /.test(t)) return [t]; const mid = t.length / 2; let best = -1; for (let i = 0; i < t.length; i++) if (t[i] === ' ' && (best < 0 || Math.abs(i - mid) < Math.abs(best - mid))) best = i; return [t.slice(0, best), t.slice(best + 1)]; };
+    const labW = Math.min(W * 0.32, Math.max(...spec.categories.map(t => Math.max(...split(t).map(x => ctx.measureText(x).width)))) + 30);
     const L = 30 + labW, R = 90 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? lm.band : 0), B = 100 * ts + (lm.pos === 'bottom' ? lm.band : 0);
     const pw = W - L - R, ph = H - T - B, nc = spec.categories.length, ns = spec.series.length, rh = ph / nc;
     const all = spec.series.flatMap(s => s.values), max = spec.percent === false ? Math.max(1, ...all) * 1.1 : Math.min(100, Math.max(10, Math.max(...all) * 1.15));
@@ -903,7 +916,7 @@ const Charts = (() => {
     const gh = rh * widthOf(st, perGroup ? 0.55 : 0.8), bh = gh / (perGroup ? 1 : ns);
     spec.categories.forEach((cat, ci) => {
       ctx.font = F(700, 26); ctx.fillStyle = '#333'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-      ctx.fillText(cat, L - 14, T + rh * (ci + 0.5));
+      { const ln = split(cat), lh = 30; ln.forEach((t, li) => ctx.fillText(t, L - 14, T + rh * (ci + 0.5) + (li - (ln.length - 1) / 2) * lh)); }
       spec.series.forEach((s, si) => {
         const v = s.values[ci] || 0, color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const y0 = T + rh * ci + (rh - gh) / 2 + bh * (perGroup ? 0 : si) + bh * 0.06, h = bh * 0.88;

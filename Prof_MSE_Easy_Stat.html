@@ -26955,8 +26955,10 @@ const Analysis = (() => {
     FMT = { pText: opts.pText || '', pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct', ci: opts.catCI || '' };
     const used = new Set();
     // error bars of mean charts: SD (default), SEM or 95% CI of the mean
-    const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
-      : opts.errorBar === 'ci' ? jStat.studentt.inv(S.QU(), dd.n - 1) * dd.sd / Math.sqrt(dd.n) : dd.sd;
+    // a figure's own error bars (step 7), else the report's
+    let ERRV = null; const errKindOf = () => (ERRV && ERRV.errBar) || opts.errorBar;
+    const errOf = dd => errKindOf() === 'sem' ? dd.sd / Math.sqrt(dd.n)
+      : errKindOf() === 'ci' ? jStat.studentt.inv(S.QU(), dd.n - 1) * dd.sd / Math.sqrt(dd.n) : dd.sd;
     const errNote = { sem: ' (mean ± SEM)', ci: ' (mean ± 95% CI)' }[opts.errorBar] || '';
     const valueLabels = opts.valueLabels ? { labels: true, labelDec: d } : {};
     // nice equal-width bins for histograms (same rule as chart axes)
@@ -27818,7 +27820,7 @@ const Analysis = (() => {
           return x.pairs ? { sig: x.pairs.filter(q => q.p <= alpha).map(q => ({ i: q.i, j: q.j, p: q.p })), alpha, ...(opts.sigLabel === 'letters' ? { letters: compactLetters(k, x.pairs.filter(q => q.p <= alpha)) } : {}) } : {};
         };
         const figures = res.filter(r => r.v.chart !== 'none').map(r => {
-          const f = { sig: (r.num || r.cat).p <= alpha, vid: r.v.id, ...figureFor(r) };
+          ERRV = r.v; const f = { sig: (r.num || r.cat).p <= alpha, vid: r.v.id, ...figureFor(r) }; ERRV = null; if (r.v.errBar && r.v.errBar !== opts.errorBar && f.spec) f.spec.errKind = r.v.errBar;
           // a group without data: no bar (the chart writes "no data"), not a bar at 0%
           if (r.cat && f.spec && ['bar', 'line'].includes(f.spec.type) && r.cat.ns.some(n => !n)) f.spec.series = f.spec.series.map(s0 => Array.isArray(s0.values) && s0.values.length === k ? { ...s0, values: s0.values.map((x, j) => r.cat.ns[j] ? x : null) } : s0);
           if (r.v.caption) f.caption = r.v.caption;
@@ -28039,7 +28041,9 @@ const Analysis = (() => {
       const pOf = v => { const r0 = resOf(v.id); return r0 ? (num ? r0.num : r0.cat).p : NaN; };
       const pos = v => data.headers.indexOf(v.cols[0].col), stars = cf.stars !== false && k > 1, sym = FMT.sig || '*', gname = gi => k > 1 ? withN([gl[gi]], [gN[gi]])[0] : (gl[0] || 'Patients');
       const yesLike = l => /^(yes|y|present|positive|pos|1|true)$/i.test(String(l).trim());
-      const order = list => { if (cf.sort === 'desc') list.sort((x, y) => y.tot - x.tot); else if (cf.sort === 'asc') list.sort((x, y) => x.tot - y.tot); else if (cf.sort === 'master') list.sort((x, y) => x.pos - y.pos); return list; };
+      // the order of the items: by size, by the difference between the groups, as in the sheet, or as ticked (the manual order)
+      const diffOf = x => { if (x.ds) { const m = x.ds.map(d0 => d0.mean).filter(isFinite); return m.length > 1 ? Math.max(...m) - Math.min(...m) : 0; } const rs0 = x.rows || [x]; return Math.max(...rs0.map(r0 => r0.pct ? Math.max(...r0.pct) - Math.min(...r0.pct) : 0)); };
+      const order = list => { if (cf.sort === 'desc') list.sort((x, y) => y.tot - x.tot); else if (cf.sort === 'asc') list.sort((x, y) => x.tot - y.tot); else if (cf.sort === 'master') list.sort((x, y) => x.pos - y.pos); else if (cf.sort === 'diff') list.sort((x, y) => diffOf(y) - diffOf(x)); else if (cf.sort === 'manual') list.sort((x, y) => (cf.items || []).indexOf(x.v.id) - (cf.items || []).indexOf(y.v.id)); return list; };
       let fig;
       if (!num) {
         let rows = [];
@@ -28084,6 +28088,7 @@ const Analysis = (() => {
             else { let c = n1 - a, d2 = n0 - b; if (!a || !b || !c || !d2) { a += 0.5; b += 0.5; c += 0.5; d2 += 0.5; } est = (a * d2) / (b * c); se = Math.sqrt(1 / a + 1 / b + 1 / c + 1 / d2); }
             const lo = Math.exp(Math.log(est) - z * se), hi = Math.exp(Math.log(est) + z * se); return { label: flat(r).replace(new RegExp(`\\${sym}$`), ''), est, lo, hi, p: r.p, text: `${fmt(est, 2)} (${fmt(lo, 2)} to ${fmt(hi, 2)})` }; });
           Object.keys(spec).forEach(key2 => delete spec[key2]); Object.assign(spec, { type: 'forest', log: true, ref: 1, alpha, xLabel: `${eff} (${gl[1]} vs ${gl[0]}, 95% CI), log scale`, valHead: `${eff} (95% CI)`, rows: fr }); }
+        if (cf.sigAbove && k > 1 && spec.type === 'bar' && !byG && Array.isArray(spec.categories) && spec.categories.length === rows.length) Object.assign(spec, { sigCat: rows.map(r => r.p), alpha, sigWhat: 'between the groups' });
         const levels = [...new Set(rows.map(r => r.level))], what = levels.length === 1 && !yesLike(levels[0]) ? ` (${levels[0]})` : '';
         fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what };
       } else {
@@ -28093,7 +28098,7 @@ const Analysis = (() => {
         const cats = [...Array(Math.max(1, k))].map((_, gi) => gname(gi));
         const sigOf = r => opts.sigMarks && k === 2 && r.p <= alpha ? { sig: [{ i: 0, j: 1, p: r.p }], alpha } : {};
         const chartOf = r => { const c = cf.chart && cf.chart !== 'asVar' ? cf.chart : (r.v.chart && r.v.chart !== 'auto' ? r.v.chart : (r.param && opts.chartStyle !== 'box' ? 'bar' : 'box')); return c === 'hist' || c === 'none' ? 'box' : c; };
-        const panel = r => { const ct = chartOf(r), lab = r.v.ylabel || r.v.label, base = { perGroup: true, categories: cats, yLabel: lab, title: plain(r.v.label) + (stars && r.p <= alpha ? sym : ''), ...sigOf(r) };
+        const panel = r => { const ct = chartOf(r), lab = r.v.ylabel || r.v.label, base = { perGroup: true, categories: cats, yLabel: lab, title: (cf.units ? r.v.label : plain(r.v.label)) + (stars && r.p <= alpha ? sym : ''), ...sigOf(r) };
           if (ct === 'violin' || ct === 'rain') return { ...base, type: 'violin', ...(ct === 'rain' ? { rain: true } : {}), points: opts.points, series: [{ name: r.v.label, data: r.gv }] };
           if (ct === 'dotci') return { ...base, type: 'dot', ci: true, series: [{ name: r.v.label, data: r.gv }] };
           if (ct === 'dot') return { ...base, type: 'dot', median: !r.param, series: [{ name: r.v.label, data: r.gv }] };
@@ -28106,11 +28111,12 @@ const Analysis = (() => {
         if ((cf.axes || 'shared') === 'shared' && allBar) spec = { type: cf.type === 'hbar' ? 'hbar' : 'bar', labels: cf.labels !== false, labelDec: d, categories: rows.map(r => plain(r.v.label) + (stars && r.p <= alpha ? sym : '')), yLabel: cf.yLabel || (med ? 'Median' : 'Mean'),
           series: cats.map((g, gi) => med ? { name: g, values: rows.map(r => r.ds[gi].median ?? NaN), lo: rows.map(r => r.ds[gi].q1), hi: rows.map(r => r.ds[gi].q3) } : { name: g, values: rows.map(r => r.ds[gi].mean ?? NaN), err: rows.map(r => r.ds[gi].n ? errOf(r.ds[gi]) : null) }) };
         else spec = { type: 'panels', cols: +cf.cols || Math.min(3, rows.length), letters: cf.letters === true, sharedY: (cf.axes || 'shared') === 'shared' || cf.axes === 'samey', panels: rows.map(panel) };
+        if (cf.sigAbove && k > 1 && spec.type === 'bar' && Array.isArray(spec.categories) && spec.categories.length === rows.length) Object.assign(spec, { sigCat: rows.map(r => r.p), alpha, sigWhat: 'between the groups' });
         const kinds = [...new Set(rows.map(chartOf))], how = kinds.length === 1 ? { bar: med ? ' (bars show the median; error bars show the IQR)' : allBar && rows.every(r => r.param || cf.stat === 'mean') ? ` (bars show the mean; error bars show ${{ sem: 'the SEM', ci: 'the 95% CI' }[opts.errorBar] || '±1 SD'})` : '', box: ' (box plots)', violin: ' (violin plots)', rain: ' (raincloud plots)', dot: ' (every patient)', dotci: ' (every patient, mean with 95% CI)', meanci: ' (mean with 95% CI)' }[kinds[0]] || '' : '';
         fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what: '', how };
       }
       const capList = listJoin(items.map(v => lowerFirst(plain(v.label))).map((t, i2) => i2 ? t : t.charAt(0).toUpperCase() + t.slice(1)));
-      const out = { sig: fig.anySig || k === 1, vid: 'cf_' + (cf.id || items.map(v => v.id).join('_')), comb: true, place: cf.place || 'home', widthCm: +cf.widthCm || undefined,
+      const out = { pal: cf.pal || undefined, sig: fig.anySig || k === 1, vid: 'cf_' + (cf.id || items.map(v => v.id).join('_')), comb: true, place: cf.place || 'home', widthCm: +cf.widthCm || undefined,
         caption: (cf.title || `${cf.groupName || capList}${fig.what} of the studied ${k > 1 ? 'groups' : 'patients'}`) + (opts.figNoteParts ? fig.how || '' : ''),
         note: stars && fig.anySig ? `${sym} significant difference between the groups (P ≤ ${alpha}).` : '', spec: fig.spec };
       // the figure goes with the table of its first item (other places are set by the app); the items' own figures are left out (unless asked to keep them)
@@ -29318,10 +29324,18 @@ const Charts = (() => {
       if (b > a) { const ns = niceScale(a, b, 6, spec.integer); sc = { min: a, max: b, step: ns.step }; }
     }
     let y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
+    // F3: a break in the y axis when one bar is much taller than the others (asked per figure): the lower part keeps its scale
+    let brk = null;
+    if (spec.yBreak && spec.type === 'bar' && !spec.percent && !fixY && !spec._log && lo >= 0) { const tops = []; spec.series.forEach(s0 => (s0.values || []).forEach((v, i) => { if (v != null && isFinite(v)) tops.push(v + (s0.err && isFinite(s0.err[i]) ? s0.err[i] : 0)); })); tops.sort((a, b) => b - a);
+      // the largest jump between a few tall bars (a third of them at most) and the rest
+      let cut = -1; for (let i = 0; i < tops.length - 1 && i + 1 <= Math.max(1, Math.floor(tops.length / 3)); i++) if (tops[i + 1] > 0 && tops[i] > 2.5 * tops[i + 1] && (cut < 0 || tops[i] / tops[i + 1] > tops[cut] / tops[cut + 1])) cut = i;
+      if (cut >= 0) { const lowS = niceScale(0, tops[cut + 1] * 1.15, 4, spec.integer), upS = niceScale(tops[cut] * 0.85, tops[0] * 1.1, 3, spec.integer);
+        if (upS.min > lowS.max) { const f1 = 0.7, gf = 0.07, uf = 1 - f1 - gf; brk = { low: lowS, up: upS }; sc = { min: 0, max: upS.max, step: lowS.step };
+          y = v => v <= lowS.max ? T + ph - v / lowS.max * f1 * ph : v >= upS.min ? T + uf * ph - (v - upS.min) / (upS.max - upS.min) * uf * ph : T + ph - f1 * ph - (v - lowS.max) / (upS.min - lowS.max) * gf * ph; } } }
     // room above the data for stacked significance brackets / stars
     const dataHi = hi, BR0 = (spec.labels ? 70 : 34) * ts, BRSTEP = 50 * ts;
     const need = brackets.length ? BR0 + BRSTEP * brackets.length : catStars.some(Boolean) ? 70 * ts : 0;
-    for (let top = hi, tries = 0; !fixY && need && y(dataHi) - need < T && tries < 12; tries++) {
+    for (let top = hi, tries = 0; !fixY && !brk && need && y(dataHi) - need < T && tries < 12; tries++) {
       top += (top - sc.min) * 0.12;
       sc = niceScale(lo, top, 6, spec.integer);
       y = v => T + ph - (v - sc.min) / (sc.max - sc.min) * ph;
@@ -29332,7 +29346,8 @@ const Charts = (() => {
     // panel: classic (default), grey background with white gridlines, or minimal (no axis lines)
     if (st.panel === 'grey') { ctx.fillStyle = '#EBEBEB'; ctx.fillRect(L, T, pw, ph); }
     ctx.font = F(600, 26 * AX);
-    for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) {
+    const tickList = s0 => { const a = []; for (let v = s0.min; v <= s0.max + 1e-9; v += s0.step) a.push(+v.toFixed(10)); return a; };
+    for (const v of brk ? [...tickList(brk.low), ...tickList(brk.up)] : tickList(sc)) {
       if (spec.percent && v > 100 + 1e-9) break;
       const yy = y(v);
       ctx.strokeStyle = st.grid ? '#E6E1EC' : '#333'; ctx.lineWidth = st.grid ? 1.5 : 3; ctx.setLineDash([]);
@@ -29585,6 +29600,8 @@ const Charts = (() => {
     if (letters) { ctx.font = F(700, 30); letters.forEach((t, ci) => { if (t) ctx.fillText(t, xAt(ci), y(dataHi) - 24); }); }
     else catStars.forEach((s, ci) => { if (s) fillSig(ctx, sigMark(spec.sigCat[ci], spec.alpha, st), xAt(ci), y(dataHi) - 24); });
 
+    // the break: a white band across the plot and two slanted strokes on the axis
+    if (brk) { const yc = (y(brk.low.max) + y(brk.up.min)) / 2; ctx.fillStyle = '#fff'; ctx.fillRect(L - 14, yc - 7, pw + 14, 14); ctx.strokeStyle = '#333'; ctx.lineWidth = 3; [-7, 7].forEach(dy => { ctx.beginPath(); ctx.moveTo(L - 16, yc + dy + 6); ctx.lineTo(L + 16, yc + dy - 6); ctx.stroke(); }); }
     drawLegend(ctx, legendItems.map((it, i) => ({ ...it, dash: i === 2, ...(shapes ? { dashArr: DASHES[i % 6], marker: spec.type === 'line' ? i : null } : {}) })), spec.type === 'line' || spec.type === 'box' ? 'line' : 'fill', st, lm, { W, H, L, T, pw, ph, ts });
     return c;
   }
@@ -29759,7 +29776,9 @@ const Charts = (() => {
     const items = perGroup ? [] : spec.series.map((s, i) => ({ name: s.name, color: pal[i % pal.length] }));
     const lm = legendMetrics(ctx, items, { ...st, legend: st.legend === 'inside' ? 'bottom' : st.legend }, ts);
     ctx.font = F(700, 26);
-    const labW = Math.min(W * 0.32, Math.max(...spec.categories.map(t => ctx.measureText(t).width)) + 30);
+    // a long name goes on two lines (at the space nearest its middle) instead of being cut
+    const maxLab = W * 0.32 - 30, split = t => { t = String(t); if (ctx.measureText(t).width <= maxLab || !/ /.test(t)) return [t]; const mid = t.length / 2; let best = -1; for (let i = 0; i < t.length; i++) if (t[i] === ' ' && (best < 0 || Math.abs(i - mid) < Math.abs(best - mid))) best = i; return [t.slice(0, best), t.slice(best + 1)]; };
+    const labW = Math.min(W * 0.32, Math.max(...spec.categories.map(t => Math.max(...split(t).map(x => ctx.measureText(x).width)))) + 30);
     const L = 30 + labW, R = 90 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 40 + (lm.pos === 'top' ? lm.band : 0), B = 100 * ts + (lm.pos === 'bottom' ? lm.band : 0);
     const pw = W - L - R, ph = H - T - B, nc = spec.categories.length, ns = spec.series.length, rh = ph / nc;
     const all = spec.series.flatMap(s => s.values), max = spec.percent === false ? Math.max(1, ...all) * 1.1 : Math.min(100, Math.max(10, Math.max(...all) * 1.15));
@@ -29774,7 +29793,7 @@ const Charts = (() => {
     const gh = rh * widthOf(st, perGroup ? 0.55 : 0.8), bh = gh / (perGroup ? 1 : ns);
     spec.categories.forEach((cat, ci) => {
       ctx.font = F(700, 26); ctx.fillStyle = '#333'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-      ctx.fillText(cat, L - 14, T + rh * (ci + 0.5));
+      { const ln = split(cat), lh = 30; ln.forEach((t, li) => ctx.fillText(t, L - 14, T + rh * (ci + 0.5) + (li - (ln.length - 1) / 2) * lh)); }
       spec.series.forEach((s, si) => {
         const v = s.values[ci] || 0, color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const y0 = T + rh * ci + (rh - gh) / 2 + bh * (perGroup ? 0 : si) + bh * 0.06, h = bh * 0.88;
@@ -31282,7 +31301,9 @@ const Report = (() => {
       const apa = opts.captionStyle === 'apa';
       const figs = list.filter(f => f.url).map(f => { const num = figLabel(pre + fig++, opts.captionStyle); listFigs.push(`${num} ${f.caption}`); return { ...f, apa, num, label: `${num} ${f.caption}` }; });
       if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
-      else for (const f of figs) {
+      else for (let fi = 0; fi < figs.length; fi++) { const f = figs[fi];
+        // two figures marked half width (step 7) one after the other: side by side
+        if (f.half) { const j = figs.findIndex((g, q) => q > fi && g.half); if (j > 0) { const g = figs.splice(j, 1)[0]; children.push(figureGrid([f, g], w2), para('', { after: 80 })); continue; } }
         // APA places the number and title above the figure and the explanation below it as a note
         if (apa) {
           children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, fw(f), true, f.caption));
@@ -35295,13 +35316,17 @@ if (typeof module !== 'undefined') module.exports = Sav;
               ${(cf.ctype || 'bars') === 'bars' ? `<div><label class="f">Bars grouped by</label>${sel2('layout', byG ? 'group' : 'item', [['group', 'Study group (category names under the bars)'], ['item', 'Item (a bar per study group)']])}</div>
               ${byG ? '' : `<div><label class="f">Direction</label>${sel2('type', cf.type === 'hbar' ? 'hbar' : 'bar', [['bar', 'Vertical'], ['hbar', 'Horizontal']])}</div>`}` : ''}
               ${cf.ctype === 'forest' ? `<div><label class="f">Effect</label>${sel2('effect', cf.effect || 'rr', [['rr', 'Relative risk (RR)'], ['or', 'Odds ratio (OR)']])}</div>` : ''}`}
-          <div><label class="f">Order of the items</label>${sel2('sort', cf.sort || '', [['', 'As ticked'], ['master', 'As in the master sheet'], ['desc', num ? 'Largest first' : 'Most frequent first'], ['asc', num ? 'Smallest first' : 'Least frequent first']])}</div>
+          <div><label class="f">Order of the items</label>${sel2('sort', cf.sort || '', [['', 'As ticked (↑ to move)'], ['master', 'As in the master sheet'], ['desc', num ? 'Largest first' : 'Most frequent first'], ['asc', num ? 'Smallest first' : 'Least frequent first'], ['diff', 'Largest difference between the groups first']])}</div>
+          <div><label class="f">Colours</label>${sel2('pal', cf.pal || '', [['', 'As the report'], ...Object.entries(Charts.PALETTE_NAMES || {})])}</div>
           <div><label class="f">Y-axis title</label><input type="text" data-cfk="yLabel" value="${esc(cf.yLabel || '')}" placeholder="${num ? 'the item' : '% of patients'}" style="width:130px"></div>
           <div><label class="f">Place in the report</label>${placeSel(cf.place, true)}</div>
           <div><label class="f">Width in Word (cm)</label><input type="number" min="4" max="30" step="0.5" data-cfk="widthCm" value="${esc(cf.widthCm || '')}" placeholder="as figures" style="width:90px"></div>
         </div>
         <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:6px;align-items:center">
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="stars" ${cf.stars !== false ? 'checked' : ''}><span>* on significant items</span></label>
+          <label class="check" style="margin:0" title="Stars above each item's bars (P of the comparison between the groups)"><input type="checkbox" data-cfk="sigAbove" ${cf.sigAbove ? 'checked' : ''}><span>Significance marks above the items</span></label>
+          ${num ? `<label class="check" style="margin:0"><input type="checkbox" data-cfk="units" ${cf.units ? 'checked' : ''}><span>Panel titles with units</span></label>` : ''}
+          ${ticked.length > 1 && !cf.sort ? `<span class="legend-note">Order:</span>${ticked.map((v, q) => `<span class="chip">${esc(v.label)}${q ? ` <button type="button" class="btn ghost small" data-cfup="${i}|${esc(v.id)}" title="Earlier">↑</button>` : ''}</span>`).join(' ')}` : ''}
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="labels" ${cf.labels !== false ? 'checked' : ''}><span>Values on the bars</span></label>
           ${!num ? `<label class="legend-note" style="margin:0" title="An item that no patient has (Yes 0%)">When no patient has it ${sel2('zeroYes', cf.zeroYes || 'zero', [['zero', 'show Yes 0%'], ['other', 'show its other answer']])}</label>` : ''}
           ${num ? `<label class="check" style="margin:0"><input type="checkbox" data-cfk="letters" ${cf.letters ? 'checked' : ''}><span>Panel letters A, B …</span></label>` : ''}
@@ -35351,6 +35376,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   document.addEventListener('click', e => { const b = e.target.closest('[data-cfcopy],[data-cfexp],[data-cfppt],[data-cfpdf],[data-pfcopy],[data-pfexp],[data-pfppt],[data-pfpdf]'); if (!b) return;
     const k = Object.keys(b.dataset).find(x => /^(cf|pf)(copy|exp|ppt|pdf)$/.test(x)), m = /^(cf|pf)(copy|exp|ppt|pdf)$/.exec(k); figAction(m[1], m[2], +b.dataset[k]); });
   $('#cfList').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !state.cfg) return; const L = state.cfg.combFigs;
+    if (b.dataset.cfup) { const [i, id] = b.dataset.cfup.split('|'), cf = L[+i], it = cf.items || [], q = it.indexOf(id); if (q > 0) { [it[q - 1], it[q]] = [it[q], it[q - 1]]; renderCombFigs(); } return; }
     if (b.dataset.cfdel !== undefined) { const cf = L[+b.dataset.cfdel]; if (cf.auto) { state.cfg.groupFigs = false; } L.splice(+b.dataset.cfdel, 1); renderCombFigs(); if (cf.auto) toast('Removed; the automatic group figures are switched off (step 2)'); }
     else if (b.dataset.cfyn !== undefined) { const cf = L[+b.dataset.cfyn]; cf.items = cfVars(cf).filter(v => isYesNo(v) && v.include).map(v => v.id); renderCombFigs(); }
     else if (b.dataset.cfall !== undefined) { const cf = L[+b.dataset.cfall]; cf.items = cfVars(cf).filter(v => v.include).map(v => v.id); renderCombFigs(); }
@@ -35368,6 +35394,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
           <div><label class="f">Panels per row</label><select data-pfk="cols" style="width:auto">${['2', '3', '1', '4'].map(c => `<option ${String(pf.cols || 2) === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
           <div><label class="f">Place in the report</label>${placeSel(pf.place, false).replace(/data-cfk=/g, 'data-pfk=')}</div>
           <div><label class="f">Legends</label><select data-pfk="legend" style="width:auto"><option value="each" ${!pf.legend || pf.legend === 'each' ? 'selected' : ''}>On every panel</option><option value="first" ${pf.legend === 'first' ? 'selected' : ''}>Shared (first panel only)</option><option value="none" ${pf.legend === 'none' ? 'selected' : ''}>None</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-pfk="titles" ${pf.titles ? 'checked' : ''}><span>Panel titles</span></label></div>
           <div><label class="f">Y axis</label><select data-pfk="sameY" style="width:auto"><option value="" ${!pf.sameY ? 'selected' : ''}>Each panel its own</option><option value="1" ${pf.sameY ? 'selected' : ''}>The same for every panel (numbers)</option></select></div>
           <div><label class="f">Panel shape</label><select data-pfk="equal" style="width:auto"><option value="" ${!pf.equal ? 'selected' : ''}>As each figure</option><option value="standard" ${pf.equal === 'standard' ? 'selected' : ''}>Equal heights (4:3)</option><option value="wide" ${pf.equal === 'wide' ? 'selected' : ''}>Equal heights (wide)</option><option value="square" ${pf.equal === 'square' ? 'selected' : ''}>Equal heights (square)</option></select></div>
           <div><label class="f">Width in Word (cm)</label><input type="number" min="4" max="30" step="0.5" data-pfk="widthCm" value="${esc(pf.widthCm || '')}" placeholder="as figures" style="width:90px"></div>
@@ -35392,7 +35419,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     } catch (err) { console.error(err); box.innerHTML = `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; } }
   const panelFigure = (pf, src) => src.length < 2 ? null : { comb: true, panelFig: true, place: pf.place || 'end', sig: true, vid: 'pf_' + pf.id, note: '',
     caption: pf.caption || `Combined figure: ${src.map((f, k) => `(${String.fromCharCode(65 + k)}) ${f.caption}`).join('; ')}`,
-    spec: { type: 'panels', cols: +pf.cols || 2, letters: true, legend: pf.legend || 'each', equal: pf.equal || '', sharedY: !!pf.sameY && pf.sameY !== '0', panels: src.map(f => ({ ...f.spec, title: null })) }, widthCm: +pf.widthCm || undefined, srcKeys: src.map(f => f.caption), hideSrc: !!pf.hide };
+    spec: { type: 'panels', cols: +pf.cols || 2, letters: true, legend: pf.legend || 'each', equal: pf.equal || '', sharedY: !!pf.sameY && pf.sameY !== '0', panels: src.map(f => ({ ...f.spec, title: pf.titles ? String(f.caption || '').replace(/\s+(of|in) the studied (groups|patients).*$/i, '') : null })) }, widthCm: +pf.widthCm || undefined, srcKeys: src.map(f => f.caption), hideSrc: !!pf.hide };
   $('#pfAdd').onclick = () => { if (!state.cfg) return; (state.cfg.panelFigs = state.cfg.panelFigs || []).push({ id: 'pf' + Date.now().toString(36), caption: '', cols: 2, keys: [], place: 'end', hide: false }); renderPanelFigs(); };
   $('#pfList').addEventListener('input', e => { const box = e.target.closest('[data-pf]'); if (!box) return; const i = +box.dataset.pf, pf = state.cfg.panelFigs[i], t = e.target;
     if (t.dataset.pfv !== undefined) { pf.keys = (pf.keys || []).filter(x => x !== t.dataset.pfv); if (t.checked) pf.keys.push(t.dataset.pfv); renderPanelFigs(); return; }
@@ -35416,7 +35443,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   function renderFigureTable() {
     [['#fbNum', 'numeric'], ['#fbCat', 'categorical'], ['#fbRep', 'repeated']].forEach(([id, kind]) => { $(id).innerHTML = `<option value="">${kind}…</option>` + CHART_TYPES[kind].map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); });
     const vars = state.cfg.variables.filter(v => v.include);
-    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th>Y axis from – to</th><th>Reference line (value, label)</th><th>Log scale</th><th>Shape</th><th>Annotation</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
+    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th>Y axis from – to</th><th>Reference line (value, label)</th><th>Log scale</th><th>Shape</th><th>Annotation</th><th>Colours</th><th>Error bars</th><th>Axis break</th><th>Half width</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
       <td><b>${esc(v.label)}</b>${v.memo ? ` <span title="${esc(v.memo)}" style="cursor:help">ℹ</span>` : ''}<div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
       <td><select data-fv="${v.id}" data-fk="chart">${CHART_TYPES[chartKind(v)].map(([k, l]) => `<option value="${k}" ${(v.chart || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input type="text" data-fv="${v.id}" data-fk="caption" value="${esc(v.caption || '')}" placeholder="${esc(v.label)} of the studied groups"></td>
@@ -35426,6 +35453,10 @@ if (typeof module !== 'undefined') module.exports = Sav;
       <td>${v.type === 'numeric' ? `<label class="check" style="margin:0"><input type="checkbox" data-fv="${v.id}" data-fk="logY" ${v.logY ? 'checked' : ''}><span>log</span></label>` : ''}</td>
       <td><select data-fv="${v.id}" data-fk="aspect">${[['', 'As in the style'], ['wide', 'Wide'], ['standard', '4:3'], ['square', 'Square'], ['tall', 'Tall']].map(([k, l]) => `<option value="${k}" ${(v.aspect || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input type="text" data-fv="${v.id}" data-fk="annot" value="${esc(v.annot || '')}" placeholder="text @ 60,15; arrow 55,20 > 40,45" title="Text at x,y (% of the width and height), and arrows from x1,y1 to x2,y2; separate several with ;" style="min-width:150px"></td>
+      <td><select data-fv="${v.id}" data-fk="pal" style="width:auto"><option value="">As the report</option>${Object.entries(Charts.PALETTE_NAMES || {}).map(([k2, l]) => `<option value="${k2}" ${v.pal === k2 ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></td>
+      <td>${v.type !== 'categorical' ? `<select data-fv="${v.id}" data-fk="errBar" style="width:auto">${[['', 'As the report'], ['sd', 'SD'], ['sem', 'SEM'], ['ci', '95% CI']].map(([k2, l]) => `<option value="${k2}" ${(v.errBar || '') === k2 ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}</td>
+      <td>${v.type !== 'categorical' ? `<label class="check" style="margin:0" title="Bar charts: a break in the y axis when one bar is much taller than the others"><input type="checkbox" data-fv="${v.id}" data-fk="ybreak" ${v.ybreak ? 'checked' : ''}><span>break</span></label>` : ''}</td>
+      <td><label class="check" style="margin:0" title="In Word, two half-width figures in a row sit side by side"><input type="checkbox" data-fv="${v.id}" data-fk="half" ${v.half ? 'checked' : ''}><span>½</span></label></td>
       <td><button class="btn ghost small" data-fprev="${v.id}" type="button" title="Preview this figure">👁</button></td></tr>`).join('')}</tbody>`;
     const cur = $('#figPrevVar').value;
     $('#figPrevVar').innerHTML = vars.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
@@ -37941,6 +37972,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     const n = x => { const t = parseFloat(String(x ?? '').replace(',', '.')); return isFinite(t) ? t : undefined; };
     const yMin = n(v.ymin), yMax = n(v.ymax), ref = n(v.ref);
     if (yMin !== undefined) f.spec.yMin = yMin; if (yMax !== undefined) f.spec.yMax = yMax;
+    if (v.ybreak) f.spec.yBreak = true; if (v.half) f.half = true; if (v.pal) f.pal = v.pal;
     if (ref !== undefined) { f.spec.refLine = ref; if (v.refLabel) f.spec.refLabel = v.refLabel; }
     // the variable's reference range shaded, and its annotations ("text @ x,y" and "arrow x1,y1 > x2,y2", in % of the figure)
     if (state.cfg.options.figRefBand && (v.refLo !== undefined || v.refHi !== undefined) && !['hist'].includes(v.chart)) { const lo = n(v.refLo), hi = n(v.refHi); if (lo !== undefined || hi !== undefined) f.spec.band = { lo: lo ?? -1e12, hi: hi ?? 1e12, label: 'Reference range' }; }
@@ -37949,7 +37981,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   }
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
   function renderFigure(f, o) {
-    const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, chartPalette(o), chartStyle(o));
+    const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, f.pal && f.pal !== 'report' ? f.pal : chartPalette(o), chartStyle(o));
     f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height;
   }
 

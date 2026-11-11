@@ -2729,8 +2729,10 @@ const Analysis = (() => {
     FMT = { pText: opts.pText || '', pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct', ci: opts.catCI || '' };
     const used = new Set();
     // error bars of mean charts: SD (default), SEM or 95% CI of the mean
-    const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
-      : opts.errorBar === 'ci' ? jStat.studentt.inv(S.QU(), dd.n - 1) * dd.sd / Math.sqrt(dd.n) : dd.sd;
+    // a figure's own error bars (step 7), else the report's
+    let ERRV = null; const errKindOf = () => (ERRV && ERRV.errBar) || opts.errorBar;
+    const errOf = dd => errKindOf() === 'sem' ? dd.sd / Math.sqrt(dd.n)
+      : errKindOf() === 'ci' ? jStat.studentt.inv(S.QU(), dd.n - 1) * dd.sd / Math.sqrt(dd.n) : dd.sd;
     const errNote = { sem: ' (mean ± SEM)', ci: ' (mean ± 95% CI)' }[opts.errorBar] || '';
     const valueLabels = opts.valueLabels ? { labels: true, labelDec: d } : {};
     // nice equal-width bins for histograms (same rule as chart axes)
@@ -3592,7 +3594,7 @@ const Analysis = (() => {
           return x.pairs ? { sig: x.pairs.filter(q => q.p <= alpha).map(q => ({ i: q.i, j: q.j, p: q.p })), alpha, ...(opts.sigLabel === 'letters' ? { letters: compactLetters(k, x.pairs.filter(q => q.p <= alpha)) } : {}) } : {};
         };
         const figures = res.filter(r => r.v.chart !== 'none').map(r => {
-          const f = { sig: (r.num || r.cat).p <= alpha, vid: r.v.id, ...figureFor(r) };
+          ERRV = r.v; const f = { sig: (r.num || r.cat).p <= alpha, vid: r.v.id, ...figureFor(r) }; ERRV = null; if (r.v.errBar && r.v.errBar !== opts.errorBar && f.spec) f.spec.errKind = r.v.errBar;
           // a group without data: no bar (the chart writes "no data"), not a bar at 0%
           if (r.cat && f.spec && ['bar', 'line'].includes(f.spec.type) && r.cat.ns.some(n => !n)) f.spec.series = f.spec.series.map(s0 => Array.isArray(s0.values) && s0.values.length === k ? { ...s0, values: s0.values.map((x, j) => r.cat.ns[j] ? x : null) } : s0);
           if (r.v.caption) f.caption = r.v.caption;
@@ -3813,7 +3815,9 @@ const Analysis = (() => {
       const pOf = v => { const r0 = resOf(v.id); return r0 ? (num ? r0.num : r0.cat).p : NaN; };
       const pos = v => data.headers.indexOf(v.cols[0].col), stars = cf.stars !== false && k > 1, sym = FMT.sig || '*', gname = gi => k > 1 ? withN([gl[gi]], [gN[gi]])[0] : (gl[0] || 'Patients');
       const yesLike = l => /^(yes|y|present|positive|pos|1|true)$/i.test(String(l).trim());
-      const order = list => { if (cf.sort === 'desc') list.sort((x, y) => y.tot - x.tot); else if (cf.sort === 'asc') list.sort((x, y) => x.tot - y.tot); else if (cf.sort === 'master') list.sort((x, y) => x.pos - y.pos); return list; };
+      // the order of the items: by size, by the difference between the groups, as in the sheet, or as ticked (the manual order)
+      const diffOf = x => { if (x.ds) { const m = x.ds.map(d0 => d0.mean).filter(isFinite); return m.length > 1 ? Math.max(...m) - Math.min(...m) : 0; } const rs0 = x.rows || [x]; return Math.max(...rs0.map(r0 => r0.pct ? Math.max(...r0.pct) - Math.min(...r0.pct) : 0)); };
+      const order = list => { if (cf.sort === 'desc') list.sort((x, y) => y.tot - x.tot); else if (cf.sort === 'asc') list.sort((x, y) => x.tot - y.tot); else if (cf.sort === 'master') list.sort((x, y) => x.pos - y.pos); else if (cf.sort === 'diff') list.sort((x, y) => diffOf(y) - diffOf(x)); else if (cf.sort === 'manual') list.sort((x, y) => (cf.items || []).indexOf(x.v.id) - (cf.items || []).indexOf(y.v.id)); return list; };
       let fig;
       if (!num) {
         let rows = [];
@@ -3858,6 +3862,7 @@ const Analysis = (() => {
             else { let c = n1 - a, d2 = n0 - b; if (!a || !b || !c || !d2) { a += 0.5; b += 0.5; c += 0.5; d2 += 0.5; } est = (a * d2) / (b * c); se = Math.sqrt(1 / a + 1 / b + 1 / c + 1 / d2); }
             const lo = Math.exp(Math.log(est) - z * se), hi = Math.exp(Math.log(est) + z * se); return { label: flat(r).replace(new RegExp(`\\${sym}$`), ''), est, lo, hi, p: r.p, text: `${fmt(est, 2)} (${fmt(lo, 2)} to ${fmt(hi, 2)})` }; });
           Object.keys(spec).forEach(key2 => delete spec[key2]); Object.assign(spec, { type: 'forest', log: true, ref: 1, alpha, xLabel: `${eff} (${gl[1]} vs ${gl[0]}, 95% CI), log scale`, valHead: `${eff} (95% CI)`, rows: fr }); }
+        if (cf.sigAbove && k > 1 && spec.type === 'bar' && !byG && Array.isArray(spec.categories) && spec.categories.length === rows.length) Object.assign(spec, { sigCat: rows.map(r => r.p), alpha, sigWhat: 'between the groups' });
         const levels = [...new Set(rows.map(r => r.level))], what = levels.length === 1 && !yesLike(levels[0]) ? ` (${levels[0]})` : '';
         fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what };
       } else {
@@ -3867,7 +3872,7 @@ const Analysis = (() => {
         const cats = [...Array(Math.max(1, k))].map((_, gi) => gname(gi));
         const sigOf = r => opts.sigMarks && k === 2 && r.p <= alpha ? { sig: [{ i: 0, j: 1, p: r.p }], alpha } : {};
         const chartOf = r => { const c = cf.chart && cf.chart !== 'asVar' ? cf.chart : (r.v.chart && r.v.chart !== 'auto' ? r.v.chart : (r.param && opts.chartStyle !== 'box' ? 'bar' : 'box')); return c === 'hist' || c === 'none' ? 'box' : c; };
-        const panel = r => { const ct = chartOf(r), lab = r.v.ylabel || r.v.label, base = { perGroup: true, categories: cats, yLabel: lab, title: plain(r.v.label) + (stars && r.p <= alpha ? sym : ''), ...sigOf(r) };
+        const panel = r => { const ct = chartOf(r), lab = r.v.ylabel || r.v.label, base = { perGroup: true, categories: cats, yLabel: lab, title: (cf.units ? r.v.label : plain(r.v.label)) + (stars && r.p <= alpha ? sym : ''), ...sigOf(r) };
           if (ct === 'violin' || ct === 'rain') return { ...base, type: 'violin', ...(ct === 'rain' ? { rain: true } : {}), points: opts.points, series: [{ name: r.v.label, data: r.gv }] };
           if (ct === 'dotci') return { ...base, type: 'dot', ci: true, series: [{ name: r.v.label, data: r.gv }] };
           if (ct === 'dot') return { ...base, type: 'dot', median: !r.param, series: [{ name: r.v.label, data: r.gv }] };
@@ -3880,11 +3885,12 @@ const Analysis = (() => {
         if ((cf.axes || 'shared') === 'shared' && allBar) spec = { type: cf.type === 'hbar' ? 'hbar' : 'bar', labels: cf.labels !== false, labelDec: d, categories: rows.map(r => plain(r.v.label) + (stars && r.p <= alpha ? sym : '')), yLabel: cf.yLabel || (med ? 'Median' : 'Mean'),
           series: cats.map((g, gi) => med ? { name: g, values: rows.map(r => r.ds[gi].median ?? NaN), lo: rows.map(r => r.ds[gi].q1), hi: rows.map(r => r.ds[gi].q3) } : { name: g, values: rows.map(r => r.ds[gi].mean ?? NaN), err: rows.map(r => r.ds[gi].n ? errOf(r.ds[gi]) : null) }) };
         else spec = { type: 'panels', cols: +cf.cols || Math.min(3, rows.length), letters: cf.letters === true, sharedY: (cf.axes || 'shared') === 'shared' || cf.axes === 'samey', panels: rows.map(panel) };
+        if (cf.sigAbove && k > 1 && spec.type === 'bar' && Array.isArray(spec.categories) && spec.categories.length === rows.length) Object.assign(spec, { sigCat: rows.map(r => r.p), alpha, sigWhat: 'between the groups' });
         const kinds = [...new Set(rows.map(chartOf))], how = kinds.length === 1 ? { bar: med ? ' (bars show the median; error bars show the IQR)' : allBar && rows.every(r => r.param || cf.stat === 'mean') ? ` (bars show the mean; error bars show ${{ sem: 'the SEM', ci: 'the 95% CI' }[opts.errorBar] || '±1 SD'})` : '', box: ' (box plots)', violin: ' (violin plots)', rain: ' (raincloud plots)', dot: ' (every patient)', dotci: ' (every patient, mean with 95% CI)', meanci: ' (mean with 95% CI)' }[kinds[0]] || '' : '';
         fig = { rows, spec, anySig: rows.some(r => r.p <= alpha), what: '', how };
       }
       const capList = listJoin(items.map(v => lowerFirst(plain(v.label))).map((t, i2) => i2 ? t : t.charAt(0).toUpperCase() + t.slice(1)));
-      const out = { sig: fig.anySig || k === 1, vid: 'cf_' + (cf.id || items.map(v => v.id).join('_')), comb: true, place: cf.place || 'home', widthCm: +cf.widthCm || undefined,
+      const out = { pal: cf.pal || undefined, sig: fig.anySig || k === 1, vid: 'cf_' + (cf.id || items.map(v => v.id).join('_')), comb: true, place: cf.place || 'home', widthCm: +cf.widthCm || undefined,
         caption: (cf.title || `${cf.groupName || capList}${fig.what} of the studied ${k > 1 ? 'groups' : 'patients'}`) + (opts.figNoteParts ? fig.how || '' : ''),
         note: stars && fig.anySig ? `${sym} significant difference between the groups (P ≤ ${alpha}).` : '', spec: fig.spec };
       // the figure goes with the table of its first item (other places are set by the app); the items' own figures are left out (unless asked to keep them)

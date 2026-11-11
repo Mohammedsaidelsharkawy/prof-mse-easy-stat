@@ -250,6 +250,13 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**📊 Figures (round 3)**
+- **Per figure** (step 7, the figure table): **colours** (any palette for that figure only), **error bars** (SD, SEM or 95% CI for that figure, said in its caption), **axis break** (bar charts: when a few bars are much taller, the y axis is broken so the others stay readable) and **½ half width** (two half-width figures sit side by side in Word).
+- **Combined figures**: order by the **largest difference between the groups** or by hand (**↑** on the ticked items); **significance marks above the items**; **panel titles with units**; **colours** of their own.
+- **Combine figures**: **panel titles** on each panel.
+- **Horizontal bars**: long item names wrap onto two lines instead of being cut.
+- Already in the app: the group means on box plots, with their values (step 7, box plots).
+
 **🗂 Tables (round 3)** — in each table's ⚙ Options unless said
 - **Yes/no rows under one heading** (e.g. “Complications, n (%)”, its own text or the item group's name), the items indented.
 - **Hide rows no patient has** (listed in the footnote), **bold the higher group** in significant rows, **units in their own column** (“Weight (kg)” → Weight | kg).

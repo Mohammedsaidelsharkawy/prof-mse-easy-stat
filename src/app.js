@@ -3167,13 +3167,17 @@
               ${(cf.ctype || 'bars') === 'bars' ? `<div><label class="f">Bars grouped by</label>${sel2('layout', byG ? 'group' : 'item', [['group', 'Study group (category names under the bars)'], ['item', 'Item (a bar per study group)']])}</div>
               ${byG ? '' : `<div><label class="f">Direction</label>${sel2('type', cf.type === 'hbar' ? 'hbar' : 'bar', [['bar', 'Vertical'], ['hbar', 'Horizontal']])}</div>`}` : ''}
               ${cf.ctype === 'forest' ? `<div><label class="f">Effect</label>${sel2('effect', cf.effect || 'rr', [['rr', 'Relative risk (RR)'], ['or', 'Odds ratio (OR)']])}</div>` : ''}`}
-          <div><label class="f">Order of the items</label>${sel2('sort', cf.sort || '', [['', 'As ticked'], ['master', 'As in the master sheet'], ['desc', num ? 'Largest first' : 'Most frequent first'], ['asc', num ? 'Smallest first' : 'Least frequent first']])}</div>
+          <div><label class="f">Order of the items</label>${sel2('sort', cf.sort || '', [['', 'As ticked (↑ to move)'], ['master', 'As in the master sheet'], ['desc', num ? 'Largest first' : 'Most frequent first'], ['asc', num ? 'Smallest first' : 'Least frequent first'], ['diff', 'Largest difference between the groups first']])}</div>
+          <div><label class="f">Colours</label>${sel2('pal', cf.pal || '', [['', 'As the report'], ...Object.entries(Charts.PALETTE_NAMES || {})])}</div>
           <div><label class="f">Y-axis title</label><input type="text" data-cfk="yLabel" value="${esc(cf.yLabel || '')}" placeholder="${num ? 'the item' : '% of patients'}" style="width:130px"></div>
           <div><label class="f">Place in the report</label>${placeSel(cf.place, true)}</div>
           <div><label class="f">Width in Word (cm)</label><input type="number" min="4" max="30" step="0.5" data-cfk="widthCm" value="${esc(cf.widthCm || '')}" placeholder="as figures" style="width:90px"></div>
         </div>
         <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:6px;align-items:center">
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="stars" ${cf.stars !== false ? 'checked' : ''}><span>* on significant items</span></label>
+          <label class="check" style="margin:0" title="Stars above each item's bars (P of the comparison between the groups)"><input type="checkbox" data-cfk="sigAbove" ${cf.sigAbove ? 'checked' : ''}><span>Significance marks above the items</span></label>
+          ${num ? `<label class="check" style="margin:0"><input type="checkbox" data-cfk="units" ${cf.units ? 'checked' : ''}><span>Panel titles with units</span></label>` : ''}
+          ${ticked.length > 1 && !cf.sort ? `<span class="legend-note">Order:</span>${ticked.map((v, q) => `<span class="chip">${esc(v.label)}${q ? ` <button type="button" class="btn ghost small" data-cfup="${i}|${esc(v.id)}" title="Earlier">↑</button>` : ''}</span>`).join(' ')}` : ''}
           <label class="check" style="margin:0"><input type="checkbox" data-cfk="labels" ${cf.labels !== false ? 'checked' : ''}><span>Values on the bars</span></label>
           ${!num ? `<label class="legend-note" style="margin:0" title="An item that no patient has (Yes 0%)">When no patient has it ${sel2('zeroYes', cf.zeroYes || 'zero', [['zero', 'show Yes 0%'], ['other', 'show its other answer']])}</label>` : ''}
           ${num ? `<label class="check" style="margin:0"><input type="checkbox" data-cfk="letters" ${cf.letters ? 'checked' : ''}><span>Panel letters A, B …</span></label>` : ''}
@@ -3223,6 +3227,7 @@
   document.addEventListener('click', e => { const b = e.target.closest('[data-cfcopy],[data-cfexp],[data-cfppt],[data-cfpdf],[data-pfcopy],[data-pfexp],[data-pfppt],[data-pfpdf]'); if (!b) return;
     const k = Object.keys(b.dataset).find(x => /^(cf|pf)(copy|exp|ppt|pdf)$/.test(x)), m = /^(cf|pf)(copy|exp|ppt|pdf)$/.exec(k); figAction(m[1], m[2], +b.dataset[k]); });
   $('#cfList').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !state.cfg) return; const L = state.cfg.combFigs;
+    if (b.dataset.cfup) { const [i, id] = b.dataset.cfup.split('|'), cf = L[+i], it = cf.items || [], q = it.indexOf(id); if (q > 0) { [it[q - 1], it[q]] = [it[q], it[q - 1]]; renderCombFigs(); } return; }
     if (b.dataset.cfdel !== undefined) { const cf = L[+b.dataset.cfdel]; if (cf.auto) { state.cfg.groupFigs = false; } L.splice(+b.dataset.cfdel, 1); renderCombFigs(); if (cf.auto) toast('Removed; the automatic group figures are switched off (step 2)'); }
     else if (b.dataset.cfyn !== undefined) { const cf = L[+b.dataset.cfyn]; cf.items = cfVars(cf).filter(v => isYesNo(v) && v.include).map(v => v.id); renderCombFigs(); }
     else if (b.dataset.cfall !== undefined) { const cf = L[+b.dataset.cfall]; cf.items = cfVars(cf).filter(v => v.include).map(v => v.id); renderCombFigs(); }
@@ -3240,6 +3245,7 @@
           <div><label class="f">Panels per row</label><select data-pfk="cols" style="width:auto">${['2', '3', '1', '4'].map(c => `<option ${String(pf.cols || 2) === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
           <div><label class="f">Place in the report</label>${placeSel(pf.place, false).replace(/data-cfk=/g, 'data-pfk=')}</div>
           <div><label class="f">Legends</label><select data-pfk="legend" style="width:auto"><option value="each" ${!pf.legend || pf.legend === 'each' ? 'selected' : ''}>On every panel</option><option value="first" ${pf.legend === 'first' ? 'selected' : ''}>Shared (first panel only)</option><option value="none" ${pf.legend === 'none' ? 'selected' : ''}>None</option></select></div>
+          <div><label class="check" style="margin-top:22px"><input type="checkbox" data-pfk="titles" ${pf.titles ? 'checked' : ''}><span>Panel titles</span></label></div>
           <div><label class="f">Y axis</label><select data-pfk="sameY" style="width:auto"><option value="" ${!pf.sameY ? 'selected' : ''}>Each panel its own</option><option value="1" ${pf.sameY ? 'selected' : ''}>The same for every panel (numbers)</option></select></div>
           <div><label class="f">Panel shape</label><select data-pfk="equal" style="width:auto"><option value="" ${!pf.equal ? 'selected' : ''}>As each figure</option><option value="standard" ${pf.equal === 'standard' ? 'selected' : ''}>Equal heights (4:3)</option><option value="wide" ${pf.equal === 'wide' ? 'selected' : ''}>Equal heights (wide)</option><option value="square" ${pf.equal === 'square' ? 'selected' : ''}>Equal heights (square)</option></select></div>
           <div><label class="f">Width in Word (cm)</label><input type="number" min="4" max="30" step="0.5" data-pfk="widthCm" value="${esc(pf.widthCm || '')}" placeholder="as figures" style="width:90px"></div>
@@ -3264,7 +3270,7 @@
     } catch (err) { console.error(err); box.innerHTML = `<span class="legend-note">Preview failed: ${esc(err.message)}</span>`; } }
   const panelFigure = (pf, src) => src.length < 2 ? null : { comb: true, panelFig: true, place: pf.place || 'end', sig: true, vid: 'pf_' + pf.id, note: '',
     caption: pf.caption || `Combined figure: ${src.map((f, k) => `(${String.fromCharCode(65 + k)}) ${f.caption}`).join('; ')}`,
-    spec: { type: 'panels', cols: +pf.cols || 2, letters: true, legend: pf.legend || 'each', equal: pf.equal || '', sharedY: !!pf.sameY && pf.sameY !== '0', panels: src.map(f => ({ ...f.spec, title: null })) }, widthCm: +pf.widthCm || undefined, srcKeys: src.map(f => f.caption), hideSrc: !!pf.hide };
+    spec: { type: 'panels', cols: +pf.cols || 2, letters: true, legend: pf.legend || 'each', equal: pf.equal || '', sharedY: !!pf.sameY && pf.sameY !== '0', panels: src.map(f => ({ ...f.spec, title: pf.titles ? String(f.caption || '').replace(/\s+(of|in) the studied (groups|patients).*$/i, '') : null })) }, widthCm: +pf.widthCm || undefined, srcKeys: src.map(f => f.caption), hideSrc: !!pf.hide };
   $('#pfAdd').onclick = () => { if (!state.cfg) return; (state.cfg.panelFigs = state.cfg.panelFigs || []).push({ id: 'pf' + Date.now().toString(36), caption: '', cols: 2, keys: [], place: 'end', hide: false }); renderPanelFigs(); };
   $('#pfList').addEventListener('input', e => { const box = e.target.closest('[data-pf]'); if (!box) return; const i = +box.dataset.pf, pf = state.cfg.panelFigs[i], t = e.target;
     if (t.dataset.pfv !== undefined) { pf.keys = (pf.keys || []).filter(x => x !== t.dataset.pfv); if (t.checked) pf.keys.push(t.dataset.pfv); renderPanelFigs(); return; }
@@ -3288,7 +3294,7 @@
   function renderFigureTable() {
     [['#fbNum', 'numeric'], ['#fbCat', 'categorical'], ['#fbRep', 'repeated']].forEach(([id, kind]) => { $(id).innerHTML = `<option value="">${kind}…</option>` + CHART_TYPES[kind].map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join(''); });
     const vars = state.cfg.variables.filter(v => v.include);
-    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th>Y axis from – to</th><th>Reference line (value, label)</th><th>Log scale</th><th>Shape</th><th>Annotation</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
+    $('#figTbl').innerHTML = `<thead><tr><th>Variable</th><th>Chart type</th><th>Caption (optional)</th><th>Y-axis title (optional)</th><th>Y axis from – to</th><th>Reference line (value, label)</th><th>Log scale</th><th>Shape</th><th>Annotation</th><th>Colours</th><th>Error bars</th><th>Axis break</th><th>Half width</th><th></th></tr></thead><tbody>${vars.map(v => `<tr>
       <td><b>${esc(v.label)}</b>${v.memo ? ` <span title="${esc(v.memo)}" style="cursor:help">ℹ</span>` : ''}<div class="legend-note">${v.kind === 'repeated' ? 'repeated' : v.type}</div></td>
       <td><select data-fv="${v.id}" data-fk="chart">${CHART_TYPES[chartKind(v)].map(([k, l]) => `<option value="${k}" ${(v.chart || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input type="text" data-fv="${v.id}" data-fk="caption" value="${esc(v.caption || '')}" placeholder="${esc(v.label)} of the studied groups"></td>
@@ -3298,6 +3304,10 @@
       <td>${v.type === 'numeric' ? `<label class="check" style="margin:0"><input type="checkbox" data-fv="${v.id}" data-fk="logY" ${v.logY ? 'checked' : ''}><span>log</span></label>` : ''}</td>
       <td><select data-fv="${v.id}" data-fk="aspect">${[['', 'As in the style'], ['wide', 'Wide'], ['standard', '4:3'], ['square', 'Square'], ['tall', 'Tall']].map(([k, l]) => `<option value="${k}" ${(v.aspect || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input type="text" data-fv="${v.id}" data-fk="annot" value="${esc(v.annot || '')}" placeholder="text @ 60,15; arrow 55,20 > 40,45" title="Text at x,y (% of the width and height), and arrows from x1,y1 to x2,y2; separate several with ;" style="min-width:150px"></td>
+      <td><select data-fv="${v.id}" data-fk="pal" style="width:auto"><option value="">As the report</option>${Object.entries(Charts.PALETTE_NAMES || {}).map(([k2, l]) => `<option value="${k2}" ${v.pal === k2 ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></td>
+      <td>${v.type !== 'categorical' ? `<select data-fv="${v.id}" data-fk="errBar" style="width:auto">${[['', 'As the report'], ['sd', 'SD'], ['sem', 'SEM'], ['ci', '95% CI']].map(([k2, l]) => `<option value="${k2}" ${(v.errBar || '') === k2 ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}</td>
+      <td>${v.type !== 'categorical' ? `<label class="check" style="margin:0" title="Bar charts: a break in the y axis when one bar is much taller than the others"><input type="checkbox" data-fv="${v.id}" data-fk="ybreak" ${v.ybreak ? 'checked' : ''}><span>break</span></label>` : ''}</td>
+      <td><label class="check" style="margin:0" title="In Word, two half-width figures in a row sit side by side"><input type="checkbox" data-fv="${v.id}" data-fk="half" ${v.half ? 'checked' : ''}><span>½</span></label></td>
       <td><button class="btn ghost small" data-fprev="${v.id}" type="button" title="Preview this figure">👁</button></td></tr>`).join('')}</tbody>`;
     const cur = $('#figPrevVar').value;
     $('#figPrevVar').innerHTML = vars.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
@@ -5813,6 +5823,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     const n = x => { const t = parseFloat(String(x ?? '').replace(',', '.')); return isFinite(t) ? t : undefined; };
     const yMin = n(v.ymin), yMax = n(v.ymax), ref = n(v.ref);
     if (yMin !== undefined) f.spec.yMin = yMin; if (yMax !== undefined) f.spec.yMax = yMax;
+    if (v.ybreak) f.spec.yBreak = true; if (v.half) f.half = true; if (v.pal) f.pal = v.pal;
     if (ref !== undefined) { f.spec.refLine = ref; if (v.refLabel) f.spec.refLabel = v.refLabel; }
     // the variable's reference range shaded, and its annotations ("text @ x,y" and "arrow x1,y1 > x2,y2", in % of the figure)
     if (state.cfg.options.figRefBand && (v.refLo !== undefined || v.refHi !== undefined) && !['hist'].includes(v.chart)) { const lo = n(v.refLo), hi = n(v.refHi); if (lo !== undefined || hi !== undefined) f.spec.band = { lo: lo ?? -1e12, hi: hi ?? 1e12, label: 'Reference range' }; }
@@ -5821,7 +5832,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   }
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
   function renderFigure(f, o) {
-    const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, chartPalette(o), chartStyle(o));
+    const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, f.pal && f.pal !== 'report' ? f.pal : chartPalette(o), chartStyle(o));
     f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height;
   }
 

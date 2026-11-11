@@ -339,7 +339,9 @@ const Report = (() => {
       const apa = opts.captionStyle === 'apa';
       const figs = list.filter(f => f.url).map(f => { const num = figLabel(pre + fig++, opts.captionStyle); listFigs.push(`${num} ${f.caption}`); return { ...f, apa, num, label: `${num} ${f.caption}` }; });
       if (opts.figPerRow === 2 && figs.length > 1) children.push(figureGrid(figs, w2), para('', { after: 80 }));
-      else for (const f of figs) {
+      else for (let fi = 0; fi < figs.length; fi++) { const f = figs[fi];
+        // two figures marked half width (step 7) one after the other: side by side
+        if (f.half) { const j = figs.findIndex((g, q) => q > fi && g.half); if (j > 0) { const g = figs.splice(j, 1)[0]; children.push(figureGrid([f, g], w2), para('', { after: 80 })); continue; } }
         // APA places the number and title above the figure and the explanation below it as a note
         if (apa) {
           children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, fw(f), true, f.caption));
