@@ -250,6 +250,19 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**⚙ Workflow (round 3)**
+- **🔁 Try a setting** (report tools): turn one setting on or off and see, side by side, every table and comment it changes; keep it or leave it.
+- **📄 Settings from a Word file**: upload a report you like; its font, table lines (grid or three-line), P value wording and leading zero, caption style, mean (SD) and comment length are proposed, each to tick.
+- **🔒 Lock a table** (on each table of the report): its comment is kept as it is when the report runs again, with a warning (and a line in the health panel) when its numbers changed.
+- **↻ This table**: run one table again after a change to its variables or options, the rest of the report kept.
+- **🩺 Report health**: long tables, tables without a comment, figures without a caption, abbreviations not defined, locked tables with changed numbers, and edited comments whose numbers differ from the results.
+- **Comments by keyboard**: Alt+↓ / Alt+↑ go to the next / previous comment; Esc brings back the automatic comment.
+- **ⓘ Tests** on each table: what its tests do, what to check and an example (the app's statistics guide).
+- **Accessibility**: a “Skip to the main content” link, names for every icon-only button and unlabelled field (screen readers), a visible focus outline.
+- **Large data**: at most 2,000 dots drawn per group in dot, box and raincloud plots (evenly spaced; the summaries use every value).
+- **🖨 Print this screen** (☰ More): the design, the generator, the tables or the report printed without menus and buttons, folded parts opened.
+- Already in the app: the undo timeline (☰ More › Undo timeline, “Undo to before this”).
+
 **📊 Figures (round 3)**
 - **Per figure** (step 7, the figure table): **colours** (any palette for that figure only), **error bars** (SD, SEM or 95% CI for that figure, said in its caption), **axis break** (bar charts: when a few bars are much taller, the y axis is broken so the others stay readable) and **½ half width** (two half-width figures sit side by side in Word).
 - **Combined figures**: order by the **largest difference between the groups** or by hand (**↑** on the ticked items); **significance marks above the items**; **panel titles with units**; **colours** of their own.

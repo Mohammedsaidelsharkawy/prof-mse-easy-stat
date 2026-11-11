@@ -192,6 +192,7 @@ const Charts = (() => {
     const f = v => Math.round(amt >= 0 ? v + (255 - v) * amt : v * (1 + amt));
     return `rgb(${f(r)},${f(g)},${f(b)})`;
   }
+  const thin = arr => arr.length > 2000 ? arr.filter((_, i) => i % Math.ceil(arr.length / 2000) === 0) : arr;
   function niceScale(min, max, ticks = 6, integer = false) {
     if (min === max) { max = min + 1; }
     if (ticks === 6) ticks = TICKS; // the y-axis density chosen in the style
@@ -609,7 +610,7 @@ const Charts = (() => {
         if (!arr.length) return;
         const color = pal[ci % pal.length], cx = L + cw * (ci + 0.5);
         ctx.fillStyle = color; ctx.globalAlpha = 0.55;
-        arr.forEach((v, i) => { ctx.beginPath(); ctx.arc(cx + jitter(i + 1) * gw * 0.8, y(v), 7, 0, Math.PI * 2); ctx.fill(); });
+        thin(arr).forEach((v, i) => { ctx.beginPath(); ctx.arc(cx + jitter(i + 1) * gw * 0.8, y(v), 7, 0, Math.PI * 2); ctx.fill(); });
         ctx.globalAlpha = 1;
         const m = spec.median ? Stats.median(arr) : Stats.mean(arr);
         // whiskers: IQR (median), the 95% CI of the mean, or ± SD
@@ -643,7 +644,7 @@ const Charts = (() => {
         ctx.fillStyle = shade(color, 0.7); ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 3.5 * lw(st); ctx.setLineDash(perGroup ? [] : shapes ? DASHES[si % 6] : si === 2 ? [12, 7] : []); ctx.stroke(); ctx.setLineDash([]);
         if (spec.points || rain) {
           ctx.fillStyle = color; ctx.globalAlpha = 0.5;
-          arr.forEach((v, i) => { ctx.beginPath(); ctx.arc(rain ? cx - half * 0.55 + jitter(i + 1) * half * 0.45 : cx + jitter(i + 1) * half * 0.5, y(v), 5, 0, Math.PI * 2); ctx.fill(); });
+          thin(arr).forEach((v, i) => { ctx.beginPath(); ctx.arc(rain ? cx - half * 0.55 + jitter(i + 1) * half * 0.45 : cx + jitter(i + 1) * half * 0.5, y(v), 5, 0, Math.PI * 2); ctx.fill(); });
           ctx.globalAlpha = 1;
         }
         hit(cx, y(b.med), `${perGroup ? spec.categories[ci] : `${s.name} · ${spec.categories[ci]}`}: median ${+(spec._log ? 10 ** b.med : b.med).toPrecision(4)}`);
@@ -689,7 +690,7 @@ const Charts = (() => {
         if (spec.points) {
           // every observation as a translucent dot (outliers included)
           ctx.fillStyle = color; ctx.globalAlpha = 0.55;
-          arr.forEach((v, i) => { ctx.beginPath(); ctx.arc(cx + jitter(i + 1) * w * 0.7, y(v), 6, 0, Math.PI * 2); ctx.fill(); });
+          thin(arr).forEach((v, i) => { ctx.beginPath(); ctx.arc(cx + jitter(i + 1) * w * 0.7, y(v), 6, 0, Math.PI * 2); ctx.fill(); });
           ctx.globalAlpha = 1;
         } else b.out.forEach(v => { ctx.beginPath(); ctx.arc(cx, y(v), 7, 0, Math.PI * 2); ctx.stroke(); });
       }));

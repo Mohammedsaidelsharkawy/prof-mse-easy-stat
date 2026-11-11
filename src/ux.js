@@ -525,6 +525,13 @@
     b.onclick = e => { const x = e.target.closest('[data-o]'); if (!x) return; b.remove(); if (x.dataset.o === 'y' && $('#presetSave')) $('#presetSave').click(); }; setTimeout(() => b.remove(), 20000); }
 
   setTimeout(onStepper, 0); // after every part of this module is set up
+  /* ---------- X4: accessibility: a skip link, names for icon-only buttons and unlabelled fields, visible focus (CSS) ---------- */
+  { const a = el('a', 'ux-skip', 'Skip to the main content'); a.href = '#'; a.onclick = e => { e.preventDefault(); const m = document.querySelector('main'); if (m) { m.setAttribute('tabindex', '-1'); m.focus(); } }; document.body.prepend(a);
+    const name = root => { root.querySelectorAll('button:not([aria-label]), label.btn:not([aria-label])').forEach(b => { const t = (b.textContent || '').replace(/\s+/g, ' ').trim(); if ((!t || !/[A-Za-z]{3}/.test(t)) && b.title) b.setAttribute('aria-label', b.title); });
+      root.querySelectorAll('input:not([aria-label]):not([type=hidden]), select:not([aria-label]), textarea:not([aria-label])').forEach(x => { if (x.labels && x.labels.length) return; const t = x.title || x.placeholder || (x.closest('[title]') || {}).title; if (t) x.setAttribute('aria-label', t); }); };
+    let pend = false; new MutationObserver(() => { if (pend) return; pend = true; requestAnimationFrame(() => { pend = false; name(document); }); }).observe(document.body, { childList: true, subtree: true }); name(document); }
+  // X8: print the screen as it is (the menus and buttons left out, the folded parts opened)
+  { const menu = document.querySelector('.ux-menu'); if (menu) { const b = el('button', 'btn light small', '🖨 Print this screen'); b.type = 'button'; b.title = 'The current screen (design, generator, tables or report) printed without the buttons'; b.onclick = () => window.print(); menu.appendChild(b); } }
   /* ---------- step entry hooks ---------- */
   function onStepEnter(n) { if ((n >= 4 && n <= 8) || n === 11) setTimeout(markChanged, 50); if (n === 4) setTimeout(smartBanner, 80); if (n === 8) setTimeout(() => { favRow(); decorateAdv(); }, 80); if (n === 1) setTimeout(drawChecks, 80); if (n === 11) setTimeout(onReport, 150); miniSpy(); }
 })();
