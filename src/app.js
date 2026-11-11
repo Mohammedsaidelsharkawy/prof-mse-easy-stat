@@ -701,7 +701,7 @@
     pushUndo();
     const before = JSON.parse(state.undo[state.undo.length - 1]).data;
     fn();
-    logChange(what ? `${what} — ${describeChange(before, state.data)}` : describeChange(before, state.data));
+    logChange(what ? `${what} — ${describeChange(before, state.data)}` : describeChange(before, state.data)); logCells(before, state.data, what);
     renderGrid(); renderStepper();
   }
   $('#groupComboGo').onclick = () => { const cfg = state.cfg, b = $('#groupCombo').value; if (!cfg || !b || !cfg.groupCol) { toast('Choose the second column'); return; } readUiIntoCfg();
@@ -1282,6 +1282,10 @@
     if (r) { const s = state.snapshots[+r.dataset.snaprest]; if (!confirm(`Restore “${s.name}”? The current data are kept in Undo.`)) return; pushUndo(); state.data = JSON.parse(JSON.stringify(s.data)); state.cfg = JSON.parse(JSON.stringify(s.cfg)); state.result = null; logChange(`Restored snapshot “${s.name}”`); renderGrid(); renderPrep(); renderStepper(); toast(`Snapshot “${s.name}” restored`); }
   });
   // cleaning log: every change to the data, with what changed
+  // W2: the change log of the data: every cell changed after the upload (who, when, old, new), when the rows stay the same
+  function logCells(before, after, what) { if (!before || before.rows.length !== after.rows.length) return; const L = state.cellLog = state.cellLog || [], who = (() => { try { return JSON.parse(localStorage.getItem('ux2.who') || '""'); } catch (e) { return ''; } })(), at = new Date().toLocaleString('en-GB'), idc = after.headers.find(h => /^(patient[\s_]*)?id$/i.test(h)); let n = 0;
+    after.rows.forEach((r, i) => after.headers.forEach(h => { if (!before.headers.includes(h) || n > 500) return; const a = before.rows[i][h], b = r[h]; if (String(a ?? '') !== String(b ?? '')) { n++; L.push({ at, who, id: idc ? r[idc] : i + 1, col: h, was: a ?? '', now: b ?? '', why: what || '' }); } }));
+    if (L.length > 20000) L.splice(0, L.length - 20000); }
   function logChange(what) { (state.cleanLog = state.cleanLog || []).push({ time: new Date().toLocaleString(), what }); }
   function describeChange(before, after) {
     const hb = before.headers, ha = after.headers, add = ha.filter(h => !hb.includes(h)), rem = hb.filter(h => !ha.includes(h)), out = [];
@@ -1294,7 +1298,9 @@
   $('#logXlsx').onclick = () => {
     const log = state.cleanLog || []; if (!log.length) { toast('No change logged yet'); return; }
     const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet([['#', 'Time', 'Change'], ...log.map((l, i) => [i + 1, l.time, l.what])]); ws['!cols'] = [{ wch: 5 }, { wch: 22 }, { wch: 110 }];
-    XLSX.utils.book_append_sheet(wb, ws, 'Cleaning log'); XLSX.writeFile(wb, `${baseName()} - Cleaning log.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Cleaning log');
+    const cl = state.cellLog || []; if (cl.length) { const w2 = XLSX.utils.aoa_to_sheet([['When', 'Who', 'Patient', 'Column', 'Old value', 'New value', 'Change'], ...cl.map(c => [c.at, c.who, c.id, c.col, c.was, c.now, c.why])]); w2['!cols'] = [{ wch: 20 }, { wch: 14 }, { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 16 }, { wch: 40 }]; XLSX.utils.book_append_sheet(wb, w2, 'Cell changes'); }
+    XLSX.writeFile(wb, `${baseName()} - Cleaning log.xlsx`);
   };
   // CSV of the current sheet (UTF-8 with a BOM, so Excel shows Arabic and accents)
   $('#gridCsv').onclick = () => { const ws = XLSX.utils.json_to_sheet(state.data.rows, { header: state.data.headers }), csv = XLSX.utils.sheet_to_csv(ws);
@@ -6984,13 +6990,13 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const phaseParts = () => { const out = {}; try { const D = window.EasyBuilder && window.EasyBuilder.design; if (D && D.vars && D.vars.length) out.design = JSON.parse(JSON.stringify(D)); } catch (e) { /* none */ } try { if (window.EasyGen) out.gen = JSON.parse(JSON.stringify(window.EasyGen.settings)); } catch (e) { /* none */ } return out; };
   function projectObj() { const ph = phaseParts(); if (!state.data && !ph.design) return null; if (state.data) readUiIntoCfg();
     return { app: 'ProfMSE-EasyStat-project', version: 2, steps: STEPS.length, saved: new Date().toISOString(), file: state.file || (ph.design && ph.design.title) || 'study', sheet: state.sheet, step: state.step,
-      phase: window.EasyBuilder ? window.EasyBuilder.phase : 'analyse', ...ph, ...(state.data ? { data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], snapshots: state.snapshots || [] } : {}) }; }
+      phase: window.EasyBuilder ? window.EasyBuilder.phase : 'analyse', ...ph, ...(state.data ? { data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], cellLog: state.cellLog || [], snapshots: state.snapshots || [] } : {}) }; }
   function openAny(j, fname) { openPhases(j); if (j.data && j.cfg) openProject(j, fname || j.file); else if (window.EasyBuilder) window.EasyBuilder.setPhase(j.phase === 'generate' ? 'generate' : 'build'); }
   $('#btnSaveProj').onclick = () => {
     const ph = phaseParts(); if (!state.data && !ph.design) { toast('Nothing to save yet — design a master sheet, or load an Excel file or an example'); return; }
     if (state.data) readUiIntoCfg();
     const proj = { app: 'ProfMSE-EasyStat-project', version: 2, steps: STEPS.length, saved: new Date().toISOString(), file: state.file || (ph.design && ph.design.title) || 'study', sheet: state.sheet, step: state.step,
-      phase: window.EasyBuilder ? window.EasyBuilder.phase : 'analyse', ...ph, ...(state.data ? { data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], snapshots: state.snapshots || [] } : {}) };
+      phase: window.EasyBuilder ? window.EasyBuilder.phase : 'analyse', ...ph, ...(state.data ? { data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], cellLog: state.cellLog || [], snapshots: state.snapshots || [] } : {}) };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(proj)], { type: 'application/json' }));
     a.download = String(proj.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - project.easystat.json';
@@ -7012,7 +7018,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       const cfg = j.cfg;
       cfg.options = { ...defaultOptions(), ...cfg.options };
       cfg.tpInclude = cfg.tpInclude || {}; cfg.advanced = cfg.advanced || []; cfg.exportExclude = cfg.exportExclude || {}; cfg.report = { ...DEFAULT_REPORT, ...(cfg.report || {}) };
-      state.data = j.data; state.cfg = cfg; state.file = j.file || fname; state.messy = null; state.cleanLog = j.cleanLog || []; state.snapshots = j.snapshots || []; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
+      state.data = j.data; state.cfg = cfg; state.file = j.file || fname; state.messy = null; state.cleanLog = j.cleanLog || []; state.cellLog = j.cellLog || []; state.snapshots = j.snapshots || []; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
       state.undo = []; state.redo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
       $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option>${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
       $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value;

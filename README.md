@@ -286,6 +286,13 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 - **🎓 Exam mode**: one dataset per student (the seed from the name) and a marking sheet with each student's correct means, % and P values.
 - **🕵 Find the error**: a dataset with one planted trap (clustering ignored, a confounder, regression to the mean), a hint and the answer (checked: the confounder's crude difference −1.68, P < 0.001, adjusted 0.11, P 0.70).
 
+**⚙ Workflow (round 4)** — ☰ More
+- **✅ Project checklist**: design → ethics → data collection → cleaning → analysis → report → supervisor review → submission, each with a status, a date and a note ("looks done" where the project shows it); the stage shows in 📁 Projects.
+- **Change log of the data**: every cell changed after the upload — when, who (👤 Your name), patient, column, old and new value — in the cleaning log's Excel file (sheet “Cell changes”) and in the project file.
+- **🔀 Compare with another dataset**: interim against final, before against after cleaning: rows added and removed, cells that differ by column, and the results whose P value moved (⚠ when one crosses significance).
+- **🏛 House style**: the look of the tables, P values, captions, fonts, figures and wording, with the Word template, saved as one file for colleagues; **Apply a house style** sets them (the analysis settings are left alone).
+- **🧭 Guided first analysis**: five plain questions (the outcome, groups, independent or the same patients, over time, normal — checked for you) give the test and why, and mark the primary outcome.
+
 **🗂 Organisation (round 4)**
 - **📁 Projects** (header): a dashboard of every study kept in this browser — phase, patients, dataset version, the primary result, open tasks — with tags, a filter, rename, archive, download and delete.
 - **🗂 Dataset versions** (☰ More): keep Raw, Cleaned, Interim, Final with a date and a note, go back to any; the statistical analysis states the version used.
