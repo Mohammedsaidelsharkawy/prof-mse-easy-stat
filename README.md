@@ -250,6 +250,16 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🎲 Generate (round 3)** — Special designs and relations unless said
+- **Cluster randomised trial**: whole clusters (the sites, or clusters made here) are given one group each; the patients of a cluster are alike (intraclass correlation asked); an optional cluster column; the design effect, the effective number of patients and the ICC found in the data (checked: ICC 0.10 asked, 0.102 by a mixed model in Python).
+- **Stepped-wedge**: every cluster starts on the control and moves to the intervention at its own step over the visits; effect, time trend a visit, ICC; an optional yes/no column "on the intervention"; the schedule of the steps.
+- **Crossover (AB / BA)**: the first group takes A then B, the second B then A (the first two visits are the two periods), with a period effect, a carry-over of B and a within-patient correlation; the treatment effect with its 95% CI, the period effect and the carry-over test from the data (checked: effect −2 asked, −1.97 by a mixed model).
+- **Non-inferiority**: an outcome, a margin and the better direction; data that come out non-inferior, inferior or inconclusive (drawn again until the 95% CI says so), with the one-sided P and the power to show non-inferiority.
+- **Real-world quirks**: no enrolment on Fridays and fewer on Saturdays, a seasonal swing (highest in winter), a new device that reads higher part-way through the study, a site that rounds its readings (to 5, say).
+- **⬇ Missing-data teaching pair** (beside the datasets): the same patients twice (same seed) — complete (the truth) and with values missing at random given another variable (MAR) — with a key of the bias of each complete-case mean and what to practise.
+- **Difficulty** (Realism heading): Easy (clean), Medium (5% missing, 5% drop out, 1% outliers, skewed times and counts) or Hard (12% missing MAR, 15% drop out, 2% outliers, skewed numbers, messy entries).
+- The data are unchanged when none of these is used.
+
 **🧱 Build (round 3)** — Export tab unless said
 - **📝 Protocol amendments**: version, date, what changed, why and the ethics approval; as a sheet, and as a part of the study binder.
 - **🕒 Visit windows**: upload the filled master sheet: each visit on time, early, late or missed (by its visit date against the anchor date ± window), a summary by site and visit with the % out of window, and the list of deviations.
