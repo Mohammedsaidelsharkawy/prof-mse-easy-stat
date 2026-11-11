@@ -276,6 +276,16 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 - **⚖ Balance plot (Love plot)**: the SMD of every baseline variable, ±0.1 lines, added to the Word report in one click.
 - **⚠ Limitations draft**, **✨ Highlights** and **📰 Journal style** (AMA, APA 7, ICMJE/Vancouver, thesis: P value style and captions in one click, and the word limit). The cover letter was already there.
 
+**🖼 Figures, 🧱 Build, 🎲 Generate (round 4)**
+- **⇉ all** (step 7, each figure's row): give every figure that figure's shape, colours, error bars, axis break and width. (Spaghetti, raincloud and alluvial plots were already there.)
+- **🧮 Sample size — justification and scenarios** (Build, Export): the protocol paragraph with the source of the expected values, a table of scenarios (power 80% and 90%; the difference as planned, 25% smaller and larger) and the references.
+- **🔏 Fingerprint of the plan**: a SHA-256 fingerprint of the design and analysis plan with the date and time, kept in the design. (The data management plan, the protocol with its analysis plan and the visit calendar with reminders were already there.)
+- **👥 Double data entry**: upload two master sheets of the same forms; every cell that differs by patient and column, the agreement, patients in only one entry; formula columns are left out.
+- **Time-varying treatment** (Generate, Time to event): a treatment started part-way through follow-up, its start day in a column and the hazard ratio from then on (checked: HR 0.5 asked, 0.47 by a time-varying Cox model in Python). Competing risks were already there.
+- **Verification bias** (Diagnostic accuracy): only a % of the index-negative patients get the reference standard; the naive sensitivity shown against the true one (30% verified: 0.95 against 0.85).
+- **🎓 Exam mode**: one dataset per student (the seed from the name) and a marking sheet with each student's correct means, % and P values.
+- **🕵 Find the error**: a dataset with one planted trap (clustering ignored, a confounder, regression to the mean), a hint and the answer (checked: the confounder's crude difference −1.68, P < 0.001, adjusted 0.11, P 0.70).
+
 **🗂 Organisation (round 4)**
 - **📁 Projects** (header): a dashboard of every study kept in this browser — phase, patients, dataset version, the primary result, open tasks — with tags, a filter, rename, archive, download and delete.
 - **🗂 Dataset versions** (☰ More): keep Raw, Cleaned, Interim, Final with a date and a note, go back to any; the statistical analysis states the version used.

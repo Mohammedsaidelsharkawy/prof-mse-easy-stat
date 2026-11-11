@@ -3308,7 +3308,7 @@
       <td>${v.type !== 'categorical' ? `<select data-fv="${v.id}" data-fk="errBar" style="width:auto">${[['', 'As the report'], ['sd', 'SD'], ['sem', 'SEM'], ['ci', '95% CI']].map(([k2, l]) => `<option value="${k2}" ${(v.errBar || '') === k2 ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}</td>
       <td>${v.type !== 'categorical' ? `<label class="check" style="margin:0" title="Bar charts: a break in the y axis when one bar is much taller than the others"><input type="checkbox" data-fv="${v.id}" data-fk="ybreak" ${v.ybreak ? 'checked' : ''}><span>break</span></label>` : ''}</td>
       <td><label class="check" style="margin:0" title="In Word, two half-width figures in a row sit side by side"><input type="checkbox" data-fv="${v.id}" data-fk="half" ${v.half ? 'checked' : ''}><span>½</span></label></td>
-      <td><button class="btn ghost small" data-fprev="${v.id}" type="button" title="Preview this figure">👁</button></td></tr>`).join('')}</tbody>`;
+      <td style="white-space:nowrap"><button class="btn ghost small" data-fprev="${v.id}" type="button" title="Preview this figure">👁</button><button class="btn ghost small" data-fstyle="${v.id}" type="button" title="Give every figure this figure's shape, colours, error bars, axis break and width">⇉ all</button></td></tr>`).join('')}</tbody>`;
     const cur = $('#figPrevVar').value;
     $('#figPrevVar').innerHTML = vars.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
     if (vars.some(v => v.id === cur)) $('#figPrevVar').value = cur;
@@ -3493,6 +3493,10 @@
     box.innerHTML = specs.map(([t, sp]) => { let url = ''; try { url = Charts.draw({ ...sp, title: o.chartTitle ? t : null }, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png'); } catch (e) { console.error(e); }
       return `<figure>${url ? `<img src="${url}" alt="">` : ''}<figcaption>${esc(t)}</figcaption></figure>`; }).join('');
   }
+  // F5: one figure's style to every figure (shape, colours, error bars, axis break, width)
+  $('#figTbl').addEventListener('click', e => { const b = e.target.closest('[data-fstyle]'); if (!b) return; readUiIntoCfg(); const src = state.cfg.variables.find(v => v.id === b.dataset.fstyle); if (!src) return; let n = 0;
+    state.cfg.variables.filter(v => v.include && v !== src).forEach(v => { ['aspect', 'pal', 'half'].forEach(k => { v[k] = src[k]; }); if (v.type !== 'categorical' && src.type !== 'categorical') { v.errBar = src.errBar; v.ybreak = src.ybreak; } n++; });
+    renderFigureTable(); toast(`The style of “${src.label}” given to ${n} figure${n === 1 ? '' : 's'}`); });
   $('#figTbl').addEventListener('click', e => { const b = e.target.closest('[data-fprev]'); if (b) { $('#figPrevVar').value = b.dataset.fprev; schedulePreview(); } });
 
   $('#tpTbl').addEventListener('click', e => {
