@@ -250,6 +250,16 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🧱 Build (round 3)** — Export tab unless said
+- **📝 Protocol amendments**: version, date, what changed, why and the ethics approval; as a sheet, and as a part of the study binder.
+- **🕒 Visit windows**: upload the filled master sheet: each visit on time, early, late or missed (by its visit date against the anchor date ± window), a summary by site and visit with the % out of window, and the list of deviations.
+- **🩹 Adverse events coded**: each event term given a body system from a word list (infections, gastrointestinal, nervous system, skin, cardiac, vascular …; the others marked to code by hand), with the CTCAE checks (grade 1–5, grade 5 = fatal, serious with grade 1).
+- **💊 Concomitant drugs**: drugs not allowed (your list) and drugs started after the patient's last visit flagged.
+- **🏥 A pack for each site** (two sites or more): one zip, a folder per site with its master sheet, labels, allocation tool (one password) and a one-page site guide.
+- **✍ Consent version tracking**: the version signed and its date as two columns; older versions highlighted in Excel (re-consent).
+- **🌍 Translation sheet**: each questionnaire item with two forward translations, the reconciled version, the back translation and the agreed wording.
+- **Recruitment tracker** (an Excel option): planned and actual patients by month and by site from the enrolment date, the cumulative % of the plan, red when below 90%.
+
 **⚙ Workflow (round 3)**
 - **🔁 Try a setting** (report tools): turn one setting on or off and see, side by side, every table and comment it changes; keep it or leave it.
 - **📄 Settings from a Word file**: upload a report you like; its font, table lines (grid or three-line), P value wording and leading zero, caption style, mean (SD) and comment length are proposed, each to tick.
