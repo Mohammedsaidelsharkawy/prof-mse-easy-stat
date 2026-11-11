@@ -250,6 +250,32 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🎨 Interface (round 4)**
+- **Report tools in tabs** (step 12, Word document extras): 🩺 Check, ✍ Write, 🔬 Explore, ⬇ Export; the last tab is remembered.
+- **Preview card** on hover: what the tool does, its tab and what it gives (a panel, a Word file, a zip …).
+- **★ My tools**: the star beside any tool pins it to a row at the top.
+- **Report map with status**: ✓ comment edited, ⚠ needs a look (no comment, a long table), 🔒 locked, 📌 open task.
+- **Edit in place**: click a footnote or a column heading in the preview to change it (captions and titles were already editable).
+- **Changes highlighted**: after a run, the tables and comments whose numbers or text changed flash yellow.
+- **📄 Page view**: the preview as A4 pages with the margins and the font of step 11 (approximate page breaks).
+- **Step status** on the stepper: auto-chosen ✓, optional, mark the outcomes, needs a look.
+- **👉 Next** banner above the report: the most useful thing to do now (title, primary outcome, variables with > 20% missing, open tasks, comments not read yet).
+- **Undo toast** after a click that changes the setup in steps 2 and 12 (lock, hide, move …).
+- **Empty states** that say what to do (no data, nothing to report).
+- **📱 Review mode**: read the report and approve each comment or send it back to the automatic text, with a note; on a phone it turns on by itself. (Display density and the dark theme were already there: 👁 View and ◐ Theme.)
+
+**🗂 Organisation (round 4)**
+- **📁 Projects** (header): a dashboard of every study kept in this browser — phase, patients, dataset version, the primary result, open tasks — with tags, a filter, rename, archive, download and delete.
+- **🗂 Dataset versions** (☰ More): keep Raw, Cleaned, Interim, Final with a date and a note, go back to any; the statistical analysis states the version used.
+- **📝 Analysis log**: every run, setting changed by a click, version, review mark and task, plus your notes; as text or a Word appendix.
+- **📌 Tasks** on tables (a 📌 button on each table): who, due date, done; shown in the report map and the 👉 Next banner.
+- **🗃 Reports from these data**: Thesis, Paper 1, Conference … each with its own tables, settings and edited text, on the same data.
+- **🧩 Templates**: the variables' settings, the order of the tables and the options, applied to another study by matching column names or labels.
+- **🔍 Find** (Ctrl+K) now also searches the comments, footnotes and column headings of the report and the methods text.
+- **🧹 Storage**: what this browser keeps, with clean-up.
+- **🤝 Ready to hand over?** (Check tab): health, roles, abstract, locked tables, dataset version, tasks and review marks, then the project file and the pack for the supervisor.
+- The project file (💾) carries all of this (it lives in the setup).
+
 **Figures** — with one group (no comparison), a categorical variable is drawn as a pie by default (bars when it has more than 8 categories); bars, donut and the others stay available for each variable.
 
 **📊 Analyse (round 3)** — report tools

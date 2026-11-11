@@ -1640,6 +1640,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <button class="btn ghost small" id="btnDiscussion" type="button" title="A draft of the discussion from the results and the design">✍ Discussion draft</button>
           <button class="btn ghost small" id="btnResPage" type="button" title="One HTML page of the results to send: search, significant only, every table and figure">⬇ Interactive results page</button>
           <button class="btn ghost small" id="btnVersions" type="button" title="Every Word export kept in this browser, and what changed between two">🕘 Report versions</button>
+          <button class="btn ghost small" id="btnHandoff" type="button" title="Before sending to the supervisor: health, roles, abstract, locked tables, dataset version, tasks, review">🤝 Ready to hand over?</button>
           <button class="btn ghost small" id="btnHealth" type="button" title="Long tables, missing comments or captions, abbreviations not defined, edited comments with other numbers">🩺 Report health</button>
           <button class="btn ghost small" id="btnTrySet" type="button" title="Turn one setting on or off and see the tables and comments it changes, before keeping it">🔁 Try a setting</button>
           <label class="btn ghost small" style="margin:0" title="A Word report you like: its fonts, table lines, P value style, captions and comment length proposed as settings">📄 Settings from a Word file<input type="file" id="wsFile" accept=".docx" hidden></label>
@@ -37989,6 +37990,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         { const defs = state.cfg.variables.filter(v => v.include && v.definition).map(v => { const d0 = v.definition.trim().replace(/\.$/, ''); return /\bdefined\b/i.test(d0) ? d0 + '.' : `${v.label.replace(/\s*\([^)]*\)\s*$/, '')} was defined as ${/^[A-Z][a-z]+\b/.test(d0) ? d0.charAt(0).toLowerCase() + d0.slice(1) : d0}.`; });
           if (defs.length && res.methods) res.methods = `${res.methods.trim()} Definitions: ${defs.join(' ')}`; }
         if (state.cfg.simulated && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The data were simulated (Prof MSE Easy Stat data generator, seed ${state.cfg.simulated.seed}) and do not describe real patients.`;
+        { const dv = (state.cfg.org || {}).dataVersion; if (dv && dv.name && res.methods) res.methods = `${res.methods.trim()} The analysis used the dataset version “${dv.name}” (${String(dv.at || '').slice(0, 10)}).`; }
         applyTableMeta(res); applyVarNotes(res); applyLocks(res);
         placeFigures(res, cfg.options);
         if (report().subForest) { try { const sf = subgroupForest(report().subForest); if (sf && !sf.err) res.sections.push({ kind: 'figonly', figOnly: true, title: sf.caption, key: 'fig:' + sf.caption, head: [], rows: [], footnote: '', comment: '', figures: [{ ...sf, data: undefined }], meta: {} }); } catch (err) { console.error(err); } }
@@ -39142,6 +39144,10 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   }
   // the design (phase 1) and the generator's settings (phase 2) go in the project too
   const phaseParts = () => { const out = {}; try { const D = window.EasyBuilder && window.EasyBuilder.design; if (D && D.vars && D.vars.length) out.design = JSON.parse(JSON.stringify(D)); } catch (e) { /* none */ } try { if (window.EasyGen) out.gen = JSON.parse(JSON.stringify(window.EasyGen.settings)); } catch (e) { /* none */ } return out; };
+  function projectObj() { const ph = phaseParts(); if (!state.data && !ph.design) return null; if (state.data) readUiIntoCfg();
+    return { app: 'ProfMSE-EasyStat-project', version: 2, steps: STEPS.length, saved: new Date().toISOString(), file: state.file || (ph.design && ph.design.title) || 'study', sheet: state.sheet, step: state.step,
+      phase: window.EasyBuilder ? window.EasyBuilder.phase : 'analyse', ...ph, ...(state.data ? { data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], snapshots: state.snapshots || [] } : {}) }; }
+  function openAny(j, fname) { openPhases(j); if (j.data && j.cfg) openProject(j, fname || j.file); else if (window.EasyBuilder) window.EasyBuilder.setPhase(j.phase === 'generate' ? 'generate' : 'build'); }
   $('#btnSaveProj').onclick = () => {
     const ph = phaseParts(); if (!state.data && !ph.design) { toast('Nothing to save yet — design a master sheet, or load an Excel file or an example'); return; }
     if (state.data) readUiIntoCfg();
@@ -39305,7 +39311,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   window.EasyStat = state; // for debugging
   // what the interface layer (ux.js) may use
   window.EasyUI = { loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
-    renderAdvanced, renderVariables, renderOptions, effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
+    renderAdvanced, renderVariables, renderOptions, projectObj, openAny, healthItems, abstractTable, applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();
 
@@ -39451,8 +39457,9 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       [['genGo', '🎲 Generate the data'], ['genPower', 'Power of the planned study'], ['genCurve', 'Power curve'], ['genEx', 'Practice exercises (.docx)'], ['genMethods', 'Simulation methods (.docx)'], ['genCsv', 'Simulated data as CSV'], ['genPack', 'Several datasets with an answer key'], ['genXlsx', 'Simulated master sheet (.xlsx)']].forEach(([id, l]) => out.push({ kind: 'Generate', label: l, where: 'Phase 2', run: () => inPhase('generate', () => flash(document.getElementById(id))) }));
       ['Time to event', 'Risk factors', 'Regression', 'Confounding', 'Diagnostic accuracy', 'Agreement', 'Recruitment', 'Protocol deviations', 'Operator effect', 'Matched case-control', 'From a published table'].forEach(t => out.push({ kind: 'Generate', label: t, where: 'Phase 2 · special designs', run: () => inPhase('generate', () => { const d = [...document.querySelectorAll('.gen-det')].find(x => (x.querySelector('summary') || {}).textContent && x.querySelector('summary').textContent.includes(t)); if (d) { d.open = true; flash(d); } }) })); }
     // tables and figures of the report
-    if (st.result) st.result.sections.forEach((s, i) => { if (!s.title) return; out.push({ kind: 'Report', label: s.title, where: `Step ${U.REPORT_STEP} · ${s.kind}${s.figures && s.figures.length ? ` · ${s.figures.length} figure${s.figures.length > 1 ? 's' : ''}` : ''}`,
+    if (st.result) st.result.sections.forEach((s, i) => { if (!s.title) return; out.push({ kind: 'Report', find: `${s.comment || ''} ${s.footnote || ''} ${(s.head || []).map(h => typeof h === 'string' ? h : (h && h.t) || '').join(' ')}`, label: s.title, where: `Step ${U.REPORT_STEP} · ${s.kind}${s.figures && s.figures.length ? ` · ${s.figures.length} figure${s.figures.length > 1 ? 's' : ''}` : ''}`,
       run: () => goTo(U.REPORT_STEP, () => { const t = document.querySelector(`[data-ttl="${i}"]`); flash(t ? t.closest('.report-sec') || t : null); }) }); });
+    if (st.result && st.result.methods) out.push({ kind: 'Report', label: 'Statistical analysis (methods)', find: st.result.methods, where: `Step ${U.REPORT_STEP} · the methods text`, run: () => goTo(U.REPORT_STEP, () => flash(document.querySelector('#edMethods'))) });
     // examples and the statistics guide
     (typeof Examples !== 'undefined' ? Examples.LIST : []).forEach(ex => out.push({ kind: 'Example', label: ex.name, where: 'Open this example data set', run: () => goTo(1, () => { const b = document.querySelector(`[data-exopen="${ex.id}"]`); if (b) b.click(); }) }));
     (window.EasyToolsGuide || []).forEach(g => out.push({ kind: 'Guide', label: g[0], where: g[1], info: g, run: () => showGuide(g) }));
@@ -39468,7 +39475,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     return prev[b.length]; };
   const esc2 = a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // ranking: whole words first, then word starts, substrings, the place, and words with a typo
-  function score(o, words) { const L = (o.label + ' ' + (o.where || '')).toLowerCase(), lab = o.label.toLowerCase(), toks = lab.split(/[^a-z0-9²³µ-]+/).filter(Boolean); let sc = 0;
+  function score(o, words) { const L = (o.label + ' ' + (o.where || '') + ' ' + (o.find || '')).toLowerCase(), lab = o.label.toLowerCase(), toks = lab.split(/[^a-z0-9²³µ-]+/).filter(Boolean); let sc = 0;
     for (const w of words) { const alts = [w, ...(SYN[w] ? SYN[w].split(' ') : [])]; let best = 0;
       for (const a of alts) { const e = esc2(a), whole = new RegExp(`(^|[^a-z0-9])${e}($|[^a-z0-9])`), start = new RegExp(`(^|[^a-z0-9])${e}`);
         let v = whole.test(lab) ? 7 : lab.startsWith(a) ? 5.5 : start.test(lab) ? 5 : lab.includes(a) ? 4 : whole.test(L) ? 3.2 : start.test(L) ? 3 : L.includes(a) ? 2 : 0;
@@ -42872,6 +42879,313 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
   }
   window.EasyGen = { render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; }, get results() { return resOut; }, get errors() { return lastErrors; }, get consort() { return lastConsort; }, dataCode: P => dataCode(P || last), pTestX: (v, key, P, test) => pTestX(D0(), v, key, P, test), multiPower: r => multiPower(D0(), r), interimSim: r => interimSim(D0(), r), variability: r => variability(D0(), r), get sigInfo() { return sigInfo; }, numParams: v => numParams(v, 0, 'once') };
   if (document.documentElement.classList.contains('ph-generate')) render();
+})();
+
+/* Prof MSE Easy Stat — interface, round 4: report tools in tabs with previews and favourites, report status map, inline editing,
+   changes highlighted, page view, step status, next best action, undo toasts, empty states, review mode. Works through window.EasyUI. */
+(() => {
+  const U = window.EasyUI; if (!U) return;
+  const S = () => U.state, $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)], esc = U.esc;
+  const ls = { get: (k, d) => { try { const v = localStorage.getItem('ux2.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem('ux2.' + k, JSON.stringify(v)); } catch (e) { /* not kept */ } } };
+  const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
+  const step = () => S().step || 1;
+  window.EasyUX2 = {};
+
+  const css = el('style'); css.textContent = `
+.ux2-tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:2px solid var(--line);margin:10px 0 8px}.ux2-tabs button{border:0;background:none;padding:6px 12px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.ux2-tabs button.on{color:var(--title,#3B2A8C);border-bottom-color:#7B2FBE}.ux2-pane{display:none;flex-wrap:wrap;gap:8px}.ux2-pane.on{display:flex}
+.ux2-fav{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 8px;padding:6px 8px;border:1px dashed var(--line);border-radius:10px}.ux2-fav:empty{display:none}
+.ux2-star{border:0;background:none;cursor:pointer;font-size:14px;color:#bbb;padding:0 2px;margin-left:-6px}.ux2-star.on{color:#E2A400}
+.ux2-card{position:fixed;z-index:9000;max-width:300px;background:var(--card,#fff);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:8px 10px;font-size:13px;pointer-events:none}
+.ux2-card .k{display:inline-block;font-size:11px;padding:1px 6px;border-radius:8px;background:#EFE7FB;color:#5B2A9B;margin-right:4px}
+.ux-mini a .ux2-ic{float:right;margin-left:4px}
+.ux2-changed{animation:ux2fl 4s ease-out}@keyframes ux2fl{0%{box-shadow:0 0 0 3px #FFD54F;background:#FFF8D6}100%{box-shadow:0 0 0 0 transparent}}
+html.ux2-page #report{max-width:21cm;margin:0 auto;background:#fff;color:#111;padding:var(--ux2m,2.54cm);box-shadow:0 2px 14px rgba(0,0,0,.2);background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(29.7cm - 2px),#c9c3d6 calc(29.7cm - 2px),#c9c3d6 29.7cm)}
+html.ux2-page #report textarea,html.ux2-page #report .btn,html.ux2-page #report select{font-family:var(--ux2f,inherit)}html.ux2-page #report .report-sec{border:0;box-shadow:none;background:transparent}
+.ux2-st{display:block;font-size:10px;line-height:1.1;margin-top:2px;font-weight:600}.ux2-st.auto{color:#2E7D32}.ux2-st.opt{color:#888}.ux2-st.warn{color:#C62828}
+.ux2-nba{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0;padding:8px 12px;border-radius:10px;background:#FFF6E0;border:1px solid #F3D48A;color:#5a4300}
+[data-theme="dark"] .ux2-nba{background:#3a3020;color:#f3e2b0;border-color:#6b5a2a}
+.ux2-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:9999;background:#1C1648;color:#fff;padding:9px 14px;border-radius:10px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 18px rgba(0,0,0,.3);font-size:14px}
+.ux2-toast button{background:#fff;color:#1C1648;border:0;border-radius:6px;padding:4px 10px;font-weight:700;cursor:pointer}
+.ux2-empty{border:2px dashed var(--line);border-radius:14px;padding:22px;text-align:center;margin:12px 0;background:var(--lav,#F7F3FD)}.ux2-empty h3{margin:0 0 6px}
+html.ux2-review #report textarea{border-color:transparent;background:transparent;resize:none}html.ux2-review #report .report-sec .row .btn,html.ux2-review #report .ux-copyas,html.ux2-review #report [data-copytbl],html.ux2-review #report .tb-tools{display:none}
+.ux2-rv{display:none;gap:6px;margin:6px 0}html.ux2-review .ux2-rv{display:flex}.ux2-rv .on-ok{background:#2E7D32;color:#fff}.ux2-rv .on-no{background:#C62828;color:#fff}
+#report .foot[contenteditable]:hover,#report table.rt thead th[contenteditable]:hover{outline:1px dashed #7B2FBE;cursor:text}
+@media (max-width:700px){#report table.rt{font-size:12px}#report .report-sec{padding:8px}#report figure img{max-width:100%;height:auto}.ux2-tabs button{padding:6px 8px}}
+.ux2-panel{position:fixed;z-index:8000;top:70px;right:16px;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 100px);overflow:auto;background:var(--card,#fff);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);padding:12px 14px;display:none}
+.ux2-panel.open{display:block}.ux2-panel h3{margin:0 0 8px;display:flex;align-items:center;gap:8px}.ux2-panel h3 .x{margin-left:auto}
+.ux2-tbl{border-collapse:collapse;width:100%;font-size:13px}.ux2-tbl td,.ux2-tbl th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+`; document.head.appendChild(css);
+
+  // a floating panel (shared by the organisation tools)
+  function panel(id, title, html) { let p = document.getElementById(id); if (!p) { p = el('div', 'ux2-panel'); p.id = id; document.body.appendChild(p); }
+    p.innerHTML = `<h3>${title}<button class="btn ghost small x" type="button">✕</button></h3><div class="ux2-body">${html}</div>`; p.querySelector('.x').onclick = () => p.classList.remove('open'); p.classList.add('open'); return p; }
+  window.EasyUX2.panel = panel;
+
+  /* ---------- U12: a toast with Undo ---------- */
+  function undoToast(msg, undo) { $$('.ux2-toast').forEach(t => t.remove()); const t = el('div', 'ux2-toast', `<span>${esc(msg)}</span>${undo ? '<button type="button">Undo</button>' : ''}`); document.body.appendChild(t);
+    const b = t.querySelector('button'); if (b) b.onclick = () => { t.remove(); undo(); }; setTimeout(() => t.remove(), 7000); }
+  window.EasyUX2.undoToast = undoToast;
+
+  /* ---------- U1, U2, U3: the report tools in tabs, a preview card, favourites ---------- */
+  const TABS = [['check', '🩺 Check', ['btnHealth', 'btnTextCheck', 'btnSampl', 'btnChecklist', 'btnAccess', 'btnSapCmp', 'btnPlanned', 'btnTrySet', 'wsFile', 'btnReviewer', 'btnConsist', 'btnHandoff']],
+    ['write', '✍ Write', ['btnAbs', 'btnLay', 'btnDiscussion', 'btnMethFull', 'btnThesisCh', 'btnRvResp', 'clJournal', 'btnLetter', 'btnAbsTable', 'btnLimits', 'btnHighlights', 'btnTwoCol']],
+    ['explore', '🔬 Explore', ['btnSubForest', 'btnSensDash', 'btnMissRep', 'btnAssume', 'btnEffSize', 'btnBayesRead', 'btnForestAll', 'btnResSnap', 'resSnapList', 'btnMultiplicity', 'btnOutSens', 'btnItt', 'btnLove']],
+    ['export', '⬇ Export', ['btnMd', 'btnTex', 'btnHtml', 'btnReview', 'btnSupp', 'btnOnePage', 'gaLayout', 'btnGA', 'btnRis', 'btnGdocs', 'btnResPage', 'btnSharePack', 'btnRScript', 'btnDeck', 'btnSap', 'btnVersions']]];
+  const OUT = { btnMd: 'a file (.md)', btnTex: 'a file (.tex)', btnHtml: 'a web page file', btnReview: 'a Word file', btnSupp: 'a Word file', btnOnePage: 'a Word file', btnGA: 'an image', btnRis: 'a file (.ris)', btnResPage: 'a web page file', btnSharePack: 'a zip file', btnRScript: 'an R script', btnDeck: 'a PowerPoint file', btnSap: 'a Word file', btnThesisCh: 'a Word file', btnGdocs: 'the clipboard' };
+  const outOf = id => OUT[id] || (/^btn(Md|Tex)/.test(id) ? 'a file' : 'a panel below the buttons');
+  function toolTabs() { const first = $('#btnMd'); if (!first || $('#ux2Tabs')) return; const row = first.parentNode, kids = [...row.children], favs = new Set(ls.get('favTools', []));
+    const bar = el('div', 'ux2-tabs'); bar.id = 'ux2Tabs'; bar.setAttribute('role', 'tablist'); const favRow = el('div', 'ux2-fav'); favRow.id = 'ux2Fav';
+    const panes = {}; [...TABS, ['more', '⋯ More', []]].forEach(([k, l]) => { const b = el('button', '', l); b.type = 'button'; b.dataset.ux2tab = k; b.setAttribute('role', 'tab'); bar.appendChild(b); panes[k] = el('div', 'ux2-pane'); panes[k].dataset.ux2pane = k; });
+    const tail = el('div', 'row'); tail.style.cssText = 'gap:8px;margin-top:8px;flex-wrap:wrap'; let inTail = false;
+    kids.forEach(c => { if (c.classList.contains('spacer')) inTail = true; if (inTail) { tail.appendChild(c); return; } const ids = [c.id, ...[...c.querySelectorAll('[id]')].map(x => x.id)].filter(Boolean), t = TABS.find(T => ids.some(i => T[2].includes(i)));
+      panes[t ? t[0] : 'more'].appendChild(c); });
+    row.style.display = 'none'; row.after(bar, favRow, ...Object.values(panes), tail);
+    if (!panes.more.children.length) bar.querySelector('[data-ux2tab="more"]').remove();
+    const pick = k => { bar.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.ux2tab === k); b.setAttribute('aria-selected', String(b.dataset.ux2tab === k)); }); Object.entries(panes).forEach(([kk, p]) => p.classList.toggle('on', kk === k)); ls.set('tab', k); };
+    bar.onclick = e => { const b = e.target.closest('[data-ux2tab]'); if (b) pick(b.dataset.ux2tab); }; pick(ls.get('tab', 'check'));
+    // stars and the favourites row
+    Object.values(panes).forEach(p => p.querySelectorAll('button.btn[id], label.btn').forEach(b => { const id = b.id || (b.querySelector('input[id]') || {}).id; if (!id) return; const s = el('button', 'ux2-star' + (favs.has(id) ? ' on' : ''), favs.has(id) ? '★' : '☆'); s.type = 'button'; s.title = 'Pin to My tools'; s.dataset.ux2star = id; b.after(s); }));
+    const drawFav = () => { const f = ls.get('favTools', []); favRow.innerHTML = f.length ? `<b style="font-size:13px">★ My tools</b>${f.map(id => { const b = document.getElementById(id), lab = b ? (b.closest('label.btn') || b).textContent.trim() : ''; return b ? `<button class="btn ghost small" type="button" data-ux2go="${esc(id)}">${esc(lab || id)}</button>` : ''; }).join('')}` : ''; };
+    drawFav();
+    document.addEventListener('click', e => { const s = e.target.closest('[data-ux2star]'); if (s) { e.preventDefault(); const id = s.dataset.ux2star, f = new Set(ls.get('favTools', [])); f.has(id) ? f.delete(id) : f.add(id); ls.set('favTools', [...f]); s.classList.toggle('on', f.has(id)); s.textContent = f.has(id) ? '★' : '☆'; drawFav(); return; }
+      const g = e.target.closest('[data-ux2go]'); if (g) { const b = document.getElementById(g.dataset.ux2go); if (b) b.click(); } });
+    // U2: the preview card of a tool: what it does and what it gives
+    const card = el('div', 'ux2-card'); card.style.display = 'none'; document.body.appendChild(card); let ht = 0;
+    const show = (b, ev) => { const id = b.id || (b.querySelector('input[id]') || {}).id || ''; const t = b.title || (b.closest('label') || {}).title || ''; if (!t) return; const tab = TABS.find(T => T[2].includes(id));
+      card.innerHTML = `<b>${esc(b.textContent.trim())}</b><div style="margin:4px 0">${esc(t)}</div><span class="k">${tab ? tab[1] : 'Tool'}</span><span class="k">gives ${esc(outOf(id))}</span>`; card.style.display = '';
+      const r = b.getBoundingClientRect(); card.style.left = Math.min(innerWidth - 320, Math.max(8, r.left)) + 'px'; card.style.top = (r.bottom + 6 + card.offsetHeight > innerHeight ? r.top - card.offsetHeight - 6 : r.bottom + 6) + 'px'; };
+    Object.values(panes).forEach(p => { p.addEventListener('mouseover', e => { const b = e.target.closest('.btn'); if (!b) return; clearTimeout(ht); ht = setTimeout(() => show(b, e), 350); }); p.addEventListener('mouseout', () => { clearTimeout(ht); card.style.display = 'none'; }); });
+    // the tools keep their tooltip text for the card only
+    Object.values(panes).forEach(p => p.querySelectorAll('.btn[title], label.btn[title]').forEach(b => { b.dataset.ux2t = b.title; b.setAttribute('aria-description', b.title); b.removeAttribute('title'); b.title = ''; Object.defineProperty(b, 'title', { get: () => b.dataset.ux2t, configurable: true }); })); }
+  window.EasyUX2.toolTabs = toolTabs;
+
+  /* ---------- U4: the status of each report part in the mini-map; U6: changed parts flash; U5: footnotes and headings edited in place ---------- */
+  let prevSigs = null;
+  const secIndex = sec => { const t = sec.querySelector('[data-ttl],[data-comment]'); return t ? +(t.dataset.ttl ?? t.dataset.comment) : -1; };
+  function statusOf(i) { const r = S().result, s = r && r.sections[i]; if (!s) return ''; const auto = ((r.auto || {}).sections || []).find(x => x.title === s.title), locked = (S().cfg.lockedSecs || {})[s.title] || (S().cfg.lockedSecs || []).includes && (S().cfg.lockedSecs || []).includes(s.title);
+    const task = ((S().cfg.org || {}).tasks || []).some(t => t.sec === s.title && !t.done), warn = !String(s.comment || '').trim() || (s.rows || []).length > 30;
+    return `${locked ? '🔒' : ''}${task ? '📌' : ''}${warn ? '⚠' : auto && auto.comment !== s.comment ? '✓' : ''}`; }
+  function onReport() { const r = S().result, rep = $('#report'); if (!r || !rep) return;
+    if (!r.sections.length && !rep.querySelector('.ux2-empty')) { const box = el('div', 'ux2-empty', `<h3>Nothing to report yet</h3><p class="legend-note">No variable is ticked for the analysis, or every table is switched off.</p><button class="btn primary" type="button">Choose the variables (step 2)</button>`); rep.prepend(box); box.querySelector('button').onclick = () => U.go(2); }
+    // the mini-map marks
+    const mini = $('#uxMini'); if (mini) { const secs = $$('#report .report-sec'); mini.querySelectorAll('[data-mm]').forEach(a => { const s = secs[+a.dataset.mm], i = s ? secIndex(s) : -1; let ic = a.querySelector('.ux2-ic'); const st = i >= 0 ? statusOf(i) : ''; if (!ic) { ic = el('span', 'ux2-ic'); a.prepend(ic); } ic.textContent = st; ic.title = st ? '✓ comment edited · ⚠ needs a look (no comment or a long table) · 🔒 locked · 📌 open task' : ''; }); }
+    // what changed since the last run
+    const sigs = new Map(r.sections.map(s => [s.title, JSON.stringify([s.rows, s.comment])]));
+    if (prevSigs && prevSigs.run !== r) { $$('#report .report-sec').forEach(sec => { const i = secIndex(sec), s = r.sections[i]; if (!s) return; const was = prevSigs.map.get(s.title); if (was !== undefined && was !== sigs.get(s.title)) { sec.classList.remove('ux2-changed'); void sec.offsetWidth; sec.classList.add('ux2-changed'); } }); }
+    prevSigs = { map: sigs, run: r };
+    // footnotes and column headings editable in place
+    $$('#report .report-sec').forEach(sec => { const i = secIndex(sec), s = r.sections[i]; if (!s) return;
+      const f = sec.querySelector('.foot'); if (f && !f.isContentEditable) { f.contentEditable = 'true'; f.title = 'Click to edit the footnote'; f.onblur = () => { if (s.footnote !== f.textContent) { s.footnote = f.textContent; logOrg(`Footnote of “${s.title}” edited`); } }; }
+      const ths = sec.querySelectorAll('table.rt thead tr:last-child th'); if (ths.length === (s.head || []).length) ths.forEach((th, k) => { if (th.isContentEditable) return; th.contentEditable = 'true'; th.title = 'Click to edit the column heading'; th.onblur = () => { const h = s.head[k], nv = th.textContent.trim(); if ((typeof h === 'string' ? h : h && h.t) === nv) return; s.head[k] = typeof h === 'string' || !h ? nv : { ...h, t: nv }; logOrg(`Column heading of “${s.title}” edited`); }; });
+      // U14: review buttons
+      if (!sec.querySelector('.ux2-rv') && sec.querySelector('[data-comment]')) { const rv = el('div', 'ux2-rv', `<button class="btn ghost small" type="button" data-ux2rv="ok">✓ Approve</button><button class="btn ghost small" type="button" data-ux2rv="no">✗ Back to the automatic text</button><input type="text" placeholder="Note for the author" data-ux2rvn style="flex:1;min-width:120px">`); sec.querySelector('[data-comment]').after(rv);
+        const mk = (S().cfg.org || {}).review || {}, m = mk[s.title]; if (m) { rv.querySelector(`[data-ux2rv="${m.v}"]`).classList.add(m.v === 'ok' ? 'on-ok' : 'on-no'); rv.querySelector('[data-ux2rvn]').value = m.note || ''; } } });
+    nextBest(); }
+  window.EasyUX2.onReport = onReport;
+  document.addEventListener('click', e => { const b = e.target.closest('[data-ux2rv]'); if (!b) return; const sec = b.closest('.report-sec'), i = secIndex(sec), r = S().result, s = r && r.sections[i]; if (!s) return;
+    const org = org0(), rv = org.review = org.review || {}, v = b.dataset.ux2rv; rv[s.title] = { ...(rv[s.title] || {}), v, at: new Date().toISOString() };
+    if (v === 'no') { const a = ((r.auto || {}).sections || []).find(x => x.title === s.title), ta = sec.querySelector('[data-comment]'); if (a && ta) { ta.value = a.comment; ta.dispatchEvent(new Event('input', { bubbles: true })); } }
+    sec.querySelectorAll('[data-ux2rv]').forEach(x => x.classList.remove('on-ok', 'on-no')); b.classList.add(v === 'ok' ? 'on-ok' : 'on-no'); logOrg(`Review: “${s.title}” ${v === 'ok' ? 'approved' : 'sent back to the automatic text'}`); reviewCount(); });
+  document.addEventListener('change', e => { const n = e.target.closest('[data-ux2rvn]'); if (!n) return; const sec = n.closest('.report-sec'), s = S().result.sections[secIndex(sec)]; if (!s) return; const rv = org0().review = org0().review || {}; rv[s.title] = { ...(rv[s.title] || {}), note: n.value }; });
+  function reviewCount() { const b = $('#ux2RevN'); if (!b) return; const rv = (S().cfg.org || {}).review || {}, v = Object.values(rv); b.textContent = v.length ? ` (${v.filter(x => x.v === 'ok').length} ✓, ${v.filter(x => x.v === 'no').length} ✗)` : ''; }
+
+  /* ---------- the organisation data of the project (kept in the setup, so it is saved with the project) ---------- */
+  function org0() { const c = S().cfg; if (!c) return {}; return c.org = c.org || {}; }
+  function logOrg(what, kind = 'auto') { const c = S().cfg; if (!c) return; const o = org0(); (o.log = o.log || []).push({ at: new Date().toISOString(), what, kind }); if (o.log.length > 500) o.log.splice(0, o.log.length - 500); }
+  window.EasyUX2.org = org0; window.EasyUX2.log = logOrg;
+
+  /* ---------- U7 page view, U14 review mode: buttons on the report bar ---------- */
+  function reportBar() { const b = $('#uxRepBar'); if (!b || $('#ux2Page')) return;
+    const pg = el('button', 'btn ghost small', '📄 Page view'); pg.type = 'button'; pg.id = 'ux2Page'; pg.title = 'The report as A4 pages with the margins and the font of step 11 (approximate page breaks)';
+    pg.onclick = () => { const on = document.documentElement.classList.toggle('ux2-page'), o = S().cfg.options || {}, mar = { narrow: 1.27, normal: 2.54, moderate: 1.91, wide: 5.08 }[o.pageMargin] || (o.pageMargin === 'custom' ? +o.marLeft || 2.54 : 2.54);
+      document.documentElement.style.setProperty('--ux2m', mar + 'cm'); document.documentElement.style.setProperty('--ux2f', `'${o.font || 'Times New Roman'}', serif`); pg.classList.toggle('primary', on); };
+    const rv = el('button', 'btn ghost small', '📱 Review mode<span id="ux2RevN"></span>'); rv.type = 'button'; rv.id = 'ux2Rev'; rv.title = 'Read the report and approve each comment or send it back (works on a phone); the editing buttons are hidden';
+    rv.onclick = () => { const on = document.documentElement.classList.toggle('ux2-review'); rv.classList.toggle('primary', on); $$('#report textarea[data-comment]').forEach(t => { t.readOnly = on; }); };
+    b.append(pg, rv); reviewCount(); if (innerWidth < 700 && !ls.get('revAsked', false)) { ls.set('revAsked', true); rv.click(); U.toast('Review mode is on (a small screen): approve or send back each comment'); } }
+
+  /* ---------- U10: the status of each step on the stepper ---------- */
+  const OPT_STEPS = new Set([8, 9, 10, 11]), AUTO_STEPS = new Set([3, 4, 5, 6, 7]);
+  function stepStatus() { const st = S(); $$('#stepper .step').forEach((s, i) => { const k = i + 1; let t = s.querySelector('.ux2-st'); if (!t) { t = el('div', 'ux2-st'); (s.querySelector('.sub') || s).after(t); }
+      const warn = s.classList.contains('ux-warn'), txt = !st.data ? '' : warn ? 'needs a look' : k === 2 && st.cfg && !st.cfg.variables.some(v => v.role === 'primary') ? 'mark the outcomes' : AUTO_STEPS.has(k) ? 'auto-chosen ✓' : OPT_STEPS.has(k) ? 'optional' : '';
+      t.textContent = txt; t.className = 'ux2-st ' + (warn || txt === 'mark the outcomes' ? 'warn' : AUTO_STEPS.has(k) ? 'auto' : 'opt'); }); }
+  const stp = $('#stepper'); if (stp) new MutationObserver(() => { clearTimeout(stepStatus._t); stepStatus._t = setTimeout(() => { stepStatus(); emptyState(); }, 30); }).observe(stp, { childList: true, subtree: false });
+
+  /* ---------- U11: the next best action ---------- */
+  let nbaI = 0;
+  function nbaList() { const st = S(), out = []; if (!st.data || !st.cfg) return out; const cfg = st.cfg, rows = st.data.rows;
+    if (!(cfg.study && String(cfg.study.title || '').trim())) out.push(['The report has no study title', 'Add it', () => { U.go(1); setTimeout(() => { const t = $('#studyTitle'); if (t) t.focus(); }, 80); }]);
+    if (!cfg.variables.some(v => v.include && v.role === 'primary')) out.push(['The primary outcome is not marked', 'Mark it (step 2)', () => U.go(2)]);
+    const miss = cfg.variables.filter(v => v.include && v.cols && v.cols.length).map(v => ({ v, p: rows.length ? rows.filter(r => U.isMissing(r[v.cols[v.cols.length - 1].col])).length / rows.length : 0 })).filter(x => x.p > 0.2).sort((a, b) => b.p - a.p);
+    if (miss.length) out.push([`${miss[0].v.label} has ${Math.round(100 * miss[0].p)}% missing values${miss.length > 1 ? ` (and ${miss.length - 1} more variable${miss.length > 2 ? 's' : ''})` : ''}`, 'See the missing data', () => { U.go(12); setTimeout(() => { const b = $('#btnMissRep'); if (b) { const d = b.closest('details'); if (d) d.open = true; b.click(); } }, 400); }]);
+    const tasks = ((cfg.org || {}).tasks || []).filter(t => !t.done); if (tasks.length) out.push([`${tasks.length} open task${tasks.length > 1 ? 's' : ''} on the report`, 'Show the tasks', () => window.EasyUX2.tasks && window.EasyUX2.tasks()]);
+    const r = st.result; if (r && r.auto) { const same = r.sections.filter(s => { const a = (r.auto.sections || []).find(x => x.title === s.title); return a && a.comment === s.comment && s.comment; }).length; if (same >= 3) out.push([`${same} tables still have the automatic comment — read them once`, 'Go to the first', () => { const ta = [...$$('#report textarea[data-comment]')].find(t => { const s = r.sections[+t.dataset.comment], a = (r.auto.sections || []).find(x => x.title === s.title); return a && a.comment === t.value; }); if (ta) { ta.scrollIntoView({ block: 'center' }); ta.focus(); } }]); }
+    return out; }
+  function nextBest() { const host = $('#report'); if (!host) return; let b = $('#ux2Nba'); const L = nbaList(); if (!L.length) { if (b) b.remove(); return; }
+    if (!b) { b = el('div', 'ux2-nba'); b.id = 'ux2Nba'; host.parentNode.insertBefore(b, host); } nbaI = nbaI % L.length; const [t, l] = L[nbaI];
+    b.innerHTML = `<b>👉 Next:</b> <span>${esc(t)}</span><span class="spacer"></span><button class="btn primary small" type="button" data-nba="go">${esc(l)}</button>${L.length > 1 ? `<button class="btn ghost small" type="button" data-nba="next">Another (${nbaI + 1}/${L.length})</button>` : ''}`;
+    b.onclick = e => { const x = e.target.closest('[data-nba]'); if (!x) return; if (x.dataset.nba === 'next') { nbaI++; nextBest(); } else L[nbaI][2](); }; }
+
+  /* ---------- U13: empty states ---------- */
+  function emptyState() { const n = step(), st = S(); $$('.ux2-empty').forEach(e => { if (st.data || +e.dataset.step !== n) e.remove(); }); if (st.data || n < 2) return; const p = $('#p' + n); if (!p || p.querySelector('.ux2-empty')) return;
+    const box = el('div', 'ux2-empty', `<h3>No data yet</h3><p class="legend-note">This step works on your data. Upload an Excel file, or open an example to see what it does.</p><div class="row" style="gap:8px;justify-content:center"><button class="btn primary" type="button" data-ux2e="up">⬆ Upload a file (step 1)</button><button class="btn ghost" type="button" data-ux2e="ex">Try an example</button></div>`); box.dataset.step = n;
+    (p.querySelector('.card') || p).prepend(box); box.onclick = e => { const b = e.target.closest('[data-ux2e]'); if (!b) return; U.go(1); setTimeout(() => { if (b.dataset.ux2e === 'up') { const f = $('#file'); if (f) f.click(); } else { const x = $('[data-exopen]'); if (x) x.scrollIntoView({ block: 'center' }); } }, 80); }; }
+
+  /* ---------- U12: an undo toast for the changes made by a click in steps 2 and 12 ---------- */
+  let before = null; const noOrg = (k, v) => k === 'org' ? undefined : v;
+  document.addEventListener('pointerdown', e => { const t = e.target.closest('button, .btn, [data-tbo], input[type=checkbox]'); if (!t || !t.closest('#p12, #p2') || t.closest('.ux2-rv, #ux2Tabs, .ux2-fav, .ux2-panel')) { before = null; return; } try { before = { json: JSON.stringify(S().cfg, noOrg), label: (t.textContent || t.title || '').trim().slice(0, 50) || 'Setting changed', step: step() }; } catch (err) { before = null; } }, true);
+  document.addEventListener('click', () => { const b = before; before = null; if (!b) return; setTimeout(() => { let now; try { now = JSON.stringify(S().cfg, noOrg); } catch (e) { return; } if (now === b.json) return;
+      logOrg(`${b.label} (step ${b.step})`); undoToast(`${b.label}`, () => { const keep = S().cfg.org; S().cfg = JSON.parse(b.json); if (keep) S().cfg.org = keep; try { U.renderOptions && U.renderOptions(); U.renderVariables && U.renderVariables(); } catch (e) { /* not on screen */ } if (b.step === 12 && S().result) U.runAnalysis(); U.toast('Undone'); }); }, 120); });
+
+  /* ---------- report observer ---------- */
+  const rep = $('#report'); if (rep) new MutationObserver(() => { clearTimeout(onReport._h); onReport._h = setTimeout(() => { reportBar(); onReport(); }, 200); }).observe(rep, { childList: true });
+  setTimeout(() => { toolTabs(); stepStatus(); }, 0);
+})();
+
+/* Prof MSE Easy Stat — organisation: projects library and dashboard, tags, archive, dataset versions, analysis log, tasks,
+   report profiles, templates, storage, hand-off checklist. The project's own items live in cfg.org, so they are saved with the project. */
+(() => {
+  const U = window.EasyUI, X = window.EasyUX2; if (!U || !X) return;
+  const S = () => U.state, $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)], esc = U.esc, panel = X.panel, org = X.org, log = X.log;
+  const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
+  const day = t => { const d = new Date(t); return isFinite(d) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; };
+  const need = () => { if (!S().data) { U.toast('Open your data or a project first'); return false; } return true; };
+
+  /* ---------- the library of projects in this browser (IndexedDB) ---------- */
+  const DB = () => new Promise((res, rej) => { const r = indexedDB.open('mse-projects', 1); r.onupgradeneeded = () => r.result.createObjectStore('p', { keyPath: 'id' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  const tx = async (mode, fn) => { const db = await DB(); return new Promise((res, rej) => { const t = db.transaction('p', mode), st = t.objectStore('p'), out = fn(st); t.oncomplete = () => res(out && out.result !== undefined ? out.result : out); t.onerror = () => rej(t.error); }); };
+  const libAll = () => tx('readonly', st => st.getAll()), libPut = rec => tx('readwrite', st => st.put(rec)), libDel = id => tx('readwrite', st => st.delete(id)), libGet = id => tx('readonly', st => st.get(id));
+  // a one-line summary of a project: phase, patients, the primary result, open tasks
+  function summary() { const st = S(), cfg = st.cfg || {}, o = cfg.org || {}; let prim = '';
+    try { if (st.result) { const t = U.abstractTable(), pv = cfg.variables.find(v => v.role === 'primary'), row = t.rows.find(r0 => pv && r0[0].startsWith(pv.label)) || t.rows[0]; if (row) prim = `${row[0]}: ${row.slice(-2).join(', P ')}`; } } catch (e) { /* none */ }
+    const EB = window.EasyBuilder; return { phase: EB ? EB.phase : 'analyse', n: st.data ? st.data.rows.length : 0, prim, tasks: (o.tasks || []).filter(t => !t.done).length, ver: (o.dataVersion || {}).name || '' }; }
+  async function keepInLibrary(silent) { const j = U.projectObj(); if (!j) { U.toast('Nothing to keep yet'); return; } const id = S().libId || ('p' + Date.now().toString(36)); S().libId = id; const old = await libGet(id).catch(() => null);
+    const name = (old && old.name) || (j.cfg && j.cfg.study && j.cfg.study.title) || String(j.file || 'Study').replace(/\.[^.]+$/, '');
+    await libPut({ id, name, tags: old ? old.tags : [], archived: old ? old.archived : false, at: Date.now(), sum: summary(), json: j }); log('Kept in My projects'); if (!silent) U.toast(`“${name}” kept in My projects (this browser)`); }
+  async function projects(showArch = false, tag = '') { let all = []; try { all = await libAll(); } catch (e) { U.toast('This browser does not allow keeping projects (private window?)'); return; }
+    const tags = [...new Set(all.flatMap(p => p.tags || []))].sort(), list = all.filter(p => !!p.archived === showArch && (!tag || (p.tags || []).includes(tag))).sort((a, b) => b.at - a.at);
+    const size = all.reduce((t, p) => t + JSON.stringify(p.json).length, 0);
+    const card = p => `<div class="report-sec" style="margin:6px 0;padding:8px 10px"><div class="row" style="gap:6px;align-items:center"><b style="flex:1">${esc(p.name)}</b>${S().libId === p.id ? '<span class="chip ok">open now</span>' : ''}<span class="legend-note">${day(p.at)}</span></div>
+      <div class="legend-note">${esc({ build: '🧱 Build', generate: '🎲 Generate', analyse: '📊 Analyse' }[p.sum.phase] || '📊 Analyse')} · ${p.sum.n} patients${p.sum.ver ? ` · data “${esc(p.sum.ver)}”` : ''}${p.sum.tasks ? ` · 📌 ${p.sum.tasks} open task${p.sum.tasks > 1 ? 's' : ''}` : ''}${p.sum.prim ? `<br>Primary: ${esc(p.sum.prim)}` : ''}</div>
+      <div class="row" style="gap:6px;margin-top:4px;flex-wrap:wrap">${(p.tags || []).map(t => `<span class="chip">🏷 ${esc(t)}</span>`).join('')}<span class="spacer"></span><button class="btn primary small" type="button" data-lib="open" data-id="${p.id}">Open</button><button class="btn ghost small" type="button" data-lib="tag" data-id="${p.id}">🏷 Tags</button><button class="btn ghost small" type="button" data-lib="ren" data-id="${p.id}">✎</button><button class="btn ghost small" type="button" data-lib="arch" data-id="${p.id}">${p.archived ? '↩ Restore' : '🗄 Archive'}</button><button class="btn ghost small" type="button" data-lib="file" data-id="${p.id}" title="Download the project file">⬇</button><button class="btn ghost small" type="button" data-lib="del" data-id="${p.id}">🗑</button></div></div>`;
+    const p = panel('orgProj', '📁 My projects', `<div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn primary small" type="button" data-lib="keep">💾 Keep the open project here</button><button class="btn ghost small" type="button" data-lib="arch0">${showArch ? '← Active projects' : '🗄 Archive'}</button>
+        <select data-lib="tagf" style="width:auto"><option value="">All tags</option>${tags.map(t => `<option ${t === tag ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select><span class="legend-note">${all.length} project${all.length === 1 ? '' : 's'} · ${(size / 1e6).toFixed(1)} MB in this browser</span></div>
+      ${list.map(card).join('') || `<p class="legend-note">${showArch ? 'Nothing archived.' : 'No projects kept yet: open a study and press “Keep the open project here”.'}</p>`}
+      <p class="legend-note">Projects are kept in this browser only; download the project file (⬇) to move one to another computer or to send it.</p>`);
+    p.onclick = async e => { const b = e.target.closest('[data-lib]'); if (!b || b.tagName === 'SELECT') return; const k = b.dataset.lib, id = b.dataset.id, rec = id ? await libGet(id) : null;
+      if (k === 'keep') { await keepInLibrary(); return projects(showArch, tag); } if (k === 'arch0') return projects(!showArch, tag);
+      if (k === 'open' && rec) { if (S().data && !confirm(`Open “${rec.name}”? The open project is replaced (keep it here first if needed).`)) return; U.openAny(rec.json, rec.json.file); S().libId = rec.id; p.classList.remove('open'); return; }
+      if (k === 'tag' && rec) { const t = prompt('Tags, separated by commas (e.g. Thesis, Paper 1, Conference):', (rec.tags || []).join(', ')); if (t === null) return; rec.tags = t.split(',').map(x => x.trim()).filter(Boolean); await libPut(rec); return projects(showArch, tag); }
+      if (k === 'ren' && rec) { const t = prompt('Name of the project:', rec.name); if (!t) return; rec.name = t.trim(); await libPut(rec); return projects(showArch, tag); }
+      if (k === 'arch' && rec) { rec.archived = !rec.archived; await libPut(rec); return projects(showArch, tag); }
+      if (k === 'file' && rec) { U.saveUrl(URL.createObjectURL(new Blob([JSON.stringify(rec.json)], { type: 'application/json' })), `${rec.name} - project.easystat.json`); return; }
+      if (k === 'del' && rec && confirm(`Delete “${rec.name}” from this browser? This cannot be undone.`)) { await libDel(id); if (S().libId === id) S().libId = null; return projects(showArch, tag); } };
+    p.onchange = e => { if (e.target.dataset.lib === 'tagf') projects(showArch, e.target.value); }; }
+
+  /* ---------- O2: dataset versions ---------- */
+  function datasets() { if (!need()) return; const o = org(), L = o.datasets = o.datasets || [], cur = o.dataVersion;
+    const p = panel('orgData', '🗂 Dataset versions', `<p class="legend-note">Keep the data as they are now (e.g. Raw, Cleaned, Interim, Final) and go back to any of them. The report states the version it used.</p>
+      <div class="row" style="gap:6px"><input type="text" id="orgDvName" placeholder="Name, e.g. Cleaned" style="width:150px"><input type="text" id="orgDvNote" placeholder="What changed" style="flex:1"><button class="btn primary small" type="button" data-dv="keep">＋ Keep the current data</button></div>
+      <table class="ux2-tbl" style="margin-top:8px"><thead><tr><th>Version</th><th>Date</th><th>Rows</th><th>Note</th><th></th></tr></thead><tbody>${L.map((d, i) => `<tr><td><b>${esc(d.name)}</b>${cur && cur.name === d.name ? ' <span class="chip ok">in use</span>' : ''}</td><td>${day(d.at)}</td><td>${d.data.rows.length}</td><td>${esc(d.note || '')}</td><td style="white-space:nowrap"><button class="btn ghost small" type="button" data-dv="use" data-i="${i}">Use</button><button class="btn ghost small" type="button" data-dv="del" data-i="${i}">🗑</button></td></tr>`).join('') || '<tr><td colspan="5" class="legend-note">No versions kept yet.</td></tr>'}</tbody></table>
+      ${cur ? `<p class="legend-note">The report uses “${esc(cur.name)}” <button class="btn ghost small" type="button" data-dv="none">Do not name a version</button></p>` : ''}`);
+    p.onclick = e => { const b = e.target.closest('[data-dv]'); if (!b) return; const k = b.dataset.dv, i = +b.dataset.i;
+      if (k === 'keep') { const nm = $('#orgDvName').value.trim() || `Version ${L.length + 1}`; L.push({ name: nm, note: $('#orgDvNote').value.trim(), at: new Date().toISOString(), data: JSON.parse(JSON.stringify(S().data)) }); o.dataVersion = { name: nm, at: new Date().toISOString() }; log(`Dataset version “${nm}” kept (${S().data.rows.length} rows)`); U.toast(`Data kept as “${nm}”`); return datasets(); }
+      if (k === 'use') { const d = L[i]; if (!confirm(`Use the data “${d.name}” (${d.data.rows.length} rows)? The data now on screen are replaced (keep them as a version first if needed).`)) return; S().data = JSON.parse(JSON.stringify(d.data)); o.dataVersion = { name: d.name, at: d.at }; S().result = null; U.renderGrid(); log(`Dataset version “${d.name}” in use`); U.toast(`Using “${d.name}”`); if (U.state.step === 12) U.runAnalysis(); return datasets(); }
+      if (k === 'del' && confirm(`Delete the version “${L[i].name}”?`)) { L.splice(i, 1); return datasets(); }
+      if (k === 'none') { delete o.dataVersion; return datasets(); } }; }
+
+  /* ---------- O5: the analysis log, with your own notes ---------- */
+  function analysisLog() { if (!need()) return; const o = org(), L = (o.log || []).slice().reverse(), clean = (S().cleanLog || []).map(c => ({ at: c.time, what: `Data: ${c.what}`, kind: 'data' }));
+    const all = [...L, ...clean.reverse()];
+    const p = panel('orgLog', '📝 Analysis log', `<div class="row" style="gap:6px"><input type="text" id="orgNote" placeholder="Your note, e.g. Decided to use Mann-Whitney for VAS (skewed)" style="flex:1"><button class="btn primary small" type="button" data-lg="add">＋ Note</button><button class="btn ghost small" type="button" data-lg="txt">⬇ Text</button><button class="btn ghost small" type="button" data-lg="doc">⬇ Appendix (.docx)</button></div>
+      <table class="ux2-tbl" style="margin-top:8px"><tbody>${all.slice(0, 300).map(x => `<tr><td style="white-space:nowrap" class="legend-note">${esc(isFinite(Date.parse(x.at)) ? new Date(x.at).toLocaleString('en-GB') : x.at)}</td><td>${x.kind === 'note' ? '📝 ' : x.kind === 'data' ? '🧹 ' : ''}${esc(x.what)}</td></tr>`).join('') || '<tr><td class="legend-note">Nothing yet: runs of the report, settings changed in steps 2 and 12, versions and your notes appear here.</td></tr>'}</tbody></table>`);
+    const lines = () => all.slice().reverse().map(x => `${isFinite(Date.parse(x.at)) ? new Date(x.at).toLocaleString('en-GB') : x.at}\t${x.what}`);
+    p.onclick = async e => { const b = e.target.closest('[data-lg]'); if (!b) return; const k = b.dataset.lg;
+      if (k === 'add') { const t = $('#orgNote').value.trim(); if (!t) return; log(t, 'note'); return analysisLog(); }
+      if (k === 'txt') U.saveUrl(URL.createObjectURL(new Blob([lines().join('\r\n')], { type: 'text/plain' })), `${U.baseName()} - analysis log.txt`);
+      if (k === 'doc') { const D = window.docx, P = (t, o2 = {}) => new D.Paragraph({ spacing: { after: 80 }, children: [new D.TextRun({ text: t, bold: o2.b, size: o2.s || 20, font: 'Calibri' })] });
+        const blob = await D.Packer.toBlob(new D.Document({ sections: [{ children: [P('Appendix: analysis log', { b: true, s: 28 }), P(`${S().cfg.study.title || U.baseName()} — every run, change of setting, dataset version and note, oldest first.`, { s: 18 }), ...lines().map(l => P(l, { s: 18 }))] }] }));
+        U.saveUrl(URL.createObjectURL(blob), `${U.baseName()} - analysis log.docx`); } }; }
+
+  /* ---------- O6: tasks on tables and figures ---------- */
+  function tasks() { if (!need()) return; const o = org(), L = o.tasks = o.tasks || [];
+    const p = panel('orgTasks', '📌 Tasks', `<p class="legend-note">Add a task from the 📌 button of a table in step 12, or here.</p><div class="row" style="gap:6px;flex-wrap:wrap"><input type="text" id="orgTk" placeholder="e.g. Ask the supervisor about Table 4" style="flex:1;min-width:200px"><input type="text" id="orgTkWho" placeholder="Who" style="width:100px"><input type="date" id="orgTkDue" style="width:auto"><button class="btn primary small" type="button" data-tk="add">＋ Task</button></div>
+      <table class="ux2-tbl" style="margin-top:8px"><thead><tr><th></th><th>Task</th><th>On</th><th>Who</th><th>Due</th><th></th></tr></thead><tbody>${L.map((t, i) => `<tr style="${t.done ? 'opacity:.55' : ''}"><td><input type="checkbox" data-tkdone="${i}" ${t.done ? 'checked' : ''}></td><td>${esc(t.text)}</td><td>${t.sec ? `<a href="#" data-tkgo="${i}">${esc(t.sec.slice(0, 40))}</a>` : '—'}</td><td>${esc(t.who || '')}</td><td class="${!t.done && t.due && t.due < new Date().toISOString().slice(0, 10) ? 'ux-over' : ''}">${esc(t.due || '')}</td><td><button class="btn ghost small" type="button" data-tk="del" data-i="${i}">🗑</button></td></tr>`).join('') || '<tr><td colspan="6" class="legend-note">No tasks.</td></tr>'}</tbody></table>
+      <p class="legend-note">${L.filter(t => !t.done).length} open · ${L.filter(t => t.done).length} done</p>`);
+    p.onclick = e => { const b = e.target.closest('[data-tk],[data-tkgo]'); if (!b) return; e.preventDefault();
+      if (b.dataset.tkgo !== undefined) { const t = L[+b.dataset.tkgo]; U.go(12); setTimeout(() => { const sec = $$('#report .report-sec').find(s => { const i2 = s.querySelector('[data-ttl]'); return i2 && i2.value === t.sec; }); if (sec) sec.scrollIntoView({ block: 'center' }); }, 300); return; }
+      if (b.dataset.tk === 'add') { const t = $('#orgTk').value.trim(); if (!t) return; L.push({ text: t, who: $('#orgTkWho').value.trim(), due: $('#orgTkDue').value, done: false, at: new Date().toISOString() }); log(`Task added: ${t}`); return tasks(); }
+      if (b.dataset.tk === 'del') { L.splice(+b.dataset.i, 1); return tasks(); } };
+    p.onchange = e => { const c = e.target.closest('[data-tkdone]'); if (!c) return; const t = L[+c.dataset.tkdone]; t.done = c.checked; log(`Task ${t.done ? 'done' : 'reopened'}: ${t.text}`); tasks(); X.onReport && X.onReport(); }; }
+  X.tasks = tasks;
+  // the 📌 button of each table
+  function taskButtons() { $$('#report [data-copytbl]').forEach(b => { if (b.parentNode.querySelector('[data-orgtk]')) return; const t = el('button', 'btn ghost small', '📌 Task'); t.type = 'button'; t.dataset.orgtk = b.dataset.copytbl; t.title = 'A task on this table (e.g. a question for the supervisor)'; b.parentNode.append(' ', t); }); }
+  document.addEventListener('click', e => { const b = e.target.closest('[data-orgtk]'); if (!b) return; const s = S().result.sections[+b.dataset.orgtk]; if (!s) return; const t = prompt(`Task on “${s.title}”:`, 'Ask the supervisor about '); if (!t) return;
+    const who = prompt('Who? (optional)', '') || '', due = prompt('Due date (YYYY-MM-DD, optional)', '') || ''; (org().tasks = org().tasks || []).push({ text: t, who, due, sec: s.title, done: false, at: new Date().toISOString() }); log(`Task added on “${s.title}”: ${t}`); U.toast('Task added — 📌 in the report map'); X.onReport && X.onReport(); });
+  const rep = $('#report'); if (rep) new MutationObserver(() => setTimeout(taskButtons, 250)).observe(rep, { childList: true });
+
+  /* ---------- O7: several reports from one dataset (report profiles) ---------- */
+  function profiles() { if (!need()) return; const o = org(), P0 = o.profiles = o.profiles || {}, cur = o.profile || '';
+    const p = panel('orgProf', '🗃 Reports from these data', `<p class="legend-note">Each report keeps its own tables, settings and edited text (e.g. Thesis, Paper 1 — primary outcome, Conference abstract); the data are shared.</p>
+      <div class="row" style="gap:6px"><input type="text" id="orgPfName" placeholder="Name, e.g. Paper 1" value="${esc(cur)}" style="width:180px"><button class="btn primary small" type="button" data-pf="save">💾 Save the current report as</button></div>
+      <table class="ux2-tbl" style="margin-top:8px"><tbody>${Object.entries(P0).map(([n, pf]) => `<tr><td><b>${esc(n)}</b>${n === cur ? ' <span class="chip ok">open</span>' : ''}</td><td class="legend-note">${day(pf.at)} · ${pf.cfg.variables.filter(v => v.include).length} variables</td><td style="white-space:nowrap"><button class="btn ghost small" type="button" data-pf="open" data-n="${esc(n)}">Open</button><button class="btn ghost small" type="button" data-pf="del" data-n="${esc(n)}">🗑</button></td></tr>`).join('') || '<tr><td class="legend-note">No saved reports yet.</td></tr>'}</tbody></table>`);
+    p.onclick = e => { const b = e.target.closest('[data-pf]'); if (!b) return; const k = b.dataset.pf, n = b.dataset.n;
+      if (k === 'save') { const nm = $('#orgPfName').value.trim(); if (!nm) return; const j = U.projectObj(); const c = JSON.parse(JSON.stringify(j.cfg)); delete c.org; P0[nm] = { at: new Date().toISOString(), cfg: c, edits: j.edits }; o.profile = nm; log(`Report “${nm}” saved`); U.toast(`Report “${nm}” saved`); return profiles(); }
+      if (k === 'open') { const pf = P0[n]; const keepOrg = JSON.parse(JSON.stringify(o)); keepOrg.profile = n; const j = U.projectObj(); U.openProject({ ...j, cfg: { ...JSON.parse(JSON.stringify(pf.cfg)), org: keepOrg }, edits: pf.edits, step: 12 }, S().file); log(`Report “${n}” opened`); U.toast(`Report “${n}” — running`); return; }
+      if (k === 'del' && confirm(`Delete the report “${n}”?`)) { delete P0[n]; if (o.profile === n) delete o.profile; return profiles(); } }; }
+
+  /* ---------- O8: templates: the variables' settings and the options, applied to another study by matching names ---------- */
+  const norm = t => String(t || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z0-9]+/g, '');
+  const VKEEP = ['label', 'table', 'role', 'test', 'chart', 'include', 'dec', 'decimals', 'mcid', 'better', 'unit', 'definition', 'caption', 'ylabel', 'group', 'order', 'cutoff', 'rowNote', 'noSecond', 'levelOrder', 'refLevel'];
+  function templates() { if (!need()) return;
+    const p = panel('orgTpl', '🧩 Templates', `<p class="legend-note">A template keeps the settings of the variables (label, table, role, test, figure, MCID …), the order of the tables and every option. Apply it to a new study with similar variables: they are matched by their column names, or by their labels.</p>
+      <div class="row" style="gap:6px"><button class="btn primary small" type="button" data-tp="save">⬇ Save this study as a template</button><label class="btn ghost small" style="margin:0">⬆ Apply a template<input type="file" id="orgTplFile" accept=".json" hidden></label></div><div id="orgTplOut" class="legend-note" style="margin-top:6px"></div>`);
+    p.onclick = e => { const b = e.target.closest('[data-tp]'); if (!b) return; U.readUiIntoCfg(); const c = S().cfg;
+      const tpl = { app: 'ProfMSE-EasyStat-template', at: new Date().toISOString(), title: c.study.title || '', options: c.options, report: c.report, groupLabels: c.groupLabels, vars: c.variables.map((v, i) => ({ cols: v.cols.map(x => x.col), key: norm(v.label), pos: i, ...Object.fromEntries(VKEEP.filter(k => v[k] !== undefined).map(k => [k, v[k]])) })) };
+      U.saveUrl(URL.createObjectURL(new Blob([JSON.stringify(tpl, null, 1)], { type: 'application/json' })), `${U.baseName()} - template.json`); log('Template saved'); };
+    p.onchange = async e => { if (e.target.id !== 'orgTplFile') return; const f = e.target.files[0]; e.target.value = ''; if (!f) return; let t; try { t = JSON.parse(await f.text()); } catch (err) { U.toast('Not a template file'); return; } if (t.app !== 'ProfMSE-EasyStat-template') { U.toast('Not a template file'); return; }
+      const c = S().cfg, used = new Set(); let n = 0; c.variables.forEach(v => { const cols = v.cols.map(x => norm(x.col)), m = t.vars.find((tv, i) => !used.has(i) && tv.cols.some(cc => cols.includes(norm(cc)))) || t.vars.find((tv, i) => !used.has(i) && tv.key && tv.key === norm(v.label));
+        if (!m) return; used.add(t.vars.indexOf(m)); VKEEP.forEach(k => { if (m[k] !== undefined) v[k] = m[k]; }); v.__pos = m.pos; n++; });
+      c.variables.sort((a, b) => (a.__pos ?? 1e6) - (b.__pos ?? 1e6)); c.variables.forEach(v => delete v.__pos); c.options = { ...c.options, ...t.options }; c.report = { ...c.report, ...(t.report || {}) };
+      Object.entries(t.groupLabels || {}).forEach(([g, l]) => { if (c.groupLabels && g in c.groupLabels) c.groupLabels[g] = l; }); U.renderOptions(); U.renderVariables(); log(`Template applied: ${n} of ${c.variables.length} variables matched`);
+      $('#orgTplOut').textContent = `${n} of ${c.variables.length} variables matched and set; the options and the Word settings applied.${n < c.variables.length ? ` Not matched: ${c.variables.filter(v => !t.vars.some(tv => tv.key === norm(v.label) || tv.cols.some(cc => v.cols.some(x => norm(x.col) === norm(cc))))).map(v => v.label).slice(0, 8).join(', ')}.` : ''}`; U.go(2); }; }
+
+  /* ---------- O10: storage in this browser, and clean-up ---------- */
+  async function storage() { const groups = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i), v = localStorage.getItem(k) || '', g = /^gen\./.test(k) ? 'Generator settings and scenarios' : /^ux2?\./.test(k) ? 'Display, favourites and recent work' : /autosave/.test(k) ? 'Autosaved work' : /builder|^mb\.|design/i.test(k) ? 'Master sheet designs' : /preset/i.test(k) ? 'Presets' : 'Other settings'; (groups[g] = groups[g] || { n: 0, size: 0, keys: [] }); groups[g].n++; groups[g].size += k.length + v.length; groups[g].keys.push(k); }
+    let lib = []; try { lib = await libAll(); } catch (e) { /* none */ } let est = null; try { est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null; } catch (e) { /* none */ }
+    const p = panel('orgStore', '🧹 Storage and clean-up', `<table class="ux2-tbl"><thead><tr><th>What</th><th>Items</th><th>Size</th><th></th></tr></thead><tbody>${Object.entries(groups).map(([g, x]) => `<tr><td>${esc(g)}</td><td>${x.n}</td><td>${(2 * x.size / 1024).toFixed(0)} KB</td><td>${/Autosaved|Generator/.test(g) ? `<button class="btn ghost small" type="button" data-sg="${esc(g)}">Clear</button>` : ''}</td></tr>`).join('')}
+      <tr><td>My projects (📁)</td><td>${lib.length} (${lib.filter(x => x.archived).length} archived)</td><td>${(lib.reduce((t, x) => t + JSON.stringify(x.json).length, 0) / 1024).toFixed(0)} KB</td><td><button class="btn ghost small" type="button" data-sg="arch">Delete the archived</button></td></tr></tbody></table>
+      ${est ? `<p class="legend-note">This browser gives this page ${(est.quota / 1e9).toFixed(1)} GB; ${(est.usage / 1e6).toFixed(1)} MB used (with the report versions).</p>` : ''}<p class="legend-note">Old report versions are listed in 🕘 Report versions (step 12), where each can be deleted.</p>`);
+    p.onclick = async e => { const b = e.target.closest('[data-sg]'); if (!b) return; const g = b.dataset.sg;
+      if (g === 'arch') { const a = lib.filter(x => x.archived); if (!a.length || !confirm(`Delete the ${a.length} archived project(s) from this browser?`)) return; for (const x of a) await libDel(x.id); return storage(); }
+      if (!confirm(`Clear “${g}”? This cannot be undone.`)) return; (groups[g].keys || []).filter(k => !/scenarios/.test(k) || /Generator/.test(g)).forEach(k => localStorage.removeItem(k)); U.toast('Cleared'); storage(); }; }
+
+  /* ---------- O12: the hand-off checklist before sending to the supervisor ---------- */
+  function handoff() { if (!S().result) { U.toast('Run the report first (step 12)'); return; } U.syncEdits(); const st = S(), cfg = st.cfg, o = cfg.org || {}, r = st.result, H = U.healthItems ? U.healthItems() : [];
+    const rv = Object.values(o.review || {}), locked = Array.isArray(cfg.lockedSecs) ? cfg.lockedSecs.length : Object.keys(cfg.lockedSecs || {}).length, openT = (o.tasks || []).filter(t => !t.done).length;
+    const items = [[!H.length, H.length ? `${H.length} point${H.length > 1 ? 's' : ''} in 🩺 Report health` : 'Report health: nothing to fix'], [cfg.variables.some(v => v.include && v.role === 'primary'), 'The primary outcome is marked (🎭 Roles)'],
+      [!!(r.abstract || o.abstractDone), 'An abstract is written (Structured abstract, or the paper format)'], [locked > 0, `${locked} table${locked === 1 ? '' : 's'} locked (their comments kept when the data change)`],
+      [!!(o.dataVersion && o.dataVersion.name), o.dataVersion ? `Dataset version named: “${o.dataVersion.name}”` : 'Name the dataset version (🗂 Dataset versions)'], [!openT, openT ? `${openT} open task${openT > 1 ? 's' : ''}` : 'No open tasks'],
+      [!!(cfg.study.title || '').trim(), 'The study has a title'], [rv.length === 0 || rv.every(x => x.v === 'ok'), rv.length ? `Review: ${rv.filter(x => x.v === 'ok').length} approved, ${rv.filter(x => x.v === 'no').length} sent back` : 'No review marks yet']];
+    const p = panel('orgHand', '🤝 Ready to hand over?', `${items.map(([ok, t]) => `<div>${ok ? '✅' : '⬜'} ${esc(t)}</div>`).join('')}<p class="legend-note">${items.filter(x => x[0]).length} of ${items.length} done.</p>
+      <div class="row" style="gap:6px"><button class="btn primary small" type="button" data-ho="go">🎁 Save the project and the pack for the supervisor</button><button class="btn ghost small" type="button" data-ho="abs">Mark the abstract as written</button></div>`);
+    p.onclick = e => { const b = e.target.closest('[data-ho]'); if (!b) return; if (b.dataset.ho === 'abs') { org().abstractDone = true; return handoff(); } log('Handed over to the supervisor'); $('#btnSaveProj').click(); const sp = $('#btnSharePack'); if (sp) setTimeout(() => sp.click(), 600); }; }
+
+  /* ---------- the menu entries ---------- */
+  (function menu() { const top = $('.top-actions'), more = $('.ux-menu'); if (!top) return;
+    const pb = el('button', 'btn light small', '📁 <span class="tl">Projects</span>'); pb.type = 'button'; pb.id = 'orgProjects'; pb.title = 'My projects: a dashboard of every study kept in this browser, with tags and an archive'; pb.onclick = () => projects();
+    const sv = $('#btnSaveProj'); if (sv) sv.after(pb); else top.prepend(pb);
+    const add = (id, label, title, fn) => { const b = el('button', 'btn light small', label); b.type = 'button'; b.id = id; b.title = title; b.onclick = fn; (more || top).appendChild(b); };
+    add('orgDatasets', '🗂 Dataset versions', 'Raw, cleaned, interim and final data, each with its date and a note', datasets);
+    add('orgReports', '🗃 Reports from these data', 'Thesis, Paper 1, Conference: each with its own tables, settings and text', profiles);
+    add('orgTasksB', '📌 Tasks', 'Tasks on tables and figures: who, when, done', tasks);
+    add('orgLogB', '📝 Analysis log', 'Every run, change of setting, version and note; as an appendix', analysisLog);
+    add('orgTplB', '🧩 Templates', 'The setup of a study, applied to the next one by matching the variable names', templates);
+    add('orgStoreB', '🧹 Storage', 'What this browser keeps, and clean-up', storage);
+    const ho = $('#btnHandoff'); if (ho) ho.onclick = handoff; })();
+  // the report runs go into the log
+  let lastRun = null; const rep2 = $('#report'); if (rep2) new MutationObserver(() => { const r = S().result; if (r && r !== lastRun) { lastRun = r; log(`Report run: ${r.sections.length} parts${(S().cfg.org || {}).dataVersion ? ` (data “${S().cfg.org.dataVersion.name}”)` : ''}`); } }).observe(rep2, { childList: true });
+  X.projects = projects; X.keepInLibrary = keepInLibrary; X.libAll = libAll;
 })();
 </script>
 </body>

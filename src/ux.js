@@ -140,8 +140,9 @@
       [['genGo', '🎲 Generate the data'], ['genPower', 'Power of the planned study'], ['genCurve', 'Power curve'], ['genEx', 'Practice exercises (.docx)'], ['genMethods', 'Simulation methods (.docx)'], ['genCsv', 'Simulated data as CSV'], ['genPack', 'Several datasets with an answer key'], ['genXlsx', 'Simulated master sheet (.xlsx)']].forEach(([id, l]) => out.push({ kind: 'Generate', label: l, where: 'Phase 2', run: () => inPhase('generate', () => flash(document.getElementById(id))) }));
       ['Time to event', 'Risk factors', 'Regression', 'Confounding', 'Diagnostic accuracy', 'Agreement', 'Recruitment', 'Protocol deviations', 'Operator effect', 'Matched case-control', 'From a published table'].forEach(t => out.push({ kind: 'Generate', label: t, where: 'Phase 2 · special designs', run: () => inPhase('generate', () => { const d = [...document.querySelectorAll('.gen-det')].find(x => (x.querySelector('summary') || {}).textContent && x.querySelector('summary').textContent.includes(t)); if (d) { d.open = true; flash(d); } }) })); }
     // tables and figures of the report
-    if (st.result) st.result.sections.forEach((s, i) => { if (!s.title) return; out.push({ kind: 'Report', label: s.title, where: `Step ${U.REPORT_STEP} · ${s.kind}${s.figures && s.figures.length ? ` · ${s.figures.length} figure${s.figures.length > 1 ? 's' : ''}` : ''}`,
+    if (st.result) st.result.sections.forEach((s, i) => { if (!s.title) return; out.push({ kind: 'Report', find: `${s.comment || ''} ${s.footnote || ''} ${(s.head || []).map(h => typeof h === 'string' ? h : (h && h.t) || '').join(' ')}`, label: s.title, where: `Step ${U.REPORT_STEP} · ${s.kind}${s.figures && s.figures.length ? ` · ${s.figures.length} figure${s.figures.length > 1 ? 's' : ''}` : ''}`,
       run: () => goTo(U.REPORT_STEP, () => { const t = document.querySelector(`[data-ttl="${i}"]`); flash(t ? t.closest('.report-sec') || t : null); }) }); });
+    if (st.result && st.result.methods) out.push({ kind: 'Report', label: 'Statistical analysis (methods)', find: st.result.methods, where: `Step ${U.REPORT_STEP} · the methods text`, run: () => goTo(U.REPORT_STEP, () => flash(document.querySelector('#edMethods'))) });
     // examples and the statistics guide
     (typeof Examples !== 'undefined' ? Examples.LIST : []).forEach(ex => out.push({ kind: 'Example', label: ex.name, where: 'Open this example data set', run: () => goTo(1, () => { const b = document.querySelector(`[data-exopen="${ex.id}"]`); if (b) b.click(); }) }));
     (window.EasyToolsGuide || []).forEach(g => out.push({ kind: 'Guide', label: g[0], where: g[1], info: g, run: () => showGuide(g) }));
@@ -157,7 +158,7 @@
     return prev[b.length]; };
   const esc2 = a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // ranking: whole words first, then word starts, substrings, the place, and words with a typo
-  function score(o, words) { const L = (o.label + ' ' + (o.where || '')).toLowerCase(), lab = o.label.toLowerCase(), toks = lab.split(/[^a-z0-9²³µ-]+/).filter(Boolean); let sc = 0;
+  function score(o, words) { const L = (o.label + ' ' + (o.where || '') + ' ' + (o.find || '')).toLowerCase(), lab = o.label.toLowerCase(), toks = lab.split(/[^a-z0-9²³µ-]+/).filter(Boolean); let sc = 0;
     for (const w of words) { const alts = [w, ...(SYN[w] ? SYN[w].split(' ') : [])]; let best = 0;
       for (const a of alts) { const e = esc2(a), whole = new RegExp(`(^|[^a-z0-9])${e}($|[^a-z0-9])`), start = new RegExp(`(^|[^a-z0-9])${e}`);
         let v = whole.test(lab) ? 7 : lab.startsWith(a) ? 5.5 : start.test(lab) ? 5 : lab.includes(a) ? 4 : whole.test(L) ? 3.2 : start.test(L) ? 3 : L.includes(a) ? 2 : 0;

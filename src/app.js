@@ -5824,6 +5824,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         { const defs = state.cfg.variables.filter(v => v.include && v.definition).map(v => { const d0 = v.definition.trim().replace(/\.$/, ''); return /\bdefined\b/i.test(d0) ? d0 + '.' : `${v.label.replace(/\s*\([^)]*\)\s*$/, '')} was defined as ${/^[A-Z][a-z]+\b/.test(d0) ? d0.charAt(0).toLowerCase() + d0.slice(1) : d0}.`; });
           if (defs.length && res.methods) res.methods = `${res.methods.trim()} Definitions: ${defs.join(' ')}`; }
         if (state.cfg.simulated && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The data were simulated (Prof MSE Easy Stat data generator, seed ${state.cfg.simulated.seed}) and do not describe real patients.`;
+        { const dv = (state.cfg.org || {}).dataVersion; if (dv && dv.name && res.methods) res.methods = `${res.methods.trim()} The analysis used the dataset version “${dv.name}” (${String(dv.at || '').slice(0, 10)}).`; }
         applyTableMeta(res); applyVarNotes(res); applyLocks(res);
         placeFigures(res, cfg.options);
         if (report().subForest) { try { const sf = subgroupForest(report().subForest); if (sf && !sf.err) res.sections.push({ kind: 'figonly', figOnly: true, title: sf.caption, key: 'fig:' + sf.caption, head: [], rows: [], footnote: '', comment: '', figures: [{ ...sf, data: undefined }], meta: {} }); } catch (err) { console.error(err); } }
@@ -6977,6 +6978,10 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   }
   // the design (phase 1) and the generator's settings (phase 2) go in the project too
   const phaseParts = () => { const out = {}; try { const D = window.EasyBuilder && window.EasyBuilder.design; if (D && D.vars && D.vars.length) out.design = JSON.parse(JSON.stringify(D)); } catch (e) { /* none */ } try { if (window.EasyGen) out.gen = JSON.parse(JSON.stringify(window.EasyGen.settings)); } catch (e) { /* none */ } return out; };
+  function projectObj() { const ph = phaseParts(); if (!state.data && !ph.design) return null; if (state.data) readUiIntoCfg();
+    return { app: 'ProfMSE-EasyStat-project', version: 2, steps: STEPS.length, saved: new Date().toISOString(), file: state.file || (ph.design && ph.design.title) || 'study', sheet: state.sheet, step: state.step,
+      phase: window.EasyBuilder ? window.EasyBuilder.phase : 'analyse', ...ph, ...(state.data ? { data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], snapshots: state.snapshots || [] } : {}) }; }
+  function openAny(j, fname) { openPhases(j); if (j.data && j.cfg) openProject(j, fname || j.file); else if (window.EasyBuilder) window.EasyBuilder.setPhase(j.phase === 'generate' ? 'generate' : 'build'); }
   $('#btnSaveProj').onclick = () => {
     const ph = phaseParts(); if (!state.data && !ph.design) { toast('Nothing to save yet — design a master sheet, or load an Excel file or an example'); return; }
     if (state.data) readUiIntoCfg();
@@ -7140,6 +7145,6 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   window.EasyStat = state; // for debugging
   // what the interface layer (ux.js) may use
   window.EasyUI = { loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
-    renderAdvanced, renderVariables, renderOptions, effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
+    renderAdvanced, renderVariables, renderOptions, projectObj, openAny, healthItems, abstractTable, applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();
