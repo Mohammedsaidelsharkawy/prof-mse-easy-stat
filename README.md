@@ -250,6 +250,15 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**✍ Comments (round 3)**
+- **Comment style per table** (Tables › ⚙ Options): concise, detailed or descriptive for one table, the report's style for the others; the same for the non-significant wording and the order.
+- **Non-significant results worded as** (step 6): “… were insignificantly different” (default), “The groups were comparable regarding …” or “No significant difference was found in …”.
+- **Better direction per variable** (Tables › ⚙ Options › Better direction): “Pain was significantly better in A than B (lower values, P value < 0.001)” instead of higher / lower.
+- **P values in the text**: as in the tables (default) or as thresholds (< 0.05, < 0.01, < 0.001), the tables unchanged.
+- **Order in each comment**: non-significant first (default) or significant first.
+- **A sentence on what each figure shows** (step 7): the highest and lowest value from the figure's own data, before the symbols.
+- Already in the app: the minimal clinically important difference sentence (step 2 ⚙, MCID) and numbers below ten in words (step 6).
+
 **Fixes**
 - **A yes/no variable with one answer only** (all No, all 0, all Yes): the table and the figure now show the “Yes” row (e.g. 0 (0%) in each group) instead of switching to “No”. No test is run (P “—”), and the comment says that none (or all) of the patients had it.
 - **A group without data**: its cells show “—” (n = 0) instead of 0 (0%), the P value is “—”, the figure writes “no data” instead of a bar, and the comment says the variable could not be compared because there were no data in that group (also for repeated measures). Before, a figure with a missing value stopped the whole analysis.

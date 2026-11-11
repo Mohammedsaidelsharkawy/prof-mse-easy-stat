@@ -1161,6 +1161,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <h2>6 · Comments</h2>
       <div class="grid g4">
         <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option><option value="descriptive">Descriptive — values, test, statistic, effect size and an overview</option></select></div>
+        <div><label class="f">Non-significant results worded as</label><select id="optNsWord"><option value="insig" selected>… were insignificantly different</option><option value="comparable">The groups were comparable regarding …</option><option value="nodiff">No significant difference was found in …</option></select></div>
+        <div><label class="f">Order in each comment</label><select id="optCommentOrder"><option value="ns" selected>Non-significant first</option><option value="sig">Significant first</option></select></div>
+        <div><label class="f">P values in the text</label><select id="optPText"><option value="" selected>As in the tables (P value = 0.013)</option><option value="thr">Thresholds (P value &lt; 0.05, &lt; 0.01, &lt; 0.001)</option></select></div>
         <div><label class="f">P value wording</label><select id="optPWord"><option value="P value" selected>(P value = 0.013)</option><option value="P">(P = 0.013)</option><option value="p">(p = 0.013)</option></select></div>
         <div><label class="f">Comment placement</label><select id="optCommentPlace"><option value="after" selected>After each table</option><option value="before">Before each table</option><option value="none">No comments</option></select></div>
       </div>
@@ -1301,6 +1304,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
           <label class="check"><input type="checkbox" id="optFigFrame"><span><b>Frame</b> around each figure</span></label>
           <label class="check"><input type="checkbox" id="optFigNotes" checked><span><b>Explain the symbols in the caption</b> — the *, **, *** and dashed lines used in the figure</span></label>
+          <label class="check"><input type="checkbox" id="optFigSummary"><span><b>A sentence on what each figure shows</b> — the highest and lowest value, from the figure's own data</span></label>
           <label class="check"><input type="checkbox" id="optFigNoteParts"><span><b>Also explain the bars, error bars, boxes and markers</b> — what each part of the chart shows (mean ± SD, median and IQR, outliers …)</span></label>
         </div>
       </div>
@@ -24275,7 +24279,7 @@ const Analysis = (() => {
   const SUP = { a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ', g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ', m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ' };
   const toSup = t => [...t].map(c => SUP[c] || c).join('');
   // p-value as used inside sentences: "= 0.013" or "< 0.001"
-  const pTxt = p => { const thr = 10 ** -FMT.pDig; return p < thr ? '< ' + pNum(thr) : '= ' + pNum(p); };
+  const pTxt = p => { if (FMT.pText === 'thr' && isFinite(p)) { const t = x => FMT.pLead ? x : x.replace(/^0/, ''); return p < 0.001 ? '< ' + t('0.001') : p < 0.01 ? '< ' + t('0.01') : p < 0.05 ? '< ' + t('0.05') : '> ' + t('0.05'); } const thr = 10 ** -FMT.pDig; return p < thr ? '< ' + pNum(thr) : '= ' + pNum(p); };
   const msd = (m, sdv, d) => FMT.mean === 'paren' ? `${fmt(m, d)} (${fmt(sdv, d)})` : `${fmt(m, d)} ± ${fmt(sdv, d)}`;
   const iqrTxt = (a, b, d) => FMT.iqr === 'bracket' ? `[${fmt(a, d)}, ${fmt(b, d)}]` : FMT.iqr === 'endash' ? `${fmt(a, d)}–${fmt(b, d)}` : `${fmt(a, d)} - ${fmt(b, d)}`;
   const medIqr = (dd, d) => FMT.iqr === 'bracket' ? `${fmt(dd.median, d)} ${iqrTxt(dd.q1, dd.q3, d)}` : `${fmt(dd.median, d)} (${iqrTxt(dd.q1, dd.q3, d)})`;
@@ -26937,15 +26941,15 @@ const Analysis = (() => {
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
     setRO(opts); UNITS_ON = opts.unitsInText !== false;
     // descriptive: the detailed comment plus the test used, effect sizes, values of every group and an overview of each table
-    const descriptive = opts.commentStyle === 'descriptive', detailed = opts.commentStyle === 'detailed' || descriptive;
-    const wantEff = opts.commentEffect || descriptive;
+    let descriptive = opts.commentStyle === 'descriptive', detailed = opts.commentStyle === 'detailed' || descriptive, wantEff = opts.commentEffect || descriptive;
+    const setStyle = () => { descriptive = opts.commentStyle === 'descriptive'; detailed = opts.commentStyle === 'detailed' || descriptive; wantEff = opts.commentEffect || descriptive; };
     normality = normalityTest(opts.normality);
     const wording = s => {
       if (opts.notSig) s = s.replace(/insignificant(ly)?/g, 'not significant$1');
       if (opts.pWord && opts.pWord !== 'P value') s = s.replace(/\bP value\b/g, opts.pWord);
       return s;
     };
-    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct', ci: opts.catCI || '' };
+    FMT = { pText: opts.pText || '', pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct', ci: opts.catCI || '' };
     const used = new Set();
     // error bars of mean charts: SD (default), SEM or 95% CI of the mean
     const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
@@ -27205,10 +27209,10 @@ const Analysis = (() => {
     }
 
     // the options of a table (step 2, Tables): its columns and order, for that table only
-    const TB_KEYS = ['totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort', 'pairCols', 'nntCol', 'tableGroupOrder', 'hlSig', 'hlMiss', 'hlEff'];
+    const TB_KEYS = ['commentStyle', 'nsWord', 'commentOrder', 'totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort', 'pairCols', 'nntCol', 'tableGroupOrder', 'hlSig', 'hlMiss', 'hlEff'];
     let tbSaved = null; const tbRestore = () => { if (tbSaved) { Object.assign(opts, tbSaved); tbSaved = null; } };
     for (const b of blocks) {
-      tbRestore(); { const o2 = b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table]; if (o2) { const ks = TB_KEYS.filter(x => o2[x] !== undefined); if (ks.length) { tbSaved = Object.fromEntries(ks.map(x => [x, opts[x]])); ks.forEach(x => { opts[x] = o2[x]; }); } } }
+      tbRestore(); setStyle(); { const o2 = b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table]; if (o2) { const ks = TB_KEYS.filter(x => o2[x] !== undefined); if (ks.length) { tbSaved = Object.fromEntries(ks.map(x => [x, opts[x]])); ks.forEach(x => { opts[x] = o2[x]; }); } } } setStyle();
       if (k === 1) { sections.push(b.kind === 'repeated' ? oneGroupRepeated(b.vars[0]) : oneGroupSingle(b)); continue; }
       if (b.kind === 'repeated') {
         const v = b.vars[0];
@@ -27620,7 +27624,8 @@ const Analysis = (() => {
           const p = (r.num || r.cat).p;
           sent.push(`${cap(withValues(r, plain(r.v.label)))} was insignificantly different ${amongTxt(k)}${isFinite(p) ? ` (P value ${pTxt(p)})` : ''}.`);
         });
-        else if (nsRes.length) {
+        const nsStart = sent.length;
+        if (!noP && !descriptive && !detailed && nsRes.length) {
           // baseline characteristics read as "comparable"; outcomes as "insignificantly different"
           // optional: P between alpha and 0.10 written as a trend
           const trendR = opts.trendWord ? nsRes.filter(r => (r.num || r.cat).p < 0.1) : [];
@@ -27628,8 +27633,11 @@ const Analysis = (() => {
           trendR.forEach(r => sent.push(`${cap(plain(r.v.label))} showed a non-significant trend towards a difference ${amongTxt(k)} (P value ${pTxt((r.num || r.cat).p)}).`));
           // every non-significant variable of the table in one sentence, with one wording (baseline or outcome alike)
           const nsAll = [...base, ...rest].sort((x, y) => res.indexOf(x) - res.indexOf(y)), nsLabels = nsAll.map(r => lowerFirst(plain(r.v.label)));
-          if (nsLabels.length) sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)} (P value > ${opts.alpha}).`);
+          if (nsLabels.length) sent.push(opts.nsWord === 'comparable' ? `The groups were comparable regarding ${listJoin(nsLabels)} (P value > ${opts.alpha}).`
+            : opts.nsWord === 'nodiff' ? `No significant difference was found ${amongTxt(k)} in ${listJoin(nsLabels)} (P value > ${opts.alpha}).`
+            : `${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)} (P value > ${opts.alpha}).`);
         }
+        const nsEnd = sent.length;
         if (untested.length && !descriptive) { const lab = r => lowerFirst(plain(r.v.label)), ns0 = r => r.num ? r.num.desc.map(dd => dd.n) : r.cat.ns;
           const noData = untested.filter(r => ns0(r).some(n => !n) && ns0(r).some(n => n > 0)), none = untested.filter(r => !noData.includes(r) && ns0(r).every(n => !n));
           const one = untested.filter(r => r.cat && !noData.includes(r) && !none.includes(r)), other = untested.filter(r => !noData.includes(r) && !none.includes(r) && !one.includes(r));
@@ -27663,11 +27671,13 @@ const Analysis = (() => {
         const grouped = new Set();
         if (k === 2) { const items = sigAll.filter(r => r.num || isCompact(r)).map(r => { const x = r.num || r.cat;
             const hi = r.num ? (() => { const loc = i => r.num.param ? r.num.desc[i].mean : r.num.desc[i].median, lo = loc(0) < loc(1) || (loc(0) === loc(1) && r.num.desc[0].mean < r.num.desc[1].mean) ? 0 : 1; return 1 - lo; })() : (r.cat.pct[0][0] >= r.cat.pct[0][1] ? 0 : 1);
-            const vals = r.num ? '' : `${pctTxt(r.cat.pct[0][hi])}% vs ${pctTxt(r.cat.pct[0][1 - hi])}%, `;
-            return { r, hi, lab: isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label)), detail: `${vals}P value ${pTxt(x.p)}${effTxt(r)}${testInG(r)}` }; });
-          [0, 1].forEach(hi => { const its = items.filter(x => x.hi === hi); if (!its.length) return; its.forEach(x => grouped.add(x.r));
-            if (its.length === 1) sent.push(`${cap(its[0].lab)} was significantly higher in ${gl[hi]} than ${gl[1 - hi]} (${its[0].detail}).`);
-            else sent.push(`${cap(listJoin(its.map((x, i) => i ? lowerFirst(x.lab) : x.lab)))} were significantly higher in ${gl[hi]} than ${gl[1 - hi]} (${its.map(x => `${lowerFirst(x.lab)}: ${x.detail}`).join('; ')}).`);
+            const vals = r.num ? '' : `${pctTxt(r.cat.pct[0][hi])}% vs ${pctTxt(r.cat.pct[0][1 - hi])}%, `, bt = r.v.better === 'higher' || r.v.better === 'lower' ? r.v.better : '';
+            // a variable with a better direction (step 2, Tables ⋯): "significantly better in A than B (lower values, …)"
+            const g0 = bt ? (bt === 'higher' ? hi : 1 - hi) : hi, word = bt ? 'better' : 'higher', dirTxt = bt && r.num ? `${bt} values, ` : bt && !r.num ? '' : '';
+            return { r, hi: g0, word, lab: isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label)), detail: `${dirTxt}${bt && !r.num ? `${pctTxt(r.cat.pct[0][g0])}% vs ${pctTxt(r.cat.pct[0][1 - g0])}%, ` : vals}P value ${pTxt(x.p)}${effTxt(r)}${testInG(r)}` }; });
+          [['higher', 0], ['higher', 1], ['better', 0], ['better', 1]].forEach(([word, hi]) => { const its = items.filter(x => x.hi === hi && x.word === word); if (!its.length) return; its.forEach(x => grouped.add(x.r));
+            if (its.length === 1) sent.push(`${cap(its[0].lab)} was significantly ${word} in ${gl[hi]} than ${gl[1 - hi]} (${its[0].detail}).`);
+            else sent.push(`${cap(listJoin(its.map((x, i) => i ? lowerFirst(x.lab) : x.lab)))} were significantly ${word} in ${gl[hi]} than ${gl[1 - hi]} (${its.map(x => `${lowerFirst(x.lab)}: ${x.detail}`).join('; ')}).`);
             its.forEach(x => { const r = x.r; if (!r.num) return;
               if (opts.clinWord) { const em = effectMagnitude(r, k, opts); if (/negligible|very small|small/.test(em)) sent.push(`Although statistically significant, the difference in ${lowerFirst(plain(r.v.label))} was ${/negligible/.test(em) ? 'negligible' : 'small'} in size (${em.replace(/, [a-z ]+$/, '')}) and may be of limited clinical importance.`); }
               const mc = Math.abs(toNum(r.v.mcid)), q = r.num.pairs[0]; if (mc > 0 && q && isFinite(q.diff)) sent.push(`The difference in ${lowerFirst(plain(r.v.label))} (${fmt(Math.abs(q.diff), d)}${U(r.v)}) ${Math.abs(q.diff) >= mc ? 'exceeded' : 'was smaller than'} the minimal clinically important difference of ${fmt(mc, d)}${U(r.v)}.`); }); }); }
@@ -27702,6 +27712,7 @@ const Analysis = (() => {
             }
           }
         }
+        if (opts.commentOrder === 'sig' && nsEnd > nsStart) { const moved = sent.splice(nsStart, nsEnd - nsStart); sent.push(...moved); }
         // descriptive style: one sentence per variable with every group's values, the test, its statistic, the P value and the effect size,
         // pairwise results for three or more groups, and a closing overview of the table
         function descriptiveSentences(res, tableName) {
@@ -27866,7 +27877,7 @@ const Analysis = (() => {
           brief: opts.paperStyle ? wording(briefSingle(res, gl, alpha, d)) : '', briefSig: anySig });
       }
     }
-    tbRestore();
+    tbRestore(); setStyle();
 
     // enrolment over time: patients per month from a date column (step 9)
     if (cfg.timeline && cfg.timeline.col) { const sec = timelineSection(cfg, rows, groups, gl); if (sec) sections.unshift(sec); }
@@ -32079,7 +32090,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
 
   const DEFAULT_OPTIONS = {
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'brand', effect: true, within: false, fisher: true, branding: false,
-    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, clinWord: false, testInText: false, tableIntro: false, limits: false, discuss: false, conclusion: false, subSummary: false, formerLatter: false, numWords: false, spelling: '', hedge: '', voice: '', tense: '', esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, abbrFoot: true, figNoteParts: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
+    commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, clinWord: false, testInText: false, tableIntro: false, limits: false, discuss: false, conclusion: false, subSummary: false, formerLatter: false, numWords: false, spelling: '', hedge: '', voice: '', tense: '', esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, nsWord: 'insig', commentOrder: 'ns', pText: '', figSummary: false, abbrFoot: true, figNoteParts: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figWidthCm: '15', figPerRow: 1, valueLabels: false,
     chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
@@ -32098,7 +32109,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
     tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
-    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], clinWord: ['optClinWord', true], testInText: ['optTestInText', true], tableIntro: ['optTableIntro', true], limits: ['optLimits', true], discuss: ['optDiscuss', true], conclusion: ['optConclusion', true], subSummary: ['optSubSummary', true], formerLatter: ['optFormerLatter', true], numWords: ['optNumWords', true], spelling: ['optSpelling'], hedge: ['optHedge'], voice: ['optVoice'], tense: ['optTense'], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], abbrFoot: ['optAbbrFoot', true], figNoteParts: ['optFigNoteParts', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
+    branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], clinWord: ['optClinWord', true], testInText: ['optTestInText', true], tableIntro: ['optTableIntro', true], limits: ['optLimits', true], discuss: ['optDiscuss', true], conclusion: ['optConclusion', true], subSummary: ['optSubSummary', true], formerLatter: ['optFormerLatter', true], numWords: ['optNumWords', true], spelling: ['optSpelling'], hedge: ['optHedge'], voice: ['optVoice'], tense: ['optTense'], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], nsWord: ['optNsWord'], commentOrder: ['optCommentOrder'], pText: ['optPText'], figSummary: ['optFigSummary', true], abbrFoot: ['optAbbrFoot', true], figNoteParts: ['optFigNoteParts', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figWidthCm: ['optFigWidthCm'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], flowSameStyle: ['optFlowSame', true], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
     gridlines: ['optGrid', true], axisArrows: ['optArrows', true], nLabels: ['optNLabels', true],
@@ -34843,6 +34854,10 @@ if (typeof module !== 'undefined') module.exports = Sav;
       <div class="tb-own">${(() => { const gs = activeGroups(); if (gs.length < 3) return ''; const only = own.groupsOnly || gs; return `<span class="legend-note">Groups in this table:</span>${gs.map(g => `<label class="check" style="margin:0"><input type="checkbox" data-tbgrp="${nm}|${esc(g)}" ${only.includes(g) ? 'checked' : ''}><span>${esc(cfg.groupLabels[g] || g)}</span></label>`).join('')}`; })()}
         ${activeGroups().length >= 2 ? `<span class="legend-note">order</span><input type="text" data-tbgord="${nm}" value="${esc(own.tableGroupOrder || '')}" placeholder="as the report (e.g. ${esc(activeGroups().map(g => cfg.groupLabels[g] || g).reverse().join(', '))})" style="width:220px;font-size:12px">` : ''}
         <span class="legend-note">Style</span><select data-tbjs="${nm}" style="width:auto;font-size:12px">${[['', 'as the report'], ['apa', 'APA (three lines, Times)'], ['nejm', 'NEJM (shaded heading, bands, Arial)'], ['lancet', 'Lancet (three lines, Arial 9)'], ['compact', 'Compact (small, tight)']].map(([k2, l]) => `<option value="${k2}" ${(own.jstyle || '') === k2 ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="tb-own"><span class="legend-note">Comment:</span><select data-tbown="${nm}|commentStyle" style="width:auto;font-size:12px">${[['', 'style as the report'], ['concise', 'concise'], ['detailed', 'detailed'], ['descriptive', 'descriptive']].map(([k2, l]) => `<option value="${k2}" ${(own.commentStyle || '') === k2 ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <select data-tbown="${nm}|nsWord" style="width:auto;font-size:12px">${[['', 'non-significant: as the report'], ['insig', '“insignificantly different”'], ['comparable', '“comparable”'], ['nodiff', '“no significant difference”']].map(([k2, l]) => `<option value="${k2}" ${(own.nsWord || '') === k2 ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <select data-tbown="${nm}|commentOrder" style="width:auto;font-size:12px">${[['', 'order as the report'], ['ns', 'non-significant first'], ['sig', 'significant first']].map(([k2, l]) => `<option value="${k2}" ${(own.commentOrder || '') === k2 ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <details class="tb-notes" ${b.vars.some(v => v.better) ? 'open' : ''}><summary class="legend-note">Better direction (“significantly better in A than B” instead of “higher”)${b.vars.some(v => v.better) ? ` — ${b.vars.filter(v => v.better).length} set` : ''}</summary>${b.vars.map(v => `<div class="row" style="gap:6px;align-items:center;margin:2px 0"><span style="min-width:180px">${esc(v.label)}</span><select data-tbbetter="${esc(v.id)}" style="width:auto"><option value="" ${!v.better ? 'selected' : ''}>— (higher / lower)</option><option value="higher" ${v.better === 'higher' ? 'selected' : ''}>Higher is better</option><option value="lower" ${v.better === 'lower' ? 'selected' : ''}>Lower is better</option></select></div>`).join('')}</details>
       <details class="tb-notes" ${b.vars.some(v => v.subhead) ? 'open' : ''}><summary class="legend-note">Sub-headings inside the table (a heading row above a variable, e.g. Vital signs, Laboratory)${b.vars.some(v => v.subhead) ? ` — ${b.vars.filter(v => v.subhead).length} set` : ''}</summary>${b.vars.map(v => `<div class="row" style="gap:6px;align-items:center;margin:2px 0"><span style="min-width:180px">${esc(v.label)}</span><input type="text" data-tbsub="${esc(v.id)}" value="${esc(v.subhead || '')}" placeholder="heading above it (optional)" style="flex:1"></div>`).join('')}</details>
       <details class="tb-notes"><summary class="legend-note">Notes on variables (a letter after the name, the note under the table)${b.vars.some(v => VN[v.id]) ? ` — ${b.vars.filter(v => VN[v.id]).length} set` : ''}</summary>${b.vars.map(v => `<div class="row" style="gap:6px;align-items:center;margin:2px 0"><span style="min-width:180px">${esc(v.label)}</span><input type="text" data-tbvnote="${esc(v.id)}" value="${esc(VN[v.id] || '')}" placeholder="e.g. measured at 24 h" style="flex:1"></div>`).join('')}</details>`;
   }
@@ -35093,6 +35108,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       b0.vars.forEach(v => { if (kind === 'num' && v.type !== 'categorical') v.dist = t.value || 'auto'; if (kind === 'cat' && v.type === 'categorical') v.test = t.value === 'fisher' ? ((v.levels || []).length === 2 ? 'fisher' : 'ffh') : t.value; }); renderVariables(); toast(`${name}: tests set`); return; }
     if (t.dataset.tbdec !== undefined) { readUiIntoCfg(); const b0 = tableModel().find(x => !x.rep && x.name === t.dataset.tbdec); if (!b0) return; b0.vars.forEach(v => { if (v.type !== 'categorical') v.dec = t.value === '' ? '' : +t.value; }); toast(`${t.dataset.tbdec}: ${t.value === '' ? 'decimals as the report' : t.value + ' decimals'}`); return; }
     if (t.dataset.tbvnote) { const VN = cfg.varNotes = cfg.varNotes || {}; if (t.value.trim()) VN[t.dataset.tbvnote] = t.value; else delete VN[t.dataset.tbvnote]; return; }
+    if (t.dataset.tbbetter) { const v = cfg.variables.find(x => x.id === t.dataset.tbbetter); if (v) { if (t.value) v.better = t.value; else delete v.better; } return; }
     if (t.dataset.tbsub) { const v = cfg.variables.find(x => x.id === t.dataset.tbsub); if (v) { if (t.value.trim()) v.subhead = t.value.trim(); else delete v.subhead; } const card = t.closest('.tb-card'), pv = card && card.querySelector('.tb-prev'); if (pv) { pv.innerHTML = tbPreview(card.dataset.tbname); tbEnhance(); } return; }
     if (t.dataset.tbgrp || t.dataset.tbjs !== undefined || t.dataset.tbgord !== undefined) { readUiIntoCfg(); const name = (t.dataset.tbgrp || t.dataset.tbjs || t.dataset.tbgord || '').split('|')[0] || t.dataset.tbjs || t.dataset.tbgord, TO = cfg.tableOpts = cfg.tableOpts || {}, own = TO[name] = TO[name] || {};
       if (t.dataset.tbgrp) { const gs = activeGroups(), g = t.dataset.tbgrp.split('|').slice(1).join('|'), cur = new Set(own.groupsOnly || gs); if (t.checked) cur.add(g); else cur.delete(g); if (cur.size < 2) { toast('A table needs two groups or more'); t.checked = true; return; } own.groupsOnly = gs.filter(x => cur.has(x)); if (own.groupsOnly.length === gs.length) delete own.groupsOnly; }
@@ -35110,7 +35126,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       tbMove([t.value], t.dataset.tbadd); renderVariables(); $('#tablesBox').open = true; if (v) toast(`${v.label} → ${t.dataset.tbadd}`); return; }
     if (t.dataset.tbglob) { readUiIntoCfg(); cfg.options[t.dataset.tbglob] = t.type === 'checkbox' ? t.checked : t.value; renderOptions(); renderTablesBoard(); toast(`Every table: ${t.closest('label').textContent.trim()} ${t.type === 'checkbox' ? (t.checked ? 'on' : 'off') : ''}`); return; }
     if (t.dataset.tbown) { readUiIntoCfg(); const [name, key] = t.dataset.tbown.split('|'), val = t.type === 'checkbox' ? t.checked : t.value, TO = cfg.tableOpts = cfg.tableOpts || {}, own = TO[name] = TO[name] || {};
-      if ((cfg.options[key] ?? (key === 'tableSort' ? '' : false)) === val || (key === 'tableSort' && (cfg.options[key] || '') === val)) delete own[key]; else own[key] = val; if (!Object.keys(own).length) delete TO[name]; renderTablesBoard(); return; }
+      if ((val === '' && key !== 'tableSort') || (cfg.options[key] ?? (key === 'tableSort' ? '' : false)) === val || (key === 'tableSort' && (cfg.options[key] || '') === val)) delete own[key]; else own[key] = val; if (!Object.keys(own).length) delete TO[name]; renderTablesBoard(); return; }
     if (t.id === 'tbSelTo' && t.value) { readUiIntoCfg(); let to = t.value; if (to === '__new') { to = (prompt('Name of the new table:', 'Outcomes') || '').trim(); if (!to) { t.value = ''; return; } }
       const ids = [...(state.tbSel || [])]; tbMove(ids, to); state.tbSel = new Set(); renderVariables(); renderTbSel(); $('#tablesBox').open = true; toast(`${ids.length} variable${ids.length > 1 ? 's' : ''} → ${to === '__out' ? 'not in the report' : to}`); return; }
     if (t.dataset.tbsort !== undefined && t.value) { readUiIntoCfg(); const name = t.dataset.tbsort, how = t.value, blocks = tableModel(), b = blocks.find(x => !x.rep && x.name === name); if (!b) return;
@@ -37750,7 +37766,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         res.auto = { methods: res.methods || '', sections: res.sections.map(s => ({ title: s.title, comment: s.comment || '' })) }; state.rephraseBase = {}; state.rephraseK = {};
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
           f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options); const own = f.comb ? f.note || '' : '';
-          f.note = [own, cfg.options.figNotes || cfg.options.figNoteParts ? figNote(f.spec, cfg.options) : ''].filter(Boolean).join(' ');
+          f.note = [own, cfg.options.figSummary ? figSummaryText(f.spec, cfg.options) : '', cfg.options.figNotes || cfg.options.figNoteParts ? figNote(f.spec, cfg.options) : ''].filter(Boolean).join(' ');
           if (cfg.options.midDot) f.note = dot(f.note);
         }); });
         const pal = chartPalette(cfg.options);
@@ -37788,6 +37804,12 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     });
   }
   // the caption's explanation of what the chart shows: bars, error bars, boxes, markers and significance stars
+  // C8: what a figure shows, in one sentence from its own values (highest and lowest)
+  function figSummaryText(spec, o) { if (!spec || !['bar', 'line', 'hbar', 'box', 'violin', 'dot'].includes(spec.type)) return ''; const cats = spec.categories || [], ser = spec.series || [], pts = [], med = a => { const x = (a || []).filter(isFinite).sort((p, q) => p - q); return x.length ? (x.length % 2 ? x[(x.length - 1) / 2] : (x[x.length / 2 - 1] + x[x.length / 2]) / 2) : NaN; };
+    ser.forEach(sr => { if (sr.values) sr.values.forEach((v, i) => { if (v != null && isFinite(v)) pts.push({ v: +v, s: sr.name, c: cats[i] }); }); else if (sr.data) sr.data.forEach((a, i) => { const m = med(a); if (isFinite(m)) pts.push({ v: m, s: sr.name, c: cats[i] }); }); });
+    if (pts.length < 2) return ''; const hi = pts.reduce((a, b) => b.v > a.v ? b : a), lo = pts.reduce((a, b) => b.v < a.v ? b : a); if (hi.v === lo.v) return '';
+    const what = ['box', 'violin'].includes(spec.type) || ser.some(sr => sr.lo) ? 'median' : spec.percent ? 'percentage' : 'mean', strip = t => String(t || '').replace(/\s*\(n\s*=\s*\d+\)\s*$/, ''), where = p => [strip(p.c), ser.length > 1 ? strip(p.s) : ''].filter(Boolean).join(', '), num = v => `${+v.toFixed(Math.abs(v) >= 100 ? 0 : Math.abs(v) >= 10 ? 1 : 2)}${spec.percent ? '%' : ''}`;
+    return `The ${what} was highest in ${where(hi)} (${num(hi.v)}) and lowest in ${where(lo)} (${num(lo.v)}).`; }
   function figNote(spec, o) {
     const P = o.pWord === 'p' ? 'p' : 'P', out = [], sym = [], series = spec.series || [];
     const err = { sem: 'the standard error of the mean (SEM)', ci: 'the 95% CI of the mean' }[spec.errKind || o.errorBar] || '±1 standard deviation (SD)';

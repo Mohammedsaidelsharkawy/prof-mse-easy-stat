@@ -56,7 +56,7 @@ const Analysis = (() => {
   const SUP = { a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ', g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ', m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ' };
   const toSup = t => [...t].map(c => SUP[c] || c).join('');
   // p-value as used inside sentences: "= 0.013" or "< 0.001"
-  const pTxt = p => { const thr = 10 ** -FMT.pDig; return p < thr ? '< ' + pNum(thr) : '= ' + pNum(p); };
+  const pTxt = p => { if (FMT.pText === 'thr' && isFinite(p)) { const t = x => FMT.pLead ? x : x.replace(/^0/, ''); return p < 0.001 ? '< ' + t('0.001') : p < 0.01 ? '< ' + t('0.01') : p < 0.05 ? '< ' + t('0.05') : '> ' + t('0.05'); } const thr = 10 ** -FMT.pDig; return p < thr ? '< ' + pNum(thr) : '= ' + pNum(p); };
   const msd = (m, sdv, d) => FMT.mean === 'paren' ? `${fmt(m, d)} (${fmt(sdv, d)})` : `${fmt(m, d)} ± ${fmt(sdv, d)}`;
   const iqrTxt = (a, b, d) => FMT.iqr === 'bracket' ? `[${fmt(a, d)}, ${fmt(b, d)}]` : FMT.iqr === 'endash' ? `${fmt(a, d)}–${fmt(b, d)}` : `${fmt(a, d)} - ${fmt(b, d)}`;
   const medIqr = (dd, d) => FMT.iqr === 'bracket' ? `${fmt(dd.median, d)} ${iqrTxt(dd.q1, dd.q3, d)}` : `${fmt(dd.median, d)} (${iqrTxt(dd.q1, dd.q3, d)})`;
@@ -2718,15 +2718,15 @@ const Analysis = (() => {
     const opts = cfg.options, alpha = opts.alpha, d = opts.decimals;
     setRO(opts); UNITS_ON = opts.unitsInText !== false;
     // descriptive: the detailed comment plus the test used, effect sizes, values of every group and an overview of each table
-    const descriptive = opts.commentStyle === 'descriptive', detailed = opts.commentStyle === 'detailed' || descriptive;
-    const wantEff = opts.commentEffect || descriptive;
+    let descriptive = opts.commentStyle === 'descriptive', detailed = opts.commentStyle === 'detailed' || descriptive, wantEff = opts.commentEffect || descriptive;
+    const setStyle = () => { descriptive = opts.commentStyle === 'descriptive'; detailed = opts.commentStyle === 'detailed' || descriptive; wantEff = opts.commentEffect || descriptive; };
     normality = normalityTest(opts.normality);
     const wording = s => {
       if (opts.notSig) s = s.replace(/insignificant(ly)?/g, 'not significant$1');
       if (opts.pWord && opts.pWord !== 'P value') s = s.replace(/\bP value\b/g, opts.pWord);
       return s;
     };
-    FMT = { pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct', ci: opts.catCI || '' };
+    FMT = { pText: opts.pText || '', pDig: +opts.pDigits || 3, sig: opts.sigSym ?? '*', mean: opts.meanStyle || 'pm', iqr: opts.iqrStyle || 'dash', pct: opts.pctDecimals ?? 1, pLead: opts.pLead !== false && +opts.pLead !== 0, cat: opts.catFormat || 'npct', ci: opts.catCI || '' };
     const used = new Set();
     // error bars of mean charts: SD (default), SEM or 95% CI of the mean
     const errOf = dd => opts.errorBar === 'sem' ? dd.sd / Math.sqrt(dd.n)
@@ -2986,10 +2986,10 @@ const Analysis = (() => {
     }
 
     // the options of a table (step 2, Tables): its columns and order, for that table only
-    const TB_KEYS = ['totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort', 'pairCols', 'nntCol', 'tableGroupOrder', 'hlSig', 'hlMiss', 'hlEff'];
+    const TB_KEYS = ['commentStyle', 'nsWord', 'commentOrder', 'totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort', 'pairCols', 'nntCol', 'tableGroupOrder', 'hlSig', 'hlMiss', 'hlEff'];
     let tbSaved = null; const tbRestore = () => { if (tbSaved) { Object.assign(opts, tbSaved); tbSaved = null; } };
     for (const b of blocks) {
-      tbRestore(); { const o2 = b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table]; if (o2) { const ks = TB_KEYS.filter(x => o2[x] !== undefined); if (ks.length) { tbSaved = Object.fromEntries(ks.map(x => [x, opts[x]])); ks.forEach(x => { opts[x] = o2[x]; }); } } }
+      tbRestore(); setStyle(); { const o2 = b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table]; if (o2) { const ks = TB_KEYS.filter(x => o2[x] !== undefined); if (ks.length) { tbSaved = Object.fromEntries(ks.map(x => [x, opts[x]])); ks.forEach(x => { opts[x] = o2[x]; }); } } } setStyle();
       if (k === 1) { sections.push(b.kind === 'repeated' ? oneGroupRepeated(b.vars[0]) : oneGroupSingle(b)); continue; }
       if (b.kind === 'repeated') {
         const v = b.vars[0];
@@ -3401,7 +3401,8 @@ const Analysis = (() => {
           const p = (r.num || r.cat).p;
           sent.push(`${cap(withValues(r, plain(r.v.label)))} was insignificantly different ${amongTxt(k)}${isFinite(p) ? ` (P value ${pTxt(p)})` : ''}.`);
         });
-        else if (nsRes.length) {
+        const nsStart = sent.length;
+        if (!noP && !descriptive && !detailed && nsRes.length) {
           // baseline characteristics read as "comparable"; outcomes as "insignificantly different"
           // optional: P between alpha and 0.10 written as a trend
           const trendR = opts.trendWord ? nsRes.filter(r => (r.num || r.cat).p < 0.1) : [];
@@ -3409,8 +3410,11 @@ const Analysis = (() => {
           trendR.forEach(r => sent.push(`${cap(plain(r.v.label))} showed a non-significant trend towards a difference ${amongTxt(k)} (P value ${pTxt((r.num || r.cat).p)}).`));
           // every non-significant variable of the table in one sentence, with one wording (baseline or outcome alike)
           const nsAll = [...base, ...rest].sort((x, y) => res.indexOf(x) - res.indexOf(y)), nsLabels = nsAll.map(r => lowerFirst(plain(r.v.label)));
-          if (nsLabels.length) sent.push(`${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)} (P value > ${opts.alpha}).`);
+          if (nsLabels.length) sent.push(opts.nsWord === 'comparable' ? `The groups were comparable regarding ${listJoin(nsLabels)} (P value > ${opts.alpha}).`
+            : opts.nsWord === 'nodiff' ? `No significant difference was found ${amongTxt(k)} in ${listJoin(nsLabels)} (P value > ${opts.alpha}).`
+            : `${cap(listJoin(nsLabels))} ${nsLabels.length > 1 ? 'were' : 'was'} insignificantly different ${amongTxt(k)} (P value > ${opts.alpha}).`);
         }
+        const nsEnd = sent.length;
         if (untested.length && !descriptive) { const lab = r => lowerFirst(plain(r.v.label)), ns0 = r => r.num ? r.num.desc.map(dd => dd.n) : r.cat.ns;
           const noData = untested.filter(r => ns0(r).some(n => !n) && ns0(r).some(n => n > 0)), none = untested.filter(r => !noData.includes(r) && ns0(r).every(n => !n));
           const one = untested.filter(r => r.cat && !noData.includes(r) && !none.includes(r)), other = untested.filter(r => !noData.includes(r) && !none.includes(r) && !one.includes(r));
@@ -3444,11 +3448,13 @@ const Analysis = (() => {
         const grouped = new Set();
         if (k === 2) { const items = sigAll.filter(r => r.num || isCompact(r)).map(r => { const x = r.num || r.cat;
             const hi = r.num ? (() => { const loc = i => r.num.param ? r.num.desc[i].mean : r.num.desc[i].median, lo = loc(0) < loc(1) || (loc(0) === loc(1) && r.num.desc[0].mean < r.num.desc[1].mean) ? 0 : 1; return 1 - lo; })() : (r.cat.pct[0][0] >= r.cat.pct[0][1] ? 0 : 1);
-            const vals = r.num ? '' : `${pctTxt(r.cat.pct[0][hi])}% vs ${pctTxt(r.cat.pct[0][1 - hi])}%, `;
-            return { r, hi, lab: isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label)), detail: `${vals}P value ${pTxt(x.p)}${effTxt(r)}${testInG(r)}` }; });
-          [0, 1].forEach(hi => { const its = items.filter(x => x.hi === hi); if (!its.length) return; its.forEach(x => grouped.add(x.r));
-            if (its.length === 1) sent.push(`${cap(its[0].lab)} was significantly higher in ${gl[hi]} than ${gl[1 - hi]} (${its[0].detail}).`);
-            else sent.push(`${cap(listJoin(its.map((x, i) => i ? lowerFirst(x.lab) : x.lab)))} were significantly higher in ${gl[hi]} than ${gl[1 - hi]} (${its.map(x => `${lowerFirst(x.lab)}: ${x.detail}`).join('; ')}).`);
+            const vals = r.num ? '' : `${pctTxt(r.cat.pct[0][hi])}% vs ${pctTxt(r.cat.pct[0][1 - hi])}%, `, bt = r.v.better === 'higher' || r.v.better === 'lower' ? r.v.better : '';
+            // a variable with a better direction (step 2, Tables ⋯): "significantly better in A than B (lower values, …)"
+            const g0 = bt ? (bt === 'higher' ? hi : 1 - hi) : hi, word = bt ? 'better' : 'higher', dirTxt = bt && r.num ? `${bt} values, ` : bt && !r.num ? '' : '';
+            return { r, hi: g0, word, lab: isCompact(r) ? plain(r.v.label) : withValues(r, plain(r.v.label)), detail: `${dirTxt}${bt && !r.num ? `${pctTxt(r.cat.pct[0][g0])}% vs ${pctTxt(r.cat.pct[0][1 - g0])}%, ` : vals}P value ${pTxt(x.p)}${effTxt(r)}${testInG(r)}` }; });
+          [['higher', 0], ['higher', 1], ['better', 0], ['better', 1]].forEach(([word, hi]) => { const its = items.filter(x => x.hi === hi && x.word === word); if (!its.length) return; its.forEach(x => grouped.add(x.r));
+            if (its.length === 1) sent.push(`${cap(its[0].lab)} was significantly ${word} in ${gl[hi]} than ${gl[1 - hi]} (${its[0].detail}).`);
+            else sent.push(`${cap(listJoin(its.map((x, i) => i ? lowerFirst(x.lab) : x.lab)))} were significantly ${word} in ${gl[hi]} than ${gl[1 - hi]} (${its.map(x => `${lowerFirst(x.lab)}: ${x.detail}`).join('; ')}).`);
             its.forEach(x => { const r = x.r; if (!r.num) return;
               if (opts.clinWord) { const em = effectMagnitude(r, k, opts); if (/negligible|very small|small/.test(em)) sent.push(`Although statistically significant, the difference in ${lowerFirst(plain(r.v.label))} was ${/negligible/.test(em) ? 'negligible' : 'small'} in size (${em.replace(/, [a-z ]+$/, '')}) and may be of limited clinical importance.`); }
               const mc = Math.abs(toNum(r.v.mcid)), q = r.num.pairs[0]; if (mc > 0 && q && isFinite(q.diff)) sent.push(`The difference in ${lowerFirst(plain(r.v.label))} (${fmt(Math.abs(q.diff), d)}${U(r.v)}) ${Math.abs(q.diff) >= mc ? 'exceeded' : 'was smaller than'} the minimal clinically important difference of ${fmt(mc, d)}${U(r.v)}.`); }); }); }
@@ -3483,6 +3489,7 @@ const Analysis = (() => {
             }
           }
         }
+        if (opts.commentOrder === 'sig' && nsEnd > nsStart) { const moved = sent.splice(nsStart, nsEnd - nsStart); sent.push(...moved); }
         // descriptive style: one sentence per variable with every group's values, the test, its statistic, the P value and the effect size,
         // pairwise results for three or more groups, and a closing overview of the table
         function descriptiveSentences(res, tableName) {
@@ -3647,7 +3654,7 @@ const Analysis = (() => {
           brief: opts.paperStyle ? wording(briefSingle(res, gl, alpha, d)) : '', briefSig: anySig });
       }
     }
-    tbRestore();
+    tbRestore(); setStyle();
 
     // enrolment over time: patients per month from a date column (step 9)
     if (cfg.timeline && cfg.timeline.col) { const sec = timelineSection(cfg, rows, groups, gl); if (sec) sections.unshift(sec); }

@@ -1161,6 +1161,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <h2>6 · Comments</h2>
       <div class="grid g4">
         <div><label class="f">Comment style</label><select id="optComment"><option value="concise" selected>Concise — P values for significant results</option><option value="detailed">Detailed — group values and every P value</option><option value="descriptive">Descriptive — values, test, statistic, effect size and an overview</option></select></div>
+        <div><label class="f">Non-significant results worded as</label><select id="optNsWord"><option value="insig" selected>… were insignificantly different</option><option value="comparable">The groups were comparable regarding …</option><option value="nodiff">No significant difference was found in …</option></select></div>
+        <div><label class="f">Order in each comment</label><select id="optCommentOrder"><option value="ns" selected>Non-significant first</option><option value="sig">Significant first</option></select></div>
+        <div><label class="f">P values in the text</label><select id="optPText"><option value="" selected>As in the tables (P value = 0.013)</option><option value="thr">Thresholds (P value &lt; 0.05, &lt; 0.01, &lt; 0.001)</option></select></div>
         <div><label class="f">P value wording</label><select id="optPWord"><option value="P value" selected>(P value = 0.013)</option><option value="P">(P = 0.013)</option><option value="p">(p = 0.013)</option></select></div>
         <div><label class="f">Comment placement</label><select id="optCommentPlace"><option value="after" selected>After each table</option><option value="before">Before each table</option><option value="none">No comments</option></select></div>
       </div>
@@ -1301,6 +1304,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optChartTitle"><span><b>Title on each chart</b> — the caption printed above the chart image</span></label>
           <label class="check"><input type="checkbox" id="optFigFrame"><span><b>Frame</b> around each figure</span></label>
           <label class="check"><input type="checkbox" id="optFigNotes" checked><span><b>Explain the symbols in the caption</b> — the *, **, *** and dashed lines used in the figure</span></label>
+          <label class="check"><input type="checkbox" id="optFigSummary"><span><b>A sentence on what each figure shows</b> — the highest and lowest value, from the figure's own data</span></label>
           <label class="check"><input type="checkbox" id="optFigNoteParts"><span><b>Also explain the bars, error bars, boxes and markers</b> — what each part of the chart shows (mean ± SD, median and IQR, outliers …)</span></label>
         </div>
       </div>
