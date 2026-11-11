@@ -2799,7 +2799,7 @@ const Analysis = (() => {
     const postHocLines = res => res.pairs.map((q, idx) => `P${idx + 1}=${fmtP(q.p, alpha)}`);
 
     // the tests behind a table's P values: listed in its footnote, or as letters after each P value (testNote = 'list' / 'marks')
-    const SUP = 'ᵃᵇᶜᵈᵉᶠᵍʰ';
+    const SUP = opts.noteSyms === 'symbols' ? ['†', '‡', '§', '‖', '¶', '#', '††', '‡‡'] : opts.noteSyms === 'numbers' ? '¹²³⁴⁵⁶⁷⁸' : 'ᵃᵇᶜᵈᵉᶠᵍʰ';
     function testMarker(names) {
       const order = opts.testNote === 'list' || opts.testNote === 'marks' ? [...new Set(names.filter(n => TEST_NAME[n]))] : [];
       return {
@@ -2986,7 +2986,7 @@ const Analysis = (() => {
     }
 
     // the options of a table (step 2, Tables): its columns and order, for that table only
-    const TB_KEYS = ['commentStyle', 'nsWord', 'commentOrder', 'totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort', 'pairCols', 'nntCol', 'tableGroupOrder', 'hlSig', 'hlMiss', 'hlEff'];
+    const TB_KEYS = ['ynBlock', 'ynTitle', 'hideZero', 'rareOther', 'boldSigMax', 'smdCol', 'adjCol', 'adjVars', 'commentStyle', 'nsWord', 'commentOrder', 'totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort', 'pairCols', 'nntCol', 'tableGroupOrder', 'hlSig', 'hlMiss', 'hlEff'];
     let tbSaved = null; const tbRestore = () => { if (tbSaved) { Object.assign(opts, tbSaved); tbSaved = null; } };
     for (const b of blocks) {
       tbRestore(); setStyle(); { const o2 = b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table]; if (o2) { const ks = TB_KEYS.filter(x => o2[x] !== undefined); if (ks.length) { tbSaved = Object.fromEntries(ks.map(x => [x, opts[x]])); ks.forEach(x => { opts[x] = o2[x]; }); } } } setStyle();
@@ -3234,10 +3234,13 @@ const Analysis = (() => {
             const gv = byGroup.map(rs => rs.map(r => toNum(r[v.cols[0].col])).filter(isFinite));
             return { v, num: analyzeNumeric(gv, v.dist, used, opts, v.test), gv };
           }
-          const gv = byGroup.map(rs => rs.map(r => toCat(r[v.cols[0].col])).filter(x => x !== null));
+          let gv = byGroup.map(rs => rs.map(r => toCat(r[v.cols[0].col])).filter(x => x !== null));
           const present = [...new Set(gv.flat())];
-          const levels = catLevels(v, present);
-          return { v, cat: analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null, v.test), levels, gv };
+          let levels = catLevels(v, present), merged = null;
+          // categories rarer than the % asked are put together as "Other" (two or more of them, three categories or more)
+          if (+opts.rareOther > 0 && levels.length >= 3 && !v.ordinal) { const N0 = gv.flat().length, rare = levels.filter(l => N0 && 100 * gv.flat().filter(x => x === l).length / N0 < +opts.rareOther && !/^other$/i.test(String(l)));
+            if (rare.length >= 2) { const oth = levels.find(l => /^other$/i.test(String(l))) || 'Other'; gv = gv.map(x => x.map(y => rare.includes(y) ? oth : y)); levels = [...levels.filter(l => !rare.includes(l) && l !== oth), oth]; merged = rare; } }
+          return { v, cat: analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null, v.test), levels, gv, merged };
         });
         // CONSORT: a baseline table of a randomised trial is described without P values
         const noP = !!opts.baselineNoP && (res.every(r => r.v.role === 'baseline') || /baseline|demograph/i.test(b.table));
@@ -3298,13 +3301,27 @@ const Analysis = (() => {
           if (!c.ns[i0] || !c.ns[i1]) return [{ t: ['—'], rs: span }, { t: ['—'], rs: span }]; const nc = S.newcombeDiff(c.table[0][i0], c.ns[i0], c.table[0][i1], c.ns[i1], CONF_OF(opts)), inv = x => Math.abs(x) < 1e-9 ? '∞' : fmt(1 / Math.abs(x), 1);
           const nnt = Math.abs(nc.d) < 1e-9 ? '∞' : fmt(1 / Math.abs(nc.d), 1), ci = nc.lo > 0 || nc.hi < 0 ? `${inv(nc.lo > 0 ? nc.hi : nc.lo)} to ${inv(nc.lo > 0 ? nc.lo : nc.hi)}` : `${inv(nc.d >= 0 ? nc.hi : nc.lo)} to ∞ to −${inv(nc.d >= 0 ? nc.lo : nc.hi)}`;
           return [{ t: [`${fmt(100 * nc.d, 1)} (${fmt(100 * nc.lo, 1)} to ${fmt(100 * nc.hi, 1)})`], rs: span, small: true }, { t: [`${nnt} (${ci})`], rs: span, small: true }]; };
+        // standardised mean differences (two groups): numbers by the pooled SD, yes/no and categories by the proportions (the largest of the categories)
+        const smdOn = !!opts.smdCol && k === 2, smdOf = r => { if (r.num) { const [a, c] = r.num.desc; if (!a.n || !c.n) return NaN; const sp = Math.sqrt((a.sd ** 2 + c.sd ** 2) / 2); return sp > 0 ? Math.abs(a.mean - c.mean) / sp : NaN; }
+          const t = r.cat, d1 = li => { const p1 = t.ns[0] ? t.table[li][0] / t.ns[0] : NaN, p2 = t.ns[1] ? t.table[li][1] / t.ns[1] : NaN, sd = Math.sqrt((p1 * (1 - p1) + p2 * (1 - p2)) / 2); return sd > 0 ? Math.abs(p1 - p2) / sd : 0; };
+          return t.table.length ? Math.max(...(isCompact(r) ? [0] : t.table.map((_, li) => li)).map(d1)) : NaN; };
+        if (smdOn) { head.push('SMD'); used.add('smdCol'); }
+        // crude and adjusted side by side (two groups): linear regression for numbers, logistic for yes/no, with the covariates chosen for the table
+        const adjCovs = opts.adjCol && k === 2 ? (opts.adjVars || []).map(id => cfg.variables.find(v => v.id === id)).filter(v => v && v.kind !== 'repeated') : [];
+        const adjOn = adjCovs.length > 0;
+        if (adjOn) { head.push(`Adjusted MD / OR (95% CI)`, 'P (adjusted)'); used.add('adjCol'); }
+        const adjFit = r => { if (!adjOn || !(r.num || isCompact(r))) return null; const col = r.v.cols[0].col, X = [], y = [], lv = {}; adjCovs.forEach(cv => { if (cv.type === 'categorical') lv[cv.id] = levelsOf(cfg, byGroup.flat(), cv.cols[0].col); });
+          byGroup.slice(0, 2).forEach((rs, gi) => rs.forEach(row => { const yy = r.num ? toNum(row[col]) : (toCat(row[col]) === null ? NaN : toCat(row[col]) === r.levels[0] ? 1 : 0); if (!isFinite(yy)) return; const xr = [gi === 0 ? 1 : 0]; let ok = true;
+            adjCovs.forEach(cv => { if (cv.id === r.v.id) return; if (cv.type !== 'categorical') { const x = toNum(row[cv.cols[0].col]); if (!isFinite(x)) ok = false; xr.push(x); } else { const x = toCat(row[cv.cols[0].col]); if (x === null) ok = false; lv[cv.id].slice(1).forEach(l => xr.push(x === l ? 1 : 0)); } }); if (ok) { X.push(xr); y.push(yy); } }));
+          if (y.length < adjCovs.length + 8) return null; try { const f = r.num ? S.linearRegression(X, y) : S.logisticRegression(X, y), t = f && f.terms[1]; return t ? (r.num ? { txt: `${fmt(t.B, d)} (${fmt(t.lo, d)} to ${fmt(t.hi, d)})`, p: t.p } : { txt: `OR ${fmt(t.or, 2)} (${fmt(t.lo, 2)}-${fmt(t.hi, 2)})`, p: t.p }) : null; } catch (e) { return null; } };
+        const zeroHidden = [];
         const ncolsOf = () => head.reduce((t, c) => t + ((typeof c === 'string' ? 1 : c.span) || 1), 0), rowStart = new Map();
         const refTxt = v => { if (v.refBy && v.refBy.length) return v.refBy.map(x => `${x.sex ? x.sex.charAt(0).toUpperCase() : 'All'}${x.ageMin !== '' && x.ageMin !== undefined || x.ageMax !== '' && x.ageMax !== undefined ? ` ${x.ageMin !== '' && x.ageMin !== undefined ? x.ageMin : ''}–${x.ageMax !== '' && x.ageMax !== undefined ? x.ageMax : ''}y` : ''}: ${x.lo !== '' && x.lo !== undefined ? fmt(+x.lo, d0) : ''}–${x.hi !== '' && x.hi !== undefined ? fmt(+x.hi, d0) : ''}`).join('; '); const lo = toNum(v.refLo), hi = toNum(v.refHi); return isFinite(lo) && isFinite(hi) ? `${fmt(lo, d0)}–${fmt(hi, d0)}` : isFinite(lo) ? `≥ ${fmt(lo, d0)}` : isFinite(hi) ? `≤ ${fmt(hi, d0)}` : '—'; };
         const extraCells = (r, span) => [...(opts.esCol && !noP ? [{ t: [effectMagnitude(r, k, opts) || '—'], rs: span, small: true }] : []), ...(opts.refCol ? [{ t: [r.num ? refTxt(r.v) : '—'], rs: span }] : []), ...(opts.noteCol ? [{ t: [r.v.rowNote || ''], rs: span, small: true }] : [])];
         res.forEach(r => { r.extra = cluCol || strCol || powOn ? extraTests(r) : {}; }); if (!noP) ASSUME.push(...res.filter(r => r.num));
         const trows = [];
         const tail = (r, span) => {
-          if (noP) return extraCells(r, span);
+          if (noP) return [...extraCells(r, span), ...(smdOn ? [(() => { const v0 = smdOf(r); return { t: [isFinite(v0) ? fmt(v0, 2) + (v0 > 0.1 ? '†' : '') : '—'], rs: span }; })()] : [])];
           const x = r.num || r.cat, cells = [{ t: [fmtP(x.p, alpha) + (isFinite(x.p) ? tm.mark(x.test) : '')], rs: span }];
           if (trendOn) cells.push({ t: [fmtP(r.trend, alpha)], rs: span });
           if (opts.showStat) cells.push({ t: [(r.num || r.cat).stat], rs: span, small: true });
@@ -3314,7 +3331,8 @@ const Analysis = (() => {
           if (cluCol) cells.push({ t: [isFinite(ex.clu) ? fmtP(ex.clu, alpha) : '—'], rs: span });
           if (strCol) cells.push({ t: [isFinite(ex.str) ? fmtP(ex.str, alpha) : '—'], rs: span });
           if (powOn) cells.push({ t: [isFinite(ex.pow) ? `${fmt(100 * ex.pow, 0)}% (${isFinite(ex.need) ? ex.need : '—'})` : '—'], rs: span, small: true });
-          return [...cells, ...extraCells(r, span), ...(pairOn ? prs.map(([i, j]) => { const q = pairP(r).find(x => (x.i === i && x.j === j) || (x.i === j && x.j === i)); return { t: [q && isFinite(q.p) ? fmtP(q.p, alpha) : '—'], rs: span }; }) : []), ...(nntOn ? nntCells(r, span) : [])];
+          const smdCells = smdOn ? [(() => { const v0 = smdOf(r); return { t: [isFinite(v0) ? fmt(v0, 2) + (v0 > 0.1 ? '†' : '') : '—'], rs: span }; })()] : [], adjCells = adjOn ? (() => { const a = adjFit(r); return [{ t: [a ? a.txt : '—'], rs: span, small: true }, { t: [a ? fmtP(a.p, alpha) : '—'], rs: span }]; })() : [];
+          return [...cells, ...extraCells(r, span), ...(pairOn ? prs.map(([i, j]) => { const q = pairP(r).find(x => (x.i === i && x.j === j) || (x.i === j && x.j === i)); return { t: [q && isFinite(q.p) ? fmtP(q.p, alpha) : '—'], rs: span }; }) : []), ...(nntOn ? nntCells(r, span) : []), ...smdCells, ...adjCells];
         };
         for (const r of resRows) {
           // a sub-heading row above the variable (e.g. "Vital signs", "Laboratory")
@@ -3322,7 +3340,7 @@ const Analysis = (() => {
           rowStart.set(r, trows.length);
           if (r.num) {
             const n = r.num, P = n.param, d = r.v.dec !== undefined && r.v.dec !== null && r.v.dec !== '' ? +r.v.dec : d0; // decimals: the variable's own, else the report's
-            const cen = n.desc.map(dd => P ? dd.mean : dd.median), maxJ = opts.boldMax && cen.some(isFinite) ? cen.indexOf(Math.max(...cen.filter(isFinite))) : -1;
+            const cen = n.desc.map(dd => P ? dd.mean : dd.median), maxJ = (opts.boldMax || (opts.boldSigMax && n.p <= alpha)) && cen.some(isFinite) ? cen.indexOf(Math.max(...cen.filter(isFinite))) : -1;
             const L = cldOf(r), gcell = (dd, j, txt) => ({ t: [txt + supOf(L, j)], ...(j === maxJ ? { b: true } : {}) });
             if (opts.secondRow === 'none' || r.v.noSecond) {
               // one row: "Mean ± SD" or "Median (IQR)" in a single cell
@@ -3345,7 +3363,11 @@ const Analysis = (() => {
             }
           } else if (isCompact(r)) {
             const c = r.cat, Lt = cldOf(r);
-            trows.push([{ t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...pre(r, 1), ...O(c.table[0].map((cnt, j) => ({ t: [npc(cnt, c.pct[0][j], c.ns[j]) + supOf(Lt, j)] }))), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
+            if (opts.hideZero && S.sum(c.table[0]) === 0) { zeroHidden.push(plain(r.v.label)); continue; }
+            const ri = resRows.indexOf(r), cpt = x => x && isCompact(x) && !x.v.group, prevC = ri > 0 && cpt(resRows[ri - 1]) && !(opts.hideZero && S.sum(resRows[ri - 1].cat.table[0]) === 0), nextC = ri < resRows.length - 1 && cpt(resRows[ri + 1]), inBlock = opts.ynBlock && !r.v.group && (prevC || nextC);
+            if (inBlock && !prevC) trows.push([{ t: [String(opts.ynTitle || '').trim() || (() => { const gr = [...new Set(resRows.slice(ri).filter((x, q, a) => a.slice(0, q + 1).every(cpt)).map(x => x.v.group).filter(Boolean))]; return gr.length === 1 ? `${gr[0]}, n (%)` : 'Yes / no items, n (%)'; })()], b: true, left: true, subhead: true, span: ncolsOf() }]);
+            const mj = opts.boldSigMax && c.p <= alpha ? c.pct[0].indexOf(Math.max(...c.pct[0])) : -1;
+            trows.push([inBlock ? { t: ['\u2003' + r.v.label], ind: true, span: twoCol ? 2 : 1 } : { t: [r.v.label], b: true, span: twoCol ? 2 : 1 }, ...pre(r, 1), ...O(c.table[0].map((cnt, j) => ({ t: [npc(cnt, c.pct[0][j], c.ns[j]) + supOf(Lt, j)], ...(j === mj ? { b: true } : {}) }))), ...tot(true, () => totCat(r, 0)), ...tail(r, 1)]);
           } else {
             const c = r.cat, Lt = cldOf(r), indent = opts.catLayout === 'indent', totRow = !!opts.catTotal;
             const L = r.levels.length + (totRow ? 1 : 0) + (indent ? 1 : 0);
@@ -3557,7 +3579,11 @@ const Analysis = (() => {
           !noP && powOn ? 'Power: of the two-group test at the observed difference and α, with the n per group needed for 80% power (post hoc power is descriptive)' : '',
           pairOn ? `Pair columns: P value of each pair of groups (numbers: the post hoc test of the table; categories: Chi-square or Fisher's exact${(opts.chiAdjust || 'bonferroni') === 'bonferroni' ? ', Bonferroni-adjusted' : ''})` : '',
           nntOn ? `RD: risk difference of the first category (${headName(gl[ord[0]], ord[0])} − ${headName(gl[ord[1]], ord[1])}, percentage points, Newcombe CI); NNT: number needed to treat (1 / |RD|; when the RD's CI includes 0, the CI runs through ∞ and its negative end is in the other direction)` : '',
-          hlMissUsed ? 'Grey rows: more than 20% missing values' : '', hlEffUsed ? 'Highlighted names: large effect (d ≥ 0.8, RR ≥ 2 or ≤ 0.5)' : ''].filter(Boolean).join(', ');
+          hlMissUsed ? 'Grey rows: more than 20% missing values' : '',
+          smdOn ? 'SMD: standardised mean difference (difference in means over the pooled SD; for categories, difference in proportions); † SMD > 0.1 (imbalance)' : '',
+          adjOn ? `Adjusted: linear regression (numbers, mean difference) or logistic regression (yes/no, odds ratio of the first category) adjusted for ${listJoin(adjCovs.map(cv => lowerFirst(plain(cv.label))))}` : '',
+          zeroHidden.length ? `Not shown (no patient in any group): ${listJoin(zeroHidden.map(lowerFirst))}` : '',
+          res.some(r => r.merged) ? res.filter(r => r.merged).map(r => `${plain(r.v.label)}, Other: ${r.merged.join(', ')}`).join('; ') : '', hlEffUsed ? 'Highlighted names: large effect (d ≥ 0.8, RR ≥ 2 or ≤ 0.5)' : ''].filter(Boolean).join(', ');
         if (!noP && cluCol) used.add('cluster'); if (!noP && strCol) used.add('strata'); if (!noP && powOn) used.add('power');
         // significance brackets between groups: pairwise P values once the overall test is significant
         const brackets = x => {
@@ -3655,16 +3681,39 @@ const Analysis = (() => {
       }
     }
     tbRestore(); setStyle();
+    // extra tables (step 6): the change from baseline, the patients reaching a cut-off, and the missing values
+    { const repVars = cfg.variables.filter(v => v.include && v.kind === 'repeated' && v.type !== 'categorical' && v.cols.length >= 2), gN0 = gl.map((_, i) => byGroup[i].length), mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+      if (opts.changeTable && repVars.length) { const rowsC = [], ciT = a => { if (a.length < 2) return [NaN, NaN]; const m = mean(a), sd = S.sd(a), h = jStat.studentt.inv(S.QU(), a.length - 1) * sd / Math.sqrt(a.length); return [m - h, m + h]; };
+        repVars.forEach(v => { const c0 = v.cols[0], c1 = v.cols[v.cols.length - 1], tl0 = c0.label || cfg.tpLabels[c0.tp] || c0.tp, tl1 = c1.label || cfg.tpLabels[c1.tp] || c1.tp, ch = [];
+          rowsC.push([{ t: [`${v.label}: ${tl0} → ${tl1}`], b: true, left: true, subhead: true, span: 6 }]);
+          byGroup.forEach((rs, gi) => { const pr = rs.map(r => [toNum(r[c0.col]), toNum(r[c1.col])]).filter(([a, b2]) => isFinite(a) && isFinite(b2)), dd = pr.map(([a, b2]) => b2 - a); ch.push(dd);
+            const b0 = S.describe(rs.map(r => toNum(r[c0.col])).filter(isFinite)), b1 = S.describe(rs.map(r => toNum(r[c1.col])).filter(isFinite)), [lo, hi] = ciT(dd), pw = dd.length > 1 && S.sd(dd) > 0 ? 2 * (1 - jStat.studentt.cdf(Math.abs(mean(dd) / (S.sd(dd) / Math.sqrt(dd.length))), dd.length - 1)) : NaN;
+            rowsC.push([{ t: [gl[gi]] }, { t: [b0.n ? msd(b0.mean, b0.sd, d) : '—'] }, { t: [b1.n ? msd(b1.mean, b1.sd, d) : '—'] }, { t: [dd.length ? `${fmt(mean(dd), d)} (${fmt(lo, d)} to ${fmt(hi, d)})` : '—'] }, { t: [String(dd.length)] }, { t: [isFinite(pw) ? fmtP(pw, alpha) : '—'] }]); });
+          if (k === 2 && ch[0].length > 1 && ch[1].length > 1) { const w = S.tTest(ch[0], ch[1], false); rowsC.push([{ t: [`Difference in change (${gl[0]} − ${gl[1]})`], b: true }, { t: [`${fmt(w.diff, d)} (${fmt(w.lo, d)} to ${fmt(w.hi, d)}), P ${pTxt(w.p)}`], span: 5 }]); } });
+        sections.push({ kind: 'change', title: 'Change from baseline of the studied groups', head: ['', 'Baseline (mean ± SD)', 'Last (mean ± SD)', 'Change, mean (95% CI)', 'n', 'P (within group)'], rows: rowsC,
+          footnote: `Change: last value minus baseline value of the patients with both, mean with its 95% CI; P (within group): paired t-test${k === 2 ? `; difference in change: Welch's t-test of the changes, ${gl[0]} minus ${gl[1]}` : ''}.`, comment: '', figures: [], meta: {} }); used.add('changeTable'); }
+      // responders: a cut-off typed for a variable (Tables ⋯, e.g. "<= 3")
+      const cutVars = cfg.variables.filter(v => v.include && v.type !== 'categorical' && /^(<=|>=|<|>|≤|≥)\s*-?\d/.test(String(v.cutoff || '').trim()));
+      if (cutVars.length && k >= 1) { const rowsR = [], sentR = [];
+        cutVars.forEach(v => { const m = /^(<=|>=|<|>|≤|≥)\s*(-?\d+(?:\.\d+)?)/.exec(String(v.cutoff).trim()), op = m[1].replace('≤', '<=').replace('≥', '>='), thr = +m[2], ok = x => op === '<=' ? x <= thr : op === '>=' ? x >= thr : op === '<' ? x < thr : x > thr, col = v.cols[v.cols.length - 1], tl = v.kind === 'repeated' ? ` at ${col.label || cfg.tpLabels[col.tp] || col.tp}` : '';
+          const gv = byGroup.map(rs => rs.map(r => toNum(r[col.col])).filter(isFinite).map(x => ok(x) ? 'Yes' : 'No')), cr = analyzeCategorical(gv, ['Yes', 'No'], used, opts), lab = `${plain(v.label)} ${op.replace('<=', '≤').replace('>=', '≥')} ${fmt(thr, 2).replace(/\.?0+$/, '')}${tl}`;
+          let eff = '—'; if (k === 2 && cr.ns[0] && cr.ns[1]) { const nc = S.newcombeDiff(cr.table[0][0], cr.ns[0], cr.table[0][1], cr.ns[1], CONF_OF(opts)), rr = cr.rr && cr.rr[0]; eff = `${rr && rr.rr !== null ? `RR ${fmt(rr.rr, 2)} (${fmt(rr.lo, 2)}-${fmt(rr.hi, 2)}); ` : ''}NNT ${Math.abs(nc.d) > 1e-9 ? fmt(1 / Math.abs(nc.d), 1) : '∞'}`; }
+          rowsR.push([{ t: [lab], b: true }, ...cr.table[0].map((c0, j) => ({ t: [npc(c0, cr.pct[0][j], cr.ns[j])] })), ...(k > 1 ? [{ t: [isFinite(cr.p) ? fmtP(cr.p, alpha) : '—'] }] : []), ...(k === 2 ? [{ t: [eff], small: true }] : [])]);
+          if (k > 1 && cr.p <= alpha) sentR.push(`The proportion of patients with ${lowerFirst(lab)} differed significantly ${amongTxt(k)} (${cr.pct[0].map((p0, i) => `${gl[i]} ${pctTxt(p0)}%`).join(' vs ')}, P value ${pTxt(cr.p)}).`); });
+        sections.push({ kind: 'responder', title: 'Patients reaching the cut-off in the studied groups', head: ['', ...gl.map((g, i) => `${g} (n=${gN0[i]})`), ...(k > 1 ? ['P value'] : []), ...(k === 2 ? ['RR (95% CI); NNT'] : [])], rows: rowsR,
+          footnote: 'Data are presented as n (%) of the patients with a value; RR: relative risk; NNT: number needed to treat (1 / risk difference).', comment: sentR.join(' ') || (k > 1 ? 'The proportions reaching the cut-offs did not differ significantly between the groups.' : ''), figures: [], meta: {} }); used.add('responders'); }
+ }
 
     // enrolment over time: patients per month from a date column (step 9)
     if (cfg.timeline && cfg.timeline.col) { const sec = timelineSection(cfg, rows, groups, gl); if (sec) sections.unshift(sec); }
     // missing values of every analysed column, per group
     if (opts.missTable) { const cols = vars.flatMap(v => v.kind === 'repeated' ? v.cols.map(c => [`${plain(v.label)} at ${c.label || cfg.tpLabels[c.tp] || c.tp}`, c.col]) : [[plain(v.label), v.cols[0].col]]);
       const mi = (rs, c) => rs.filter(x => { const y = x[c]; return y === null || y === undefined || String(y).trim() === ''; }).length;
-      const rowsM = cols.map(([l, c]) => [{ t: [l], b: true }, ...byGroup.map(rs => { const m = mi(rs, c); return { t: [`${m} (${fmt(rs.length ? 100 * m / rs.length : 0, 1)}%)`] }; }), ...(k > 1 ? [{ t: [`${mi(rows, c)} (${fmt(rows.length ? 100 * mi(rows, c) / rows.length : 0, 1)}%)`] }] : [])]);
+      const missP = c => { const gv = byGroup.map(rs => rs.map(x => { const y = x[c]; return y === null || y === undefined || String(y).trim() === '' ? 'Missing' : 'Present'; })); if (!gv.some(g => g.includes('Missing'))) return '—'; const cr = analyzeCategorical(gv, ['Missing', 'Present'], new Set(), opts); return isFinite(cr.p) ? fmtP(cr.p, alpha) : '—'; };
+      const rowsM = cols.map(([l, c]) => [{ t: [l], b: true }, ...byGroup.map(rs => { const m = mi(rs, c); return { t: [`${m} (${fmt(rs.length ? 100 * m / rs.length : 0, 1)}%)`] }; }), ...(k > 1 ? [{ t: [`${mi(rows, c)} (${fmt(rows.length ? 100 * mi(rows, c) / rows.length : 0, 1)}%)`] }, { t: [missP(c)] }] : [])]);
       const worst = cols.map(([l, c]) => [l, mi(rows, c)]).filter(x => x[1] > 0).sort((a2, b2) => b2[1] - a2[1]);
-      sections.push({ kind: 'missing', title: 'Missing data of the studied variables', head: ['Variable', ...gl.map((g, i) => `${g} (n=${gN[i]})`), ...(k > 1 ? [`All (n=${rows.length})`] : [])], rows: rowsM,
-        footnote: 'Number (%) of patients with no value.', comment: worst.length ? `Missing values were most frequent in ${listJoin(worst.slice(0, 3).map(([l, m]) => `${lowerFirst(l)} (${m} patients, ${fmt(100 * m / rows.length, 1)}%)`))}.` : 'There were no missing values in the studied variables.', figures: [], meta: {} }); }
+      sections.push({ kind: 'missing', title: 'Missing data of the studied variables', head: ['Variable', ...gl.map((g, i) => `${g} (n=${gN[i]})`), ...(k > 1 ? [`All (n=${rows.length})`, 'P value'] : [])], rows: rowsM,
+        footnote: `Number (%) of patients with no value${k > 1 ? '; P value: Chi-square or Fisher’s exact test of missing against present between the groups' : ''}.`, comment: worst.length ? `Missing values were most frequent in ${listJoin(worst.slice(0, 3).map(([l, m]) => `${lowerFirst(l)} (${m} patients, ${fmt(100 * m / rows.length, 1)}%)`))}.` : 'There were no missing values in the studied variables.', figures: [], meta: {} }); }
     // the first table split by a second factor (e.g. sex): the groups compared within each of its categories
     const tfJobs = [...(opts.twoFactor && data.headers.includes(opts.twoFactor) ? [[blocks.find(x => x.kind === 'single'), opts.twoFactor, false]] : []),
       ...blocks.filter(b => b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table] && cfg.tableOpts[b.table].twoFactor && data.headers.includes(cfg.tableOpts[b.table].twoFactor)).map(b => [b, cfg.tableOpts[b.table].twoFactor, true])];

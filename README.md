@@ -250,6 +250,20 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🗂 Tables (round 3)** — in each table's ⚙ Options unless said
+- **Yes/no rows under one heading** (e.g. “Complications, n (%)”, its own text or the item group's name), the items indented.
+- **Hide rows no patient has** (listed in the footnote), **bold the higher group** in significant rows, **units in their own column** (“Weight (kg)” → Weight | kg).
+- **Rare categories as “Other”** below a % chosen (two or more of them; listed in the footnote).
+- **SMD column** (two groups): standardised mean differences (numbers by the pooled SD, categories by the proportions), † above 0.1; also in a CONSORT baseline table without P values. Checked by hand (0.13, 0.38).
+- **Adjusted beside crude** (two groups): adjusted MD (linear regression) or OR (logistic) with its P, for the covariates ticked. Matches statsmodels (OR 2.23, 0.37–13.6, P 0.384).
+- **Width of the table and of its first column**, and **keep the table on one page** in Word (no split, rows kept together).
+- **Change-from-baseline table** (step 6): baseline, last value, change (95% CI) and paired P for each group, and the difference in change (Welch); matches scipy.
+- **Responder cut-offs** (⋯ in a table, or on a repeated measure's card, e.g. “<= 3”): the patients reaching them by group, P, RR and NNT, in a table of their own.
+- **Missing-data table** (step 6, already there): now with a P value of missing against present between the groups.
+- **⬇ TeX / MD** on each table card: the table alone in LaTeX (booktabs, \multicolumn) or Markdown.
+- **Footnote marks** (step 6): letters (ᵃ ᵇ), symbols († ‡ §) or numbers (¹ ²) for the notes on variables and the test marks.
+- **▤ Table for the abstract** (report tools): one line per outcome — the groups' values, the effect (95% CI) and P — to copy.
+
 **✍ Comments (round 3)**
 - **Comment style per table** (Tables › ⚙ Options): concise, detailed or descriptive for one table, the report's style for the others; the same for the non-significant wording and the order.
 - **Non-significant results worded as** (step 6): “… were insignificantly different” (default), “The groups were comparable regarding …” or “No significant difference was found in …”.

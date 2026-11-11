@@ -163,7 +163,7 @@ const Report = (() => {
         const name = (Array.isArray(h.t) ? h.t[0] : h.t) || '';
         // very wide tables (e.g. ROC) need roomier label and P value columns
         const wide = nCols > 7;
-        weights.push(h.w ? +h.w : i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : isP(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
+        weights.push(h.w ? +h.w : i === 0 && +look.col1 > 0 && s === 0 ? +look.col1 : i === 0 ? (h.span === 2 ? (s === 0 ? 1.1 : 1.0) : wide ? 1.05 : 0.85) : /CI/.test(name) ? 1.6 : /Post hoc/.test(name) ? 0.95 : isP(name) ? (wide ? 0.95 : 0.7) : /^Test$/.test(name) ? 0.8 : 1.15);
       }
     });
     // widths fitted to the content: the longest text of each column (rows that fill every column)
@@ -199,10 +199,10 @@ const Report = (() => {
         margins: { top: padV, bottom: padV, left: padH, right: padH },
         shading: isHead && !apa ? (headFill ? { type: ShadingType.CLEAR, color: 'auto', fill: headFill } : undefined) : cell.hl ? { type: ShadingType.CLEAR, color: 'auto', fill: 'FFF2CC' } : cell.grey ? { type: ShadingType.CLEAR, color: 'auto', fill: 'EDEDED' } : band ? { type: ShadingType.CLEAR, color: 'auto', fill: 'F2F2F2' } : undefined,
         children: lines.map(l => STYLED ? (() => { const al = dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left || cell.sub ? AlignmentType.LEFT : null, csz = cell.small ? sz - 3 : sz;
-            return new Paragraph({ style: 'TableText', ...(al ? { alignment: al } : {}), ...(cell.sub && colIdx === 0 ? { indent: { left: 240 } } : {}), ...(dec ? { tabStops: [{ type: D().TabStopType.DECIMAL, position: Math.max(200, Math.round(w / 2 - padH)) }] } : {}),
+            return new Paragraph({ style: 'TableText', ...(look.keep ? { keepNext: true } : {}), ...(al ? { alignment: al } : {}), ...(cell.sub && colIdx === 0 ? { indent: { left: 240 } } : {}), ...(dec ? { tabStops: [{ type: D().TabStopType.DECIMAL, position: Math.max(200, Math.round(w / 2 - padH)) }] } : {}),
               children: runs((dec ? '\t' : '') + String(l), { styled: true, bold: isHead || cell.b, size: csz === TT_SZ ? undefined : csz,
                 color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : PCOL && sigRe && !isHead && sigRe.test(String(l)) ? PCOL : undefined }) }); })() : new Paragraph({
-          alignment: dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left || cell.sub ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 }, ...(cell.sub && colIdx === 0 ? { indent: { left: 240 } } : {}),
+          alignment: dec ? AlignmentType.LEFT : (look.left && !isHead && colIdx === 0) || cell.ind || cell.left || cell.sub ? AlignmentType.LEFT : AlignmentType.CENTER, spacing: { after: 0, line: 240 }, ...(look.keep ? { keepNext: true } : {}), ...(cell.sub && colIdx === 0 ? { indent: { left: 240 } } : {}),
           ...(dec ? { tabStops: [{ type: D().TabStopType.DECIMAL, position: Math.max(200, Math.round(w / 2 - padH)) }] } : {}),
           children: runs((dec ? '\t' : '') + String(l), { bold: isHead || cell.b, size: cell.small ? sz - 3 : sz, font: look.font,
             color: isHead && !apa && look.head === 'navy' ? 'FFFFFF' : PCOL && sigRe && !isHead && sigRe.test(String(l)) ? PCOL : undefined })
@@ -391,9 +391,9 @@ const Report = (() => {
         if (AR) children.push(arPara(`الجدول ${pre}${tab - 1}: ${AR.caption(s.title)}`, { bold: true, keepNext: true, line: 276, after: 120 }));
         // bilingual column headings: the Arabic below the English
         const headAr = AR ? s.head.map(h => { const c = typeof h === 'string' ? { t: h } : { ...h }, a = AR.head(c.t); return a ? { ...c, t: [c.t, a] } : c; }) : s.head;
-        chunks(s.rows).forEach((part, pi) => {
+        (s.keepPage ? [s.rows] : chunks(s.rows)).forEach((part, pi) => {
           if (pi > 0) { const cont = `${num} (continued)`; children.push(opts.tableCaption === 'apa' ? para(cont, { bold: true, align: D().AlignmentType.LEFT, after: 120, line: 276, keepNext: true, before: 200 }) : caption(cont, { before: 200, align: D().AlignmentType.LEFT })); }
-          children.push(table(headAr, part, brand, s.tstyle || opts.tableStyle, { ...opts.tableLook, ...(s.tlook || {}) }));
+          children.push(table(headAr, part, brand, s.tstyle || opts.tableStyle, { ...opts.tableLook, ...(s.tlook || {}), ...(s.keepPage ? { keep: true } : {}) }));
         });
         children.push(para(s.footnote, STYLED ? { pStyle: 'TableNote' } : { size: 18, line: 240, after: 160, before: 60 }));
         if (AR && s.footnote) children.push(arPara(AR.footnote(s.footnote), { size: 18, line: 240, after: 160 }));
