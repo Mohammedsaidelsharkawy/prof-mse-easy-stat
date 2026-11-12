@@ -8,7 +8,7 @@ def js(name):
     return (src / name).read_text(encoding='utf-8').replace('</script', '<\\/script')
 
 libs = '\n'.join(js('lib/' + n) for n in ['jstat.min.js', 'xlsx.full.min.js', 'docx.umd.js'])
-app = '\n'.join(js(n) for n in ['boot.js', 'stats.js', 'analysis.js', 'charts.js', 'arabic.js', 'report.js', 'examples.js', 'sav.js', 'app.js', 'ux.js', 'prep.js', 'tools.js', 'builder.js', 'builder2.js', 'generator.js', 'ux2.js', 'org.js', 'tools2.js', 'work.js'])
+app = '\n'.join(js(n) for n in ['boot.js', 'stats.js', 'analysis.js', 'charts.js', 'arabic.js', 'report.js', 'examples.js', 'sav.js', 'app.js', 'ux.js', 'prep.js', 'tools.js', 'builder.js', 'builder2.js', 'generator.js', 'ux2.js', 'org.js', 'tools2.js', 'work.js', 'round5.js', 'detective.js'])
 logo = 'data:image/png;base64,' + base64.b64encode((src / 'logo.png').read_bytes()).decode()
 
 html = (src / 'index.html').read_text(encoding='utf-8')
