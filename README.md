@@ -250,6 +250,28 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🧱 Build the master sheet (round 8)** — in 6 · Export, under *More for the design*
+- **📋 Paste a questionnaire**: items one per line, `(R)` for reversed items, and the response scale → the items, their codes and a total that reverses those items.
+- **🏷 Coded pick-lists**: drop-down fields of diagnoses (ICD-10), drugs (ATC) or procedures, with an “other (specify)” field asked only when “Other” is chosen.
+- **⚖ Unit columns for the labs**: glucose, creatinine, cholesterol, triglycerides, urea, Hb, calcium, bilirubin, vitamin D get a unit column and the value in one unit, converted by an Excel formula (new calculation *One unit (converted from the unit column)*).
+- **🔀 A form shown only when needed**: a whole section asked only when a question has a given answer.
+- **🧾 CDISC-style codebook** (domains DM, VS, LB, AE, CM, QS and short names).
+- **🖨 Fillable PDF form** (typed fields and tick boxes for every field and visit) and **🔠 large-print form** (big type, tick boxes, faces pain scale).
+- **📱 Patient diary**: an offline phone page (sliders, yes/no, numbers) that the patient sends back as a file; **Diaries → summary** turns the files into a summary per patient.
+- **🗂 Trial operations** (Excel with formulas): follow-up calls with due dates and a call script, drug accountability with compliance and a flag below 80%, specimens (aliquot IDs, minutes to processing, freezer positions, chain of custody, labels), unblinding log, participant payments, equipment calibration, and **✍ sign-off columns** at each visit.
+- **🧪 Before the first patient**: a **dry run** of 20 simulated patients with planted errors through every rule (and the numbers without a range), a **pilot report** from the first filled forms (fields often empty or wrong), a **training page** for the data collectors (5 practice patients, marked, 95% to pass), the **time** each visit's forms take, and the **impact of a change** to a variable (skip logic, calculations, rules, analysis, randomisation, generator).
+- **🏥 Design gallery by specialty**: 24 ready designs (orthopaedics, anaesthesia, obstetrics, cardiology, ICU, surgery, bariatric, oncology, paediatrics, nephrology, gastroenterology, endocrinology, psychiatry, neurology, dentistry, ophthalmology, diagnostic accuracy).
+- **🤝 Share and register**: a design file and its import, a **data sharing package** (codebook, de-identification plan, licence, README) and the **registry fields** (Word).
+- Already there: normal ranges by sex and age, REDCap / XLSForm import, saved designs.
+
+**🎲 Generate the data (round 8)** — *🧪 Scenario library, synthetic twin and simulation study*
+- **19 teaching scenarios with a known truth**, each with an answer key and the analysis to try, a strength of effect (none → strong) and a seed: nested patients in wards in hospitals (two ICCs), mediation, effect modification by a continuous variable, J-shaped risk or an Emax plateau, confounder / collider / mediator, poor compliance (ITT, per-protocol, CACE), informative dropout, placebo response and regression to the mean, survival with an increasing, decreasing or bathtub hazard or a cure fraction, recurrent events with frailty, two index tests on the same patients, several raters, a prediction model with an external validation cohort, Likert response styles, a weighted survey with strata and clusters, a known factor structure, irregular EHR visits, realistic dates and times (weekday, hour, season, weekend effect), and clinical notes that sometimes disagree with the coded data. Open any of them in 📊 Analyse in one click.
+- **🪞 Synthetic twin** of real data: the same distributions, category %, correlations and missing rates, new IDs, no row copied, with a fidelity report.
+- **🔬 Simulation study**: Student t, Welch, Mann-Whitney and Hodges-Lehmann over many datasets (normal, skewed, heavy-tailed, or unequal SDs and sizes): type I error or power, bias, MSE and CI coverage.
+- **🗃 Relational workbook** from the generated master sheet: Patients, Visits, Events and Codes linked by IDs.
+- **📝 Graded worksheets** (data inside, answers marked at once) and **🎓 class sets**: a personal dataset and worksheet for each student (seed from the name, code inside), the teacher's key, and **Whose file?** to tell whose dataset a file is.
+- Already there: the methods page of the simulation (Word), dataset codes and class packs with an answer key.
+
 **🟢 Easier use (round 7)** — most are in ☰ More
 - **⚡ Make my report**: two choices (the group column, the main outcome), then the report with the recommended settings; also in step 1 with **👀 See a finished example report**. Every step has **⏩ Recommended settings for the rest — show the report**.
 - **First-report checklist** (five ticks, then it goes away); **notes typed below the data** found and removed in one click.

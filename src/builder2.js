@@ -574,6 +574,7 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
       ${card('📱', 'XLSForm (KoBoToolbox / ODK)', 'For data collection on a tablet or phone: the same questions, choice lists, ranges, required fields, skip logic and some calculations.', btn('xlsform', '⬇ XLSForm (.xlsx)'))}
       ${card('🧮', 'SPSS syntax', 'Reads the master sheet into SPSS with variable labels, value labels (codes), missing values and measurement levels.', btn('spss', '⬇ Syntax (.sps)'))}
       ${card('🌐', 'Google Sheets', 'The Excel master sheet opens in Google Sheets (File › Import): drop-down lists, ranges, highlighting and formulas keep working, for entry by several people.', '')}</div>
+      ${window.EasyBuild3 ? window.EasyBuild3.cards(D) : ''}
       <h3>Versions</h3><div class="mb-exp"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">${btn('saveVer', '💾 Save a version…')}<span class="legend-note">${vers.length ? `${vers.length} version${vers.length > 1 ? 's' : ''} of this design` : 'No versions yet'}</span>
         <span class="legend-note">Compare with</span><select data-bxcmp="1" style="width:auto"><option value="">a saved design…</option>${mine.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select><label class="btn ghost small" style="margin:0">or a design file<input type="file" data-bxcmpf="1" accept=".json" hidden></label></div>${cmpOut}</div>`;
   }
@@ -615,7 +616,7 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
   }
 
   /* ---------- events ---------- */
-  async function onClick(e, D) {
+  async function onClick(e, D) { if (window.EasyBuild3 && await window.EasyBuild3.onClick(e, D)) return true;
     const b = e.target.closest('[data-bx]'); if (!b) return false; const k = b.dataset.bx;
     try {
       if (k === 'protocol') await protocol(D); else if (k === 'schedule') await schedule(D); else if (k === 'shells') await shells(D); else if (k === 'dict') await dictionary(D); else if (k === 'summary') await summary(D);
@@ -633,7 +634,7 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
     return true;
   }
   function onInput(e) { const t = e.target, d = t.dataset; if (d.bxw) { const w = ls.get('wiz', {}); w[d.bxw] = t.value; ls.set('wiz', w); if (t.tagName === 'SELECT' || d.bxw === 'outcome' && e.type === 'change') { wizOpen = true; B.render(); } return true; } return false; }
-  function onChange(e, D) { const t = e.target, d = t.dataset;
+  function onChange(e, D) { const t = e.target, d = t.dataset; if (window.EasyBuild3 && window.EasyBuild3.onChange(e, D)) return true;
     if (d.bxcal && t.files[0]) { const f = t.files[0]; t.value = ''; calendar(D, f).catch(err => { console.error(err); toast('Could not read it: ' + err.message); }); return true; }
     if (d.bxtl) { D.timeline = { ...(D.timeline || {}), [d.bxtl]: t.value === '' ? '' : +t.value }; B.save(); return true; }
     if (d.bxam) { const [i, k2] = d.bxam.split('|'); (D.amendments || [])[+i][k2] = t.value; B.save(); return true; }

@@ -218,7 +218,7 @@
     cut: { name: 'Categories from cut-offs', a: 'Variable', cuts: true },
     sum: { name: 'Sum of items', list: 'num', rev: true }, mean: { name: 'Mean of items', list: 'num', rev: true }, pctsum: { name: 'Score as % of the maximum (e.g. Oswestry)', list: 'num' },
     rpct: { name: '100 − mean as % of the maximum (e.g. KOOS)', list: 'num' }, wsum: { name: 'Weighted score: points per item', list: 'any', weights: true },
-    any: { name: 'Any of the items is Yes', list: 'yn' }, eligible: { name: 'Eligible: every inclusion Yes and every exclusion No', list: 'yn' }
+    uconv: { name: 'One unit (converted from the unit column)', a: 'Variable', b: 'Unit column' }, any: { name: 'Any of the items is Yes', list: 'yn' }, eligible: { name: 'Eligible: every inclusion Yes and every exclusion No', list: 'yn' }
   };
   const cutsOf = f => String(f.cuts || '').split(/[,;\s]+/).map(Number).filter(x => isFinite(x)), labsOf = f => String(f.labs || '').split(/\s*[,;\/]\s*/).map(x => x.trim()).filter(Boolean);
   // a calculated column that gives categories (written as words)
@@ -235,6 +235,7 @@
       case 'ibw': { if (!A || !Cc) return null; const F = `${Cc}=${lit(f.c, femCat(vv(f.c)))}`; return `IF(AND(${N(A)},${Cc}<>""),ROUND(IF(${F},45.5,50)+2.3*(${A}/2.54-60),1),"")`; }
       case 'egfr': { if (!A || !Bc || !Cc) return null; const F = `(${Cc}=${lit(f.c, femCat(vv(f.c)))})`, k = `IF(${F},0.7,0.9)`;
         return `IF(AND(${N(A)},${N(Bc)},${Cc}<>""),ROUND(142*MIN(${A}/${k},1)^IF(${F},-0.241,-0.302)*MAX(${A}/${k},1)^(-1.2)*0.9938^${Bc}*IF(${F},1.012,1),0),"")`; }
+      case 'uconv': return A && Bc ? `IF(${N(A)},ROUND(IF(${Bc}=${lit(f.b, f.from)},${A}*${+f.factor || 1},${A}),2),"")` : null;
       case 'cut': { const c2 = cutsOf(f), L = labsOf(f); if (!A || L.length !== c2.length + 1) return null; let e = `"${L[L.length - 1]}"`; for (let i = c2.length - 1; i >= 0; i--) e = `IF(${A}<${c2[i]},"${L[i]}",${e})`; return `IF(${N(A)},${e},"")`; }
       case 'any': return n ? `IF(COUNTA(${refs})=0,"",IF(OR(${list.map(([id, r]) => `${r}=${lit(id, yesCat(vv(id)))}`).join(',')}),"Yes","No"))` : null;
       case 'eligible': return n ? `IF(COUNTA(${refs})<${n},"",IF(AND(${list.map(([id, r]) => `${r}${(vv(id) || {}).elig === 'exc' ? '<>' : '='}${lit(id, yesCat(vv(id)))}`).join(',')}),"Yes","No"))` : null;
@@ -256,6 +257,7 @@
       case 'qtc': return isFinite(A) && B2 > 0 ? Math.round(A / Math.sqrt(60 / B2)) : null;
       case 'ibw': return isFinite(A) && c != null ? r1((c === lit(f.c, femCat(vv(f.c))) ? 45.5 : 50) + 2.3 * (A / 2.54 - 60), 1) : null;
       case 'egfr': { if (!(A > 0) || !isFinite(B2) || c == null) return null; const F = c === lit(f.c, femCat(vv(f.c))), k = F ? 0.7 : 0.9; return Math.round(142 * Math.min(A / k, 1) ** (F ? -0.241 : -0.302) * Math.max(A / k, 1) ** -1.2 * 0.9938 ** B2 * (F ? 1.012 : 1)); }
+      case 'uconv': return isFinite(A) ? r1(b === lit(f.b, f.from) ? A * (+f.factor || 1) : A, 2) : null;
       case 'cut': { const c2 = cutsOf(f), L = labsOf(f); if (!isFinite(A) || L.length !== c2.length + 1) return null; const i = c2.findIndex(x => A < x); return L[i < 0 ? L.length - 1 : i]; }
       case 'any': return xs.every(x => x == null) ? null : list.some((id, i) => xs[i] === lit(id, yesCat(vv(id)))) ? 'Yes' : 'No';
       case 'eligible': return xs.some(x => x == null) ? null : list.every((id, i) => ((vv(id) || {}).elig === 'exc') !== (xs[i] === lit(id, yesCat(vv(id))))) ? 'Yes' : 'No';
