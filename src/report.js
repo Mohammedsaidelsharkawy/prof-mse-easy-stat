@@ -427,6 +427,7 @@ const Report = (() => {
       apFigs.forEach((f, i) => { const lab = `Figure A${i + 1}${opts.captionStyle === 'period' ? '.' : opts.captionStyle === 'apa' ? '' : ':'}`;
         children.push(image(f.url, f.w, f.h, Math.min(FIG_W.full[0], Math.floor(PAGE_W / 15)), true, f.caption), caption(`${lab} ${f.caption}`, f.note ? { note: f.note, noteSize: 20 } : {})); }); }
     if (model.discussionParts && model.discussionParts.length) { children.push(H1('Discussion (draft)', brand)); model.discussionParts.forEach(([h, t]) => { children.push(para(h, { bold: true, after: 60 })); String(t).split(/\n+/).forEach(x => children.push(para(x))); }); }
+    if (model.stamp) children.push(para(model.stamp, { size: 16, color: '808080', before: 240 }));
     if (opts.refs && opts.refs.length) { children.push(heading('References', brand)); opts.refs.forEach((r, i) => children.push(para(`${i + 1}. ${r}`, { line: 276, after: 80, align: AlignmentType.LEFT }))); }
     if (opts.listTF && (listTabs.length || listFigs.length)) {
       const lst = [];

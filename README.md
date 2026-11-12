@@ -258,6 +258,15 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 - **Data labels**: values on the bars on or off, their size. **Legend**: position (bottom, top, right, inside, none), size, title, box. **Error bars**: SD, SE or 95% CI, black or the group's colour.
 - **⇉ Format to all figures** pastes the format on every other figure (their titles kept); **↺ Reset** clears it. The format is saved with the project and used in the report, the Word file and the figure export.
 
+**Round 6**
+- **Data**: 🔍 **outlier review queue** (each value beyond 3 SD in turn: keep, fix or set missing, with a reason in the change and analysis logs); 🔒 **lock the data** (SHA-256 fingerprint; the statistical analysis says “done on the locked dataset”, and a banner warns if the data change). (REDCap / SPSS value labels, derived variables and Little's MCAR test were already there.)
+- **Analyses** (Explore tab): 🪶 **fragility index** and reverse fragility index of yes/no outcomes (checked against scipy); 🔁 **bootstrap CIs** of the mean difference, median difference and ratio of means; 🏥 **site effect** (the primary outcome adjusted for the sites, with their intraclass correlation); 📏 **blinded sample-size re-estimation** (☰ More); 📚 **beside published studies** (a table and forest plot with your result, added to Word). (The events-per-variable check was already there.)
+- **Writing**: 📥 **the supervisor's Word file back** (tracked changes accepted into the matching comments, Word comments into 💬 Discussions); ✓ **abstract checklist** (CONSORT or STROBE for abstracts); 🔎 **figure legends** checked; 🎯 **main-finding sentence** in three strengths matched to the evidence. Open discussions now go into the review copy as Word comments. (Method references in Vancouver or APA were already there.)
+- **Figures**: 📉 **slopegraph** (each patient before → after, green better, red worse); ⬇ **editable charts (.pptx)** — bar, line, stacked and pie figures as real PowerPoint charts with their data in an embedded workbook (checked with python-pptx); **themes** in one click (Journal, Thesis, Poster, Black & white, step 7); **how to read each figure** (step 7 option).
+- **Teaching**: ❓ **quiz on the generated data** (marked at once, with the reasons); 🎯 **guess the test** game (☰ More); 🎬 **watch the power** (100 simulated studies arriving, green when significant).
+- **Collaboration**: 👤 **views** — Student (guided, essentials), Full, Supervisor (review mode on) (☰ More). (Comparing two report versions was already there.)
+- **Quality**: ♻ **reproducibility check** (the analysis run again from the saved project: every table identical, with a results fingerprint); **report stamp** (Word extras: version, date, settings and data fingerprints); 🧪 **sanity tests** (P within 0–1, n within the sample, estimates inside their CIs, percentages within 0–100).
+
 **🎲 More control of the data generated** (Realism › More control of the realism)
 - Dropout **by group** (e.g. 5% and 30%) and its **timing** (any visit, mostly early, mostly late); missing values **rising over the visits**.
 - Outliers: their **size** (in SD) and **direction** (both, high only, low only).

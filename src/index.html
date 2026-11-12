@@ -1303,6 +1303,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <label class="check"><input type="checkbox" id="optFigStackSort"><span><b>Stacked bars ordered</b> by their first category</span></label>
           <div class="row" style="gap:8px;margin:4px 0 6px"><div><label class="f">Watermark on the figures</label><input type="text" id="optFigWatermark" placeholder="e.g. DRAFT" style="width:140px"></div><button class="btn ghost small" id="cbCheck" type="button" style="align-self:flex-end;margin-bottom:6px">👁 Colour-blind check</button></div>
           <div id="cbOut"></div>
+          <label class="check"><input type="checkbox" id="optFigHowTo"><span><b>How to read each figure</b> — a plain sentence after the caption (what the boxes, bars, lines or slices mean), for examiners and lay readers</span></label>
           <label class="check"><input type="checkbox" id="optFigPanels"><span><b>Multi-panel figures</b> — the figures of a table joined as panels A, B, C (Word)</span></label>
           <label class="check"><input type="checkbox" id="optFigForestAll"><span><b>Forest plot of every effect</b> — standardized differences of all variables, two groups</span></label>
           <label class="check"><input type="checkbox" id="optFigHeat"><span><b>Correlation heat map</b> with the correlation table (step 4)</span></label>
@@ -1599,6 +1600,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Reporting checklist (appendix)</label><select data-rx="checklist"><option value="">None</option><option value="consort">CONSORT 2010</option><option value="strobe">STROBE</option></select></div>
           <div><label class="f">Word limit of Results (warning)</label><input type="number" min="0" step="50" data-rx="wordLimit" placeholder="none"></div>
           <div><label class="check" style="margin-top:22px" title="Table and figure numbers are Word fields (SEQ), and every “Table 3” or “Figure 2” in the text is a cross-reference to them: after moving or deleting a table, select all (Ctrl+A) and press F9 to renumber"><input type="checkbox" data-rx="autoNum"><span><b>Automatic numbers and cross-references</b> (Word fields)</span></label></div>
+          <div><label class="check" style="margin-top:22px" title="A small grey line at the end: app version, date, a fingerprint of the settings and of the data (and its version / lock), so every number can be traced"><input type="checkbox" data-rx="stamp"><span><b>Report stamp</b> (version, settings and data fingerprints)</span></label></div>
           <div><label class="check" style="margin-top:22px"><input type="checkbox" data-rx="altText"><span><b>Alternative text</b> of the figures (screen readers)</span></label></div>
           <div><label class="f">Master sheet at the end</label><select data-rx="appSheet"><option value="">None</option><option value="analysed">Columns of the analysed variables</option><option value="all">Every column</option><option value="chosen">Chosen columns →</option></select></div>
           <div><label class="f">Rows of the master sheet</label><input type="number" min="0" data-rx="appSheetRows" placeholder="all"></div>
@@ -1665,7 +1667,19 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <button class="btn ghost small" id="btnGlossApp" type="button" title="Every statistical term of the report with a plain definition (appendix)">📖 Glossary appendix</button>
           <button class="btn ghost small" id="btnRebut" type="button" title="Answers for a reviewer: why this test, why no correction, is the sample enough — from your own results">💬 Answers for the reviewers</button>
           <button class="btn ghost small" id="btnPoster" type="button" title="An A0 poster: title, methods, key results, key figure, conclusion (PDF and PNG)">🖼 Poster (A0)</button>
+          <button class="btn ghost small" id="btnPptxNative" type="button" title="The bar, line, stacked-bar and pie figures as real PowerPoint charts: colours, titles and the data can be edited (right-click › Edit Data)">⬇ Editable charts (.pptx)</button>
           <button class="btn ghost small" id="btnArchive" type="button" title="Everything to archive in a repository: data, project, report, dictionary, R script, logs and SHA-256 checksums">🗄 Archive (.zip)</button>
+          <button class="btn ghost small" id="btnSanity" type="button" title="P values within 0–1, n never above the sample, estimates inside their CIs, percentages within 0–100">🧪 Sanity tests</button>
+          <button class="btn ghost small" id="btnRepro" type="button" title="Run the analysis again from the saved project and confirm every number matches">♻ Reproducibility check</button>
+          <button class="btn ghost small" id="btnAbsCheck" type="button" title="The abstract against CONSORT (or STROBE) for abstracts">✓ Abstract checklist</button>
+          <button class="btn ghost small" id="btnLegendCheck" type="button" title="Each figure legend: the plot type, the error bars, the symbols, the patients">🔎 Figure legends</button>
+          <label class="btn ghost small" style="margin:0" title="The Word file back from the supervisor: tracked changes accepted into the comments, Word comments into the discussions">📥 Supervisor's Word file back<input type="file" id="wordBackFile" accept=".docx" hidden></label>
+          <button class="btn ghost small" id="btnMainFind" type="button" title="The main finding in one sentence: cautious, standard or confident, matched to the evidence">🎯 Main-finding sentence</button>
+          <button class="btn ghost small" id="btnFragility" type="button" title="How many patients with another result would change a yes/no outcome's significance">🪶 Fragility index</button>
+          <button class="btn ghost small" id="btnBoot" type="button" title="Bootstrap 95% CIs of the mean difference, the median difference and the ratio of means">🔁 Bootstrap CIs</button>
+          <button class="btn ghost small" id="btnSiteEff" type="button" title="The primary outcome again with the site in the model: does the conclusion hold?">🏥 Site effect</button>
+          <button class="btn ghost small" id="btnPrior" type="button" title="Your result beside published studies: a table and a forest plot for the discussion">📚 Beside published studies</button>
+          <button class="btn ghost small" id="btnSlope" type="button" title="Each patient's before → after line, green when better, red when worse">📉 Slopegraph</button>
           <button class="btn ghost small" id="btnHandoff" type="button" title="Before sending to the supervisor: health, roles, abstract, locked tables, dataset version, tasks, review">🤝 Ready to hand over?</button>
           <button class="btn ghost small" id="btnHealth" type="button" title="Long tables, missing comments or captions, abbreviations not defined, edited comments with other numbers">🩺 Report health</button>
           <button class="btn ghost small" id="btnTrySet" type="button" title="Turn one setting on or off and see the tables and comments it changes, before keeping it">🔁 Try a setting</button>
