@@ -53,6 +53,7 @@ const Charts = (() => {
     ['Office-style colours', ['office', 'office2013', 'office2007', 'blueWarm', 'blue', 'blue2', 'blueGreen', 'green', 'greenYellow', 'yellow', 'yellowOrange', 'orange', 'orangeRed', 'redOrange', 'red', 'redViolet', 'violet', 'violet2', 'median', 'paper', 'marquee', 'slipstream', 'aspect']]];
   const FONTS = { sans: '"Segoe UI", Arial, sans-serif', arial: 'Arial, Helvetica, sans-serif', times: '"Times New Roman", Times, serif', calibri: 'Calibri, Carlito, Arial, sans-serif' };
   let FONT = FONTS.sans; // chart text font, set per chart from the style
+  let MAJOR = 0, AXDEC = null, BG = '#fff'; // per-figure format: the major unit of the value axis, its decimals, the background
   let TICKS = 6; // about how many axis ticks: fewer (4), normal (6) or more (10), set per chart from the style
   // figure shapes (logical canvas size before the resolution multiplier)
   const ASPECTS = { wide: [1500, 820], standard: [1500, 1125], square: [1300, 1300], tall: [1100, 1400] };
@@ -156,7 +157,7 @@ const Charts = (() => {
     ctx.fillText = (t, x, y, mw) => { const s = String(t); if (!s.includes('\n')) return mw === undefined ? ft(s, x, y) : ft(s, x, y, mw);
       const ls = s.split('\n'), lh = parseFloat((/(\d+(?:\.\d+)?)px/.exec(ctx.font) || [0, 24])[1]) * 1.15, b = ctx.textBaseline, y0 = b === 'top' || b === 'hanging' ? y : b === 'bottom' || b === 'alphabetic' ? y - lh * (ls.length - 1) : y - lh * (ls.length - 1) / 2;
       ls.forEach((l, i) => ft(l, x, y0 + i * lh)); };
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
     return { c, ctx, W, H, ts, F: (weight, px) => `${weight} ${Math.round(px * ts)}px ${FONT}` };
   }
 
@@ -200,11 +201,12 @@ const Charts = (() => {
     const mag = 10 ** Math.floor(Math.log10(raw));
     // counts get whole-number steps (no 2.5)
     let step = (integer ? [1, 2, 5, 10] : [1, 2, 2.5, 5, 10]).map(m => m * mag).find(s => s >= raw);
+    if (MAJOR > 0 && span / MAJOR <= 60 && !integer) step = MAJOR; else if (MAJOR > 0 && span / MAJOR <= 60) step = Math.max(1, MAJOR);
     if (integer) step = Math.max(1, step);
     return { min: Math.floor(min / step) * step, max: Math.ceil(max / step) * step, step };
   }
   // as many decimals as the step needs: 2.5 → "7.5", 0.25 → "0.75"
-  const fmtTick = (v, step) => {
+  const fmtTick = (v, step) => { if (AXDEC !== null && isFinite(AXDEC)) return (+v).toFixed(AXDEC);
     const dec = (String(+step.toPrecision(6)).split('.')[1] || '').length;
     return (+v.toFixed(Math.min(dec, 3))).toString();
   };
@@ -327,6 +329,7 @@ const Charts = (() => {
     if (spec && spec.type === 'panels') return drawPanels(spec, paletteName, style);
     FONT = FONTS[style.font] || FONTS.sans;
     TICKS = { fewer: 4, more: 10 }[style.ticks] || 6;
+    MAJOR = +style.major > 0 ? +style.major : 0; AXDEC = style.axisDec !== undefined && style.axisDec !== '' && isFinite(+style.axisDec) ? +style.axisDec : null; BG = /^#[0-9a-f]{3,8}$/i.test(style.bg || '') ? style.bg : '#fff';
     HITS = [];
     // a figure may have its own shape (step 7)
     if (spec.aspect && ASPECTS[spec.aspect]) style = { ...style, aspect: spec.aspect };
@@ -367,12 +370,12 @@ const Charts = (() => {
   }
   const FS = { small: 0.8, normal: 1, large: 1.25, xlarge: 1.5 };
   function withTitle(src, title, st) {
-    const res = VECTOR ? 1 : +st.res || 1, ts = TEXT[st.text] || +st.text || 1, out = makeCanvas(src.width, src.height), ctx = out.getContext('2d');
+    const res = VECTOR ? 1 : +st.res || 1, ts = (TEXT[st.text] || +st.text || 1) * ({ small: 0.8, normal: 1, large: 1.25, xlarge: 1.5 }[st.chartTitleSize] || 1), out = makeCanvas(src.width, src.height), ctx = out.getContext('2d');
     ctx.font = `700 ${Math.round(32 * ts * res)}px ${FONT}`;
     const lines = measureLines(ctx, title, src.width - 80 * res), band = (lines * 42 * ts + 36) * res;
     out.width = src.width; out.height = src.height + band;
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, out.width, out.height);
-    ctx.font = `700 ${Math.round(32 * ts * res)}px ${FONT}`; ctx.fillStyle = '#1C1648'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle = BG; ctx.fillRect(0, 0, out.width, out.height);
+    ctx.font = `700 ${Math.round(32 * ts * res)}px ${FONT}`; ctx.fillStyle = st.titleColor || '#1C1648'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     wrapText(ctx, title, out.width / 2, 24 * res, src.width - 80 * res, 42 * ts * res);
     ctx.drawImage(src, 0, band);
     return out;

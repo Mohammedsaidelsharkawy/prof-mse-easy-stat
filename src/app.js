@@ -5921,12 +5921,20 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     if (ref !== undefined) { f.spec.refLine = ref; if (v.refLabel) f.spec.refLabel = v.refLabel; }
     // the variable's reference range shaded, and its annotations ("text @ x,y" and "arrow x1,y1 > x2,y2", in % of the figure)
     if (state.cfg.options.figRefBand && (v.refLo !== undefined || v.refHi !== undefined) && !['hist'].includes(v.chart)) { const lo = n(v.refLo), hi = n(v.refHi); if (lo !== undefined || hi !== undefined) f.spec.band = { lo: lo ?? -1e12, hi: hi ?? 1e12, label: 'Reference range' }; }
+    // the Format pane of the figure (like Excel): titles, axes, series colours, labels, legend, background
+    { const F0 = v.fmt || {}, st = {}; ['grid', 'legend', 'legendSize', 'legendFrame', 'barFill', 'barWidth', 'font', 'text', 'axisSize', 'titleSize', 'valueSize', 'bg', 'major', 'axisDec', 'frame', 'chartTitleSize', 'titleColor', 'gridStyle', 'lineWeight', 'errColor', 'boxMean', 'ticks', 'seriesStyle'].forEach(k => { if (F0[k] !== undefined && F0[k] !== '') st[k === 'seriesStyle' ? 'series' : k] = k === 'grid' || k === 'legendFrame' || k === 'frame' || k === 'boxMean' ? F0[k] === true || F0[k] === 'on' : F0[k]; });
+      if (F0.legendTitle !== undefined && F0.legendTitle !== '') st.legendTitle = F0.legendTitle; f.fmtStyle = st;
+      if (F0.yTitle) f.spec.yLabel = F0.yTitle; if (F0.xTitle) f.spec.xLabel = F0.xTitle; if (F0.labels === 'on') f.spec.labels = true; if (F0.labels === 'off') f.spec.labels = false; if (+F0.lineW > 0) f.spec.lineW = +F0.lineW; if (+F0.ptSize > 0) f.spec.ptSize = +F0.ptSize; if (F0.title !== undefined && F0.title !== 'auto') f.fmtTitle = F0.title === 'none' ? '' : F0.titleText || f.caption;
+      if (Array.isArray(F0.colors) && F0.colors.some(Boolean)) f.colors = F0.colors; }
     if (v.annot) f.spec.annot = String(v.annot).split(';').map(p => { p = p.trim(); let m = /^arrow\s+([\d.]+)\s*,\s*([\d.]+)\s*(?:>|→|->)\s*([\d.]+)\s*,\s*([\d.]+)$/i.exec(p); if (m) return { type: 'arrow', x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4] };
       m = /^(.+?)\s*@\s*([\d.]+)\s*,\s*([\d.]+)$/.exec(p); return m ? { type: 'text', text: m[1], x: +m[2], y: +m[3] } : null; }).filter(Boolean);
   }
+  // a figure's title (the Format pane can show its caption, its own text or none) and palette (its own colours over the report's)
+  const figTitle = (f, o) => f.fmtTitle !== undefined ? (f.fmtTitle || null) : o.chartTitle ? f.caption : null;
+  function figPal(f, o) { const base = f.pal && f.pal !== 'report' ? f.pal : chartPalette(o); if (!f.colors) return base; const arr = Array.isArray(base) ? base : (Charts.PALETTES[base] || Charts.PALETTES.brand); return [...Array(Math.max(arr.length, f.colors.length))].map((_, i) => f.colors[i] || arr[i % arr.length]); }
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
   function renderFigure(f, o) {
-    const c = Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, f.pal && f.pal !== 'report' ? f.pal : chartPalette(o), chartStyle(o));
+    const c = Charts.draw({ ...f.spec, title: figTitle(f, o) }, figPal(f, o), { ...chartStyle(o), ...(f.fmtStyle || {}) });
     f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height;
   }
 
@@ -6691,8 +6699,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const chartItem = (f, name, o) => {
     const res1 = +o.chartRes || 1, w = (f.w || 1500 * res1) / res1, h = (f.h || 820 * res1) / res1;
     return { name, w, h, pt: (FIG_PT[o.figWidth] || FIG_PT.full)[o.figPerRow === 2 || +o.figPerRow === 2 ? 1 : 0],
-      draw: (res, text) => Charts.draw({ ...f.spec, title: o.chartTitle ? f.caption : null }, chartPalette(o), { ...chartStyle(o), res, ...(text ? { text } : {}) }),
-      svg: text => Charts.drawSVG({ ...f.spec, title: o.chartTitle ? f.caption : null }, chartPalette(o), { ...chartStyle(o), ...(text ? { text } : {}) }) };
+      draw: (res, text) => Charts.draw({ ...f.spec, title: figTitle(f, o) }, figPal(f, o), { ...chartStyle(o), ...(f.fmtStyle || {}), res, ...(text ? { text } : {}) }),
+      svg: text => Charts.drawSVG({ ...f.spec, title: figTitle(f, o) }, figPal(f, o), { ...chartStyle(o), ...(f.fmtStyle || {}), ...(text ? { text } : {}) }) };
   };
   const flowItem = (c, gl, name) => {
     c = flowStyled(c); const pal = chartPalette(state.cfg.options), cv = Charts.consort(c, gl, pal, 1);
@@ -7161,6 +7169,6 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   window.EasyStat = state; // for debugging
   // what the interface layer (ux.js) may use
   window.EasyUI = { loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
-    renderAdvanced, renderVariables, renderOptions, projectObj, openAny, healthItems, abstractTable, sharePack, glossary: () => GLOSSARY, exportModel: r => exportModel(r), wordOptions: () => wordOptions(), aRows: () => aRows(), aOuts: () => aOuts(), aEffect: (v, r, g) => aEffect(v, r, g), aVal: (v, r) => aVal(v, r), aLev: v => aLev(v), isBin: v => isBin(v), vLab: v => vLab(v), combos: () => (state.combos = state.combos || []), applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
+    renderAdvanced, renderVariables, renderOptions, schedulePreview: () => schedulePreview(), chartStyle: o => chartStyle(o), chartPalette: o => chartPalette(o), projectObj, openAny, healthItems, abstractTable, sharePack, glossary: () => GLOSSARY, exportModel: r => exportModel(r), wordOptions: () => wordOptions(), aRows: () => aRows(), aOuts: () => aOuts(), aEffect: (v, r, g) => aEffect(v, r, g), aVal: (v, r) => aVal(v, r), aLev: v => aLev(v), isBin: v => isBin(v), vLab: v => vLab(v), combos: () => (state.combos = state.combos || []), applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();

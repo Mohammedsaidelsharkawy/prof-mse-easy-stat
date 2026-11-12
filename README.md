@@ -250,6 +250,22 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🎨 Format figure — like Excel's Format pane** (step 7, under the preview; for the figure shown)
+- **Chart area**: font, text size, background colour, border, shape.
+- **Chart title**: as the report, the caption, your own text or none; size and colour.
+- **Axes**: vertical and horizontal axis titles, minimum, maximum, **major unit**, **decimal places** of the axis numbers, sizes of the numbers and titles, number of ticks, logarithmic scale, gridlines on or off and their style.
+- **Series**: a **colour picker for each group / series**, fill (gradient, solid, outline, hatched), bar and box width (gap), line weight, marker size, how groups are told apart, the mean marker of box plots.
+- **Data labels**: values on the bars on or off, their size. **Legend**: position (bottom, top, right, inside, none), size, title, box. **Error bars**: SD, SE or 95% CI, black or the group's colour.
+- **⇉ Format to all figures** pastes the format on every other figure (their titles kept); **↺ Reset** clears it. The format is saved with the project and used in the report, the Word file and the figure export.
+
+**🎲 More control of the data generated** (Realism › More control of the realism)
+- Dropout **by group** (e.g. 5% and 30%) and its **timing** (any visit, mostly early, mostly late); missing values **rising over the visits**.
+- Outliers: their **size** (in SD) and **direction** (both, high only, low only).
+- **Digit preference**: a % of the readings rounded by hand to the nearest 5 (or any step), for every number or one.
+- **Measurement error** on a variable (its SD as a % of the variable's SD).
+- **Visit dates**: a date measured at each visit now follows the schedule (anchor + the visit's day); deviations of ± days and a % of visits 1–4 weeks late can be added.
+- Checked: dropout 5% vs 30% by group, missing values 11% → 32% over the visits, 50% of weights on a multiple of 5, 19% of visits late. With none of these set, the data are unchanged.
+
 **Round 5**
 - **🕵 Data detective** (☰ More, and beside the data check in step 1): the same patient under two IDs (same sex, age within a year, same first date), rules learned from the sheet with their exceptions (“when Sex is Male, Pregnant is No”, “surgery comes before discharge”), columns with mixed units (lb in a kg column, g/L in g/dL …) converted in one click, dates with day and month swapped, dates far from the others and impossible ages. (Near duplicates by chosen columns, future dates, dates before birth, unit conversion of a whole column and the free-text coding assistant were already there.)
 - **Analyses** (Explore tab): 🎯 **what this study could detect** (the minimal detectable difference at 80% power, with a sentence for the discussion); ≈ **equivalence at baseline** (TOST, your margins); 📐 **ANCOVA for every repeated outcome** beside the crude difference; 🔀 **interactions** of the primary outcome with each baseline characteristic (exploratory, with the chance of a false positive); 🎚 **tipping point** for missing outcome data (a shift in SD units for numbers, every scenario for yes/no). NNH is now written for unwanted events in the NNT column. Checked against statsmodels and scipy: the detectable difference, TOST P, ANCOVA estimates and CIs and the interaction P are identical.
