@@ -559,6 +559,12 @@ const Analysis = (() => {
   const P_REMOVE = 0.10, P_ENTER = 0.05;
   function selectModel(preds, fit, method, off) {
     const predP = (m, list) => { let i = off; return list.map(e => { const ps = e.terms.map((_, k) => m.terms[i + k].p); i += e.terms.length; return Math.min(...ps); }); };
+    // screen: only the predictors significant on their own (univariable P below the cut-off) enter the multivariable model
+    if (method === 'screen') {
+      const cut = screenCut(arguments[4]), list = preds.filter(e => { const t = fit([e]); return t && predP(t, [e])[0] < cut; });
+      if (!list.length) return { model: null, kept: [], none: true };
+      const m = fit(list); return { model: m, kept: m ? list : [] };
+    }
     if (method === 'backward') {
       let list = preds.slice(), m = fit(list);
       while (m && list.length > 1) {
@@ -587,7 +593,8 @@ const Analysis = (() => {
     const m = fit(preds);
     return { model: m, kept: m ? preds : [] };
   }
-  const methodNote = method => method === 'backward' ? `Multivariable model by backward elimination (P to remove > ${P_REMOVE}); —: not retained`
+  const screenCut = x => { const v = parseFloat(x); return isFinite(v) && v > 0 && v < 1 ? v : 0.05; };
+  const methodNote = (method, sp) => method === 'screen' ? `Multivariable model of the predictors with univariable P < ${screenCut(sp)}; —: not entered` : method === 'backward' ? `Multivariable model by backward elimination (P to remove > ${P_REMOVE}); —: not retained`
     : method === 'forward' ? `Multivariable model by forward selection (P to enter < ${P_ENTER}); —: not entered` : '';
   // variance inflation factor of each design column
   const vifs = X => X[0].map((_, j) => {
@@ -630,10 +637,10 @@ const Analysis = (() => {
       if (m) { m.X = X; m.y = y; }
       return m;
     };
-    const { model: multi, kept } = selectModel(preds, fitOn, a.method, 1);
-    const uni = a.univariable || !multi ? preds.map(e => fitOn([e])) : null;
+    const { model: multi, kept, none: noneSig } = selectModel(preds, fitOn, a.method, 1, a.screenP);
+    const uni = a.univariable || !multi || a.method === 'screen' ? preds.map(e => fitOn([e])) : null;
     used.add(logistic ? 'logistic' : 'linear');
-    if (a.method === 'backward' || a.method === 'forward') used.add('sel_' + a.method);
+    if (a.method === 'backward' || a.method === 'forward' || a.method === 'screen') used.add('sel_' + a.method);
     const est = t => logistic ? `${fmt(t.or, 2)} (${fmt(t.lo, 2)}-${fmt(t.hi, 2)})` : `${fmt(t.B, d)} (${fmt(t.lo, d)} to ${fmt(t.hi, d)})`;
     const effName = logistic ? 'OR (95% CI)' : 'B (95% CI)';
     const head = [''];
@@ -681,7 +688,7 @@ const Analysis = (() => {
       if (logistic && a.hl) { const h = S.hosmerLemeshow(multi.y, multi.fitted); f.push(`Hosmer-Lemeshow χ²(${h.df}) = ${fmt(h.chi, 2)}, P ${pTxt(h.p)}${h.p > alpha ? ' (good fit)' : ' (poor fit)'}`); }
       if (showVif) f.push('VIF: Variance inflation factor (values above 5 suggest collinearity)');
     }
-    if (methodNote(a.method)) f.push(methodNote(a.method));
+    if (methodNote(a.method, a.screenP)) f.push(methodNote(a.method, a.screenP));
     const refs = preds.filter(e => e.ref).map(e => `${e.label}: reference = ${e.ref}`);
     if (refs.length) f.push(refs.join(', '));
     // comment
@@ -773,7 +780,8 @@ const Analysis = (() => {
       else sent.push(`None of the studied variables was a significant ${preds.length > 1 ? 'independent ' : ''}predictor of ${what} in ${logistic ? 'logistic' : 'linear'} regression.`);
       sent.push(logistic ? `The model was ${multi.pModel <= alpha ? 'statistically significant' : 'insignificant'} (P value ${pTxt(multi.pModel)}, Nagelkerke R² = ${fmt(multi.nagelkerke, 3)}).`
         : `The model was ${multi.pModel <= alpha ? 'statistically significant' : 'insignificant'} (P value ${pTxt(multi.pModel)}) and explained ${fmt(100 * multi.r2, 1)}% of the variance of ${lowerFirst(plain(outLabel))} (R² = ${fmt(multi.r2, 3)}).`);
-    } else sent.push('The model could not be estimated: too few complete cases or perfectly collinear predictors.');
+    } else sent.push(noneSig ? `No variable was significantly associated with ${what} in univariable analysis (P < ${screenCut(a.screenP)}), so no multivariable model was built.` : 'The model could not be estimated: too few complete cases or perfectly collinear predictors.');
+    if (multi && a.method === 'screen' && kept.length < preds.length) sent.push(`Only the ${kept.length} variable${kept.length > 1 ? 's' : ''} with a univariable P value below ${screenCut(a.screenP)} entered the multivariable model.`);
     if (a.commentDetail === 'detailed' && multi) {
       const ns = terms.filter(x => x.m && !(x.m.p <= alpha));
       sigM.forEach(x => {
@@ -1180,18 +1188,31 @@ const Analysis = (() => {
       const extra = (ciSS ? ` (95% CI ${fmt(100 * r.cutoff.sensLo, 1)}-${fmt(100 * r.cutoff.sensHi, 1)}%)` : '');
       const extraS = (ciSS ? ` (95% CI ${fmt(100 * r.cutoff.specLo, 1)}-${fmt(100 * r.cutoff.specHi, 1)}%)` : '');
       const lrs = a.lr ? `, with LR+ of ${lrTxt(r.cutoff.lrPos)} and LR− of ${lrTxt(r.cutoff.lrNeg)}` : '';
-      const pv = ciAll ? `; PPV was ${pct(r.cutoff.ppv)} (95% CI ${fmt(100 * r.cutoff.dx.ppv.lo, 1)}-${fmt(100 * r.cutoff.dx.ppv.hi, 1)}%) and NPV was ${pct(r.cutoff.npv)} (95% CI ${fmt(100 * r.cutoff.dx.npv.lo, 1)}-${fmt(100 * r.cutoff.dx.npv.hi, 1)}%)` : '';
+      const pv = ciAll ? `; PPV was ${pct(r.cutoff.ppv)} (95% CI ${fmt(100 * r.cutoff.dx.ppv.lo, 1)}-${fmt(100 * r.cutoff.dx.ppv.hi, 1)}%), NPV was ${pct(r.cutoff.npv)} (95% CI ${fmt(100 * r.cutoff.dx.npv.lo, 1)}-${fmt(100 * r.cutoff.dx.npv.hi, 1)}%) and accuracy was ${pct(r.cutoff.accuracy)} (95% CI ${fmt(100 * r.cutoff.dx.accuracy.lo, 1)}-${fmt(100 * r.cutoff.dx.accuracy.hi, 1)}%)` : `; PPV was ${pct(r.cutoff.ppv)}, NPV was ${pct(r.cutoff.npv)} and accuracy was ${pct(r.cutoff.accuracy)}`;
+      const nsCut = a.commentDetail === 'detailed' || a.commentDetail === 'full' ? `; at a cut-off of ${cutTxt(x)}${x.combined ? ' (predicted probability)' : ''}, sensitivity was ${pct(r.cutoff.sens)}, specificity was ${pct(r.cutoff.spec)}${pv.replace(/^; /, ', ')}` : '';
       return r.p <= alpha
         ? `${nm} ${r.higher || x.combined ? '' : '(lower values) '}could significantly predict ${what} with ${grade(r.auc)} discrimination (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)}); at a cut-off of ${cutTxt(x)}${x.combined ? ' (predicted probability)' : ''}, sensitivity was ${pct(r.cutoff.sens)}${extra} and specificity was ${pct(r.cutoff.spec)}${extraS}${lrs}${pv}.`
-        : `${nm} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}, P value ${pTxt(r.p)}).`;
+        : `${nm} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}${a.commentDetail === 'full' ? `, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}` : ''}, P value ${pTxt(r.p)})${nsCut}.`;
     });
     res.filter(x => !x.r).forEach(x => sent.push(`The ROC curve of ${lowerFirst(plain(x.label))} could not be estimated: fewer than two patients with or without ${what}.`));
     // detailed: every accuracy measure at the cut-off, and the tests ranked by AUC
     if (a.commentDetail === 'detailed') {
       res.filter(x => x.r && x.r.p <= alpha).forEach(x => { const c = x.r.cutoff, nm = x.combined ? 'the combined model' : lowerFirst(plain(x.label));
-        sent.push(`At this cut-off, ${nm} had a positive predictive value of ${pct(c.ppv)}, a negative predictive value of ${pct(c.npv)} and an accuracy of ${pct(c.accuracy)}; the positive and negative likelihood ratios were ${lrTxt(c.lrPos)} and ${lrTxt(c.lrNeg)} (Youden index ${fmt(c.youden, 3)}).`); });
+        sent.push(`At this cut-off, the positive and negative likelihood ratios of ${nm} were ${lrTxt(c.lrPos)} and ${lrTxt(c.lrNeg)} (Youden index ${fmt(c.youden, 3)}).`); });
       const ranked = res.filter(x => x.r).sort((p1, p2) => p2.r.auc - p1.r.auc), nm = x => x.combined ? 'the combined model' : lowerFirst(plain(x.label));
       if (ranked.length > 1) sent.push(`The highest AUC was for ${nm(ranked[0])} (${fmt(ranked[0].r.auc, 3)}), followed by ${listJoin(ranked.slice(1).map(x => `${nm(x)} (${fmt(x.r.auc, 3)})`))}.`);
+    }
+    // highly detailed: for every test, significant or not — the 2×2 counts, every measure with its 95% CI, what a positive and a negative result mean
+    if (a.commentDetail === 'full') {
+      sent.length = 0; res.filter(x => !x.r).forEach(x => sent.push(`The ROC curve of ${lowerFirst(plain(x.label))} could not be estimated: fewer than two patients with or without ${what}.`));
+      const q = (o, v) => o && isFinite(o.lo) ? `${pct(v)} (95% CI ${fmt(100 * o.lo, 1)}-${fmt(100 * o.hi, 1)}%)` : pct(v), ql = (o, v) => o && isFinite(o.lo) && isFinite(v) ? `${lrTxt(v)} (95% CI ${fmt(o.lo, 2)}-${fmt(o.hi, 2)})` : lrTxt(v);
+      res.filter(x => x.r).forEach(x => { const r = x.r, c = r.cutoff, dx = c.dx || {}, nm = x.combined ? 'the combined model' : lowerFirst(plain(x.label)), sig = r.p <= alpha, prev = (c.tp + c.fn) / (c.tp + c.fn + c.fp + c.tn);
+        sent.push(`${cap(nm)} ${sig ? `could significantly predict ${what} with ${grade(r.auc)} discrimination` : `could not significantly predict ${what}`} (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)})${sig ? '' : `; the 95% CI of the AUC ${r.lo <= 0.5 && r.hi >= 0.5 ? 'includes 0.5, so it did not discriminate better than chance' : 'is wide'}`}${x.combined || r.higher ? '' : '; lower values indicated ' + what}.`);
+        sent.push(`At the cut-off of ${cutTxt(x)}, ${c.tp} of the ${c.tp + c.fn} patients with ${what} were correctly positive (true positives) and ${c.fn} were missed (false negatives), while ${c.tn} of the ${c.tn + c.fp} patients without ${what} were correctly negative and ${c.fp} were falsely positive.`);
+        sent.push(`Sensitivity was ${q(dx.sens || { lo: c.sensLo, hi: c.sensHi }, c.sens)}, specificity ${q(dx.spec || { lo: c.specLo, hi: c.specHi }, c.spec)}, PPV ${q(dx.ppv, c.ppv)}, NPV ${q(dx.npv, c.npv)} and accuracy ${q(dx.accuracy, c.accuracy)}; LR+ was ${ql(dx.lrPos, c.lrPos)} and LR− ${ql(dx.lrNeg, c.lrNeg)} (Youden index ${fmt(c.youden, 3)}).`);
+        sent.push(`With ${what} in ${pct(prev)} of the patients, a positive result ${c.ppv >= prev ? 'raised' : 'changed'} its probability to ${pct(c.ppv)}, and a negative result ${1 - c.npv <= prev ? 'lowered' : 'changed'} it to ${pct(1 - c.npv)}${sig ? '' : '; as the AUC was not significant, this cut-off should not be used'}.`); });
+      const ranked = res.filter(x => x.r).sort((p1, p2) => p2.r.auc - p1.r.auc), nm = x => x.combined ? 'the combined model' : lowerFirst(plain(x.label));
+      if (ranked.length > 1) sent.push(`Ranked by AUC: ${listJoin(ranked.map(x => `${nm(x)} (${fmt(x.r.auc, 3)}${x.r.p <= alpha ? '' : ', not significant'})`))}.`);
     }
     const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', ROC_CUT[cutM][1], ...(a.aucScale === 'hosmer' ? ['AUC interpretation (Hosmer & Lemeshow): ≥0.9 outstanding, 0.8-0.9 excellent, 0.7-0.8 acceptable, 0.6-0.7 poor'] : [])];
     if (res.some(x => x.r && x.r.cutoff.fallback)) f.push(`${listJoin(res.filter(x => x.r && x.r.cutoff.fallback).map(x => x.combined ? 'combined model' : plain(x.label)))}: no cut-off reached the target, Youden index used`);
@@ -1214,9 +1235,9 @@ const Analysis = (() => {
       ...(a.showCut ? { cut: { fpr: 1 - x.r.cutoff.spec, tpr: x.r.cutoff.sens, label: x.combined ? '' : cutTxt(x) } } : {}) });
     const figSpec = list => ({ type: 'roc', series: list.map(serie), note: `n = ${n1} with, ${n0} without`,
       ...(a.noDiagonal ? { diagonal: false } : {}), ...(a.figLines && a.figLines !== 'normal' ? { lineW: a.figLines } : {}), ...(a.figFill ? { fill: true } : {}) });
-    const figures = !ok.length || a.figure === 'none' ? []
-      : a.figure === 'each' ? ok.map(x => ({ sig: x.r.p <= alpha, caption: `ROC curve of ${x.combined ? 'the combined model' : lowerFirst(plain(x.label))} for prediction of ${what}`, spec: figSpec([x]) }))
-      : [{ sig: ok.some(x => x.r.p <= alpha), caption: `ROC curve for prediction of ${what}`, spec: figSpec(ok) }];
+    const eachF = () => ok.map(x => ({ sig: x.r.p <= alpha, caption: `ROC curve of ${x.combined ? 'the combined model' : lowerFirst(plain(x.label))} for prediction of ${what}`, spec: figSpec([x]) })), oneF = () => [{ sig: ok.some(x => x.r.p <= alpha), caption: `ROC curve for prediction of ${what}`, spec: figSpec(ok) }];
+    // both: all curves in one figure, then one figure per test (a single test: one figure)
+    const figures = !ok.length || a.figure === 'none' ? [] : a.figure === 'each' ? eachF() : a.figure === 'both' && ok.length > 1 ? [...oneF(), ...eachF()] : oneF();
     const sec = {
       kind: 'roc', title: `Diagnostic performance for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
       figures, meta: { res }
@@ -1390,10 +1411,10 @@ const Analysis = (() => {
       if (ev.filter(Boolean).length < 2) return null;
       return S.coxRegression(rs.map(r => list.flatMap(e => e.terms.map(t => t.get(r)))), rs.map(r => toNum(r[a.outcome])), ev);
     };
-    const { model: multi, kept } = selectModel(preds, fitOn, a.method, 0), uni = a.univariable ? preds.map(e => fitOn([e])) : null;
+    const { model: multi, kept, none: noneSig } = selectModel(preds, fitOn, a.method, 0, a.screenP), uni = a.univariable || a.method === 'screen' ? preds.map(e => fitOn([e])) : null;
     if (!multi && !uni) return null;
     used.add('cox');
-    if (a.method === 'backward' || a.method === 'forward') used.add('sel_' + a.method);
+    if (a.method === 'backward' || a.method === 'forward' || a.method === 'screen') used.add('sel_' + a.method);
     const est = t => `${fmt(t.hr, 2)} (${fmt(t.lo, 2)}-${fmt(t.hi, 2)})`;
     const head = [''];
     if (uni) head.push('Univariable HR (95% CI)', 'P value');
@@ -1415,7 +1436,7 @@ const Analysis = (() => {
     f.push('HR: Hazard ratio', 'CI: Confidence interval', `Event: ${evLabel} = ${a.positive}`);
     if (multi) f.push(`Model: n=${multi.n} (${multi.events} events), likelihood ratio χ²(${multi.df}) = ${fmt(multi.chi, 2)}, P ${pTxt(multi.pModel)}`);
     if (multi && multi.unstable) f.push('Warning: the model did not converge or has extreme estimates, so they are unreliable');
-    if (methodNote(a.method)) f.push(methodNote(a.method));
+    if (methodNote(a.method, a.screenP)) f.push(methodNote(a.method, a.screenP));
     const refs = preds.filter(e => e.ref).map(e => `${e.label}: reference = ${e.ref}`);
     if (refs.length) f.push(refs.join(', '));
     const what = lowerFirst(plain(evLabel));
@@ -1424,7 +1445,8 @@ const Analysis = (() => {
     const sent = [];
     if (multi) sent.push(sm.length ? `In ${preds.length > 1 ? 'multivariable ' : ''}Cox regression, ${listJoin(sm.map(phr))} ${sm.length > 1 ? 'were independent predictors' : 'was a significant predictor'} of ${what}.`
       : `None of the studied variables was a significant ${preds.length > 1 ? 'independent ' : ''}predictor of ${what} in Cox regression.`);
-    else sent.push('The multivariable model could not be estimated: too few events or collinear predictors.');
+    else sent.push(noneSig ? `No variable was significantly associated with ${what} in univariable analysis (P < ${screenCut(a.screenP)}), so no multivariable model was built.` : 'The multivariable model could not be estimated: too few events or collinear predictors.');
+    if (multi && a.method === 'screen' && kept.length < preds.length) sent.push(`Only the ${kept.length} variable${kept.length > 1 ? 's' : ''} with a univariable P value below ${screenCut(a.screenP)} entered the multivariable model.`);
     if (a.commentDetail === 'detailed' && multi) {
       sm.forEach(x => sent.push(`For ${lowerFirst(x.label)}, the hazard of ${what} was ${fmt(Math.abs(x.t.hr - 1) * 100, 0)}% ${x.t.hr >= 1 ? 'higher' : 'lower'} ${/ vs /.test(x.label) ? 'compared with the reference category' : 'for each one-unit increase'} (HR = ${fmt(x.t.hr, 2)}).`));
       const ns = terms.filter(x => x.m && !(x.m.p <= alpha));
@@ -4273,7 +4295,7 @@ const Analysis = (() => {
       ['roc', 'ROC curve analysis'], ['rocClosest', 'ROC curve analysis'], ['survival', k > 1 ? 'Kaplan-Meier analysis with the log-rank test' : 'Kaplan-Meier analysis'], ['mcnemar', 'the McNemar test'], ['kappa', "Cohen's kappa"],
       ['icc', 'the intraclass correlation coefficient with Bland-Altman analysis'], ['diagnostic', 'sensitivity, specificity and predictive values with exact 95% CI'], ['cronbach', "Cronbach's α"]]
       .filter(([key]) => used.has(key)).map(x => x[1]).filter((x, i, a) => a.indexOf(x) === i);
-    if (adv.length) s.push(`Additional analyses included ${listJoin(adv)}${used.has('sel_backward') ? ' (backward elimination)' : used.has('sel_forward') ? ' (forward selection)' : ''}.`);
+    if (adv.length) s.push(`Additional analyses included ${listJoin(adv)}${used.has('sel_backward') ? ' (backward elimination)' : used.has('sel_forward') ? ' (forward selection)' : used.has('sel_screen') ? ' (multivariable models of the variables significant in univariable analysis)' : ''}.`);
     s.push(`A two-sided P ≤ ${o.alpha} was considered significant.`);
     return s.join(' ');
   }
@@ -4420,6 +4442,7 @@ const Analysis = (() => {
     if (used.has('regRoc')) s.push('The discrimination of logistic models was assessed by the area under the ROC curve of their predicted probabilities.');
     if (used.has('sel_backward')) s.push(`Multivariable models were built by backward elimination (P to remove > ${P_REMOVE}).`);
     if (used.has('sel_forward')) s.push(`Multivariable models were built by forward selection (P to enter < ${P_ENTER}).`);
+    if (used.has('sel_screen')) s.push('Variables significant in univariable analysis entered the multivariable model (enter method).');
     if (used.has('linear')) s.push('Multiple linear regression was used to identify predictors of quantitative outcomes, reporting unstandardized (B) and standardized (β) coefficients with 95% CI.');
     if (used.has('logistic')) s.push('Binary logistic regression was used to identify predictors of binary outcomes, reporting odds ratios (OR) with 95% CI; model fit was assessed by the omnibus chi-square test and Nagelkerke R².');
     if (used.has('roc') || used.has('rocClosest')) {

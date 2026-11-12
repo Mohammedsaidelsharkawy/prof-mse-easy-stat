@@ -250,6 +250,12 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**📊 Analyse (round 9)**
+- **All patients as one group, then the groups**: in step 2, *Also give the results of all patients as one group first* — the report opens with every variable described for all patients together (the group column included, as a pie), then the usual comparison of the groups.
+- **Regression (linear, logistic, Cox)**: new variable selection *Enter only the variables significant in univariable analysis* (univariable P below 0.05, or your own cut-off), now the default for new cards; the univariable results are always shown with it, and the comment says which variables entered.
+- **ROC**, defaults of a new card: *Compare the AUCs (DeLong test)* on; the figure *Both: all in one, and each separately*; the comment *Detailed*.
+- **ROC comment**: PPV, NPV and accuracy are now in the standard comment; *Detailed* gives the cut-off measures of non-significant tests too; new *Highly detailed* — for every test, significant or not: AUC with its CI and P, the true / false positives and negatives, every measure with its 95% CI, LR+ and LR−, Youden index, how a positive or negative result changes the probability, and the tests ranked by AUC.
+
 **🧱 Build the master sheet (round 8)** — in 6 · Export, under *More for the design*
 - **📋 Paste a questionnaire**: items one per line, `(R)` for reversed items, and the response scale → the items, their codes and a total that reverses those items.
 - **🏷 Coded pick-lists**: drop-down fields of diagnoses (ICD-10), drugs (ATC) or procedures, with an “other (specify)” field asked only when “Other” is chosen.

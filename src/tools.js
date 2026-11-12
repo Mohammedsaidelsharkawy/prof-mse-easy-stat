@@ -49,7 +49,7 @@
   function applyTemplate(t) { const c = S().cfg; if (!c) { U.toast('Load data first — a template sets up the analysis of your data'); return; } U.readUiIntoCfg();
     c.options = { ...c.options, ...(t.o || {}) }; c.report = { ...U.DEFAULT_REPORT, ...(c.report || {}), ...(t.report || {}) };
     if (c.consort) { if (t.flow) c.consort.type = t.flow; if (t.flowStyle) c.consort.style = { ...c.consort.style, ...t.flowStyle }; }
-    (t.adv || []).forEach(type => { if (!(c.advanced || []).some(a => a.type === type)) c.advanced.push({ type, include: true, outcome: '', positive: '', predictors: [] }); });
+    (t.adv || []).forEach(type => { if (!(c.advanced || []).some(a => a.type === type)) c.advanced.push({ type, include: true, outcome: '', positive: '', predictors: [], ...(U.advDefaults ? U.advDefaults(type) : {}) }); });
     U.renderOptions(); U.go(S().step || 2); U.toast(`Template applied${(t.adv || []).length ? ` — choose the columns of the added analyses in step 8` : ''}`); }
   function templates() { const mine = ls.get('templates', {});
     const p = panel('tlTplP', 'Study templates', `<p class="legend-note">A template keeps the settings of steps 4–12, the flowchart type and style and the kinds of advanced analyses — not the data or the columns.</p>

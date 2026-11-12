@@ -816,7 +816,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <h2>2 · Groups</h2>
       <p class="hint">Choose the column that defines the study groups, or analyse all patients as one group. Labels are used in tables, figures and comments.</p>
       <div class="grid g3"><div><label class="f">Study design</label><select id="groupMode"><option value="groups">Compare groups (a group column)</option><option value="one">One group — all patients together</option></select></div>
-        <div id="groupColBox"><label class="f">Group column</label><select id="groupCol"></select><div class="row" style="gap:4px;margin-top:4px"><select id="groupCombo" style="width:auto" title="A second column: each combination becomes a group (e.g. treatment × sex)"></select><button class="btn ghost small" id="groupComboGo" type="button">× Combine</button></div></div></div>
+        <div id="groupColBox"><label class="f">Group column</label><select id="groupCol"></select><div class="row" style="gap:4px;margin-top:4px"><select id="groupCombo" style="width:auto" title="A second column: each combination becomes a group (e.g. treatment × sex)"></select><button class="btn ghost small" id="groupComboGo" type="button">× Combine</button></div><label class="check" style="margin-top:6px" title="The report starts with the results of every patient together (one group), then compares the groups"><input type="checkbox" id="allFirst"><span>Also give the results of all patients as one group first</span></label></div></div>
       <p class="legend-note">One group: tables describe all patients; repeated measures are compared over time within the same patients (paired t-test / Wilcoxon, repeated-measures ANOVA / Friedman).</p>
       <div class="tbl-wrap" style="margin-top:12px"><table class="t" id="groupsTbl"></table></div>
       <p class="legend-note">Use ↑/↓ to set the column order of groups in tables.</p>
@@ -24837,6 +24837,12 @@ const Analysis = (() => {
   const P_REMOVE = 0.10, P_ENTER = 0.05;
   function selectModel(preds, fit, method, off) {
     const predP = (m, list) => { let i = off; return list.map(e => { const ps = e.terms.map((_, k) => m.terms[i + k].p); i += e.terms.length; return Math.min(...ps); }); };
+    // screen: only the predictors significant on their own (univariable P below the cut-off) enter the multivariable model
+    if (method === 'screen') {
+      const cut = screenCut(arguments[4]), list = preds.filter(e => { const t = fit([e]); return t && predP(t, [e])[0] < cut; });
+      if (!list.length) return { model: null, kept: [], none: true };
+      const m = fit(list); return { model: m, kept: m ? list : [] };
+    }
     if (method === 'backward') {
       let list = preds.slice(), m = fit(list);
       while (m && list.length > 1) {
@@ -24865,7 +24871,8 @@ const Analysis = (() => {
     const m = fit(preds);
     return { model: m, kept: m ? preds : [] };
   }
-  const methodNote = method => method === 'backward' ? `Multivariable model by backward elimination (P to remove > ${P_REMOVE}); —: not retained`
+  const screenCut = x => { const v = parseFloat(x); return isFinite(v) && v > 0 && v < 1 ? v : 0.05; };
+  const methodNote = (method, sp) => method === 'screen' ? `Multivariable model of the predictors with univariable P < ${screenCut(sp)}; —: not entered` : method === 'backward' ? `Multivariable model by backward elimination (P to remove > ${P_REMOVE}); —: not retained`
     : method === 'forward' ? `Multivariable model by forward selection (P to enter < ${P_ENTER}); —: not entered` : '';
   // variance inflation factor of each design column
   const vifs = X => X[0].map((_, j) => {
@@ -24908,10 +24915,10 @@ const Analysis = (() => {
       if (m) { m.X = X; m.y = y; }
       return m;
     };
-    const { model: multi, kept } = selectModel(preds, fitOn, a.method, 1);
-    const uni = a.univariable || !multi ? preds.map(e => fitOn([e])) : null;
+    const { model: multi, kept, none: noneSig } = selectModel(preds, fitOn, a.method, 1, a.screenP);
+    const uni = a.univariable || !multi || a.method === 'screen' ? preds.map(e => fitOn([e])) : null;
     used.add(logistic ? 'logistic' : 'linear');
-    if (a.method === 'backward' || a.method === 'forward') used.add('sel_' + a.method);
+    if (a.method === 'backward' || a.method === 'forward' || a.method === 'screen') used.add('sel_' + a.method);
     const est = t => logistic ? `${fmt(t.or, 2)} (${fmt(t.lo, 2)}-${fmt(t.hi, 2)})` : `${fmt(t.B, d)} (${fmt(t.lo, d)} to ${fmt(t.hi, d)})`;
     const effName = logistic ? 'OR (95% CI)' : 'B (95% CI)';
     const head = [''];
@@ -24959,7 +24966,7 @@ const Analysis = (() => {
       if (logistic && a.hl) { const h = S.hosmerLemeshow(multi.y, multi.fitted); f.push(`Hosmer-Lemeshow χ²(${h.df}) = ${fmt(h.chi, 2)}, P ${pTxt(h.p)}${h.p > alpha ? ' (good fit)' : ' (poor fit)'}`); }
       if (showVif) f.push('VIF: Variance inflation factor (values above 5 suggest collinearity)');
     }
-    if (methodNote(a.method)) f.push(methodNote(a.method));
+    if (methodNote(a.method, a.screenP)) f.push(methodNote(a.method, a.screenP));
     const refs = preds.filter(e => e.ref).map(e => `${e.label}: reference = ${e.ref}`);
     if (refs.length) f.push(refs.join(', '));
     // comment
@@ -25051,7 +25058,8 @@ const Analysis = (() => {
       else sent.push(`None of the studied variables was a significant ${preds.length > 1 ? 'independent ' : ''}predictor of ${what} in ${logistic ? 'logistic' : 'linear'} regression.`);
       sent.push(logistic ? `The model was ${multi.pModel <= alpha ? 'statistically significant' : 'insignificant'} (P value ${pTxt(multi.pModel)}, Nagelkerke R² = ${fmt(multi.nagelkerke, 3)}).`
         : `The model was ${multi.pModel <= alpha ? 'statistically significant' : 'insignificant'} (P value ${pTxt(multi.pModel)}) and explained ${fmt(100 * multi.r2, 1)}% of the variance of ${lowerFirst(plain(outLabel))} (R² = ${fmt(multi.r2, 3)}).`);
-    } else sent.push('The model could not be estimated: too few complete cases or perfectly collinear predictors.');
+    } else sent.push(noneSig ? `No variable was significantly associated with ${what} in univariable analysis (P < ${screenCut(a.screenP)}), so no multivariable model was built.` : 'The model could not be estimated: too few complete cases or perfectly collinear predictors.');
+    if (multi && a.method === 'screen' && kept.length < preds.length) sent.push(`Only the ${kept.length} variable${kept.length > 1 ? 's' : ''} with a univariable P value below ${screenCut(a.screenP)} entered the multivariable model.`);
     if (a.commentDetail === 'detailed' && multi) {
       const ns = terms.filter(x => x.m && !(x.m.p <= alpha));
       sigM.forEach(x => {
@@ -25458,18 +25466,31 @@ const Analysis = (() => {
       const extra = (ciSS ? ` (95% CI ${fmt(100 * r.cutoff.sensLo, 1)}-${fmt(100 * r.cutoff.sensHi, 1)}%)` : '');
       const extraS = (ciSS ? ` (95% CI ${fmt(100 * r.cutoff.specLo, 1)}-${fmt(100 * r.cutoff.specHi, 1)}%)` : '');
       const lrs = a.lr ? `, with LR+ of ${lrTxt(r.cutoff.lrPos)} and LR− of ${lrTxt(r.cutoff.lrNeg)}` : '';
-      const pv = ciAll ? `; PPV was ${pct(r.cutoff.ppv)} (95% CI ${fmt(100 * r.cutoff.dx.ppv.lo, 1)}-${fmt(100 * r.cutoff.dx.ppv.hi, 1)}%) and NPV was ${pct(r.cutoff.npv)} (95% CI ${fmt(100 * r.cutoff.dx.npv.lo, 1)}-${fmt(100 * r.cutoff.dx.npv.hi, 1)}%)` : '';
+      const pv = ciAll ? `; PPV was ${pct(r.cutoff.ppv)} (95% CI ${fmt(100 * r.cutoff.dx.ppv.lo, 1)}-${fmt(100 * r.cutoff.dx.ppv.hi, 1)}%), NPV was ${pct(r.cutoff.npv)} (95% CI ${fmt(100 * r.cutoff.dx.npv.lo, 1)}-${fmt(100 * r.cutoff.dx.npv.hi, 1)}%) and accuracy was ${pct(r.cutoff.accuracy)} (95% CI ${fmt(100 * r.cutoff.dx.accuracy.lo, 1)}-${fmt(100 * r.cutoff.dx.accuracy.hi, 1)}%)` : `; PPV was ${pct(r.cutoff.ppv)}, NPV was ${pct(r.cutoff.npv)} and accuracy was ${pct(r.cutoff.accuracy)}`;
+      const nsCut = a.commentDetail === 'detailed' || a.commentDetail === 'full' ? `; at a cut-off of ${cutTxt(x)}${x.combined ? ' (predicted probability)' : ''}, sensitivity was ${pct(r.cutoff.sens)}, specificity was ${pct(r.cutoff.spec)}${pv.replace(/^; /, ', ')}` : '';
       return r.p <= alpha
         ? `${nm} ${r.higher || x.combined ? '' : '(lower values) '}could significantly predict ${what} with ${grade(r.auc)} discrimination (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)}); at a cut-off of ${cutTxt(x)}${x.combined ? ' (predicted probability)' : ''}, sensitivity was ${pct(r.cutoff.sens)}${extra} and specificity was ${pct(r.cutoff.spec)}${extraS}${lrs}${pv}.`
-        : `${nm} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}, P value ${pTxt(r.p)}).`;
+        : `${nm} could not significantly predict ${what} (AUC = ${fmt(r.auc, 3)}${a.commentDetail === 'full' ? `, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}` : ''}, P value ${pTxt(r.p)})${nsCut}.`;
     });
     res.filter(x => !x.r).forEach(x => sent.push(`The ROC curve of ${lowerFirst(plain(x.label))} could not be estimated: fewer than two patients with or without ${what}.`));
     // detailed: every accuracy measure at the cut-off, and the tests ranked by AUC
     if (a.commentDetail === 'detailed') {
       res.filter(x => x.r && x.r.p <= alpha).forEach(x => { const c = x.r.cutoff, nm = x.combined ? 'the combined model' : lowerFirst(plain(x.label));
-        sent.push(`At this cut-off, ${nm} had a positive predictive value of ${pct(c.ppv)}, a negative predictive value of ${pct(c.npv)} and an accuracy of ${pct(c.accuracy)}; the positive and negative likelihood ratios were ${lrTxt(c.lrPos)} and ${lrTxt(c.lrNeg)} (Youden index ${fmt(c.youden, 3)}).`); });
+        sent.push(`At this cut-off, the positive and negative likelihood ratios of ${nm} were ${lrTxt(c.lrPos)} and ${lrTxt(c.lrNeg)} (Youden index ${fmt(c.youden, 3)}).`); });
       const ranked = res.filter(x => x.r).sort((p1, p2) => p2.r.auc - p1.r.auc), nm = x => x.combined ? 'the combined model' : lowerFirst(plain(x.label));
       if (ranked.length > 1) sent.push(`The highest AUC was for ${nm(ranked[0])} (${fmt(ranked[0].r.auc, 3)}), followed by ${listJoin(ranked.slice(1).map(x => `${nm(x)} (${fmt(x.r.auc, 3)})`))}.`);
+    }
+    // highly detailed: for every test, significant or not — the 2×2 counts, every measure with its 95% CI, what a positive and a negative result mean
+    if (a.commentDetail === 'full') {
+      sent.length = 0; res.filter(x => !x.r).forEach(x => sent.push(`The ROC curve of ${lowerFirst(plain(x.label))} could not be estimated: fewer than two patients with or without ${what}.`));
+      const q = (o, v) => o && isFinite(o.lo) ? `${pct(v)} (95% CI ${fmt(100 * o.lo, 1)}-${fmt(100 * o.hi, 1)}%)` : pct(v), ql = (o, v) => o && isFinite(o.lo) && isFinite(v) ? `${lrTxt(v)} (95% CI ${fmt(o.lo, 2)}-${fmt(o.hi, 2)})` : lrTxt(v);
+      res.filter(x => x.r).forEach(x => { const r = x.r, c = r.cutoff, dx = c.dx || {}, nm = x.combined ? 'the combined model' : lowerFirst(plain(x.label)), sig = r.p <= alpha, prev = (c.tp + c.fn) / (c.tp + c.fn + c.fp + c.tn);
+        sent.push(`${cap(nm)} ${sig ? `could significantly predict ${what} with ${grade(r.auc)} discrimination` : `could not significantly predict ${what}`} (AUC = ${fmt(r.auc, 3)}, 95% CI ${fmt(r.lo, 3)}-${fmt(r.hi, 3)}, P value ${pTxt(r.p)})${sig ? '' : `; the 95% CI of the AUC ${r.lo <= 0.5 && r.hi >= 0.5 ? 'includes 0.5, so it did not discriminate better than chance' : 'is wide'}`}${x.combined || r.higher ? '' : '; lower values indicated ' + what}.`);
+        sent.push(`At the cut-off of ${cutTxt(x)}, ${c.tp} of the ${c.tp + c.fn} patients with ${what} were correctly positive (true positives) and ${c.fn} were missed (false negatives), while ${c.tn} of the ${c.tn + c.fp} patients without ${what} were correctly negative and ${c.fp} were falsely positive.`);
+        sent.push(`Sensitivity was ${q(dx.sens || { lo: c.sensLo, hi: c.sensHi }, c.sens)}, specificity ${q(dx.spec || { lo: c.specLo, hi: c.specHi }, c.spec)}, PPV ${q(dx.ppv, c.ppv)}, NPV ${q(dx.npv, c.npv)} and accuracy ${q(dx.accuracy, c.accuracy)}; LR+ was ${ql(dx.lrPos, c.lrPos)} and LR− ${ql(dx.lrNeg, c.lrNeg)} (Youden index ${fmt(c.youden, 3)}).`);
+        sent.push(`With ${what} in ${pct(prev)} of the patients, a positive result ${c.ppv >= prev ? 'raised' : 'changed'} its probability to ${pct(c.ppv)}, and a negative result ${1 - c.npv <= prev ? 'lowered' : 'changed'} it to ${pct(1 - c.npv)}${sig ? '' : '; as the AUC was not significant, this cut-off should not be used'}.`); });
+      const ranked = res.filter(x => x.r).sort((p1, p2) => p2.r.auc - p1.r.auc), nm = x => x.combined ? 'the combined model' : lowerFirst(plain(x.label));
+      if (ranked.length > 1) sent.push(`Ranked by AUC: ${listJoin(ranked.map(x => `${nm(x)} (${fmt(x.r.auc, 3)}${x.r.p <= alpha ? '' : ', not significant'})`))}.`);
     }
     const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', ROC_CUT[cutM][1], ...(a.aucScale === 'hosmer' ? ['AUC interpretation (Hosmer & Lemeshow): ≥0.9 outstanding, 0.8-0.9 excellent, 0.7-0.8 acceptable, 0.6-0.7 poor'] : [])];
     if (res.some(x => x.r && x.r.cutoff.fallback)) f.push(`${listJoin(res.filter(x => x.r && x.r.cutoff.fallback).map(x => x.combined ? 'combined model' : plain(x.label)))}: no cut-off reached the target, Youden index used`);
@@ -25492,9 +25513,9 @@ const Analysis = (() => {
       ...(a.showCut ? { cut: { fpr: 1 - x.r.cutoff.spec, tpr: x.r.cutoff.sens, label: x.combined ? '' : cutTxt(x) } } : {}) });
     const figSpec = list => ({ type: 'roc', series: list.map(serie), note: `n = ${n1} with, ${n0} without`,
       ...(a.noDiagonal ? { diagonal: false } : {}), ...(a.figLines && a.figLines !== 'normal' ? { lineW: a.figLines } : {}), ...(a.figFill ? { fill: true } : {}) });
-    const figures = !ok.length || a.figure === 'none' ? []
-      : a.figure === 'each' ? ok.map(x => ({ sig: x.r.p <= alpha, caption: `ROC curve of ${x.combined ? 'the combined model' : lowerFirst(plain(x.label))} for prediction of ${what}`, spec: figSpec([x]) }))
-      : [{ sig: ok.some(x => x.r.p <= alpha), caption: `ROC curve for prediction of ${what}`, spec: figSpec(ok) }];
+    const eachF = () => ok.map(x => ({ sig: x.r.p <= alpha, caption: `ROC curve of ${x.combined ? 'the combined model' : lowerFirst(plain(x.label))} for prediction of ${what}`, spec: figSpec([x]) })), oneF = () => [{ sig: ok.some(x => x.r.p <= alpha), caption: `ROC curve for prediction of ${what}`, spec: figSpec(ok) }];
+    // both: all curves in one figure, then one figure per test (a single test: one figure)
+    const figures = !ok.length || a.figure === 'none' ? [] : a.figure === 'each' ? eachF() : a.figure === 'both' && ok.length > 1 ? [...oneF(), ...eachF()] : oneF();
     const sec = {
       kind: 'roc', title: `Diagnostic performance for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '),
       figures, meta: { res }
@@ -25668,10 +25689,10 @@ const Analysis = (() => {
       if (ev.filter(Boolean).length < 2) return null;
       return S.coxRegression(rs.map(r => list.flatMap(e => e.terms.map(t => t.get(r)))), rs.map(r => toNum(r[a.outcome])), ev);
     };
-    const { model: multi, kept } = selectModel(preds, fitOn, a.method, 0), uni = a.univariable ? preds.map(e => fitOn([e])) : null;
+    const { model: multi, kept, none: noneSig } = selectModel(preds, fitOn, a.method, 0, a.screenP), uni = a.univariable || a.method === 'screen' ? preds.map(e => fitOn([e])) : null;
     if (!multi && !uni) return null;
     used.add('cox');
-    if (a.method === 'backward' || a.method === 'forward') used.add('sel_' + a.method);
+    if (a.method === 'backward' || a.method === 'forward' || a.method === 'screen') used.add('sel_' + a.method);
     const est = t => `${fmt(t.hr, 2)} (${fmt(t.lo, 2)}-${fmt(t.hi, 2)})`;
     const head = [''];
     if (uni) head.push('Univariable HR (95% CI)', 'P value');
@@ -25693,7 +25714,7 @@ const Analysis = (() => {
     f.push('HR: Hazard ratio', 'CI: Confidence interval', `Event: ${evLabel} = ${a.positive}`);
     if (multi) f.push(`Model: n=${multi.n} (${multi.events} events), likelihood ratio χ²(${multi.df}) = ${fmt(multi.chi, 2)}, P ${pTxt(multi.pModel)}`);
     if (multi && multi.unstable) f.push('Warning: the model did not converge or has extreme estimates, so they are unreliable');
-    if (methodNote(a.method)) f.push(methodNote(a.method));
+    if (methodNote(a.method, a.screenP)) f.push(methodNote(a.method, a.screenP));
     const refs = preds.filter(e => e.ref).map(e => `${e.label}: reference = ${e.ref}`);
     if (refs.length) f.push(refs.join(', '));
     const what = lowerFirst(plain(evLabel));
@@ -25702,7 +25723,8 @@ const Analysis = (() => {
     const sent = [];
     if (multi) sent.push(sm.length ? `In ${preds.length > 1 ? 'multivariable ' : ''}Cox regression, ${listJoin(sm.map(phr))} ${sm.length > 1 ? 'were independent predictors' : 'was a significant predictor'} of ${what}.`
       : `None of the studied variables was a significant ${preds.length > 1 ? 'independent ' : ''}predictor of ${what} in Cox regression.`);
-    else sent.push('The multivariable model could not be estimated: too few events or collinear predictors.');
+    else sent.push(noneSig ? `No variable was significantly associated with ${what} in univariable analysis (P < ${screenCut(a.screenP)}), so no multivariable model was built.` : 'The multivariable model could not be estimated: too few events or collinear predictors.');
+    if (multi && a.method === 'screen' && kept.length < preds.length) sent.push(`Only the ${kept.length} variable${kept.length > 1 ? 's' : ''} with a univariable P value below ${screenCut(a.screenP)} entered the multivariable model.`);
     if (a.commentDetail === 'detailed' && multi) {
       sm.forEach(x => sent.push(`For ${lowerFirst(x.label)}, the hazard of ${what} was ${fmt(Math.abs(x.t.hr - 1) * 100, 0)}% ${x.t.hr >= 1 ? 'higher' : 'lower'} ${/ vs /.test(x.label) ? 'compared with the reference category' : 'for each one-unit increase'} (HR = ${fmt(x.t.hr, 2)}).`));
       const ns = terms.filter(x => x.m && !(x.m.p <= alpha));
@@ -28551,7 +28573,7 @@ const Analysis = (() => {
       ['roc', 'ROC curve analysis'], ['rocClosest', 'ROC curve analysis'], ['survival', k > 1 ? 'Kaplan-Meier analysis with the log-rank test' : 'Kaplan-Meier analysis'], ['mcnemar', 'the McNemar test'], ['kappa', "Cohen's kappa"],
       ['icc', 'the intraclass correlation coefficient with Bland-Altman analysis'], ['diagnostic', 'sensitivity, specificity and predictive values with exact 95% CI'], ['cronbach', "Cronbach's α"]]
       .filter(([key]) => used.has(key)).map(x => x[1]).filter((x, i, a) => a.indexOf(x) === i);
-    if (adv.length) s.push(`Additional analyses included ${listJoin(adv)}${used.has('sel_backward') ? ' (backward elimination)' : used.has('sel_forward') ? ' (forward selection)' : ''}.`);
+    if (adv.length) s.push(`Additional analyses included ${listJoin(adv)}${used.has('sel_backward') ? ' (backward elimination)' : used.has('sel_forward') ? ' (forward selection)' : used.has('sel_screen') ? ' (multivariable models of the variables significant in univariable analysis)' : ''}.`);
     s.push(`A two-sided P ≤ ${o.alpha} was considered significant.`);
     return s.join(' ');
   }
@@ -28698,6 +28720,7 @@ const Analysis = (() => {
     if (used.has('regRoc')) s.push('The discrimination of logistic models was assessed by the area under the ROC curve of their predicted probabilities.');
     if (used.has('sel_backward')) s.push(`Multivariable models were built by backward elimination (P to remove > ${P_REMOVE}).`);
     if (used.has('sel_forward')) s.push(`Multivariable models were built by forward selection (P to enter < ${P_ENTER}).`);
+    if (used.has('sel_screen')) s.push('Variables significant in univariable analysis entered the multivariable model (enter method).');
     if (used.has('linear')) s.push('Multiple linear regression was used to identify predictors of quantitative outcomes, reporting unstandardized (B) and standardized (β) coefficients with 95% CI.');
     if (used.has('logistic')) s.push('Binary logistic regression was used to identify predictors of binary outcomes, reporting odds ratios (OR) with 95% CI; model fit was assessed by the omnibus chi-square test and Nagelkerke R².');
     if (used.has('roc') || used.has('rocClosest')) {
@@ -32560,7 +32583,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       syncAssessed(c);
     }
     state.cfg.advanced = (ex.advanced || []).filter(a => [a.outcome, a.event, ...(a.predictors || [])].filter(Boolean).every(c => state.data.headers.includes(c)))
-      .map(a => ({ positive: '', predictors: [], univariable: false, include: true, ...a }));
+      .map(a => ({ positive: '', predictors: [], univariable: false, include: true, ...advDefaults(a.type), ...a }));
     toast(`Example loaded: ${ex.name}${state.cfg.advanced.length ? ' — with suggested advanced analyses in step 8' : ''}`);
   });
 
@@ -34398,6 +34421,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     $('#groupColBox').style.display = cfg.noGroups ? 'none' : '';
     $('#groupMode').onchange = e => { readUiIntoCfg(); setNoGroups(cfg, e.target.value === 'one'); renderVariables(); renderStepper();
       toast(cfg.noGroups ? 'All patients are analysed as one group: descriptive tables and changes over time' : 'Groups are compared again'); };
+    { const af = $('#allFirst'); if (af) { af.checked = !!cfg.allFirst; af.onchange = e => { cfg.allFirst = e.target.checked; toast(cfg.allFirst ? 'The report starts with all patients as one group, then compares the groups' : 'Only the comparison of the groups'); }; } }
     $('#groupCol').onchange = e => { readUiIntoCfg(); cfg.groupCol = e.target.value; cfg.variables.forEach(v => { if (v.cols[0].col === cfg.groupCol) v.include = false; }); setGroups(cfg); renderVariables(); };
     cfg.groupMerge = cfg.groupMerge || {};
     $('#groupsTbl').innerHTML = `<thead><tr><th>Use</th><th>Value in Excel</th><th>Label in report</th><th>n</th><th>Order</th><th title="Analyse this group as part of another group">Merge into</th><th title="The control (reference) group comes first in tables and comparisons">Control</th></tr></thead><tbody>${
@@ -35919,7 +35943,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       if (t === 'lasso') { const oc = cols.find(c => c.col === a.outcome), isC = oc && oc.kind !== 'numeric';
         fields = select('outcome', 'Outcome (numeric → linear, yes/no → logistic)', cols.filter(c => c.kind === 'numeric' || isCat(c)), a.outcome) + (isC ? levelSelect('Event value', a.outcome, a.positive) : '<div></div>') + opt('rule', 'Penalty', [['1se', 'Largest λ within 1 SE (sparser)'], ['min', 'Minimum CV error']], a.rule); predLabel = 'Candidate predictors'; preds = cols.filter(c => c.col !== a.outcome); }
       const withPreds = ['finegray', 'phcheck', 'subgroups', 'kalpha', 'calib', 'multilevel', 'ipwsurv', 'iv', 'lca', 'kmeans', 'efa', 'rasch', 'cfa', 'sem', 'invariance', 'gam', 'nricat', 'bayeslogit', 'lasso', 'upset', 'weighted', 'kendallw', 'noninf', 'gee', 'tdroc', 'quantreg', 'fleiss', 'firth', 'mi', 'linear', 'logistic', 'roc', 'ancova', 'cox', 'cronbach', 'correlation', 'cochran', 'clogit', 'count', 'ordinal', 'multinom', 'pca', 'partial', 'psm', 'lmm'].includes(t);
-      const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable ? 'checked' : ''}><span>Also show univariable results</span></label></div>` : '';
+      const uni = t === 'linear' || t === 'logistic' || t === 'cox' ? `<div><label class="check" style="margin-top:24px"><input type="checkbox" data-af="univariable" ${a.univariable || a.method === 'screen' ? 'checked' : ''} ${a.method === 'screen' ? 'disabled title="Always shown with univariable screening"' : ''}><span>Also show univariable results</span></label></div>` : '';
       const ci = ADV_CAT[t] ?? 99, prevC = ai ? ADV_CAT[cfg.advanced[ai - 1].type] ?? 99 : -1, sep = ci !== prevC && ADV_GROUPS[ci] ? `<div class="adv-sep">${esc(ADV_GROUPS[ci][0])}</div>` : '';
       return `${sep}<div class="gcard" data-adv="${ai}">
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
@@ -35968,11 +35992,13 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (a && advOpen.has(a)) { readAdvanced(); advOutput(ai, e.type === 'input' ? 700 : 150); } };
   $('#advList').addEventListener('change', advRefresh); $('#advList').addEventListener('input', advRefresh);
   // per-analysis options: title, patients (subset), variable selection and type-specific extras
+  // the defaults of a new analysis card: regression enters the variables significant in univariable analysis; ROC compares the AUCs, draws all curves together and each alone, with a detailed comment
+  function advDefaults(t) { return ['linear', 'logistic', 'cox'].includes(t) ? { method: 'screen', univariable: true } : t === 'roc' ? { compare: true, figure: 'both', commentDetail: 'detailed' } : {}; }
   function advOptions(a) {
     const t = a.type, sel = (key, opts, v) => `<select data-af="${key}">${opts.map(([k, l]) => `<option value="${esc(k)}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     const box = (key, label) => `<label class="check" style="margin-top:22px"><input type="checkbox" data-af="${key}" ${a[key] ? 'checked' : ''}><span>${label}</span></label>`;
     const out = [`<div><label class="f">Title (optional)</label><input type="text" data-af="title" value="${esc(a.title || '')}" placeholder="automatic"></div>`,
-      `<div><label class="f">Comment</label>${sel('commentDetail', [['standard', 'Standard'], ['detailed', 'Detailed — more numbers and interpretation'], ['brief', 'Brief — one sentence'], ['none', 'No comment (table only)']], a.commentDetail)}</div>`];
+      `<div><label class="f">Comment</label>${sel('commentDetail', [['standard', 'Standard'], ['detailed', 'Detailed — more numbers and interpretation'], ...(t === 'roc' ? [['full', 'Highly detailed — every test, significant or not']] : []), ['brief', 'Brief — one sentence'], ['none', 'No comment (table only)']], a.commentDetail)}</div>`];
     { const set = ['commentFocus', 'commentNumbers', 'commentPlace', 'commentPre', 'commentPost', 'commentCustom'].some(k => a[k] && !['all', 'default'].includes(a[k]));
       out.push(`<details style="grid-column:1/-1" ${set ? 'open' : ''}><summary class="legend-note" style="cursor:pointer"><b>Comment options</b> — significant findings only, words only, placement, your own text</summary><div class="grid g4" style="margin-top:6px">${[`<div><label class="f">Comment content</label>${sel('commentFocus', [['all', 'All findings'], ['sig', 'Only the significant findings']], a.commentFocus)}</div>`,
       `<div><label class="f">Numbers in the comment</label>${sel('commentNumbers', [['all', 'With the numbers in brackets'], ['none', 'Without the numbers (words only)']], a.commentNumbers)}</div>`,
@@ -35983,7 +36009,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm', 'noninf', 'gee', 'crossover', 'weighted'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
-      out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`);
+      out.push(`<div><label class="f">Variable selection (multivariable)</label>${sel('method', [['enter', 'Enter — all predictors'], ['screen', 'Enter only the variables significant in univariable analysis'], ['backward', 'Backward elimination (P > 0.10 out)'], ['forward', 'Forward selection (P < 0.05 in)']], a.method)}</div>`, ...(a.method === 'screen' ? [`<div><label class="f">Univariable P to enter below</label><input type="number" min="0.001" max="0.5" step="0.01" data-af="screenP" value="${esc(a.screenP ?? '')}" placeholder="0.05"></div>`] : []));
     if (t === 'correlation') out.push(`<div><label class="f">Coefficient</label>${sel('method', [['auto', 'Automatic (Pearson if normal, else Spearman)'], ['pearson', 'Pearson'], ['spearman', 'Spearman'], ['kendall', "Kendall's tau-b"]], a.method)}</div>`,
       `<div><label class="f">Table layout</label>${sel('layout', [['auto', 'Automatic'], ['matrix', 'Matrix'], ['pairs', 'List of pairs']], a.layout)}</div>`,
       `<div><label class="f">Scatter plots of</label>${sel('figWhich', [['sig', 'Significant pairs only'], ['all', 'All pairs (also non-significant)']], a.figWhich)}</div>`,
@@ -36037,7 +36063,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       out.push(`<div>${box('ci', '95% CI of sensitivity and specificity')}</div>`, `<div>${box('ciAll', '95% CI of every measure (PPV, NPV, accuracy, LRs)')}</div>`, `<div>${box('lr', 'Likelihood ratios (LR+, LR−)')}</div>`, `<div>${box('youdenCol', 'Youden index column')}</div>`,
         `<div>${box('compare', 'Compare the AUCs (DeLong test)')}</div>`, `<div>${box('combined', 'Combined model of all tests (logistic)')}</div>`);
       // the ROC figure
-      out.push(`<div><label class="f">ROC figure</label>${sel('figure', [['one', 'All curves in one figure'], ['each', 'One figure per test'], ['none', 'No figure']], a.figure)}</div>`,
+      out.push(`<div><label class="f">ROC figure</label>${sel('figure', [['one', 'All curves in one figure'], ['both', 'Both: all in one, and each separately'], ['each', 'One figure per test'], ['none', 'No figure']], a.figure)}</div>`,
         `<div><label class="f">Curve lines</label>${sel('figLines', [['normal', 'Normal'], ['thin', 'Thin'], ['bold', 'Bold']], a.figLines)}</div>`,
         `<div>${box('showCut', 'Mark the cut-off on the curve')}</div>`, `<div>${box('figAucCi', 'AUC with its 95% CI in the legend')}</div>`,
         `<div>${box('noDiagonal', 'Hide the diagonal reference line')}</div>`, `<div>${box('figFill', 'Shade the area under a single curve')}</div>`);
@@ -36060,7 +36086,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   $('#advAdd').addEventListener('click', e => {
     const b = e.target.closest('[data-advadd]'); if (!b) return;
     readUiIntoCfg();
-    state.cfg.advanced.push({ type: b.dataset.advadd, outcome: '', positive: '', predictors: [], univariable: ['logistic', 'cox'].includes(b.dataset.advadd), include: true });
+    state.cfg.advanced.push({ type: b.dataset.advadd, outcome: '', positive: '', predictors: [], univariable: ['logistic', 'cox'].includes(b.dataset.advadd), include: true, ...advDefaults(b.dataset.advadd) });
     renderAdvanced();
   });
   $('#advList').addEventListener('click', e => {
@@ -38004,6 +38030,15 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
             const nPP = Analysis.filterRows({ ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true }] }, state.data.rows).length;
             r2.sections.forEach(s => { s.title = `${s.title} — per-protocol population`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (per-protocol)`; }); res.sections.push(s); });
             res.methods += ` As a sensitivity analysis, all comparisons were repeated in the per-protocol population (${ppc} = ${ppv}; n=${nPP}).`; } catch (e) { console.error(e); } }
+        // all patients as one group first (descriptive, with the group column as a variable), then the comparison of the groups
+        if (state.cfg.allFirst && !state.cfg.noGroups && state.data.headers.includes(state.cfg.groupCol)) {
+          try { const c1 = { ...cfg, noGroups: true, advanced: [], timeline: null, subgroup: null, variables: cfg.variables.map(v => ({ ...v })) }, gc = cfg.groupCol;
+            if (!c1.variables.some(v => v.kind === 'single' && v.cols[0].col === gc)) { const pos = state.data.headers.indexOf(gc), near = c1.variables.filter(x => x.kind === 'single').sort((a, b) => Math.abs(a.pos - pos) - Math.abs(b.pos - pos))[0]; c1.variables.push(singleVariable(state.data.rows, gc, pos, near ? near.table : 'Demographic and baseline data')); c1.variables.sort((a, b) => a.pos - b.pos); }
+            else c1.variables.forEach(v => { if (v.kind === 'single' && v.cols[0].col === gc) v.include = true; });
+            c1.groupOrder = [Analysis.ALL_GROUP]; c1.groupLabels = { [Analysis.ALL_GROUP]: 'All patients' }; c1.groupInclude = { [Analysis.ALL_GROUP]: true }; c1.groupMerge = {};
+            const r1 = Analysis.run(state.data, c1); postRepeated(r1, c1);
+            r1.sections.forEach(s => { s.title = `${s.title.replace(/\s+of the studied (groups|patients)$/, '')} — all patients`; s.key = s.title; s.allPart = true; s.figures.forEach(f => { f.caption = `${f.caption} (all patients)`; }); });
+            res.sections = [...r1.sections, ...res.sections]; res.methods += ' The results of all patients were first described as one group, and then compared between the groups.'; } catch (e) { console.error(e); } }
         const sg = state.cfg.subgroup, sgCols = subCols(sg).filter(c => state.data.headers.includes(c));
         if (sgCols.length) {
           const subs = [], done = [];
@@ -39428,7 +39463,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   renderStepper();
   window.EasyStat = state; // for debugging
   // what the interface layer (ux.js) may use
-  window.EasyUI = { loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
+  window.EasyUI = { advDefaults, loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
     renderAdvanced, renderVariables, renderOptions, schedulePreview: () => schedulePreview(), chartStyle: o => chartStyle(o), chartPalette: o => chartPalette(o), renameColumn: (a, b) => renameColumn(a, b), projectObj, openAny, healthItems, abstractTable, reportBlob: () => reportBlob(), exportedFigures: () => exportedFigures(), resultsDeck: () => resultsDeck(), buildPptx: (f, t) => buildPptx(f, t), sharePack, glossary: () => GLOSSARY, exportModel: r => exportModel(r), wordOptions: () => wordOptions(), aRows: () => aRows(), aOuts: () => aOuts(), aEffect: (v, r, g) => aEffect(v, r, g), aVal: (v, r) => aVal(v, r), aLev: v => aLev(v), isBin: v => isBin(v), vLab: v => vLab(v), combos: () => (state.combos = state.combos || []), applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();
@@ -39677,7 +39712,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const st = S(), k = ls.get('goal'); if (!k || !st.cfg || !st.data || st.uxGoalDone === st.file + k) return; st.uxGoalDone = st.file + k;
     const H = st.data.headers, rows = st.data.rows, isNum = h => rows.filter(r => r[h] !== null && r[h] !== '' && r[h] !== undefined).every(r => isFinite(+r[h])) && rows.some(r => isFinite(+r[h]) && r[h] !== '' && r[h] !== null);
     const lv = h => [...new Set(rows.map(r => r[h]).filter(v => v !== null && v !== undefined && v !== ''))], bin = H.filter(h => !isNum(h) && lv(h).length === 2 && h !== st.cfg.groupCol), num = H.filter(h => isNum(h) && !st.cfg.idCols.includes(h));
-    const pos = h => lv(h).find(v => /^(yes|1|true|positive|dead|died|death|event)$/i.test(String(v))) || lv(h)[1], A = st.cfg.advanced, n0 = A.length, add = a => { if (!A.some(x => x.type === a.type && (x.outcome || '') === (a.outcome || ''))) A.push({ include: true, predictors: [], ...a }); };
+    const pos = h => lv(h).find(v => /^(yes|1|true|positive|dead|died|death|event)$/i.test(String(v))) || lv(h)[1], A = st.cfg.advanced, n0 = A.length, add = a => { if (!A.some(x => x.type === a.type && (x.outcome || '') === (a.outcome || ''))) A.push({ include: true, predictors: [], ...(U.advDefaults ? U.advDefaults(a.type) : {}), ...a }); };
     const t = num.find(h => /time|days|month|follow|survival/i.test(h)), ev = bin.find(h => /death|died|event|status|relapse|recur|dead/i.test(h));
     if (k === 'survival' && t && ev) { add({ type: 'survival', outcome: t, event: ev, positive: pos(ev) }); add({ type: 'cox', outcome: t, event: ev, positive: pos(ev), predictors: [st.cfg.groupCol].filter(Boolean) }); }
     else if (k === 'paired') { const base = h => h.replace(/[_\s-]*(pre|post|before|after|baseline|base|d?\d+|day\s?\d+|m\d+|w\d+|t\d+)$/i, ''); const pair = num.map((a, i) => num.slice(i + 1).find(b => base(a) === base(b) && a !== b) && [a, num.slice(i + 1).find(b => base(a) === base(b))]).find(Boolean);
@@ -40130,7 +40165,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   function applyTemplate(t) { const c = S().cfg; if (!c) { U.toast('Load data first — a template sets up the analysis of your data'); return; } U.readUiIntoCfg();
     c.options = { ...c.options, ...(t.o || {}) }; c.report = { ...U.DEFAULT_REPORT, ...(c.report || {}), ...(t.report || {}) };
     if (c.consort) { if (t.flow) c.consort.type = t.flow; if (t.flowStyle) c.consort.style = { ...c.consort.style, ...t.flowStyle }; }
-    (t.adv || []).forEach(type => { if (!(c.advanced || []).some(a => a.type === type)) c.advanced.push({ type, include: true, outcome: '', positive: '', predictors: [] }); });
+    (t.adv || []).forEach(type => { if (!(c.advanced || []).some(a => a.type === type)) c.advanced.push({ type, include: true, outcome: '', positive: '', predictors: [], ...(U.advDefaults ? U.advDefaults(type) : {}) }); });
     U.renderOptions(); U.go(S().step || 2); U.toast(`Template applied${(t.adv || []).length ? ` — choose the columns of the added analyses in step 8` : ''}`); }
   function templates() { const mine = ls.get('templates', {});
     const p = panel('tlTplP', 'Study templates', `<p class="legend-note">A template keeps the settings of steps 4–12, the flowchart type and style and the kinds of advanced analyses — not the data or the columns.</p>
