@@ -377,6 +377,7 @@ const Report = (() => {
       rows.forEach(r => { if (cover === 0) blocks.push([]); blocks[blocks.length - 1].push(r); cover = Math.max(cover - 1, ...r.map(c => (c.rs || 1) - 1)); });
       const out = [[]]; blocks.forEach(bk => { const cur = out[out.length - 1]; if (cur.length && cur.length + bk.length > N) out.push([...bk]); else cur.push(...bk); }); return out; };
     for (const s of model.sections) {
+      if (s.chapterHead) children.push(H1(s.chapterHead, brand));
       if (s.tableOn !== false) {
         // thesis: each table starts on a new page (from its subheading, comment or caption, whichever comes first)
         let brk = !!opts.tableNewPage;

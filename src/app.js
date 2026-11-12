@@ -6606,10 +6606,17 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     return {
       ...r, methods: isOut('methods') ? '' : r.methods, consort: isOut('consort') ? null : r.consort, summary: isOut('summary') ? '' : r.summary,
       narrative: plan.paper ? r.narrative : '', abstract: plan.paper && plan.rep.abstract ? r.abstract : '',
-      sections: r.sections.map(s => ({ ...s, tableOn: !s.figOnly && !isOut(exKey.table(s)), figures: s.figures.filter(f => plan.kept.has(f)) }))
-        .filter(s => s.tableOn || s.figures.length)
+      sections: organise(r.sections.map(s => ({ ...s, tableOn: !s.figOnly && !isOut(exKey.table(s)), figures: s.figures.filter(f => plan.kept.has(f)) }))
+        .filter(s => s.tableOn || s.figures.length))
     };
   }
+  // O11, O15, O16: the report organised: chapters as headings in their order, parts left out of this report, the appendix at the end
+  function organise(secs) { const o = state.cfg.org || {}, M = o.secMeta || {}, CH = o.chapters || []; if (!Object.keys(M).length) return secs; const prof = o.profile || '';
+    let out = secs.filter(s => { const m = M[s.title] || {}; return m.status !== 'dropped' && !(prof && (m.notIn || []).includes(prof)); });
+    const main = out.filter(s => !(M[s.title] || {}).appendix), app = out.filter(s => (M[s.title] || {}).appendix), chOf = s => (M[s.title] || {}).chapter || '';
+    if (CH.length || main.some(chOf)) { const order = [...CH, ...[...new Set(main.map(chOf))].filter(c => c && !CH.includes(c))]; const byCh = c => main.filter(s => chOf(s) === c);
+      const sorted = [...main.filter(s => !chOf(s)), ...order.flatMap(c => byCh(c).map((s, i) => i ? s : { ...s, chapterHead: c }))]; out = sorted; } else out = main;
+    return [...out, ...app.map((s, i) => i ? s : { ...s, chapterHead: 'Appendix' })]; }
   $('#btnRerun').onclick = () => runAnalysis();
   // the options of the Word file, from the steps and the report format
   function wordOptions() {
@@ -6626,7 +6633,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, capAbove: !!o.capAbove, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings, tableIntro: !!o.tableIntro };
   }
   const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
-  const saveUrl = (url, name) => { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+  const saveUrl = (url, name) => { try { window.__onExport && window.__onExport(name); } catch (e) { /* none */ } const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
   const safeName = t => String(t).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
   // every exported table to Excel, one sheet each, with the merged cells of the Word table
   // a cell note: double-click a table cell of the report preview
@@ -7201,6 +7208,6 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   window.EasyStat = state; // for debugging
   // what the interface layer (ux.js) may use
   window.EasyUI = { loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
-    renderAdvanced, renderVariables, renderOptions, schedulePreview: () => schedulePreview(), chartStyle: o => chartStyle(o), chartPalette: o => chartPalette(o), projectObj, openAny, healthItems, abstractTable, sharePack, glossary: () => GLOSSARY, exportModel: r => exportModel(r), wordOptions: () => wordOptions(), aRows: () => aRows(), aOuts: () => aOuts(), aEffect: (v, r, g) => aEffect(v, r, g), aVal: (v, r) => aVal(v, r), aLev: v => aLev(v), isBin: v => isBin(v), vLab: v => vLab(v), combos: () => (state.combos = state.combos || []), applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
+    renderAdvanced, renderVariables, renderOptions, schedulePreview: () => schedulePreview(), chartStyle: o => chartStyle(o), chartPalette: o => chartPalette(o), renameColumn: (a, b) => renameColumn(a, b), projectObj, openAny, healthItems, abstractTable, reportBlob: () => reportBlob(), exportedFigures: () => exportedFigures(), resultsDeck: () => resultsDeck(), buildPptx: (f, t) => buildPptx(f, t), sharePack, glossary: () => GLOSSARY, exportModel: r => exportModel(r), wordOptions: () => wordOptions(), aRows: () => aRows(), aOuts: () => aOuts(), aEffect: (v, r, g) => aEffect(v, r, g), aVal: (v, r) => aVal(v, r), aLev: v => aLev(v), isBin: v => isBin(v), vLab: v => vLab(v), combos: () => (state.combos = state.combos || []), applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
 })();

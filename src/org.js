@@ -129,7 +129,7 @@
 
   /* ---------- the menu entries ---------- */
   (function menu() { const top = $('.top-actions'), more = $('.ux-menu'); if (!top) return;
-    const pb = el('button', 'btn light small', '📁 <span class="tl">Projects</span>'); pb.type = 'button'; pb.id = 'orgProjects'; pb.title = 'My projects: a dashboard of every study kept in this browser, with tags and an archive'; pb.onclick = () => projects();
+    const pb = el('button', 'btn light small', '📁 <span class="tl">Projects</span>'); pb.type = 'button'; pb.id = 'orgProjects'; pb.title = 'My projects: a dashboard of every study kept in this browser, with tags and an archive'; pb.onclick = () => X.projects();
     const sv = $('#btnSaveProj'); if (sv) sv.after(pb); else top.prepend(pb);
     const add = (id, label, title, fn) => { const b = el('button', 'btn light small', label); b.type = 'button'; b.id = id; b.title = title; b.onclick = fn; (more || top).appendChild(b); };
     add('orgDatasets', '🗂 Dataset versions', 'Raw, cleaned, interim and final data, each with its date and a note', datasets);
@@ -141,5 +141,5 @@
     const ho = $('#btnHandoff'); if (ho) ho.onclick = handoff; })();
   // the report runs go into the log
   let lastRun = null; const rep2 = $('#report'); if (rep2) new MutationObserver(() => { const r = S().result; if (r && r !== lastRun) { lastRun = r; log(`Report run: ${r.sections.length} parts${(S().cfg.org || {}).dataVersion ? ` (data “${S().cfg.org.dataVersion.name}”)` : ''}`); } }).observe(rep2, { childList: true });
-  X.projects = projects; X.keepInLibrary = keepInLibrary; X.libAll = libAll;
+  X.projects = (...a) => (X.projects2 ? X.projects2(...a) : projects(...a)); X.keepInLibrary = keepInLibrary; X.libAll = libAll; X.libPut = libPut; X.libGet = libGet; X.libDel = libDel; X.summary = summary;
 })();

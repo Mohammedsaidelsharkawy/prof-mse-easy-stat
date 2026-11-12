@@ -250,6 +250,30 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🟢 Easier use (round 7)** — most are in ☰ More
+- **⚡ Make my report**: two choices (the group column, the main outcome), then the report with the recommended settings; also in step 1 with **👀 See a finished example report**. Every step has **⏩ Recommended settings for the rest — show the report**.
+- **First-report checklist** (five ticks, then it goes away); **notes typed below the data** found and removed in one click.
+- **Essential options only** (steps 4–11: the key options, the rest behind “⋯ All options (n more)”); a **🔎 filter** of the options in every step; **unfold / fold all**; the open sections remembered.
+- **Hide tools you never use** (right-click a tool; “Show hidden tools” brings them back); **🕘 Recent** tools row; **💡 tips** shown once when they matter; **glossary tooltips** on the statistical words of the options.
+- **👁 Easier view**: plain words for the tests (“Compare two averages (t-test)”), compact report preview, large touch targets, colour-blind-safe interface, text size of the report and of the settings separately; phones: steps 1–2 in one column.
+- **🎓 Show me how** (5 common tasks highlighted step by step), **✨ What's new**, **❔ Questions people ask** (also in 🔍 Find), **🩺 Diagnostic file** (settings and errors, no patient data).
+- **Shortcuts**: Alt+1…9 the steps, Alt+← / → previous / next; **commands** (Ctrl+Shift+K): “decimals 1”, “% decimals 0”, “alpha 0.01”, “font arial”, “go 7”, “run”, “dark”, “word”, “lock”, “simple”.
+- On each table: **⬇ Word** (that table alone), **❓ Explain** (every column, the tests and the footnote in plain words); on each comment **🔊** reads it aloud.
+- **📦 Export everything** (Report/, Figures/, Slides/, Data/ in one zip); **↶ History of the settings** (every change this session, back to any); **🕘 Autosaved versions** (every 10 minutes, the last 12); back to the same step and place after closing.
+- **🧭 What these data look like**: the design read from the data, a proposed plan, the primary outcome and units suggested from the values.
+- Already there: column types (step 2), batch settings and copying settings, dragging variables between tables, reset per section, examples of each option, why each test, automatic table names and groups, settings from a Word report.
+
+**🗂 Organisation (round 7)**
+- **📁 Projects**: folders, colours, icons, pins, status (active, submitted, published, abandoned) with a note, tags, search (names, tags, variables, outcomes), duplicate as a new start, back up all / restore, **☰ Overview** of every project (stage, tasks, next due, primary result — for supervisors too) and **📅 Year in review**.
+- **🗂 Organise the report** (report bar): **chapters** (Word headings, in your order; ⚡ from the roles), **appendix** at the end, **status** (draft, final, dropped), **★ key tables** (⬇ Key tables .docx), **labels** with a filter, **which report** each part is in (with 🗃 Reports from these data), the **history** of each table's comment (back to any), parts left out of Word put back, and a **🌳 report tree**.
+- **🔗 References** (report bar): every “Table n / Figure n” in the text checked, and the table titles that break the naming pattern.
+- **🏁 Milestones**: settings, text and a data fingerprint frozen at a point; open any; **compare** two (settings, data, text, P values).
+- **📋 Task board** (to do, doing, done; templates for a trial, cohort, diagnostic study, survey; only mine) and **🧪 analysis plan board** (planned › done › in the report, by itself when the table appears).
+- **📊 Project dashboard** (patients, data quality, completeness, words, tasks, what's left, next deadline, lock, milestones, exports) and **📋 What's left** (comments not read, tasks, discussions, drafts, health points).
+- **📓 Notebook** (notes, attachments such as the protocol or ethics approval inside the project, references with citation numbers), **🕰 Timeline**, **📅 This week** (a summary to send), **⏱ Time log** per stage, **👥 People** (roles, my tasks, @mentions in the discussions, also in the Next banner), **🧺 Variable sets** (e.g. the labs panel, reused in any project).
+- **👁 Read-only copy** (opens in review mode; settings locked), **🔀 Merge a colleague's copy** (their discussions, replies, tasks and notes added; their comments offered one by one), **➕ Add rows from another file** (another site: columns matched by name, a Source column), **⬇ Export history**, **🧹 Tidy the column names**.
+- Already there: numbering schemes, branches (Reports from these data), reminders, the data dictionary, house style and presets, the setup lock.
+
 **🎨 Format figure — like Excel's Format pane** (step 7, under the preview; for the figure shown)
 - **Chart area**: font, text size, background colour, border, shape.
 - **Chart title**: as the report, the caption, your own text or none; size and colour.
