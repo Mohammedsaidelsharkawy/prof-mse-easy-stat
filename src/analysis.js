@@ -538,19 +538,27 @@ const Analysis = (() => {
     return lv;
   }
   // design columns for one predictor: itself when numeric, dummies against the first level when categorical
-  function encode(cfg, rows, col) {
+  function encode(cfg, rows, col, refOwn) {
     const label = columnLabel(cfg, col);
     if (columnKind(cfg, rows, col) === 'numeric')
       return { col, label, terms: [{ label, get: r => toNum(r[col]) }], ok: r => isFinite(toNum(r[col])) };
     let lv = levelsOf(cfg, rows, col);
     // yes/no style variables: "No" is the reference, so the estimate is the effect of "Yes"
     if (lv.length === 2 && POSITIVE.test(lv[0]) && !POSITIVE.test(lv[1])) lv = [lv[1], lv[0]];
+    if (refOwn !== undefined && refOwn !== '' && lv.includes(refOwn)) lv = [refOwn, ...lv.filter(l => l !== refOwn)];
     const ref = lv[0];
     const name = l => isGroupCol(cfg, col) ? (cfg.groupLabels[l] || l) : l;
     return { col, label, ref: name(ref), terms: lv.slice(1).map(l => ({ label: `${label} (${name(l)} vs ${name(ref)})`, get: r => +(toCat(r[col]) === l) })),
       ok: r => lv.includes(toCat(r[col])) };
   }
 
+  // G4 / G5: the reference category chosen for a predictor, and a numeric predictor per 10 units, per SD or per IQR
+  function encodeOwn(a, cfg, rows, c) {
+    const e = encode(cfg, rows, c, (a.refs || {})[c]), sc = String((a.scales || {})[c] || '').trim(); if (!sc || e.ref !== undefined || e.terms.length !== 1) return e;
+    const xs = rows.map(r => toNum(r[c])).filter(isFinite); if (xs.length < 3) return e; let k, tag;
+    if (/^sd$/i.test(sc)) { k = S.sd(xs); tag = `per SD (${fmt(k, 2)})`; } else if (/^iqr$/i.test(sc)) { k = S.quantile(xs, 0.75) - S.quantile(xs, 0.25); tag = `per IQR (${fmt(k, 2)})`; } else { k = parseFloat(sc.replace(',', '.')); tag = `per ${fmt(k, 4)} units`; }
+    if (!(isFinite(k) && k > 0) || k === 1) return e; const g = e.terms[0].get; return { ...e, scale: k, terms: [{ label: `${e.label}, ${tag}`, get: r => g(r) / k }] };
+  }
   // "Sepsis group" when the outcome is the study group itself, otherwise "<outcome> (<positive value>)"
   const eventName = (cfg, a) => isGroupCol(cfg, a.outcome) ? (cfg.groupLabels[a.positive] || a.positive) : `${lowerFirst(columnLabel(cfg, a.outcome))} (${a.positive})`;
 
@@ -561,7 +569,7 @@ const Analysis = (() => {
     const predP = (m, list) => { let i = off; return list.map(e => { const ps = e.terms.map((_, k) => m.terms[i + k].p); i += e.terms.length; return Math.min(...ps); }); };
     // screen: only the predictors significant on their own (univariable P below the cut-off) enter the multivariable model
     if (method === 'screen') {
-      const cut = screenCut(arguments[4]), list = preds.filter(e => { const t = fit([e]); return t && predP(t, [e])[0] < cut; });
+      const cut = screenCut(arguments[4]), sel = preds.filter(e => { const t = fit([e]); return t && predP(t, [e])[0] < cut; }), need = new Set(sel.flatMap(e => e.parts || [])), list = preds.filter(e => sel.includes(e) || need.has(e)); // an interaction brings its main effects
       if (!list.length) return { model: null, kept: [], none: true };
       const m = fit(list); return { model: m, kept: m ? list : [] };
     }
@@ -613,10 +621,11 @@ const Analysis = (() => {
       spec: { type: 'forest', log: kind !== 'linear', ref: kind === 'linear' ? 0 : 1, alpha, xLabel: `${name} (95% CI)${kind !== 'linear' ? ', log scale' : ''}`, valHead: `${name} (95% CI)`,
         rows: list.map(x => { const t = pick(x); return { label: x.label, est: est(t), lo: t.lo, hi: t.hi, p: t.p, text: `${fmt(est(t), dd)} (${fmt(t.lo, dd)} to ${fmt(t.hi, dd)})` }; }) } };
   }
+  const withCtx = (m, ctx) => Object.defineProperty(m, 'ctx', { value: ctx, enumerable: false });
   function regressionSection(a, cfg, rows, alpha, d, used) {
     const logistic = a.type === 'logistic';
     const outLabel = columnLabel(cfg, a.outcome);
-    const preds = a.predictors.filter(c => c !== a.outcome).map(c => encode(cfg, rows, c)).filter(e => e.terms.length);
+    const preds = a.predictors.filter(c => c !== a.outcome).map(c => encodeOwn(a, cfg, rows, c)).filter(e => e.terms.length);
     if (!preds.length) return null;
     // optional restricted cubic spline of one numeric predictor (Harrell's knots)
     let rcsE = null;
@@ -626,7 +635,7 @@ const Analysis = (() => {
         eR.terms = kn.slice(1).map((_, j) => ({ label: j ? `${lb} (spline ${j})` : `${lb} (linear)`, get: r => S.rcsBasis(g(r), kn)[j] })); rcsE = { e: eR, kn, xs }; used.add('rcs'); } }
     // optional interaction of two predictors: the products of their design terms
     const e1 = preds.find(e => e.col === a.int1), e2 = preds.find(e => e.col === a.int2);
-    if (e1 && e2 && e1 !== e2) { preds.push({ col: '__int', label: `${e1.label} × ${e2.label}`, terms: e1.terms.flatMap(t1 => e2.terms.map(t2 => ({ label: `${t1.label} × ${t2.label}`, get: r => t1.get(r) * t2.get(r) }))), ok: r => e1.ok(r) && e2.ok(r) }); used.add('interaction'); }
+    if (e1 && e2 && e1 !== e2) { preds.push({ col: '__int', parts: [e1, e2], label: `${e1.label} × ${e2.label}`, terms: e1.terms.flatMap(t1 => e2.terms.map(t2 => ({ label: `${t1.label} × ${t2.label}`, get: r => t1.get(r) * t2.get(r) }))), ok: r => e1.ok(r) && e2.ok(r) }); used.add('interaction'); }
     const yOf = logistic ? r => +(toCat(r[a.outcome]) === a.positive) : r => toNum(r[a.outcome]);
     const yOk = logistic ? r => toCat(r[a.outcome]) !== null : r => isFinite(toNum(r[a.outcome]));
     const fitOn = list => {
@@ -797,7 +806,7 @@ const Analysis = (() => {
     sent.push(...extra);
     return {
       kind: 'regression', title: `${logistic ? 'Logistic' : 'Linear'} regression analysis for prediction of ${logistic ? eventName(cfg, a) : lowerFirst(outLabel)}`,
-      head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures, meta: { multi, uni, calc }
+      head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures, meta: withCtx({ multi, uni, calc }, { kind: logistic ? 'logistic' : 'linear', preds, kept, multi, uni, terms, fitOn, yOf, yOk, outLabel, what })
     };
   }
 
@@ -982,7 +991,8 @@ const Analysis = (() => {
     spec80: ['the highest sensitivity with a specificity of at least 80%', 'Cut-off: highest sensitivity with specificity ≥ 80%'],
     spec90: ['the highest sensitivity with a specificity of at least 90%', 'Cut-off: highest sensitivity with specificity ≥ 90%'],
     spec95: ['the highest sensitivity with a specificity of at least 95%', 'Cut-off: highest sensitivity with specificity ≥ 95%'],
-    manual: ['a cut-off value chosen in advance', 'Cut-off: chosen in advance']
+    manual: ['a cut-off value chosen in advance', 'Cut-off: chosen in advance'],
+    cost: ['the lowest expected cost of the errors (the relative cost of a missed case and the prevalence)', 'Cut-off: lowest expected cost of false negatives and false positives']
   };
   // options: direction (auto / higher / lower), cutoff method (ROC_CUT; manual uses manualCut), CIs of sensitivity and specificity,
   // likelihood ratios and Youden index columns, cut-off point on the curve, DeLong comparison of the AUCs, combined logistic score
@@ -1137,11 +1147,13 @@ const Analysis = (() => {
     const cutM = method === 'manual' && !isFinite(manual) ? 'youden' : method;
     used.add(cutM === 'closest' ? 'rocClosest' : 'roc'); used.add('rocCut:' + cutM);
     const dir = a.direction === 'higher' || a.direction === 'lower' ? a.direction : 'auto';
+    // cost cut-off: maximise sensitivity − m × (1 − specificity), m = (1 − prevalence) / prevalence ÷ (cost of a missed case / cost of a false alarm)
+    const costM = pos => { const pr = pos.filter(Boolean).length / pos.length, R = parseFloat(a.costRatio) > 0 ? parseFloat(a.costRatio) : 1; return (1 - pr) / pr / R; };
     const res = tests.map(col => {
       const rs = rows.filter(r => toCat(r[a.outcome]) !== null && isFinite(toNum(r[col])));
       const pos = rs.map(r => toCat(r[a.outcome]) === a.positive);
       if (pos.filter(Boolean).length < 2 || pos.filter(x => !x).length < 2) return { col, label: columnLabel(cfg, col), r: null };
-      const vals = rs.map(r => toNum(r[col])); return { col, label: columnLabel(cfg, col), r: S.roc(vals, pos, cutM, { direction: dir, manual }), vals, pos };
+      const vals = rs.map(r => toNum(r[col])); return { col, label: columnLabel(cfg, col), r: S.roc(vals, pos, cutM, { direction: dir, manual, costM: costM(pos) }), vals, pos };
     });
     // all test variables combined into one score: the predicted probability of a logistic model
     const complete = rows.filter(r => toCat(r[a.outcome]) !== null && tests.every(c => isFinite(toNum(r[c]))));
@@ -1402,8 +1414,10 @@ const Analysis = (() => {
   // Cox proportional hazards regression: hazard ratios for time to event
   function coxSection(a, cfg, rows, alpha, d, used) {
     const timeLabel = columnLabel(cfg, a.outcome), evLabel = columnLabel(cfg, a.event);
-    const preds = (a.predictors || []).filter(c => c !== a.outcome && c !== a.event).map(c => encode(cfg, rows, c)).filter(e => e.terms.length);
+    const preds = (a.predictors || []).filter(c => c !== a.outcome && c !== a.event).map(c => encodeOwn(a, cfg, rows, c)).filter(e => e.terms.length);
     if (!preds.length) return null;
+    const e1 = preds.find(e => e.col === a.int1), e2 = preds.find(e => e.col === a.int2);
+    if (e1 && e2 && e1 !== e2) { preds.push({ col: '__int', parts: [e1, e2], label: `${e1.label} × ${e2.label}`, terms: e1.terms.flatMap(t1 => e2.terms.map(t2 => ({ label: `${t1.label} × ${t2.label}`, get: r => t1.get(r) * t2.get(r) }))), ok: r => e1.ok(r) && e2.ok(r) }); used.add('interaction'); }
     const ok = r => isFinite(toNum(r[a.outcome])) && toNum(r[a.outcome]) >= 0 && toCat(r[a.event]) !== null;
     const fitOn = list => {
       const rs = rows.filter(r => ok(r) && list.every(e => e.ok(r)));
@@ -1454,7 +1468,7 @@ const Analysis = (() => {
       sent.push(`The model included ${multi.n} patients with ${multi.events} events (likelihood ratio P value ${pTxt(multi.pModel)}).`);
     }
     const fg = a.forest ? forestFigure(terms, 'cox', what, alpha, d) : null;
-    return { kind: 'cox', title: `Cox regression analysis for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: fg ? [fg] : [], meta: { multi, uni } };
+    return { kind: 'cox', title: `Cox regression analysis for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: fg ? [fg] : [], meta: withCtx({ multi, uni }, { kind: 'cox', preds, kept, multi, uni, terms, fitOn, ok, what }) };
   }
 
   // McNemar / McNemar–Bowker: change of a categorical variable between two measurements, in each group and overall
@@ -3810,8 +3824,9 @@ const Analysis = (() => {
         : a.subset === 'each' ? groups.map(g => ({ g, rows: rows.filter(r => groupOf(cfg, r) === g) }))
         : groups.includes(a.subset) ? [{ g: a.subset, rows: rows.filter(r => groupOf(cfg, r) === a.subset) }] : [{ g: null, rows }];
       for (const sub of subsets) {
-        const made = make(a, cfg, sub.rows, alpha, d, used, G);
+        let made = make(a, cfg, sub.rows, alpha, d, used, G);
         if (!made) continue;
+        if (window.RocReg && ['roc', 'linear', 'logistic', 'cox'].includes(a.type)) { try { made = window.RocReg.extend(a, cfg, sub.rows, alpha, d, used, [].concat(made), HX); } catch (e) { console.error(e); } }
         // an analysis may add a second table (e.g. the comparison of ROC curves)
         [].concat(made).forEach((sec, si) => {
           if (si === 0 && a.title && a.title.trim()) sec.title = a.title.trim();
@@ -4452,6 +4467,7 @@ const Analysis = (() => {
       if (used.has('rocCombined')) s.push('The test variables were also combined into one score, the predicted probability of a logistic regression model.');
       if (used.has('rocCompare')) s.push('The AUCs were compared with the DeLong test for correlated ROC curves.');
     }
+    [...used].filter(k => k.startsWith('rrM:') && k.length > 4).forEach(k => s.push(k.slice(4)));
     if (used.has('clt')) s.push('Variables with at least 30 patients in every group were treated as normally distributed (central limit theorem).');
     if (used.has('mwExact') || used.has('mwPerm')) s.push(`For small samples (up to 50 patients), the Mann-Whitney U test used ${used.has('mwExact') && used.has('mwPerm') ? 'its exact distribution or, with ties, a permutation test (20,000 permutations)' : used.has('mwExact') ? 'its exact distribution' : 'a permutation test (20,000 permutations)'}.`);
     if (used.has('boot')) s.push('Confidence intervals of median differences were obtained by the percentile bootstrap (2,000 resamples).');
@@ -4680,5 +4696,6 @@ const Analysis = (() => {
     if (within) { head.push({ t: 'P (within group)' }); rows.forEach((row, i) => row.push(i < k ? within[i] : { t: [''] })); tail.forEach(row => { row[1] = { ...row[1], span: n + 1 }; }); }
     return { ...s, head, rows: [...rows, ...tail], tpCols: true };
   }
-  return { timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  const HX = { encode, encodeOwn, eventName, pTxt, plain, lowerFirst, cap, listJoin, fmt, fmtP, columnLabel, columnKind, levelsOf, toNum, toCat, S, ROC_CUT, selectModel };
+  return { HX: () => HX, timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();

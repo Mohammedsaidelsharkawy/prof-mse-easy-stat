@@ -250,6 +250,25 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**📈 ROC curves (round 10)** — new options under *More for the ROC curves* in the ROC card
+- **Several cut-offs table** (10th–90th percentiles) with the **rule-out** (sensitivity ≥ 95%) and **rule-in** (specificity ≥ 95%) cut-offs; **two cut-offs with a grey zone** (patients and cases in each zone).
+- **Optimal cut-off with its 95% bootstrap CI**, **partial AUC** at high specificity (McClish standardised), **precision-recall curve** with average precision.
+- **PPV and NPV at other prevalences** (table and curve), **sensitivity and specificity by cut-off** (figure), **2×2 table** of each test (STARD), **Fagan nomogram**.
+- **AUC in subgroups** (e.g. by sex) with a test of equal AUCs; **time-dependent AUC** at chosen times.
+- New cut-off method: **lowest cost of errors** (a missed case counted as k times a false alarm).
+- ☰ More: **🎚 ROC cut-off explorer** (move the cut-off, see the 2×2 table and every measure, use it in the report) and **🧮 Diagnostic study sample size** (Buderer for sensitivity / specificity, Hanley-McNeil for the AUC).
+
+**📉 Regression (round 10)** — new options under *More for the model* in the linear, logistic and Cox cards
+- **Crude vs adjusted** estimates with the change in estimate (confounding flag); **nested models side by side** (model 1, 2, 3) with AIC, BIC, R² and likelihood ratio tests; a comment on **what changed after adjustment**.
+- **Reference category** and **units** of each predictor (per 10 units, per SD, per IQR).
+- **Interaction** (now also in Cox) with the effect **within each subgroup**.
+- **Adjusted probabilities / means** of each category (g-computation, bootstrap CI) and an **adjusted effect plot** of one number.
+- Logistic: **relative risks** (modified Poisson with robust SEs), **standard vs Firth vs LASSO**, a **point score** from the model, **Riley sample size**, **validation leaving out each site**; the added value of a predictor now also gives **ΔAUC (DeLong)** and the **likelihood ratio test**.
+- Linear: **robust (HC3) or cluster-robust standard errors**.
+- **Influential patients** (Cook's distance, leverage, the model without them), **linearity check** of each number (spline test), **assumptions in one table** (VIF, normality, Breusch-Pagan, Durbin-Watson, events per variable, Box-Tidwell, Hosmer-Lemeshow, proportional hazards), **relative importance**, **patients left out** for missing data and the model **after multiple imputation**.
+- Wording: headings **Crude / Adjusted**, **P values as stars**, final table with **significant variables only**.
+- With univariable screening, an interaction now brings its main effects into the model.
+
 **📊 Analyse (round 9)**
 - **All patients as one group, then the groups**: in step 2, *Also give the results of all patients as one group first* — the report opens with every variable described for all patients together (the group column included, as a pie), then the usual comparison of the groups.
 - **Regression (linear, logistic, Cox)**: new variable selection *Enter only the variables significant in univariable analysis* (univariable P below 0.05, or your own cut-off), now the default for new cards; the univariable results are always shown with it, and the comment says which variables entered.

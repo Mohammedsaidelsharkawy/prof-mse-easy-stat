@@ -3750,6 +3750,34 @@
   // per-analysis options: title, patients (subset), variable selection and type-specific extras
   // the defaults of a new analysis card: regression enters the variables significant in univariable analysis; ROC compares the AUCs, draws all curves together and each alone, with a detailed comment
   function advDefaults(t) { return ['linear', 'logistic', 'cox'].includes(t) ? { method: 'screen', univariable: true } : t === 'roc' ? { compare: true, figure: 'both', commentDetail: 'detailed' } : {}; }
+  // round 10: more options for ROC and regression cards (see rocreg.js)
+  function advMore(a, sel, box) {
+    const t = a.type, out = [], cols = state.data ? state.data.headers : [], lab = c => Analysis.columnLabel(state.cfg, c), rowsA = analysedRows(), kindOf = c => Analysis.columnKind(state.cfg, rowsA, c), catCols = cols.filter(c => kindOf(c) !== 'numeric' && c !== a.outcome), numCols = cols.filter(c => kindOf(c) === 'numeric' && c !== a.outcome);
+    const head = h => `<div class="adv-sep" style="grid-column:1/-1;margin-top:6px">${h}</div>`, inp = (k, l, ph, ty = 'text') => `<div><label class="f">${l}</label><input type="${ty}" data-af="${k}" value="${esc(a[k] ?? '')}" placeholder="${esc(ph)}"></div>`;
+    if (t === 'roc') {
+      out.push(head('More for the ROC curves'), `<div>${box('rocCuts', 'Table of several cut-offs (with rule-in and rule-out)')}</div>`, `<div>${box('cutCI', 'Optimal cut-off with its 95% CI (bootstrap)')}</div>`, `<div>${box('prevTab', 'PPV and NPV at other prevalences (table and curve)')}</div>`,
+        `<div>${box('pAuc', 'Partial AUC at high specificity')}</div>`, ...(a.pAuc ? [inp('pAucSpec', 'Partial AUC from specificity (%)', '90', 'number')] : []), `<div>${box('grey', 'Two cut-offs: rule-out, grey zone, rule-in')}</div>`, `<div>${box('prCurve', 'Precision-recall curve')}</div>`,
+        `<div>${box('ssPlot', 'Sensitivity and specificity by cut-off (figure)')}</div>`, `<div>${box('stard2x2', '2×2 table of each test at its cut-off (STARD)')}</div>`, `<div>${box('fagan', 'Fagan nomogram (pre- to post-test probability)')}</div>`,
+        `<div><label class="f">AUC in subgroups of</label>${sel('rocBy', [['', '— none —'], ...catCols.map(c => [c, lab(c)])], a.rocBy || '')}</div>`,
+        `<div><label class="f">Time-dependent AUC: time column</label>${sel('tdTime', [['', '— none —'], ...numCols.map(c => [c, lab(c)])], a.tdTime || '')}</div>`, ...(a.tdTime ? [inp('tdTimes', 'At the times', 'e.g. 12, 36, 60')] : []));
+    }
+    if (['linear', 'logistic', 'cox'].includes(t)) { const P = (a.predictors || []).filter(c => c !== a.outcome && c !== a.event), pc = [['', '— none —'], ...P.map(c => [c, lab(c)])], npc = [['', '— none —'], ...P.filter(c => kindOf(c) === 'numeric').map(c => [c, lab(c)])];
+      out.push(head('More for the model'), `<div>${box('crudeAdj', 'Crude vs adjusted estimates (change in estimate)')}</div>`, `<div>${box('models', 'Nested models side by side (model 1, 2, 3)')}</div>`, ...(a.models ? [inp('modelSteps', 'Predictors in each model (counts, in the order chosen)', 'e.g. 1, 3, 5')] : []),
+        `<div>${box('adjComment', 'Comment: what changed after adjustment')}</div>`, `<div>${box('linCheck', 'Linearity check of each number (spline test)')}</div>`, `<div>${box('assume', 'Assumptions of the model in one table')}</div>`, `<div>${box('importance', 'Relative importance of the predictors')}</div>`, `<div>${box('missInfo', 'Patients left out for missing data')}</div>`,
+        `<div>${box('adjWord', 'Headings “Crude” and “Adjusted”')}</div>`, `<div>${box('pStars', 'P values as stars')}</div>`, `<div>${box('onlySigRows', 'Final table: significant variables only')}</div>`);
+      if (t !== 'cox') out.push(`<div>${box('margins', 'Adjusted probability / mean of each category')}</div>`, `<div>${box('influence', 'Influential patients (Cook\'s distance)')}</div>`, `<div>${box('miCompare', 'Also after multiple imputation')}</div>`, `<div><label class="f">Effect plot of</label>${sel('effPlot', npc, a.effPlot || '')}</div>`);
+      if (t === 'linear') out.push(`<div>${box('robust', 'Robust standard errors')}</div>`, ...(a.robust ? [`<div><label class="f">Clustered by (optional)</label>${sel('clusterCol', [['', '— HC3, no clusters —'], ...catCols.map(c => [c, lab(c)])], a.clusterCol || '')}</div>`] : []));
+      if (t === 'logistic') out.push(`<div>${box('rr', 'Relative risks (modified Poisson)')}</div>`, `<div>${box('penal', 'Standard vs Firth vs LASSO estimates')}</div>`, `<div>${box('score', 'Simple point score from the model')}</div>`, `<div>${box('riley', 'Sample size for a prediction model (Riley)')}</div>`,
+        `<div><label class="f">Validation leaving out each site</label>${sel('ieSite', [['', '— none —'], ...catCols.map(c => [c, lab(c)])], a.ieSite || '')}</div>`);
+      if (t === 'cox') out.push(`<div><label class="f">Interaction term</label><div class="row" style="gap:4px">${sel('int1', pc, a.int1 || '')}×${sel('int2', pc, a.int2 || '')}</div></div>`);
+      // reference category and units of each predictor
+      const cat = P.filter(c => kindOf(c) !== 'numeric'), num = P.filter(c => kindOf(c) === 'numeric');
+      if (cat.length || num.length) out.push(`<details style="grid-column:1/-1" ${Object.values(a.refs || {}).some(Boolean) || Object.values(a.scales || {}).some(Boolean) ? 'open' : ''}><summary class="legend-note" style="cursor:pointer"><b>Reference categories and units</b> — the category compared against, and numbers per 10 units, per SD or per IQR</summary><div class="grid g4" style="margin-top:6px">${
+        cat.map(c => `<div><label class="f">${esc(lab(c))}: reference</label><select data-af="refs.${esc(c)}"><option value="">Automatic</option>${Analysis.levelsOf(state.cfg, rowsA, c).map(l => `<option value="${esc(l)}" ${(a.refs || {})[c] === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`).join('')}${
+        num.map(c => `<div><label class="f">${esc(lab(c))}: per</label><input type="text" data-af="scales.${esc(c)}" value="${esc((a.scales || {})[c] || '')}" placeholder="1 unit (or 10, SD, IQR)"></div>`).join('')}</div></details>`);
+    }
+    return out;
+  }
   function advOptions(a) {
     const t = a.type, sel = (key, opts, v) => `<select data-af="${key}">${opts.map(([k, l]) => `<option value="${esc(k)}" ${(v || opts[0][0]) === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     const box = (key, label) => `<label class="check" style="margin-top:22px"><input type="checkbox" data-af="${key}" ${a[key] ? 'checked' : ''}><span>${label}</span></label>`;
@@ -3797,6 +3825,7 @@
     if (t === 'survival') out.push(`<div>${box('kmHR', 'Hazard ratio on the plot (two groups)')}</div>`);
     if (t === 'agreement') out.push(`<div>${box('baReg', 'Proportional bias line on the Bland-Altman plot')}</div>`);
     if (t === 'roc') out.push(`<div>${box('rocBand', '95% confidence band of the curve (bootstrap)')}</div>`);
+    out.push(...advMore(a, sel, box));
     if (t === 'survival') out.push(`<div>${box('swimmer', 'Swimmer plot of every patient')}</div>`, `<div>${box('ciBand', '95% CI bands on the curves')}</div>`, `<div>${box('riskUnder', 'Number at risk under the curve')}</div>`, `<div>${box('riskCens', 'Events and censored per interval (risk table)')}</div>`, `<div>${box('risk', 'Number at risk table')}</div>`, `<div>${box('pairwise', 'Pairwise log-rank tests (3+ groups, Bonferroni)')}</div>`);
     if (t === 'kappa') out.push(`<div><label class="f">Weighted kappa (ordered categories)</label>${sel('weights', [['none', 'No — Cohen\'s kappa only'], ['linear', 'Linear weights'], ['quadratic', 'Quadratic weights']], a.weights)}</div>`);
     if (t === 'agreement') out.push(`<div><label class="f">ICC type</label>${sel('iccType', [['agreement', 'Absolute agreement (A,1)'], ['consistency', 'Consistency (C,1)']], a.iccType)}</div>`, `<div>${box('baPct', 'Bland-Altman of % differences')}</div>`);
@@ -3812,7 +3841,8 @@
       out.push(`<div><label class="f">Optimal cut-off</label>${sel('cutoff', [['youden', 'Youden index'], ['closest', 'Closest to top-left corner'],
         ['sens80', 'Sensitivity ≥ 80% (best specificity)'], ['sens90', 'Sensitivity ≥ 90% (best specificity)'], ['sens95', 'Sensitivity ≥ 95% (best specificity)'],
         ['spec80', 'Specificity ≥ 80% (best sensitivity)'], ['spec90', 'Specificity ≥ 90% (best sensitivity)'], ['spec95', 'Specificity ≥ 95% (best sensitivity)'],
-        ['manual', 'My own cut-off value']], a.cutoff)}</div>`);
+        ['cost', 'Lowest cost of errors (a missed case vs a false alarm)'], ['manual', 'My own cut-off value']], a.cutoff)}</div>`);
+      if (a.cutoff === 'cost') out.push(`<div><label class="f">A missed case costs … times a false alarm</label><input type="number" min="0.05" step="0.5" data-af="costRatio" value="${esc(a.costRatio ?? '')}" placeholder="1"></div>`);
       if (a.cutoff === 'manual') out.push(`<div><label class="f">Cut-off value (positive when ≥, or ≤ for lower values)</label><input type="text" data-af="manualCut" value="${esc(a.manualCut || '')}" placeholder="e.g. 2.5"></div>`);
       out.push(`<div><label class="f">AUC interpretation in the comment</label>${sel('aucScale', [['standard', 'Excellent ≥0.9, good ≥0.8, fair ≥0.7, poor ≥0.6'], ['hosmer', 'Hosmer & Lemeshow: outstanding ≥0.9, excellent ≥0.8, acceptable ≥0.7']], a.aucScale)}</div>`);
       out.push(`<div><label class="f">Positive test direction</label>${sel('direction', [['auto', 'Automatic (from the AUC)'], ['higher', 'Higher values positive'], ['lower', 'Lower values positive']], a.direction)}</div>`);
@@ -3829,7 +3859,7 @@
   function readAdvanced() {
     document.querySelectorAll('[data-adv]').forEach(card => {
       const a = state.cfg.advanced[+card.dataset.adv]; if (!a) return;
-      card.querySelectorAll('[data-af]').forEach(el => { a[el.dataset.af] = el.type === 'checkbox' ? el.checked : el.value; });
+      card.querySelectorAll('[data-af]').forEach(el => { const k = el.dataset.af, v = el.type === 'checkbox' ? el.checked : el.value, dot = k.indexOf('.'); if (dot > 0 && ['refs', 'scales'].includes(k.slice(0, dot))) { const k1 = k.slice(0, dot); a[k1] = { ...(a[k1] || {}), [k.slice(dot + 1)]: v }; } else a[k] = v; });
       a.predictors = [...card.querySelectorAll('[data-apred]')].filter(el => el.checked).map(el => el.dataset.apred);
     });
   }
@@ -3861,7 +3891,7 @@
   });
   $('#advList').addEventListener('change', e => {
     const f = e.target.dataset.af;
-    if (f === 'cutoff') { readUiIntoCfg(); renderAdvanced(); return; }
+    if (['cutoff', 'method', 'pAuc', 'tdTime', 'models', 'robust'].includes(f)) { readUiIntoCfg(); renderAdvanced(); return; }
     if (!['outcome', 'event', 'second', 'rvar', 'ppCol', 'design', 'seqCol'].includes(f)) return;
     readUiIntoCfg();
     const a = state.cfg.advanced[+e.target.closest('[data-adv]').dataset.adv];

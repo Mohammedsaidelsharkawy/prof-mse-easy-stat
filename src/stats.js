@@ -793,7 +793,7 @@ const Stats = (() => {
       const tp = values.filter((v, i) => pos[i] && sgn * (v - c) > 0).length, fp = values.filter((v, i) => !pos[i] && sgn * (v - c) > 0).length;
       return { cut: c, sens: tp / n1, spec: 1 - fp / n0, tp, fp, fn: n1 - tp, tn: n0 - fp };
     });
-    const score = cutoff === 'closest' ? q => -((1 - q.sens) ** 2 + (1 - q.spec) ** 2) : q => q.sens + q.spec;
+    const score = cutoff === 'closest' ? q => -((1 - q.sens) ** 2 + (1 - q.spec) ** 2) : cutoff === 'cost' && isFinite(o.costM) ? q => q.sens - o.costM * (1 - q.spec) : q => q.sens + q.spec;
     let best = points.slice(1, -1).reduce((b, q) => (score(q) > score(b) ? q : b), points[1] || points[0]);
     const target = /^(sens|spec)(\d+)$/.exec(cutoff);
     if (target) {

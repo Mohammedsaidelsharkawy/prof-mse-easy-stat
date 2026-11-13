@@ -404,6 +404,7 @@ const Charts = (() => {
     if (spec.type === 'curve') return curveChart(spec, paletteName, st);
     if (spec.type === 'margin') return marginChart(spec, paletteName, st);
     if (spec.type === 'nomogram') return nomogramChart(spec, paletteName, st);
+    if (spec.type === 'fagan') return faganChart(spec, paletteName, st);
     if (spec.type === 'ba') return baChart(spec, paletteName, st);
     const pal = palette(paletteName);
     const { c, ctx, W, H, ts, F } = setup(st);
@@ -1209,6 +1210,28 @@ const Charts = (() => {
     return c;
   }
   /* ---------- nomogram of a logistic model ---------- */
+  // Fagan nomogram: pre-test probability (left), likelihood ratio (middle, log scale), post-test probability (right); a line for a positive and a negative result
+  function faganChart(spec, paletteName, st) {
+    // standard Fagan layout: pre-test probability increases downwards on the left, post-test upwards on the right, and the likelihood ratio sits
+    // half-way on a log scale, so the straight line from the pre-test probability through the LR meets the post-test probability
+    const pal = palette(paletteName), { c, ctx, W, H, ts, F } = setup(st), T = 70, B = H - 200 * ts, x1 = W * 0.25, x2 = W * 0.5, x3 = W * 0.75, Ym = (T + B) / 2, k = (B - T) / (2 * Math.log(999));
+    const L = p => { const v = Math.min(0.999, Math.max(0.001, p)); return Math.log(v / (1 - v)); }, yL = p => Ym + k * L(p), yR = p => Ym - k * L(p), yM = r => Ym - k * Math.log(Math.min(1e6, Math.max(1e-6, r))) / 2;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3; [x1, x2, x3].forEach(x => { ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, B); ctx.stroke(); });
+    ctx.font = F(600, 22); ctx.fillStyle = '#444'; ctx.textBaseline = 'middle'; ctx.lineWidth = 2;
+    [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.8, 0.9, 0.95, 0.99, 0.999].forEach(p => { const t = `${+(100 * p).toFixed(1)}`;
+      ctx.textAlign = 'right'; ctx.fillText(t, x1 - 14, yL(p)); ctx.beginPath(); ctx.moveTo(x1 - 8, yL(p)); ctx.lineTo(x1, yL(p)); ctx.stroke();
+      ctx.textAlign = 'left'; ctx.fillText(t, x3 + 14, yR(p)); ctx.beginPath(); ctx.moveTo(x3, yR(p)); ctx.lineTo(x3 + 8, yR(p)); ctx.stroke(); });
+    [0.001, 0.01, 0.1, 0.5, 1, 2, 10, 100, 1000].forEach(r => { ctx.textAlign = 'left'; ctx.fillText(String(r), x2 + 14, yM(r)); ctx.beginPath(); ctx.moveTo(x2 - 8, yM(r)); ctx.lineTo(x2 + 8, yM(r)); ctx.stroke(); });
+    ctx.font = F(700, 26); ctx.fillStyle = '#222'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    [[x1, 'Pre-test probability (%)'], [x2, 'Likelihood ratio'], [x3, 'Post-test probability (%)']].forEach(([x, t]) => ctx.fillText(t, x, B + 20 * ts));
+    const items = [];
+    const line = (lr, post, col, name) => { if (!(lr > 0) || !isFinite(lr)) return; ctx.strokeStyle = col; ctx.lineWidth = 5 * ts; ctx.beginPath(); ctx.moveTo(x1, yL(spec.pre)); ctx.lineTo(x3, yR(post)); ctx.stroke(); items.push([col, `${name} result: LR ${+lr.toFixed(2)} → ${+(100 * post).toFixed(1)}%`]); };
+    line(spec.lrPos, spec.postPos, pal[0], 'Positive'); line(spec.lrNeg, spec.postNeg, pal[1 % pal.length], 'Negative');
+    ctx.font = F(700, 24); ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; const yLeg = B + 90 * ts, tw = items.map(([, t]) => ctx.measureText(t).width + 70), tot = tw.reduce((a, b) => a + b, 0) + 40 * (items.length - 1); let x = (W - tot) / 2;
+    items.forEach(([col, t], i) => { ctx.strokeStyle = col; ctx.lineWidth = 6 * ts; ctx.beginPath(); ctx.moveTo(x, yLeg); ctx.lineTo(x + 50, yLeg); ctx.stroke(); ctx.fillStyle = '#222'; ctx.fillText(t, x + 60, yLeg); x += tw[i] + 40; });
+    ctx.fillStyle = '#222'; ctx.font = F(700, 22); ctx.textAlign = 'right'; ctx.fillText(`pre-test ${+(100 * spec.pre).toFixed(1)}% ▸`, x1 - 70, yL(spec.pre));
+    return c;
+  }
   function nomogramChart(spec, paletteName, st) {
     const pal = palette(paletteName);
     const { c, ctx, W, H, ts, F } = setup(st);
