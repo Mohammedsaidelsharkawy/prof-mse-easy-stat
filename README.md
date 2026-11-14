@@ -250,6 +250,8 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🎨 Default chart colours**: new projects use the **Office 2013 - 2022** palette (blue, orange, grey, gold …); saved projects keep their own colours.
+
 **📈 ROC curves (round 10)** — new options under *More for the ROC curves* in the ROC card
 - **Several cut-offs table** (10th–90th percentiles) with the **rule-out** (sensitivity ≥ 95%) and **rule-in** (specificity ≥ 95%) cut-offs; **two cut-offs with a grey zone** (patients and cases in each zone).
 - **Optimal cut-off with its 95% bootstrap CI**, **partial AUC** at high specificity (McClish standardised), **precision-recall curve** with average precision.
