@@ -422,7 +422,10 @@ const Charts = (() => {
     const L = 110 + 40 * ts, R = 40 + (lm.pos === 'right' ? lm.w + 40 : 0);
     // blocks: an item's categories (e.g. Male and Female) with the item's name (Sex) under a bracket below them — over categories (catBlocks) or over the named bars (barBlocks)
     const catBlocks = spec.type === 'bar' && !twoLev ? (spec.catBlocks || []).filter(b => b.to > b.from) : [], barBlocks = twoLev ? (spec.barBlocks || []).filter(b => b.to > b.from) : [];
-    const T = 50 + (lm.pos === 'top' ? lm.band : 0), B = 120 * ts + (twoLev ? 56 * ts : 0) + (catBlocks.length || barBlocks.length ? 52 * ts : 0) + (lm.pos === 'bottom' ? lm.band : 0);
+    // many or long category names: angled (45°) when a word is wider than its slot, so neighbours never overlap
+    const rotCat = (() => { if (!['bar', 'stacked', 'line', 'box', 'dot', 'violin'].includes(spec.type) || spec.xValues || !spec.categories || spec.categories.length < 2) return 0; ctx.font = F(700, 26 * AX); const cw0 = (W - L - R) / spec.categories.length - 10;
+      const words = spec.categories.flatMap(c0 => String(c0).split(/\s+/)); if (!words.some(w => ctx.measureText(w).width > cw0)) return 0; return Math.min(300 * ts, Math.max(...spec.categories.map(c0 => ctx.measureText(String(c0)).width))) * Math.SQRT1_2 + 16 * ts; })();
+    const T = 50 + (lm.pos === 'top' ? lm.band : 0), B = 120 * ts + (twoLev ? 56 * ts : 0) + (catBlocks.length || barBlocks.length ? 52 * ts : 0) + (lm.pos === 'bottom' ? lm.band : 0) + (rotCat ? Math.max(0, rotCat - 34 * ts) : 0);
     const pw = W - L - R, ph = H - T - B;
 
     // y range
@@ -520,8 +523,11 @@ const Charts = (() => {
       ctx.font = F(700, 26 * AX); ctx.fillStyle = '#333';
       // a thin bracket under each block of bars, above its name
       ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5; spec.categories.forEach((_, ci) => { const a = L + cw * ci + (cw - gw0) / 2 + 4, b = a + gw0 - 8, yy = T + ph + nameH + 4; ctx.beginPath(); ctx.moveTo(a, yy - 6); ctx.lineTo(a, yy); ctx.lineTo(b, yy); ctx.lineTo(b, yy - 6); ctx.stroke(); }); }
-    const catLines = Math.max(1, ...spec.categories.map(cat => measureLines(ctx, cat, cw - 10)));
-    spec.categories.forEach((cat, i) => wrapText(ctx, cat, xAt(i), T + ph + 16 + nameH, cw - 10, 30 * ts));
+    const catLines = rotCat ? Math.max(1, Math.ceil(rotCat / (30 * ts))) : Math.max(1, ...spec.categories.map(cat => measureLines(ctx, cat, cw - 10)));
+    if (rotCat) { const maxW = 300 * ts, cut = t => { t = String(t); if (ctx.measureText(t).width <= maxW) return t; while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1); return t + '…'; };
+      spec.categories.forEach((cat, i) => { ctx.save(); ctx.translate(xAt(i) + 6 * ts, T + ph + 12 + nameH); ctx.rotate(-Math.PI / 4); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(cut(cat), 0, 0); ctx.restore(); });
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top'; }
+    else spec.categories.forEach((cat, i) => wrapText(ctx, cat, xAt(i), T + ph + 16 + nameH, cw - 10, 30 * ts));
     if (catBlocks.length && spec.type === 'bar') { const yy = T + ph + 16 + nameH + catLines * 30 * ts + 6; ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
       catBlocks.forEach(bk => { const a = xAt(bk.from) - cw * 0.42, b = xAt(bk.to) + cw * 0.42; ctx.beginPath(); ctx.moveTo(a, yy - 6); ctx.lineTo(a, yy); ctx.lineTo(b, yy); ctx.lineTo(b, yy - 6); ctx.stroke();
         ctx.font = F(700, 26 * AX); ctx.fillStyle = '#333'; wrapText(ctx, bk.label, (a + b) / 2, yy + 6, b - a, 30 * ts); });
@@ -542,6 +548,10 @@ const Charts = (() => {
     if (spec.type === 'bar') {
       const slots = perGroup ? 1 : ns;
       const gw = cw * widthOf(st, perGroup ? 0.42 : 0.78), bw = gw / slots;
+      // one size for every value label: the largest (down to 17) at which all fit their bar slot; upright labels when none fits
+      const labTxt = v => (Math.round(v * 10 ** (spec.labelDec ?? 1)) / 10 ** (spec.labelDec ?? 1)) + (spec.percent ? '%' : ''), room = bw + 6 * ts;
+      let labFs = 24 * VL, labUp = false; if (spec.labels) { const ws = fs => { ctx.font = F(700, fs); return Math.max(0, ...spec.series.flatMap(s0 => (s0.values || []).filter(v => v != null && isFinite(v)).map(v => ctx.measureText(labTxt(v)).width))); };
+        while (labFs > 17 * VL && ws(labFs) > room) labFs -= 1; labUp = ws(labFs) > room; if (labUp) labFs = Math.min(24 * VL, Math.max(17 * VL, bw * 0.75)); }
       spec.series.forEach((s, si) => s.values.forEach((v, ci) => {
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
@@ -552,9 +562,12 @@ const Charts = (() => {
         if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4), v, color);
         else if (s.lo && s.hi) errBar(cx, s.lo[ci], s.hi[ci], Math.min(14, w / 4), v, color);
         if (spec.labels) {
-          ctx.fillStyle = '#222'; ctx.font = F(700, 24 * VL); ctx.textBaseline = 'bottom';
-          const dec = spec.labelDec ?? 1, top = s.err && isFinite(s.err[ci]) ? v + s.err[ci] : s.hi ? s.hi[ci] : v;
-          ctx.fillText((Math.round(v * 10 ** dec) / 10 ** dec) + (spec.percent ? '%' : ''), cx, y(top) - 6);
+          ctx.fillStyle = '#222'; ctx.textBaseline = 'bottom';
+          const top = s.err && isFinite(s.err[ci]) ? v + s.err[ci] : s.hi ? s.hi[ci] : v, txt = labTxt(v);
+          ctx.font = F(700, labFs);
+          if (!labUp) ctx.fillText(txt, cx, y(top) - 6);
+          else { const tw = ctx.measureText(txt).width, hBar = y(Math.max(sc.min, 0)) - y(v), inside = hBar >= tw + 16 && !(s.err || s.hi); ctx.save(); ctx.translate(cx, inside ? y(v) + 8 : y(top) - 6); ctx.rotate(-Math.PI / 2); ctx.textAlign = inside ? 'right' : 'left'; ctx.textBaseline = 'middle';
+            if (inside) { ctx.fillStyle = st.barFill === 'outline' || st.barFill === 'hatched' ? '#222' : '#fff'; } ctx.fillText(txt, 0, 0); ctx.restore(); ctx.textAlign = 'center'; }
         }
       }));
     } else if (spec.type === 'line') {
