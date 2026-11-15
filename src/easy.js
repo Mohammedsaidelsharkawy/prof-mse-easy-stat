@@ -9,7 +9,7 @@
   const ls = { get: (k, d) => { try { const v = localStorage.getItem('ez.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem('ez.' + k, JSON.stringify(v)); } catch (e) { /* not kept */ } } };
   const step = () => S().step || 1, panel = X.panel;
   const css = el('style'); css.textContent = `
-html.e-simple .e-opt:not(.e-core):not(.ux-changed){display:none!important}html.e-simple .e-showall .e-opt.e-opt:not(.e-x1):not(.e-x2){display:revert!important}.e-more{margin:6px 0}
+html.e-simple .e-opt:not(.e-core):not(.ux-changed):not(.e-showall .e-opt){display:none!important}.e-more{margin:6px 0}
 .e-filter{display:flex;gap:6px;align-items:center;margin:0 0 8px;flex-wrap:wrap}.e-filter input{max-width:260px}.e-hit{outline:2px solid #FFC107;border-radius:6px}.e-nohit{display:none!important}
 html.e-compact #report textarea[data-comment]{max-height:2.6em;overflow:hidden}html.e-compact #report .figs,html.e-compact #report .row .btn{display:none}
 html.e-touch .btn,html.e-touch select,html.e-touch input:not([type=checkbox]):not([type=radio]){min-height:44px}html.e-touch input[type=checkbox],html.e-touch input[type=radio]{width:22px;height:22px}
