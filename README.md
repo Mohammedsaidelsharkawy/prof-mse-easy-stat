@@ -258,6 +258,7 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 **💬 Comments (step 6)**
 - **Comment of each variable**: a table of every variable with its own comment — as the options above, Concise, Detailed, Descriptive, One sentence, No comment, or **My own text**. A table's comment is the comment of its other variables followed by these.
+- **⚙ Options of each variable**: beside its comment style, a variable can have its own comment options — non-significant wording, “not significantly”, tone, varied wording, hedging, tense, spelling, P values in the text and their wording, test named, units, numbers in words, effect sizes and their size and labels, non-significant 95% CI, clinical importance, trends and its own sentence templates (each “as in step 6” until changed); copy from step 6, reset, or apply to all variables of the table.
 - **Comment preview**: tick the variables to preview (otherwise one number and two categories); the preview shows the per-variable comments too.
 
 **📋 No effect size in the baseline table** (step 5, on by default, CONSORT): the MD / RR column is left out of tables named “Baseline …” or “Demographic …”, or whose variables all have the baseline role, and the methods say so; a table's own options can still ask for it.
