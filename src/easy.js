@@ -9,7 +9,7 @@
   const ls = { get: (k, d) => { try { const v = localStorage.getItem('ez.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem('ez.' + k, JSON.stringify(v)); } catch (e) { /* not kept */ } } };
   const step = () => S().step || 1, panel = X.panel;
   const css = el('style'); css.textContent = `
-html.e-simple .e-opt:not(.e-core):not(.ux-changed){display:none!important}html.e-simple .e-showall .e-opt{display:revert!important}.e-more{margin:6px 0}
+html.e-simple .e-opt:not(.e-core):not(.ux-changed){display:none!important}html.e-simple .e-showall .e-opt.e-opt:not(.e-x1):not(.e-x2){display:revert!important}.e-more{margin:6px 0}
 .e-filter{display:flex;gap:6px;align-items:center;margin:0 0 8px;flex-wrap:wrap}.e-filter input{max-width:260px}.e-hit{outline:2px solid #FFC107;border-radius:6px}.e-nohit{display:none!important}
 html.e-compact #report textarea[data-comment]{max-height:2.6em;overflow:hidden}html.e-compact #report .figs,html.e-compact #report .row .btn{display:none}
 html.e-touch .btn,html.e-touch select,html.e-touch input:not([type=checkbox]):not([type=radio]){min-height:44px}html.e-touch input[type=checkbox],html.e-touch input[type=radio]{width:22px;height:22px}
@@ -45,7 +45,10 @@ html.e-cb .chip.ok,html.e-cb .ux2-st.auto{color:#1565C0!important}html.e-cb .chi
 
   /* ---------- E8, E9: simple options (the essentials first, the rest one click away) ---------- */
   const CORE = new Set(['optAlpha', 'optDec', 'optPctDec', 'optTable', 'optFont', 'optCommentStyle', 'optPWord', 'optPLead', 'optLegend', 'optChartText', 'optPalette', 'optNormality', 'optNotSig', 'optTableCaption', 'optCaptionStyle', 'optChartStyle', 'optPlacement', 'optFigPlacement', 'optCommentPlace', 'optPageSize', 'optPageMargin', 'optOrientation', 'optConfLevel']);
-  function markOptions() { Object.values(U.OPTION_FIELDS || {}).forEach(([id]) => { const inp = document.getElementById(id); if (!inp || !inp.closest('#p4,#p5,#p6,#p7,#p8,#p11')) return; const w = inp.closest('label.check') || inp.parentNode; if (!w || w.classList.contains('e-opt')) return; w.classList.add('e-opt'); if (CORE.has(id)) w.classList.add('e-core'); });
+  function markOptions() { Object.values(U.OPTION_FIELDS || {}).forEach(([id]) => { const inp = document.getElementById(id); if (!inp || !inp.closest('#p4,#p5,#p6,#p7,#p8,#p11')) return; let w = inp.closest('label.check') || inp.parentNode;
+      // an option placed straight in a card or a section (e.g. a text box under its label): only the box and its label, never the whole card
+      if (w && (w.classList.contains('card') || w.classList.contains('panel') || w.tagName === 'DETAILS' || w.tagName === 'SECTION')) { const lab = inp.previousElementSibling && inp.previousElementSibling.tagName === 'LABEL' ? inp.previousElementSibling : null; [inp, lab].filter(Boolean).forEach(x => { x.classList.add('e-opt'); if (CORE.has(id)) x.classList.add('e-core'); }); return; }
+      if (!w || w.classList.contains('e-opt')) return; w.classList.add('e-opt'); if (CORE.has(id)) w.classList.add('e-core'); });
     $$('#p4 .card, #p5 .card, #p6 .card, #p7 .card, #p8 .card, #p11 .card, #p4 details, #p5 details, #p6 details, #p7 details, #p11 details').forEach(c => { if (c.querySelector(':scope > .e-more')) return; const n = c.querySelectorAll('.e-opt:not(.e-core)').length; if (n < 3) return; const b = el('button', 'btn ghost small e-more', `⋯ All options (${n} more)`); b.type = 'button'; b.onclick = () => { c.classList.toggle('e-showall'); b.textContent = c.classList.contains('e-showall') ? '▴ Fewer options' : `⋯ All options (${n} more)`; }; c.appendChild(b); }); }
   function setSimple(on) { document.documentElement.classList.toggle('e-simple', on); ls.set('simple', on); if (on) markOptions(); }
 
