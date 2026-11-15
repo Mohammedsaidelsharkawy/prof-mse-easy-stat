@@ -948,6 +948,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="grid g2">
         <div>
           <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
+          <label class="check"><input type="checkbox" id="optEffNoBase" checked><span><b>No effect size in the baseline table</b> (CONSORT) — tables named “Baseline …” / “Demographic …”, or whose variables all have the baseline role</span></label>
           <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — paired t / Wilcoxon for two timepoints; repeated-measures ANOVA (Greenhouse-Geisser) or Friedman for more, with Bonferroni post hoc versus the first timepoint</span></label>
           <label class="check"><input type="checkbox" id="optWelch"><span><b>Welch's ANOVA + Games-Howell</b> post hoc when variances are unequal (Levene P &lt; 0.05), 3+ groups</span></label>
           <label class="check"><input type="checkbox" id="optDunn" checked><span><b>Dunn's test</b> (Bonferroni) as the post hoc after Kruskal-Wallis, instead of pairwise Mann-Whitney</span></label>
@@ -1231,7 +1232,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     </div>
     <div class="card">
       <div class="row"><h2 style="margin:0">Comment preview</h2><span class="spacer"></span><span class="legend-note">The comment written for a table of your own data, redrawn as you change the options above.</span></div>
-      <div class="paper-prev" id="comPreview"></div>
+      <div id="comPrevPick" class="row" style="gap:6px;flex-wrap:wrap;margin:6px 0"></div><div class="paper-prev" id="comPreview"></div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Comment of each variable</h2><span class="spacer"></span><span class="legend-note">A different comment for some variables: another style, one sentence, none, or your own text. The others follow the options above.</span></div>
+      <div class="tbl-wrap" style="max-height:420px"><table class="t" id="varComTbl"></table></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="5">← Back</button><button class="btn ghost small" data-reset="6" type="button" title="Every option of this step back to its default">↺ Defaults for this step</button><button class="btn primary" data-go="7">Next: Figures →</button></div>
   </section>

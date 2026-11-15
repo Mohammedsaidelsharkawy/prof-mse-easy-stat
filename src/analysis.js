@@ -3037,7 +3037,10 @@ const Analysis = (() => {
     const TB_KEYS = ['ynBlock', 'ynTitle', 'hideZero', 'rareOther', 'boldSigMax', 'smdCol', 'adjCol', 'adjVars', 'commentStyle', 'nsWord', 'commentOrder', 'totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort', 'pairCols', 'nntCol', 'tableGroupOrder', 'hlSig', 'hlMiss', 'hlEff'];
     let tbSaved = null; const tbRestore = () => { if (tbSaved) { Object.assign(opts, tbSaved); tbSaved = null; } };
     for (const b of blocks) {
-      tbRestore(); setStyle(); { const o2 = b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table]; if (o2) { const ks = TB_KEYS.filter(x => o2[x] !== undefined); if (ks.length) { tbSaved = Object.fromEntries(ks.map(x => [x, opts[x]])); ks.forEach(x => { opts[x] = o2[x]; }); } } } setStyle();
+      tbRestore(); setStyle(); { const o2 = b.kind === 'single' && cfg.tableOpts && cfg.tableOpts[b.table]; if (o2) { const ks = TB_KEYS.filter(x => o2[x] !== undefined); if (ks.length) { tbSaved = Object.fromEntries(ks.map(x => [x, opts[x]])); ks.forEach(x => { opts[x] = o2[x]; }); } }
+        // CONSORT: no effect sizes in the baseline table (a table named Baseline … / Demographic …, or whose variables all have the baseline role), unless the table's own options ask for them
+        if (b.kind === 'single' && k > 1 && opts.effNoBase !== false && opts.effect && !(o2 && o2.effect !== undefined) && (/^(baseline|demographic)/i.test(String(b.table || '').trim()) || (b.vars.length && b.vars.every(v => v.role === 'baseline')))) { tbSaved = tbSaved || {}; if (!('effect' in tbSaved)) tbSaved.effect = opts.effect; opts.effect = false; used.add('noEffBase'); } }
+      setStyle();
       if (k === 1) { sections.push(b.kind === 'repeated' ? oneGroupRepeated(b.vars[0]) : oneGroupSingle(b)); continue; }
       if (b.kind === 'repeated') {
         const v = b.vars[0];
@@ -4493,6 +4496,7 @@ const Analysis = (() => {
       if (used.has('rocCompare')) s.push('The AUCs were compared with the DeLong test for correlated ROC curves.');
     }
     [...used].filter(k => k.startsWith('rrM:') && k.length > 4).forEach(k => s.push(k.slice(4)));
+    if (used.has('noEffBase')) s.push('In line with reporting guidelines (CONSORT), effect sizes were not reported for the baseline characteristics.');
     if (used.has('clt')) s.push('Variables with at least 30 patients in every group were treated as normally distributed (central limit theorem).');
     if (used.has('mwExact') || used.has('mwPerm')) s.push(`For small samples (up to 50 patients), the Mann-Whitney U test used ${used.has('mwExact') && used.has('mwPerm') ? 'its exact distribution or, with ties, a permutation test (20,000 permutations)' : used.has('mwExact') ? 'its exact distribution' : 'a permutation test (20,000 permutations)'}.`);
     if (used.has('boot')) s.push('Confidence intervals of median differences were obtained by the percentile bootstrap (2,000 resamples).');

@@ -16,7 +16,7 @@
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'office2013', effect: true, within: false, fisher: true, branding: false,
     commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, clinWord: false, testInText: false, tableIntro: false, limits: false, discuss: false, conclusion: false, subSummary: false, formerLatter: false, numWords: false, spelling: '', hedge: '', voice: '', tense: '', esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, changeTable: false, noteSyms: 'letters', nsWord: 'insig', whyTest: false, figHowTo: false, commentOrder: 'ns', pText: '', figSummary: false, abbrFoot: true, figNoteParts: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figWidthCm: '15', figPerRow: 1, valueLabels: false,
-    chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 300,
+    chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 300, effNoBase: true,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
     welch: false, dunn: true, chiPost: true, mixed: false, normality: 'sw', catEffect: 'rr',
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
@@ -32,7 +32,7 @@
   // option key → [element id, checkbox?]
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
-    tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], within: ['optWithin', true], fisher: ['optFisher', true],
+    tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], effNoBase: ['optEffNoBase', true], within: ['optWithin', true], fisher: ['optFisher', true],
     branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], clinWord: ['optClinWord', true], testInText: ['optTestInText', true], tableIntro: ['optTableIntro', true], limits: ['optLimits', true], discuss: ['optDiscuss', true], conclusion: ['optConclusion', true], subSummary: ['optSubSummary', true], formerLatter: ['optFormerLatter', true], numWords: ['optNumWords', true], spelling: ['optSpelling'], hedge: ['optHedge'], voice: ['optVoice'], tense: ['optTense'], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], changeTable: ['optChangeTable', true], noteSyms: ['optNoteSyms'], nsWord: ['optNsWord'], whyTest: ['optWhyTest', true], figHowTo: ['optFigHowTo', true], commentOrder: ['optCommentOrder'], pText: ['optPText'], figSummary: ['optFigSummary', true], abbrFoot: ['optAbbrFoot', true], figNoteParts: ['optFigNoteParts', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figWidthCm: ['optFigWidthCm'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], flowSameStyle: ['optFlowSame', true], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
@@ -3429,13 +3429,40 @@
   // one numeric and one or two categorical variables of the sheet, analysed with the current options (a significant one first when there is one)
   function previewSection() {
     const cfg = state.cfg, o = cfg.options, singles = cfg.variables.filter(v => v.include && v.kind === 'single' && v.cols[0].col !== cfg.groupCol);
-    const pick = [singles.find(v => v.type === 'numeric'), ...singles.filter(v => v.type === 'categorical').slice(0, 2)].filter(Boolean).slice(0, 3);
+    const chosen = (cfg.previewVars || []).map(id => singles.find(v => v.id === id)).filter(Boolean);
+    const pick = chosen.length ? chosen : [singles.find(v => v.type === 'numeric'), ...singles.filter(v => v.type === 'categorical').slice(0, 2)].filter(Boolean).slice(0, 3);
     if (!pick.length) return { msg: 'Tick at least one variable in step 2 to see a preview.' };
-    try { return { s: Analysis.run(state.data, { ...cfg, variables: pick.map(v => ({ ...v, include: true, table: pick[0].table || 'Demographic and baseline data' })), advanced: [], consort: null, options: { ...o, correlation: false, figures: 'none', summary: false } }).sections.find(x => x.rows && x.rows.length) }; }
+    try { const res = Analysis.run(state.data, { ...cfg, variables: pick.map(v => ({ ...v, include: true, table: pick[0].table || 'Demographic and baseline data' })), advanced: [], consort: null, options: { ...o, correlation: false, figures: 'none', summary: false } }); varComments(res, { ...cfg, variables: pick.map(v => ({ ...v, include: true, table: pick[0].table || 'Demographic and baseline data' })) }); return { s: res.sections.find(x => x.rows && x.rows.length) }; }
     catch (err) { console.error(err); return { msg: err.message }; }
   }
+  // comment of each variable (step 6): a style of its own, one sentence, none, or the user's text; a table's comment is then the comment of its other
+  // variables followed by the comment of each such variable, in table order
+  const VCOM = [['', 'As the options above'], ['concise', 'Concise'], ['detailed', 'Detailed'], ['descriptive', 'Descriptive'], ['brief', 'One sentence'], ['none', 'No comment'], ['custom', 'My own text']];
+  function varComments(res, cfg) {
+    const own = cfg.variables.filter(v => v.include && v.comStyle); if (!own.length || !res || !res.sections) return;
+    const o = cfg.options, run1 = (vars, style) => { try { const r = Analysis.run(state.data, { ...cfg, variables: cfg.variables.map(v => ({ ...v, include: vars.some(x => x.id === v.id) })), advanced: [], consort: null, groupIntro: 'off', options: { ...o, ...(style ? { commentStyle: style } : {}), figures: 'none', summary: false, correlation: false } });
+      const sec = r.sections.find(x => (x.kind === 'single' || x.kind === 'repeated') && x.comment); return sec ? sec.comment : ''; } catch (e) { console.error(e); return ''; } };
+    const ownOf = v => v.comStyle === 'none' ? '' : v.comStyle === 'custom' ? String(v.comText || '').trim() : v.comStyle === 'brief' ? (Analysis.sentencesOf(run1([v], '')).filter(x => !/^(In|Regarding) (the )?(table|summary)/i.test(x))[0] || '') : run1([v], v.comStyle);
+    res.sections.forEach(s => { let vars;
+      if (s.kind === 'repeated' && s.vid) vars = cfg.variables.filter(v => v.id === s.vid);
+      else if (s.kind === 'single') vars = cfg.variables.filter(v => v.include && v.kind === 'single' && v.table && s.title.startsWith(v.table + ' of the studied') && v.cols[0].col !== cfg.groupCol);
+      else return;
+      const mine = vars.filter(v => v.comStyle); if (!mine.length) return; const rest = vars.filter(v => !v.comStyle);
+      s.comment = [rest.length ? run1(rest, '') : '', ...mine.map(ownOf)].filter(t => t && t.trim()).join(' '); });
+  }
+  function renderVarComments() { const tbl = $('#varComTbl'); if (!tbl || !state.cfg) return; const vs = state.cfg.variables.filter(v => v.include && v.cols[0].col !== state.cfg.groupCol);
+    tbl.innerHTML = `<thead><tr><th>Variable</th><th>Table</th><th>Comment</th><th>Your own text</th></tr></thead><tbody>${vs.map(v => `<tr><td><b>${esc(v.label)}</b></td><td class="legend-note">${esc(v.kind === 'repeated' ? 'repeated measure' : v.table || '')}</td>
+      <td><select data-vcom="${esc(v.id)}" style="width:auto">${VCOM.map(([k, l]) => `<option value="${k}" ${(v.comStyle || '') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></td>
+      <td>${v.comStyle === 'custom' ? `<textarea data-vcomt="${esc(v.id)}" rows="2" style="min-width:320px" placeholder="The comment for this variable">${esc(v.comText || '')}</textarea>` : ''}</td></tr>`).join('')}</tbody>`;
+    const pick = $('#comPrevPick'), singles = vs.filter(v => v.kind === 'single'), cur = new Set(state.cfg.previewVars || []);
+    if (pick) pick.innerHTML = `<span class="legend-note">Variables in the preview:</span>${singles.slice(0, 60).map(v => `<label class="check" style="margin:0"><input type="checkbox" data-cpv="${esc(v.id)}" ${cur.has(v.id) ? 'checked' : ''}><span>${esc(v.label)}</span></label>`).join('')}<span class="legend-note">${cur.size ? '' : '(none ticked: one number and two categories)'}</span>`; }
+  $('#varComTbl').addEventListener('change', e => { const t = e.target, v = state.cfg.variables.find(x => x.id === (t.dataset.vcom || t.dataset.vcomt)); if (!v) return;
+    if (t.dataset.vcom !== undefined) { v.comStyle = t.value; renderVarComments(); } else v.comText = t.value; renderCommentPreview(); });
+  $('#varComTbl').addEventListener('input', e => { const t = e.target; if (t.dataset.vcomt === undefined) return; const v = state.cfg.variables.find(x => x.id === t.dataset.vcomt); if (v) { v.comText = t.value; scheduleDesign(() => renderCommentPreview())(); } });
+  $('#comPrevPick').addEventListener('change', e => { const id = e.target.dataset.cpv; if (!id) return; const L = new Set(state.cfg.previewVars || []); e.target.checked ? L.add(id) : L.delete(id); state.cfg.previewVars = [...L]; renderVarComments(); renderCommentPreview(); });
   function renderCommentPreview() {
     const box = $('#comPreview'); if (!box || !state.cfg || !state.data) return;
+    { const sig = state.cfg.variables.filter(v => v.include).map(v => v.id + (v.comStyle || '')).join('|'); if ($('#varComTbl').dataset.sig !== sig) { renderVarComments(); $('#varComTbl').dataset.sig = sig; } }
     const o = state.cfg.options, { s, msg } = previewSection();
     box.style.fontFamily = `'${o.font}', serif`;
     box.innerHTML = msg ? `<p class="legend-note">${esc(msg)}</p>` : !s ? '' : o.commentPlace === 'none' ? '<p class="legend-note">Comments are switched off (Comment placement: No comments).</p>'
@@ -5845,7 +5872,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
       try {
         syncAssessed(ensureConsort());
         const cfg = { ...state.cfg, options: effOptions(), groupLabels: reportGroupLabels(state.cfg) };
-        const res = Analysis.run(state.data, cfg);
+        const res = Analysis.run(state.data, cfg); varComments(res, cfg);
         postRepeated(res, state.cfg);
         if (cfg.options.rmImpute === 'locf') res.methods += ' Missing follow-up values were replaced by the last observation carried forward.';
         // subgroup analysis: every table again within each category of the chosen column

@@ -250,6 +250,12 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**💬 Comments (step 6)**
+- **Comment of each variable**: a table of every variable with its own comment — as the options above, Concise, Detailed, Descriptive, One sentence, No comment, or **My own text**. A table's comment is the comment of its other variables followed by these.
+- **Comment preview**: tick the variables to preview (otherwise one number and two categories); the preview shows the per-variable comments too.
+
+**📋 No effect size in the baseline table** (step 5, on by default, CONSORT): the MD / RR column is left out of tables named “Baseline …” or “Demographic …”, or whose variables all have the baseline role, and the methods say so; a table's own options can still ask for it.
+
 **👥 Groups (step 2)**
 - **Name the groups**: Group A, B, C · Group I, II, III · Group 1, 2, 3 · First, Second group · Control group then Group A, B (follows the order and the control group; each label stays editable).
 - **Short name** and **description** of each group (e.g. “Basal–Bolus Insulin”, “Patients will receive insulin glargine …”); descriptions written in the future tense are turned into the past tense (“received”, “were given”), with a preview and a “keep as typed” tick.
