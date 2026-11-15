@@ -30,7 +30,11 @@
     [...top.querySelectorAll(':scope > .btn, :scope > label.btn'), ...menu.querySelectorAll('.btn')].forEach(b => { if (b.querySelector('.tl')) return; const t = [...b.childNodes].find(n => n.nodeType === 3 && n.textContent.trim()); if (!t) return;
       const m = /^(\s*[^\sA-Za-z0-9]+\s*)?(.*)$/s.exec(t.textContent), ic = (m[1] || '').trim(), lab = (m[2] || '').trim(); const sp = el('span', 'tl', esc(lab)); t.replaceWith(document.createTextNode(ic ? ic + ' ' : ''), sp); if (!b.title) b.title = lab; if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', lab); });
     const close = () => { menu.classList.remove('open'); mb.setAttribute('aria-expanded', 'false'); };
-    mb.onclick = e => { e.stopPropagation(); document.querySelectorAll('.ux-pop.open').forEach(p => p.classList.remove('open')); const o = menu.classList.toggle('open'); mb.setAttribute('aria-expanded', String(o)); };
+    // a search box at the top of the menu: type to keep only the matching items
+    const srch = el('div', 'ux-msearch', '<input type="search" placeholder="🔎 Find a tool…" aria-label="Find a tool in the menu">'); menu.prepend(srch);
+    const sin = srch.querySelector('input'); sin.addEventListener('input', () => { const q = sin.value.trim().toLowerCase(); [...menu.children].forEach(c => { if (c === srch) return; c.classList.toggle('ux-mhide', !!q && !(c.textContent + ' ' + (c.title || '')).toLowerCase().includes(q)); }); });
+    sin.addEventListener('click', e => e.stopPropagation()); sin.addEventListener('keydown', e => { if (e.key === 'Enter') { const f = [...menu.querySelectorAll('button')].find(b => !b.closest('.ux-mhide')); if (f) f.click(); } });
+    mb.onclick = e => { e.stopPropagation(); document.querySelectorAll('.ux-pop.open').forEach(p => p.classList.remove('open')); const o = menu.classList.toggle('open'); mb.setAttribute('aria-expanded', String(o)); if (o) { sin.value = ''; sin.dispatchEvent(new Event('input')); menu.scrollTop = 0; setTimeout(() => sin.focus(), 0); } };
     menu.addEventListener('click', e => { if (e.target.closest('.btn') && !e.target.closest('label')) close(); });
     document.addEventListener('click', e => { if (!more.contains(e.target)) close(); }); document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); }); })();
   // the Word report from any step, without leaving it: the settings of this step are read, the report is run in the background, then downloaded

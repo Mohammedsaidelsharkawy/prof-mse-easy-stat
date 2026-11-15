@@ -33,8 +33,8 @@ header.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:20;bo
 .top-actions > .btn,.top-actions > label.btn{white-space:nowrap}
 .top-actions .ux-word{background:#fff;color:var(--navy);font-weight:700;border:0}.top-actions .ux-word:hover{background:#EFE4FA}
 .ux-more{position:relative}
-.ux-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:220px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(28,22,72,.28);padding:6px;display:none;flex-direction:column;gap:2px;z-index:75}
-.ux-menu.open{display:flex}
+.ux-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:220px;width:min(620px,calc(100vw - 24px));max-height:calc(100vh - 90px);overflow-y:auto;overscroll-behavior:contain;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(28,22,72,.28);padding:6px;display:none;grid-template-columns:1fr 1fr;gap:2px 6px;align-content:start;z-index:75}
+.ux-menu.open{display:grid}.ux-menu .ux-msearch{grid-column:1/-1;position:sticky;top:-6px;background:var(--card);padding:4px 2px 6px;z-index:1}.ux-menu .ux-msearch input{width:100%}.ux-menu>label,.ux-menu>select{min-width:0}.ux-menu .ux-mhide{display:none!important}@media (max-width:640px){.ux-menu{grid-template-columns:1fr}}
 .ux-menu .btn{background:transparent!important;color:var(--ink)!important;border:0!important;box-shadow:none!important;width:100%;justify-content:flex-start;text-align:left;padding:8px 10px;border-radius:8px}
 .ux-menu .btn:hover,.ux-menu .btn:focus-visible{background:var(--lav)!important}
 .top-actions .ux-saved{color:#fff}
