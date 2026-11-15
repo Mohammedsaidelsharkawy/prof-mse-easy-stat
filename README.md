@@ -252,6 +252,7 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 **📄 Report (step 12) and page setup (step 11)**
 - **Thesis — A4** and **Thesis — B5** formats. Thesis A4: every text 2 pt larger than on B5 (paragraphs 14 pt, tables 12 pt, footnotes 11 pt, figure notes 12 pt), headings unchanged. Both: **first-line indent 1 cm** by default (type 0 in page setup for none).
+- **Indentation**: “First-line indent applies to” — paragraphs and comments only (default) or all text; and in the text styles table a **first-line** and a **left** indent (cm) for each kind of text (headings, paragraphs, comments, captions, footnotes).
 - **Text styles** in page setup: size, bold, italic, alignment and space before / after of Heading 1, Heading 2, paragraphs, table comments, table captions, figure captions, table text, table footnotes and figure notes. Empty = automatic; a styled heading replaces Word's built-in heading style.
 - **Project name** (step 1): names the saved files (Word, PDF, Excel …), the browser tab and the entry in My projects; renaming in My projects renames the open project.
 

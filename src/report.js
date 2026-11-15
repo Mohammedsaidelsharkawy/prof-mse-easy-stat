@@ -67,12 +67,16 @@ const Report = (() => {
   const tsYN = (k, p, def) => tsv(k, p) === 'yes' ? true : tsv(k, p) === 'no' ? false : def;
   const tsSp = (k, p, def) => { const v = tsv(k, p); return v === '' || v === undefined || v === null || !isFinite(+v) ? def : Math.round(+v * 20); };
   const tsAl = (k, def) => { const A = D().AlignmentType; return ({ left: A.LEFT, center: A.CENTER, justify: A.JUSTIFIED, right: A.RIGHT })[tsv(k, 'align')] || def; };
+  // indents of a kind of text (cm → twips): first line and left; undefined when not set
+  const tsCm = (k, p) => { const v = tsv(k, p); return v === '' || v === undefined || v === null || !isFinite(+v) ? undefined : Math.round(+v * 567); };
+  const tsInd = (k, defFirst) => { const f = tsCm(k, 'first'), l = tsCm(k, 'left'), first = f !== undefined ? f : defFirst; return first || l ? { indent: { ...(first ? { firstLine: first } : {}), ...(l ? { left: l } : {}) } } : {}; };
+  let INDENT_ALL = false;
   const STYLE_ALIGN = { Caption: 'center', CaptionTitle: 'left', TableText: 'center', TableNote: 'both' };
   function styledPara(text, o) {
     const { Paragraph } = D(), st = o.pStyle, al = st ? STYLE_ALIGN[st] : 'both';
     const explicit = o.after !== undefined || o.before !== undefined || o.line !== undefined;
     // the first-line indent: body paragraphs only (not headings, captions, tables, notes or bullet lines)
-    const ind = !st && !o.align && !o.cap && o.size === undefined && INDENT && text && !/^\s*•/.test(text) ? { indent: { firstLine: INDENT } } : {};
+    const ind = o.tsIndent ? o.tsIndent : !st && !o.align && !o.cap && o.size === undefined && text && !/^\s*•/.test(text) ? tsInd('body', INDENT) : {};
     return new Paragraph({ ...(st ? { style: st } : {}), ...ind, ...(o.align && o.align !== al ? { alignment: o.align } : {}),
       ...(!st && explicit ? { spacing: { after: o.after ?? 160, line: o.line ?? LINE, lineRule: D().LineRuleType.AUTO, before: o.before ?? 0 } } : {}),
       keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
@@ -86,7 +90,7 @@ const Report = (() => {
     return new Paragraph({
       alignment: o.align || BODY_ALIGN,
       spacing: TEMPLATE && o.line === undefined ? { after, before } : { after, line: o.line ?? LINE, before },
-      ...(body && INDENT && text && !/^\s*•/.test(text) ? { indent: { firstLine: INDENT } } : {}),
+      ...(o.tsIndent ? o.tsIndent : body && text && !/^\s*•/.test(text) ? tsInd('body', INDENT) : {}),
       keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: [...runs(text, o), ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, bold: false, size: o.noteSize || o.size }) : [])]
     });
@@ -95,10 +99,10 @@ const Report = (() => {
   const SENT = /[^.!?]+(?:\.(?=\d)[^.!?]*)*[.!?]+(?:\s+|$)|[^.!?]+$/g;
   const isSigSentence = x => /\b(significant(ly)?|clear(ly)?)\b/.test(x) && !/\b(in|not |non-)significant|no significant|not clear|no clear|insignificant/.test(x);
   function commentPara(text, o0 = {}) {
-    const o = tsOn('comment') ? { ...o0, italic: tsYN('comment', 'italic', o0.italic), bold: tsYN('comment', 'bold', o0.bold), forceSize: tsSz('comment', undefined), size: STYLED ? undefined : tsSz('comment', o0.size), align: tsAl('comment', o0.align), after: tsSp('comment', 'after', o0.after), before: tsSp('comment', 'before', o0.before) } : o0;
+    const o = tsOn('comment') ? { ...o0, tsIndent: tsCm('comment', 'first') !== undefined || tsCm('comment', 'left') !== undefined ? tsInd('comment', INDENT) : undefined, italic: tsYN('comment', 'italic', o0.italic), bold: tsYN('comment', 'bold', o0.bold), forceSize: tsSz('comment', undefined), size: STYLED ? undefined : tsSz('comment', o0.size), align: tsAl('comment', o0.align), after: tsSp('comment', 'after', o0.after), before: tsSp('comment', 'before', o0.before) } : o0;
     if (!o.boldSig) return para(text, o);
     const { Paragraph, AlignmentType } = D(), ss = String(text).match(SENT) || [text];
-    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, ...(o.align ? { alignment: o.align } : INDENT ? { indent: { firstLine: INDENT } } : {}), children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.forceSize })) });
+    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, ...(o.tsIndent || (o.align ? {} : tsInd('body', INDENT))), ...(o.align ? { alignment: o.align } : {}), children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.forceSize })) });
     return new Paragraph({ alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, line: LINE, ...(PARA_BEFORE ? { before: PARA_BEFORE } : {}) }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}), keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.size })) });
   }
@@ -108,7 +112,7 @@ const Report = (() => {
     const { Paragraph, TextRun, HeadingLevel } = D();
     if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(text)] });
     return new Paragraph({
-      heading: HeadingLevel.HEADING_1, spacing: { before: tsSp('h1', 'before', 240), after: tsSp('h1', 'after', 160) }, ...(tsAl('h1') ? { alignment: tsAl('h1') } : {}),
+      heading: HeadingLevel.HEADING_1, spacing: { before: tsSp('h1', 'before', 240), after: tsSp('h1', 'after', 160) }, ...(tsAl('h1') ? { alignment: tsAl('h1') } : {}), ...tsInd('h1'),
       children: [new TextRun({ text, bold: tsYN('h1', 'bold', true), italics: tsYN('h1', 'italic', undefined), size: tsSz('h1', 30), font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
     });
   }
@@ -116,7 +120,7 @@ const Report = (() => {
     const { Paragraph, TextRun, HeadingLevel } = D();
     if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_2, keepNext: true, pageBreakBefore, children: [new TextRun(text)] });
     return new Paragraph({
-      heading: HeadingLevel.HEADING_2, spacing: { before: tsSp('h2', 'before', 240), after: tsSp('h2', 'after', 120) }, keepNext: true, pageBreakBefore, ...(tsAl('h2') ? { alignment: tsAl('h2') } : {}),
+      heading: HeadingLevel.HEADING_2, spacing: { before: tsSp('h2', 'before', 240), after: tsSp('h2', 'after', 120) }, keepNext: true, pageBreakBefore, ...(tsAl('h2') ? { alignment: tsAl('h2') } : {}), ...tsInd('h2'),
       children: [new TextRun({ text, bold: tsYN('h2', 'bold', true), italics: tsYN('h2', 'italic', undefined), size: tsSz('h2', 26), font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
     });
   }
@@ -141,7 +145,7 @@ const Report = (() => {
   function caption(text, o = {}) {
     const { AlignmentType } = D(), k = o.capKind === 'fig' ? 'figCap' : 'tabCap', nk = 'figNote';
     if (o.note && tsOn(nk)) o = { ...o, noteSize: tsSz(nk, o.noteSize) };
-    if (tsOn(k)) { const { capKind, ...r } = o; return para(text, { cap: true, keepNext: true, line: 276, ...r, bold: tsYN(k, 'bold', true), italic: tsYN(k, 'italic', undefined), align: tsAl(k, r.align || AlignmentType.CENTER), size: tsSz(k, BODY_SZ), after: tsSp(k, 'after', 120), before: tsSp(k, 'before', r.before) }); }
+    if (tsOn(k)) { const { capKind, ...r } = o; return para(text, { cap: true, keepNext: true, line: 276, ...r, bold: tsYN(k, 'bold', true), italic: tsYN(k, 'italic', undefined), align: tsAl(k, r.align || AlignmentType.CENTER), size: tsSz(k, BODY_SZ), after: tsSp(k, 'after', 120), before: tsSp(k, 'before', r.before), tsIndent: tsInd(k) }); }
     return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true, cap: true, pStyle: STYLED ? 'Caption' : undefined, styleBold: true, ...o });
   }
   // APA: the number in bold on its own line, the title in italics below it, both left-aligned
@@ -296,7 +300,7 @@ const Report = (() => {
     // margins: top, right, bottom, left (custom in step 11), plus a binding gutter
     const [mT, mR, mB, mL] = !tp && pg.mar ? pg.mar : [mg, mg, mg, mg], gut = tp ? 0 : pg.gutter || 0, sideW = mR + mL + gut;
     PAGE_W = (landscape ? ph0 : pw0) - sideW;
-    BODY_SZ = pg.bodySize || 24; BODY_ALIGN = pg.align === 'left' ? AlignmentType.LEFT : AlignmentType.JUSTIFIED; PARA_AFTER = pg.after ?? 160; PARA_BEFORE = pg.before || 0; INDENT = pg.indent || 0;
+    BODY_SZ = pg.bodySize || 24; BODY_ALIGN = pg.align === 'left' ? AlignmentType.LEFT : AlignmentType.JUSTIFIED; PARA_AFTER = pg.after ?? 160; PARA_BEFORE = pg.before || 0; INDENT = pg.indent || 0; INDENT_ALL = !!pg.indentAll;
     if (opts.twoCol) PAGE_W = Math.floor((PAGE_W - 708) / 2); // tables and figures fit one column
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [], footnotes = {};
@@ -415,7 +419,7 @@ const Report = (() => {
           if (pi > 0) { const cont = `${num} (continued)`; children.push(opts.tableCaption === 'apa' ? para(cont, { bold: true, align: D().AlignmentType.LEFT, after: 120, line: 276, keepNext: true, before: 200 }) : caption(cont, { before: 200, align: D().AlignmentType.LEFT })); }
           children.push(table(headAr, part, brand, s.tstyle || opts.tableStyle, { ...opts.tableLook, ...(s.tlook || {}), ...(s.keepPage ? { keep: true } : {}) }));
         });
-        children.push(para(s.footnote, tsOn('foot') ? { size: tsSz('foot', 18), bold: tsYN('foot', 'bold', undefined), italic: tsYN('foot', 'italic', undefined), align: tsAl('foot', undefined), line: 240, after: tsSp('foot', 'after', 160), before: tsSp('foot', 'before', 60) } : STYLED ? { pStyle: 'TableNote' } : { size: 18, line: 240, after: 160, before: 60 }));
+        children.push(para(s.footnote, tsOn('foot') ? { size: tsSz('foot', 18), bold: tsYN('foot', 'bold', undefined), italic: tsYN('foot', 'italic', undefined), align: tsAl('foot', undefined), line: 240, after: tsSp('foot', 'after', 160), before: tsSp('foot', 'before', 60), tsIndent: tsInd('foot') } : STYLED ? { pStyle: 'TableNote' } : { size: 18, line: 240, after: 160, before: 60 }));
         if (AR && s.footnote) children.push(arPara(AR.footnote(s.footnote), { size: 18, line: 240, after: 160 }));
         if (s.comment && !merged && (cp || 'after') === 'after') { children.push(commentPara(figRef(s, s.comment), { boldSig: opts.boldSigText })); arAfter(s.comment); }
         if (!merged && opts.commentPlace !== 'none') children.push(...findings(s));
@@ -471,7 +475,7 @@ const Report = (() => {
     const parts = []; let from = 0, land = landscape;
     turns.forEach(t => { if (t.at > from) parts.push({ land, kids: children.slice(from, t.at) }); from = t.at; land = t.land; });
     parts.push({ land, kids: children.slice(from) });
-    const hs = (id, name, size, before, after) => { const k = id === 'Heading1' ? 'h1' : 'h2'; return { id, name, basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: tsYN(k, 'bold', true), ...(tsYN(k, 'italic') !== undefined ? { italics: tsYN(k, 'italic') } : {}), size: tsSz(k, size), font: BODY_FONT, color: brand ? '1C1648' : '000000' }, paragraph: { spacing: { before: tsSp(k, 'before', before), after: tsSp(k, 'after', after) }, keepNext: true, ...(tsAl(k) ? { alignment: tsAl(k) } : {}) } }; };
+    const hs = (id, name, size, before, after) => { const k = id === 'Heading1' ? 'h1' : 'h2'; return { id, name, basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: tsYN(k, 'bold', true), ...(tsYN(k, 'italic') !== undefined ? { italics: tsYN(k, 'italic') } : {}), size: tsSz(k, size), font: BODY_FONT, color: brand ? '1C1648' : '000000' }, paragraph: { spacing: { before: tsSp(k, 'before', before), after: tsSp(k, 'after', after) }, keepNext: true, ...(tsAl(k) ? { alignment: tsAl(k) } : {}), ...tsInd(k) } }; };
     // a heading styled in step 11 replaces Word's built-in heading style (otherwise the two styles of the same name are left as before)
     const hDef = () => { const o = {}; [['h1', 'heading1', 'Heading1', 'Heading 1', 30, 240, 160], ['h2', 'heading2', 'Heading2', 'Heading 2', 26, 240, 120]].forEach(([k, key, id, nm, sz, b, a]) => { if (tsOn(k)) { const x = hs(id, nm, sz, b, a); o[key] = { run: x.run, paragraph: x.paragraph }; } }); return o; };
     const hsList = () => [['h1', 'Heading1', 'Heading 1', 30, 240, 160], ['h2', 'Heading2', 'Heading 2', 26, 240, 120]].filter(([k]) => !tsOn(k)).map(([, id, nm, sz, b, a]) => hs(id, nm, sz, b, a));
@@ -480,13 +484,13 @@ const Report = (() => {
       title: opts.title || 'Statistical report',
       ...(opts.toc ? { features: { updateFields: true } } : {}),
       ...(Object.keys(footnotes).length ? { footnotes } : {}),
-      styles: STYLED ? { default: { ...hDef(), document: { run: { font: BODY_FONT, size: BODY_SZ }, paragraph: { alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, before: PARA_BEFORE, line: LINE, lineRule: D().LineRuleType.AUTO } } } },
+      styles: STYLED ? { default: { ...hDef(), document: { run: { font: BODY_FONT, size: BODY_SZ }, paragraph: { alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, before: PARA_BEFORE, line: LINE, lineRule: D().LineRuleType.AUTO }, ...(INDENT_ALL && INDENT ? { indent: { firstLine: INDENT } } : {}) } } },
         paragraphStyles: [...hsList(),
           { id: 'Caption', name: 'caption', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
           { id: 'CaptionTitle', name: 'Caption Title', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { italics: true }, paragraph: { alignment: AlignmentType.LEFT, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
           { id: 'TableText', name: 'Table Text', basedOn: 'Normal', quickFormat: true, run: { size: TT_SZ, ...((opts.tableLook || {}).font ? { font: opts.tableLook.font } : {}) }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240, lineRule: D().LineRuleType.AUTO } } },
           { id: 'TableNote', name: 'Table Note', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { size: 18 }, paragraph: { spacing: { before: 60, after: 160, line: 240, lineRule: D().LineRuleType.AUTO } } }] }
-        : { default: { ...(WORD_STYLES ? hDef() : {}), document: { run: { font: BODY_FONT, size: BODY_SZ } } }, ...(WORD_STYLES ? { paragraphStyles: hsList() } : {}) },
+        : { default: { ...(WORD_STYLES ? hDef() : {}), document: { run: { font: BODY_FONT, size: BODY_SZ }, ...(INDENT_ALL && INDENT ? { paragraph: { indent: { firstLine: INDENT } } } : {}) } }, ...(WORD_STYLES ? { paragraphStyles: hsList() } : {}) },
       sections: parts.filter(pt => pt.kids.length).map((pt, pi) => ({
         properties: { page: { size: pt.land ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 },
             margin: { top: mT, bottom: mB, left: mL, right: mR, ...(gut ? { gutter: gut } : {}), ...(pg.hdr !== undefined ? { header: pg.hdr } : {}), ...(pg.ftr !== undefined ? { footer: pg.ftr } : {}) },
