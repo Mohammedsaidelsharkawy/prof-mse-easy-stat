@@ -59,6 +59,14 @@ const Report = (() => {
   // formatting by Word styles (step 11, without a template): body text = Normal, captions = Caption, tables = Table Text, table notes = Table Note,
   // headings = Heading 1 / 2 — the look lives in the styles, so changing a style in Word changes every paragraph that uses it
   let STYLED = false, TT_SZ = 20;
+  // text styles of page setup (step 11): size (pt), bold / italic (yes / no), alignment and spacing (pt) of headings, captions, footnotes, figure notes and comments;
+  // only what is set changes the file
+  let TS = {};
+  const tsv = (k, p) => (TS[k] || {})[p], tsOn = k => TS[k] && Object.values(TS[k]).some(v => v !== '' && v !== undefined && v !== null);
+  const tsSz = (k, def) => { const v = +tsv(k, 'size'); return v > 0 ? Math.round(v * 2) : def; };
+  const tsYN = (k, p, def) => tsv(k, p) === 'yes' ? true : tsv(k, p) === 'no' ? false : def;
+  const tsSp = (k, p, def) => { const v = tsv(k, p); return v === '' || v === undefined || v === null || !isFinite(+v) ? def : Math.round(+v * 20); };
+  const tsAl = (k, def) => { const A = D().AlignmentType; return ({ left: A.LEFT, center: A.CENTER, justify: A.JUSTIFIED, right: A.RIGHT })[tsv(k, 'align')] || def; };
   const STYLE_ALIGN = { Caption: 'center', CaptionTitle: 'left', TableText: 'center', TableNote: 'both' };
   function styledPara(text, o) {
     const { Paragraph } = D(), st = o.pStyle, al = st ? STYLE_ALIGN[st] : 'both';
@@ -66,7 +74,7 @@ const Report = (() => {
     return new Paragraph({ ...(st ? { style: st } : {}), ...(o.align && o.align !== al ? { alignment: o.align } : {}),
       ...(!st && explicit ? { spacing: { after: o.after ?? 160, line: o.line ?? LINE, lineRule: D().LineRuleType.AUTO, before: o.before ?? 0 } } : {}),
       keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
-      children: [...runs(text, { ...o, styled: true, bold: o.styleBold ? undefined : o.bold, size: undefined }),
+      children: [...runs(text, { ...o, styled: true, bold: o.styleBold ? undefined : o.bold, size: o.forceSize }),
         ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, styled: true, bold: false, size: undefined }) : [])] });
   }
   function para(text, o = {}) {
@@ -84,12 +92,13 @@ const Report = (() => {
   // a comment: sentences reporting a significant result in bold (optional), else one plain paragraph
   const SENT = /[^.!?]+(?:\.(?=\d)[^.!?]*)*[.!?]+(?:\s+|$)|[^.!?]+$/g;
   const isSigSentence = x => /\b(significant(ly)?|clear(ly)?)\b/.test(x) && !/\b(in|not |non-)significant|no significant|not clear|no clear|insignificant/.test(x);
-  function commentPara(text, o = {}) {
+  function commentPara(text, o0 = {}) {
+    const o = tsOn('comment') ? { ...o0, italic: tsYN('comment', 'italic', o0.italic), bold: tsYN('comment', 'bold', o0.bold), forceSize: tsSz('comment', undefined), size: STYLED ? undefined : tsSz('comment', o0.size), align: tsAl('comment', o0.align), after: tsSp('comment', 'after', o0.after), before: tsSp('comment', 'before', o0.before) } : o0;
     if (!o.boldSig) return para(text, o);
     const { Paragraph, AlignmentType } = D(), ss = String(text).match(SENT) || [text];
-    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) })) });
+    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, ...(o.align ? { alignment: o.align } : {}), children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.forceSize })) });
     return new Paragraph({ alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, line: LINE, ...(PARA_BEFORE ? { before: PARA_BEFORE } : {}) }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}), keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
-      children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) })) });
+      children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.size })) });
   }
   // headings: Word's Heading 1 / 2; with WORD_STYLES the look comes from the document's styles only (so a university template can restyle them)
   let WORD_STYLES = false;
@@ -97,16 +106,16 @@ const Report = (() => {
     const { Paragraph, TextRun, HeadingLevel } = D();
     if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(text)] });
     return new Paragraph({
-      heading: HeadingLevel.HEADING_1, spacing: { before: 240, after: 160 },
-      children: [new TextRun({ text, bold: true, size: 30, font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
+      heading: HeadingLevel.HEADING_1, spacing: { before: tsSp('h1', 'before', 240), after: tsSp('h1', 'after', 160) }, ...(tsAl('h1') ? { alignment: tsAl('h1') } : {}),
+      children: [new TextRun({ text, bold: tsYN('h1', 'bold', true), italics: tsYN('h1', 'italic', undefined), size: tsSz('h1', 30), font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
     });
   }
   function subheading(text, brand, pageBreakBefore) {
     const { Paragraph, TextRun, HeadingLevel } = D();
     if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_2, keepNext: true, pageBreakBefore, children: [new TextRun(text)] });
     return new Paragraph({
-      heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, keepNext: true, pageBreakBefore,
-      children: [new TextRun({ text, bold: true, size: 26, font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
+      heading: HeadingLevel.HEADING_2, spacing: { before: tsSp('h2', 'before', 240), after: tsSp('h2', 'after', 120) }, keepNext: true, pageBreakBefore, ...(tsAl('h2') ? { alignment: tsAl('h2') } : {}),
+      children: [new TextRun({ text, bold: tsYN('h2', 'bold', true), italics: tsYN('h2', 'italic', undefined), size: tsSz('h2', 26), font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
     });
   }
   // bilingual report: an Arabic paragraph, right to left, after its English one
@@ -128,7 +137,9 @@ const Report = (() => {
     return new Paragraph({ alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, line: LINE, ...(PARA_BEFORE ? { before: PARA_BEFORE } : {}) }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}), children: kids });
   }
   function caption(text, o = {}) {
-    const { AlignmentType } = D();
+    const { AlignmentType } = D(), k = o.capKind === 'fig' ? 'figCap' : 'tabCap', nk = 'figNote';
+    if (o.note && tsOn(nk)) o = { ...o, noteSize: tsSz(nk, o.noteSize) };
+    if (tsOn(k)) { const { capKind, ...r } = o; return para(text, { cap: true, keepNext: true, line: 276, ...r, bold: tsYN(k, 'bold', true), italic: tsYN(k, 'italic', undefined), align: tsAl(k, r.align || AlignmentType.CENTER), size: tsSz(k, BODY_SZ), after: tsSp(k, 'after', 120), before: tsSp(k, 'before', r.before) }); }
     return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true, cap: true, pStyle: STYLED ? 'Caption' : undefined, styleBold: true, ...o });
   }
   // APA: the number in bold on its own line, the title in italics below it, both left-aligned
@@ -251,7 +262,7 @@ const Report = (() => {
         children: f ? (f.apa
           ? [para(f.num, { bold: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 0 }), para(f.caption, { italic: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 60 }),
             image(f.url, f.w, f.h, w, true, f.label), ...(f.note ? [para('Note. ' + f.note, { align: D().AlignmentType.LEFT, size: 18, line: 240, after: 160 })] : [])]
-          : [image(f.url, f.w, f.h, w, true, f.label), para(f.label, { cap: true, bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160, note: f.note, noteSize: 18 })]) : [new Paragraph('')]
+          : [image(f.url, f.w, f.h, w, true, f.label), para(f.label, { cap: true, bold: tsYN('figCap', 'bold', true), italic: tsYN('figCap', 'italic', undefined), align: tsAl('figCap', D().AlignmentType.CENTER), size: tsSz('figCap', 20), line: 240, after: tsSp('figCap', 'after', 160), note: f.note, noteSize: tsSz('figNote', 18) })]) : [new Paragraph('')]
       })) }));
     }
     return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: [half, PAGE_W - half], rows,
@@ -287,7 +298,7 @@ const Report = (() => {
     if (opts.twoCol) PAGE_W = Math.floor((PAGE_W - 708) / 2); // tables and figures fit one column
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [], footnotes = {};
-    TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE; STYLED = !!opts.wordStyles && !TEMPLATE; TT_SZ = 2 * (+(opts.tableLook || {}).size || 10);
+    TS = opts.textStyles || {}; TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE; STYLED = !!opts.wordStyles && !TEMPLATE; TT_SZ = 2 * (+(opts.tableLook || {}).size || 10);
     // bilingual: AR gives the Arabic of a paragraph, heading, caption, footnote or column heading
     const AR = opts.ar || null, arAfter = (text, o) => { if (AR && text) { const t = AR.text(text); if (t) children.push(arPara(t, o)); } };
     const H1 = (t, b) => heading(AR && AR.heading(t) ? `${t} — ${AR.heading(t)}` : t, b);
@@ -326,7 +337,7 @@ const Report = (() => {
       const fl = figLabel(pre + fig++, opts.captionStyle), ft = model.flowCaption || 'CONSORT flowchart of the enrolled patients';
       listFigs.push(`${fl} ${ft}`);
       if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, Math.min(opts.paper ? 470 : 600, Math.floor(PAGE_W / 15)), true, ft));
-      else children.push(image(model.consort.url, model.consort.w, model.consort.h, Math.min(opts.paper ? 470 : 600, Math.floor(PAGE_W / 15)), true, ft), caption(`${fl} ${ft}`));
+      else children.push(image(model.consort.url, model.consort.w, model.consort.h, Math.min(opts.paper ? 470 : 600, Math.floor(PAGE_W / 15)), true, ft), caption(`${fl} ${ft}`, { capKind: 'fig' }));
       if (AR) children.push(arPara(`الشكل ${pre + (fig - 1)}: ${AR.caption(ft)}`, { bold: true, center: true, line: 276, after: 160 }));
     } else if (opts.paper && model.intro) children.push(para(model.intro));
     if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => { if (t.trim()) { children.push(para(t.trim())); arAfter(t.trim()); } });
@@ -351,11 +362,11 @@ const Report = (() => {
           children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, fw(f), true, f.caption));
           if (f.note) children.push(para('Note. ' + f.note, { size: 20, line: 240, after: 200, align: AlignmentType.LEFT }));
         } else if (opts.capAbove) {
-          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}), image(f.url, f.w, f.h, fw(f), false, f.caption));
+          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20, capKind: 'fig' } : { capKind: 'fig' }), image(f.url, f.w, f.h, fw(f), false, f.caption));
           children.push(para('', { after: 120, line: 240 }));
         } else {
           children.push(image(f.url, f.w, f.h, fw(f), true, f.caption));
-          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}));
+          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20, capKind: 'fig' } : { capKind: 'fig' }));
         }
         if (AR) children.push(arPara(`الشكل ${String(f.num).replace(/^\D+/, '').replace(/[:.]$/, '')}: ${AR.caption(f.caption)}${f.note ? ' ' + AR.caption(f.note) : ''}`, { bold: true, center: true, size: 22, line: 276, after: 200 }));
       }
@@ -402,7 +413,7 @@ const Report = (() => {
           if (pi > 0) { const cont = `${num} (continued)`; children.push(opts.tableCaption === 'apa' ? para(cont, { bold: true, align: D().AlignmentType.LEFT, after: 120, line: 276, keepNext: true, before: 200 }) : caption(cont, { before: 200, align: D().AlignmentType.LEFT })); }
           children.push(table(headAr, part, brand, s.tstyle || opts.tableStyle, { ...opts.tableLook, ...(s.tlook || {}), ...(s.keepPage ? { keep: true } : {}) }));
         });
-        children.push(para(s.footnote, STYLED ? { pStyle: 'TableNote' } : { size: 18, line: 240, after: 160, before: 60 }));
+        children.push(para(s.footnote, tsOn('foot') ? { size: tsSz('foot', 18), bold: tsYN('foot', 'bold', undefined), italic: tsYN('foot', 'italic', undefined), align: tsAl('foot', undefined), line: 240, after: tsSp('foot', 'after', 160), before: tsSp('foot', 'before', 60) } : STYLED ? { pStyle: 'TableNote' } : { size: 18, line: 240, after: 160, before: 60 }));
         if (AR && s.footnote) children.push(arPara(AR.footnote(s.footnote), { size: 18, line: 240, after: 160 }));
         if (s.comment && !merged && (cp || 'after') === 'after') { children.push(commentPara(figRef(s, s.comment), { boldSig: opts.boldSigText })); arAfter(s.comment); }
         if (!merged && opts.commentPlace !== 'none') children.push(...findings(s));
@@ -428,7 +439,7 @@ const Report = (() => {
       (opts.appendix || []).forEach(t => { children.push(subheading(t.title, brand)); children.push(plainTbl(t)); if (t.note) children.push(para(t.note, { size: 18, line: 240, after: 160, before: 60 })); });
       // figures placed in the appendix (step 7): Figure A1, A2 …
       apFigs.forEach((f, i) => { const lab = `Figure A${i + 1}${opts.captionStyle === 'period' ? '.' : opts.captionStyle === 'apa' ? '' : ':'}`;
-        children.push(image(f.url, f.w, f.h, Math.min(FIG_W.full[0], Math.floor(PAGE_W / 15)), true, f.caption), caption(`${lab} ${f.caption}`, f.note ? { note: f.note, noteSize: 20 } : {})); }); }
+        children.push(image(f.url, f.w, f.h, Math.min(FIG_W.full[0], Math.floor(PAGE_W / 15)), true, f.caption), caption(`${lab} ${f.caption}`, f.note ? { note: f.note, noteSize: 20, capKind: 'fig' } : { capKind: 'fig' })); }); }
     if (model.discussionParts && model.discussionParts.length) { children.push(H1('Discussion (draft)', brand)); model.discussionParts.forEach(([h, t]) => { children.push(para(h, { bold: true, after: 60 })); String(t).split(/\n+/).forEach(x => children.push(para(x))); }); }
     if (model.stamp) children.push(para(model.stamp, { size: 16, color: '808080', before: 240 }));
     if (opts.refs && opts.refs.length) { children.push(heading('References', brand)); opts.refs.forEach((r, i) => children.push(para(`${i + 1}. ${r}`, { line: 276, after: 80, align: AlignmentType.LEFT }))); }
@@ -458,19 +469,22 @@ const Report = (() => {
     const parts = []; let from = 0, land = landscape;
     turns.forEach(t => { if (t.at > from) parts.push({ land, kids: children.slice(from, t.at) }); from = t.at; land = t.land; });
     parts.push({ land, kids: children.slice(from) });
-    const hs = (id, name, size, before, after) => ({ id, name, basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: true, size, font: BODY_FONT, color: brand ? '1C1648' : '000000' }, paragraph: { spacing: { before, after }, keepNext: true } });
+    const hs = (id, name, size, before, after) => { const k = id === 'Heading1' ? 'h1' : 'h2'; return { id, name, basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: tsYN(k, 'bold', true), ...(tsYN(k, 'italic') !== undefined ? { italics: tsYN(k, 'italic') } : {}), size: tsSz(k, size), font: BODY_FONT, color: brand ? '1C1648' : '000000' }, paragraph: { spacing: { before: tsSp(k, 'before', before), after: tsSp(k, 'after', after) }, keepNext: true, ...(tsAl(k) ? { alignment: tsAl(k) } : {}) } }; };
+    // a heading styled in step 11 replaces Word's built-in heading style (otherwise the two styles of the same name are left as before)
+    const hDef = () => { const o = {}; [['h1', 'heading1', 'Heading1', 'Heading 1', 30, 240, 160], ['h2', 'heading2', 'Heading2', 'Heading 2', 26, 240, 120]].forEach(([k, key, id, nm, sz, b, a]) => { if (tsOn(k)) { const x = hs(id, nm, sz, b, a); o[key] = { run: x.run, paragraph: x.paragraph }; } }); return o; };
+    const hsList = () => [['h1', 'Heading1', 'Heading 1', 30, 240, 160], ['h2', 'Heading2', 'Heading 2', 26, 240, 120]].filter(([k]) => !tsOn(k)).map(([, id, nm, sz, b, a]) => hs(id, nm, sz, b, a));
     const doc = new Document({
       creator: 'Prof MSE Easy Stat',
       title: opts.title || 'Statistical report',
       ...(opts.toc ? { features: { updateFields: true } } : {}),
       ...(Object.keys(footnotes).length ? { footnotes } : {}),
-      styles: STYLED ? { default: { document: { run: { font: BODY_FONT, size: BODY_SZ }, paragraph: { alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, before: PARA_BEFORE, line: LINE, lineRule: D().LineRuleType.AUTO }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}) } } },
-        paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120),
+      styles: STYLED ? { default: { ...hDef(), document: { run: { font: BODY_FONT, size: BODY_SZ }, paragraph: { alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, before: PARA_BEFORE, line: LINE, lineRule: D().LineRuleType.AUTO }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}) } } },
+        paragraphStyles: [...hsList(),
           { id: 'Caption', name: 'caption', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
           { id: 'CaptionTitle', name: 'Caption Title', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { italics: true }, paragraph: { alignment: AlignmentType.LEFT, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
           { id: 'TableText', name: 'Table Text', basedOn: 'Normal', quickFormat: true, run: { size: TT_SZ, ...((opts.tableLook || {}).font ? { font: opts.tableLook.font } : {}) }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240, lineRule: D().LineRuleType.AUTO } } },
           { id: 'TableNote', name: 'Table Note', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { size: 18 }, paragraph: { spacing: { before: 60, after: 160, line: 240, lineRule: D().LineRuleType.AUTO } } }] }
-        : { default: { document: { run: { font: BODY_FONT, size: BODY_SZ } } }, ...(WORD_STYLES ? { paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120)] } : {}) },
+        : { default: { ...(WORD_STYLES ? hDef() : {}), document: { run: { font: BODY_FONT, size: BODY_SZ } } }, ...(WORD_STYLES ? { paragraphStyles: hsList() } : {}) },
       sections: parts.filter(pt => pt.kids.length).map((pt, pi) => ({
         properties: { page: { size: pt.land ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 },
             margin: { top: mT, bottom: mB, left: mL, right: mR, ...(gut ? { gutter: gut } : {}), ...(pg.hdr !== undefined ? { header: pg.hdr } : {}), ...(pg.ftr !== undefined ? { footer: pg.ftr } : {}) },

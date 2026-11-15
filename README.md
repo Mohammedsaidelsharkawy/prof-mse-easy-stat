@@ -250,6 +250,11 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**📄 Report (step 12) and page setup (step 11)**
+- **Thesis — A4** and **Thesis — B5** formats. Thesis A4: every text 2 pt larger than on B5 (paragraphs 14 pt, tables 12 pt, footnotes 11 pt, figure notes 12 pt), headings unchanged. Both: **first-line indent 1 cm** by default (type 0 in page setup for none).
+- **Text styles** in page setup: size, bold, italic, alignment and space before / after of Heading 1, Heading 2, paragraphs, table comments, table captions, figure captions, table text, table footnotes and figure notes. Empty = automatic; a styled heading replaces Word's built-in heading style.
+- **Project name** (step 1): names the saved files (Word, PDF, Excel …), the browser tab and the entry in My projects; renaming in My projects renames the open project.
+
 **💬 Comments (step 6)**
 - **Comment of each variable**: a table of every variable with its own comment — as the options above, Concise, Detailed, Descriptive, One sentence, No comment, or **My own text**. A table's comment is the comment of its other variables followed by these.
 - **Comment preview**: tick the variables to preview (otherwise one number and two categories); the preview shows the per-variable comments too.

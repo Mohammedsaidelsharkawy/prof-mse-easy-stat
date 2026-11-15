@@ -16,7 +16,7 @@
     try { if (st.result) { const t = U.abstractTable(), pv = cfg.variables.find(v => v.role === 'primary'), row = t.rows.find(r0 => pv && r0[0].startsWith(pv.label)) || t.rows[0]; if (row) prim = `${row[0]}: ${row.slice(-2).join(', P ')}`; } } catch (e) { /* none */ }
     const EB = window.EasyBuilder; return { phase: EB ? EB.phase : 'analyse', n: st.data ? st.data.rows.length : 0, prim, tasks: (o.tasks || []).filter(t => !t.done).length, ver: (o.dataVersion || {}).name || '', stage: X.checklistStage ? X.checklistStage() : '' }; }
   async function keepInLibrary(silent) { const j = U.projectObj(); if (!j) { U.toast('Nothing to keep yet'); return; } const id = S().libId || ('p' + Date.now().toString(36)); S().libId = id; const old = await libGet(id).catch(() => null);
-    const name = (old && old.name) || (j.cfg && j.cfg.study && j.cfg.study.title) || String(j.file || 'Study').replace(/\.[^.]+$/, '');
+    const pn = j.cfg && j.cfg.study && String(j.cfg.study.project || '').trim(), name = pn || (old && old.name) || (j.cfg && j.cfg.study && j.cfg.study.title) || String(j.file || 'Study').replace(/\.[^.]+$/, '');
     await libPut({ id, name, tags: old ? old.tags : [], archived: old ? old.archived : false, at: Date.now(), sum: summary(), json: j }); log('Kept in My projects'); if (!silent) U.toast(`“${name}” kept in My projects (this browser)`); }
   async function projects(showArch = false, tag = '') { let all = []; try { all = await libAll(); } catch (e) { U.toast('This browser does not allow keeping projects (private window?)'); return; }
     const tags = [...new Set(all.flatMap(p => p.tags || []))].sort(), list = all.filter(p => !!p.archived === showArch && (!tag || (p.tags || []).includes(tag))).sort((a, b) => b.at - a.at);
@@ -32,7 +32,7 @@
       if (k === 'keep') { await keepInLibrary(); return projects(showArch, tag); } if (k === 'arch0') return projects(!showArch, tag);
       if (k === 'open' && rec) { if (S().data && !confirm(`Open “${rec.name}”? The open project is replaced (keep it here first if needed).`)) return; U.openAny(rec.json, rec.json.file); S().libId = rec.id; p.classList.remove('open'); return; }
       if (k === 'tag' && rec) { const t = prompt('Tags, separated by commas (e.g. Thesis, Paper 1, Conference):', (rec.tags || []).join(', ')); if (t === null) return; rec.tags = t.split(',').map(x => x.trim()).filter(Boolean); await libPut(rec); return projects(showArch, tag); }
-      if (k === 'ren' && rec) { const t = prompt('Name of the project:', rec.name); if (!t) return; rec.name = t.trim(); await libPut(rec); return projects(showArch, tag); }
+      if (k === 'ren' && rec) { const t = prompt('Name of the project:', rec.name); if (!t) return; rec.name = t.trim(); if (rec.json && rec.json.cfg && rec.json.cfg.study) rec.json.cfg.study.project = rec.name; if (S().libId === rec.id && S().cfg) { S().cfg.study.project = rec.name; const pi = document.getElementById('projName'); if (pi) pi.value = rec.name; } await libPut(rec); return projects(showArch, tag); }
       if (k === 'arch' && rec) { rec.archived = !rec.archived; await libPut(rec); return projects(showArch, tag); }
       if (k === 'file' && rec) { U.saveUrl(URL.createObjectURL(new Blob([JSON.stringify(rec.json)], { type: 'application/json' })), `${rec.name} - project.easystat.json`); return; }
       if (k === 'del' && rec && confirm(`Delete “${rec.name}” from this browser? This cannot be undone.`)) { await libDel(id); if (S().libId === id) S().libId = null; return projects(showArch, tag); } };

@@ -791,6 +791,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="card">
       <h2>Report details</h2>
       <div class="grid g2">
+        <div><label class="f">Project name (names the saved files and the entry in My projects)</label><input type="text" id="projName" placeholder="e.g. PRF thesis — results chapter"></div>
         <div><label class="f">Study title (optional, printed at top of report)</label><input type="text" id="studyTitle" placeholder="e.g. PRF versus Ozone for chronic shoulder pain"></div>
         <div><label class="f">Software statement (first sentence of Statistical Analysis)</label>
           <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA)."></div>
@@ -1549,6 +1550,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         </div>
       </div>
     </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Text styles</h2><span class="spacer"></span><span class="legend-note" id="tsNote">Size, bold, italic, alignment and spacing of each kind of text in the Word file. Empty = automatic (shown in grey).</span></div>
+      <div class="tbl-wrap"><table class="t" id="tsTbl"></table></div>
+      <div class="row" style="margin-top:6px"><button class="btn ghost small" type="button" id="tsReset">↺ Automatic text styles</button></div>
+    </div>
     <div class="nav"><button class="btn ghost" data-go="10">← Back</button><button class="btn ghost small" data-reset="11" type="button" title="Every option of this step back to its default">↺ Defaults for this step</button><button class="btn primary" data-go="12">Run report →</button></div>
   </section>
 
@@ -1568,7 +1574,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div id="fmtBar">
         <label class="f">Report format</label>
         <div class="fmt-cards">
-          <button type="button" class="fmt-card" data-format="thesis"><b>🎓 Thesis</b><span>Full results chapter: every table with its comment, figures after each table, optional chapter numbering (Table 4.1) and subheadings.</span></button>
+          <button type="button" class="fmt-card" data-format="thesis" data-tpage="a4"><b>🎓 Thesis — A4</b><span>Full results chapter on A4 pages: every text 2 pt larger than B5 (headings unchanged), first-line indent 1 cm.</span></button><button type="button" class="fmt-card" data-format="thesis" data-tpage="b5"><b>🎓 Thesis — B5</b><span>Full results chapter on B5 pages (17.6 × 25 cm): every table with its comment, figures after each table, first-line indent 1 cm.</span></button>
           <button type="button" class="fmt-card" data-format="paper"><b>📄 Journal paper</b><span>Concise: short statistical analysis, one Results text citing tables and figures, compact three-line tables, a few figures, word counts.</span></button>
           <button type="button" class="fmt-card" data-format="custom"><b>⚙ As configured</b><span>Exactly the settings chosen in steps 4–9.</span></button>
         </div>
@@ -31438,6 +31444,14 @@ const Report = (() => {
   // formatting by Word styles (step 11, without a template): body text = Normal, captions = Caption, tables = Table Text, table notes = Table Note,
   // headings = Heading 1 / 2 — the look lives in the styles, so changing a style in Word changes every paragraph that uses it
   let STYLED = false, TT_SZ = 20;
+  // text styles of page setup (step 11): size (pt), bold / italic (yes / no), alignment and spacing (pt) of headings, captions, footnotes, figure notes and comments;
+  // only what is set changes the file
+  let TS = {};
+  const tsv = (k, p) => (TS[k] || {})[p], tsOn = k => TS[k] && Object.values(TS[k]).some(v => v !== '' && v !== undefined && v !== null);
+  const tsSz = (k, def) => { const v = +tsv(k, 'size'); return v > 0 ? Math.round(v * 2) : def; };
+  const tsYN = (k, p, def) => tsv(k, p) === 'yes' ? true : tsv(k, p) === 'no' ? false : def;
+  const tsSp = (k, p, def) => { const v = tsv(k, p); return v === '' || v === undefined || v === null || !isFinite(+v) ? def : Math.round(+v * 20); };
+  const tsAl = (k, def) => { const A = D().AlignmentType; return ({ left: A.LEFT, center: A.CENTER, justify: A.JUSTIFIED, right: A.RIGHT })[tsv(k, 'align')] || def; };
   const STYLE_ALIGN = { Caption: 'center', CaptionTitle: 'left', TableText: 'center', TableNote: 'both' };
   function styledPara(text, o) {
     const { Paragraph } = D(), st = o.pStyle, al = st ? STYLE_ALIGN[st] : 'both';
@@ -31445,7 +31459,7 @@ const Report = (() => {
     return new Paragraph({ ...(st ? { style: st } : {}), ...(o.align && o.align !== al ? { alignment: o.align } : {}),
       ...(!st && explicit ? { spacing: { after: o.after ?? 160, line: o.line ?? LINE, lineRule: D().LineRuleType.AUTO, before: o.before ?? 0 } } : {}),
       keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
-      children: [...runs(text, { ...o, styled: true, bold: o.styleBold ? undefined : o.bold, size: undefined }),
+      children: [...runs(text, { ...o, styled: true, bold: o.styleBold ? undefined : o.bold, size: o.forceSize }),
         ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, styled: true, bold: false, size: undefined }) : [])] });
   }
   function para(text, o = {}) {
@@ -31463,12 +31477,13 @@ const Report = (() => {
   // a comment: sentences reporting a significant result in bold (optional), else one plain paragraph
   const SENT = /[^.!?]+(?:\.(?=\d)[^.!?]*)*[.!?]+(?:\s+|$)|[^.!?]+$/g;
   const isSigSentence = x => /\b(significant(ly)?|clear(ly)?)\b/.test(x) && !/\b(in|not |non-)significant|no significant|not clear|no clear|insignificant/.test(x);
-  function commentPara(text, o = {}) {
+  function commentPara(text, o0 = {}) {
+    const o = tsOn('comment') ? { ...o0, italic: tsYN('comment', 'italic', o0.italic), bold: tsYN('comment', 'bold', o0.bold), forceSize: tsSz('comment', undefined), size: STYLED ? undefined : tsSz('comment', o0.size), align: tsAl('comment', o0.align), after: tsSp('comment', 'after', o0.after), before: tsSp('comment', 'before', o0.before) } : o0;
     if (!o.boldSig) return para(text, o);
     const { Paragraph, AlignmentType } = D(), ss = String(text).match(SENT) || [text];
-    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) })) });
+    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, ...(o.align ? { alignment: o.align } : {}), children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.forceSize })) });
     return new Paragraph({ alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, line: LINE, ...(PARA_BEFORE ? { before: PARA_BEFORE } : {}) }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}), keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
-      children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) })) });
+      children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.size })) });
   }
   // headings: Word's Heading 1 / 2; with WORD_STYLES the look comes from the document's styles only (so a university template can restyle them)
   let WORD_STYLES = false;
@@ -31476,16 +31491,16 @@ const Report = (() => {
     const { Paragraph, TextRun, HeadingLevel } = D();
     if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(text)] });
     return new Paragraph({
-      heading: HeadingLevel.HEADING_1, spacing: { before: 240, after: 160 },
-      children: [new TextRun({ text, bold: true, size: 30, font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
+      heading: HeadingLevel.HEADING_1, spacing: { before: tsSp('h1', 'before', 240), after: tsSp('h1', 'after', 160) }, ...(tsAl('h1') ? { alignment: tsAl('h1') } : {}),
+      children: [new TextRun({ text, bold: tsYN('h1', 'bold', true), italics: tsYN('h1', 'italic', undefined), size: tsSz('h1', 30), font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
     });
   }
   function subheading(text, brand, pageBreakBefore) {
     const { Paragraph, TextRun, HeadingLevel } = D();
     if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_2, keepNext: true, pageBreakBefore, children: [new TextRun(text)] });
     return new Paragraph({
-      heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 120 }, keepNext: true, pageBreakBefore,
-      children: [new TextRun({ text, bold: true, size: 26, font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
+      heading: HeadingLevel.HEADING_2, spacing: { before: tsSp('h2', 'before', 240), after: tsSp('h2', 'after', 120) }, keepNext: true, pageBreakBefore, ...(tsAl('h2') ? { alignment: tsAl('h2') } : {}),
+      children: [new TextRun({ text, bold: tsYN('h2', 'bold', true), italics: tsYN('h2', 'italic', undefined), size: tsSz('h2', 26), font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
     });
   }
   // bilingual report: an Arabic paragraph, right to left, after its English one
@@ -31507,7 +31522,9 @@ const Report = (() => {
     return new Paragraph({ alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, line: LINE, ...(PARA_BEFORE ? { before: PARA_BEFORE } : {}) }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}), children: kids });
   }
   function caption(text, o = {}) {
-    const { AlignmentType } = D();
+    const { AlignmentType } = D(), k = o.capKind === 'fig' ? 'figCap' : 'tabCap', nk = 'figNote';
+    if (o.note && tsOn(nk)) o = { ...o, noteSize: tsSz(nk, o.noteSize) };
+    if (tsOn(k)) { const { capKind, ...r } = o; return para(text, { cap: true, keepNext: true, line: 276, ...r, bold: tsYN(k, 'bold', true), italic: tsYN(k, 'italic', undefined), align: tsAl(k, r.align || AlignmentType.CENTER), size: tsSz(k, BODY_SZ), after: tsSp(k, 'after', 120), before: tsSp(k, 'before', r.before) }); }
     return para(text, { bold: true, align: AlignmentType.CENTER, after: 120, line: 276, keepNext: true, cap: true, pStyle: STYLED ? 'Caption' : undefined, styleBold: true, ...o });
   }
   // APA: the number in bold on its own line, the title in italics below it, both left-aligned
@@ -31630,7 +31647,7 @@ const Report = (() => {
         children: f ? (f.apa
           ? [para(f.num, { bold: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 0 }), para(f.caption, { italic: true, align: D().AlignmentType.LEFT, size: 20, line: 240, after: 60 }),
             image(f.url, f.w, f.h, w, true, f.label), ...(f.note ? [para('Note. ' + f.note, { align: D().AlignmentType.LEFT, size: 18, line: 240, after: 160 })] : [])]
-          : [image(f.url, f.w, f.h, w, true, f.label), para(f.label, { cap: true, bold: true, align: D().AlignmentType.CENTER, size: 20, line: 240, after: 160, note: f.note, noteSize: 18 })]) : [new Paragraph('')]
+          : [image(f.url, f.w, f.h, w, true, f.label), para(f.label, { cap: true, bold: tsYN('figCap', 'bold', true), italic: tsYN('figCap', 'italic', undefined), align: tsAl('figCap', D().AlignmentType.CENTER), size: tsSz('figCap', 20), line: 240, after: tsSp('figCap', 'after', 160), note: f.note, noteSize: tsSz('figNote', 18) })]) : [new Paragraph('')]
       })) }));
     }
     return new Table({ width: { size: PAGE_W, type: WidthType.DXA }, columnWidths: [half, PAGE_W - half], rows,
@@ -31666,7 +31683,7 @@ const Report = (() => {
     if (opts.twoCol) PAGE_W = Math.floor((PAGE_W - 708) / 2); // tables and figures fit one column
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [], footnotes = {};
-    TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE; STYLED = !!opts.wordStyles && !TEMPLATE; TT_SZ = 2 * (+(opts.tableLook || {}).size || 10);
+    TS = opts.textStyles || {}; TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE; STYLED = !!opts.wordStyles && !TEMPLATE; TT_SZ = 2 * (+(opts.tableLook || {}).size || 10);
     // bilingual: AR gives the Arabic of a paragraph, heading, caption, footnote or column heading
     const AR = opts.ar || null, arAfter = (text, o) => { if (AR && text) { const t = AR.text(text); if (t) children.push(arPara(t, o)); } };
     const H1 = (t, b) => heading(AR && AR.heading(t) ? `${t} — ${AR.heading(t)}` : t, b);
@@ -31705,7 +31722,7 @@ const Report = (() => {
       const fl = figLabel(pre + fig++, opts.captionStyle), ft = model.flowCaption || 'CONSORT flowchart of the enrolled patients';
       listFigs.push(`${fl} ${ft}`);
       if (opts.captionStyle === 'apa') children.push(...apaCaption(fl, ft), image(model.consort.url, model.consort.w, model.consort.h, Math.min(opts.paper ? 470 : 600, Math.floor(PAGE_W / 15)), true, ft));
-      else children.push(image(model.consort.url, model.consort.w, model.consort.h, Math.min(opts.paper ? 470 : 600, Math.floor(PAGE_W / 15)), true, ft), caption(`${fl} ${ft}`));
+      else children.push(image(model.consort.url, model.consort.w, model.consort.h, Math.min(opts.paper ? 470 : 600, Math.floor(PAGE_W / 15)), true, ft), caption(`${fl} ${ft}`, { capKind: 'fig' }));
       if (AR) children.push(arPara(`الشكل ${pre + (fig - 1)}: ${AR.caption(ft)}`, { bold: true, center: true, line: 276, after: 160 }));
     } else if (opts.paper && model.intro) children.push(para(model.intro));
     if (model.narrative) model.narrative.split(/\n\s*\n/).forEach(t => { if (t.trim()) { children.push(para(t.trim())); arAfter(t.trim()); } });
@@ -31730,11 +31747,11 @@ const Report = (() => {
           children.push(...apaCaption(f.num, f.caption), image(f.url, f.w, f.h, fw(f), true, f.caption));
           if (f.note) children.push(para('Note. ' + f.note, { size: 20, line: 240, after: 200, align: AlignmentType.LEFT }));
         } else if (opts.capAbove) {
-          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}), image(f.url, f.w, f.h, fw(f), false, f.caption));
+          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20, capKind: 'fig' } : { capKind: 'fig' }), image(f.url, f.w, f.h, fw(f), false, f.caption));
           children.push(para('', { after: 120, line: 240 }));
         } else {
           children.push(image(f.url, f.w, f.h, fw(f), true, f.caption));
-          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20 } : {}));
+          children.push(caption(f.label, f.note ? { note: f.note, noteSize: 20, capKind: 'fig' } : { capKind: 'fig' }));
         }
         if (AR) children.push(arPara(`الشكل ${String(f.num).replace(/^\D+/, '').replace(/[:.]$/, '')}: ${AR.caption(f.caption)}${f.note ? ' ' + AR.caption(f.note) : ''}`, { bold: true, center: true, size: 22, line: 276, after: 200 }));
       }
@@ -31781,7 +31798,7 @@ const Report = (() => {
           if (pi > 0) { const cont = `${num} (continued)`; children.push(opts.tableCaption === 'apa' ? para(cont, { bold: true, align: D().AlignmentType.LEFT, after: 120, line: 276, keepNext: true, before: 200 }) : caption(cont, { before: 200, align: D().AlignmentType.LEFT })); }
           children.push(table(headAr, part, brand, s.tstyle || opts.tableStyle, { ...opts.tableLook, ...(s.tlook || {}), ...(s.keepPage ? { keep: true } : {}) }));
         });
-        children.push(para(s.footnote, STYLED ? { pStyle: 'TableNote' } : { size: 18, line: 240, after: 160, before: 60 }));
+        children.push(para(s.footnote, tsOn('foot') ? { size: tsSz('foot', 18), bold: tsYN('foot', 'bold', undefined), italic: tsYN('foot', 'italic', undefined), align: tsAl('foot', undefined), line: 240, after: tsSp('foot', 'after', 160), before: tsSp('foot', 'before', 60) } : STYLED ? { pStyle: 'TableNote' } : { size: 18, line: 240, after: 160, before: 60 }));
         if (AR && s.footnote) children.push(arPara(AR.footnote(s.footnote), { size: 18, line: 240, after: 160 }));
         if (s.comment && !merged && (cp || 'after') === 'after') { children.push(commentPara(figRef(s, s.comment), { boldSig: opts.boldSigText })); arAfter(s.comment); }
         if (!merged && opts.commentPlace !== 'none') children.push(...findings(s));
@@ -31807,7 +31824,7 @@ const Report = (() => {
       (opts.appendix || []).forEach(t => { children.push(subheading(t.title, brand)); children.push(plainTbl(t)); if (t.note) children.push(para(t.note, { size: 18, line: 240, after: 160, before: 60 })); });
       // figures placed in the appendix (step 7): Figure A1, A2 …
       apFigs.forEach((f, i) => { const lab = `Figure A${i + 1}${opts.captionStyle === 'period' ? '.' : opts.captionStyle === 'apa' ? '' : ':'}`;
-        children.push(image(f.url, f.w, f.h, Math.min(FIG_W.full[0], Math.floor(PAGE_W / 15)), true, f.caption), caption(`${lab} ${f.caption}`, f.note ? { note: f.note, noteSize: 20 } : {})); }); }
+        children.push(image(f.url, f.w, f.h, Math.min(FIG_W.full[0], Math.floor(PAGE_W / 15)), true, f.caption), caption(`${lab} ${f.caption}`, f.note ? { note: f.note, noteSize: 20, capKind: 'fig' } : { capKind: 'fig' })); }); }
     if (model.discussionParts && model.discussionParts.length) { children.push(H1('Discussion (draft)', brand)); model.discussionParts.forEach(([h, t]) => { children.push(para(h, { bold: true, after: 60 })); String(t).split(/\n+/).forEach(x => children.push(para(x))); }); }
     if (model.stamp) children.push(para(model.stamp, { size: 16, color: '808080', before: 240 }));
     if (opts.refs && opts.refs.length) { children.push(heading('References', brand)); opts.refs.forEach((r, i) => children.push(para(`${i + 1}. ${r}`, { line: 276, after: 80, align: AlignmentType.LEFT }))); }
@@ -31837,19 +31854,22 @@ const Report = (() => {
     const parts = []; let from = 0, land = landscape;
     turns.forEach(t => { if (t.at > from) parts.push({ land, kids: children.slice(from, t.at) }); from = t.at; land = t.land; });
     parts.push({ land, kids: children.slice(from) });
-    const hs = (id, name, size, before, after) => ({ id, name, basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: true, size, font: BODY_FONT, color: brand ? '1C1648' : '000000' }, paragraph: { spacing: { before, after }, keepNext: true } });
+    const hs = (id, name, size, before, after) => { const k = id === 'Heading1' ? 'h1' : 'h2'; return { id, name, basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: tsYN(k, 'bold', true), ...(tsYN(k, 'italic') !== undefined ? { italics: tsYN(k, 'italic') } : {}), size: tsSz(k, size), font: BODY_FONT, color: brand ? '1C1648' : '000000' }, paragraph: { spacing: { before: tsSp(k, 'before', before), after: tsSp(k, 'after', after) }, keepNext: true, ...(tsAl(k) ? { alignment: tsAl(k) } : {}) } }; };
+    // a heading styled in step 11 replaces Word's built-in heading style (otherwise the two styles of the same name are left as before)
+    const hDef = () => { const o = {}; [['h1', 'heading1', 'Heading1', 'Heading 1', 30, 240, 160], ['h2', 'heading2', 'Heading2', 'Heading 2', 26, 240, 120]].forEach(([k, key, id, nm, sz, b, a]) => { if (tsOn(k)) { const x = hs(id, nm, sz, b, a); o[key] = { run: x.run, paragraph: x.paragraph }; } }); return o; };
+    const hsList = () => [['h1', 'Heading1', 'Heading 1', 30, 240, 160], ['h2', 'Heading2', 'Heading 2', 26, 240, 120]].filter(([k]) => !tsOn(k)).map(([, id, nm, sz, b, a]) => hs(id, nm, sz, b, a));
     const doc = new Document({
       creator: 'Prof MSE Easy Stat',
       title: opts.title || 'Statistical report',
       ...(opts.toc ? { features: { updateFields: true } } : {}),
       ...(Object.keys(footnotes).length ? { footnotes } : {}),
-      styles: STYLED ? { default: { document: { run: { font: BODY_FONT, size: BODY_SZ }, paragraph: { alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, before: PARA_BEFORE, line: LINE, lineRule: D().LineRuleType.AUTO }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}) } } },
-        paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120),
+      styles: STYLED ? { default: { ...hDef(), document: { run: { font: BODY_FONT, size: BODY_SZ }, paragraph: { alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, before: PARA_BEFORE, line: LINE, lineRule: D().LineRuleType.AUTO }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}) } } },
+        paragraphStyles: [...hsList(),
           { id: 'Caption', name: 'caption', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
           { id: 'CaptionTitle', name: 'Caption Title', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { italics: true }, paragraph: { alignment: AlignmentType.LEFT, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
           { id: 'TableText', name: 'Table Text', basedOn: 'Normal', quickFormat: true, run: { size: TT_SZ, ...((opts.tableLook || {}).font ? { font: opts.tableLook.font } : {}) }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 0, line: 240, lineRule: D().LineRuleType.AUTO } } },
           { id: 'TableNote', name: 'Table Note', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { size: 18 }, paragraph: { spacing: { before: 60, after: 160, line: 240, lineRule: D().LineRuleType.AUTO } } }] }
-        : { default: { document: { run: { font: BODY_FONT, size: BODY_SZ } } }, ...(WORD_STYLES ? { paragraphStyles: [hs('Heading1', 'Heading 1', 30, 240, 160), hs('Heading2', 'Heading 2', 26, 240, 120)] } : {}) },
+        : { default: { ...(WORD_STYLES ? hDef() : {}), document: { run: { font: BODY_FONT, size: BODY_SZ } } }, ...(WORD_STYLES ? { paragraphStyles: hsList() } : {}) },
       sections: parts.filter(pt => pt.kids.length).map((pt, pi) => ({
         properties: { page: { size: pt.land ? { width: pw0, height: ph0, orientation: D().PageOrientation.LANDSCAPE } : { width: pw0, height: ph0 },
             margin: { top: mT, bottom: mB, left: mL, right: mR, ...(gut ? { gutter: gut } : {}), ...(pg.hdr !== undefined ? { header: pg.hdr } : {}), ...(pg.ftr !== undefined ? { footer: pg.ftr } : {}) },
@@ -32867,7 +32887,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (!o) return;
     if (state.data && !confirm('Open this messy dataset? The current data and settings are replaced.')) return;
     const ex = Examples.getMessy(o.dataset.mopen);
-    state.pendingCfg = null; $('#studyTitle').value = '';
+    state.pendingCfg = null; $('#studyTitle').value = ''; if ($('#projName')) $('#projName').value = '';
     openWorkbook(ex.book(XLSX), ex.id + '.xlsx');
     state.messy = ex.id; $('#prepBox').open = true; renderMessyTasks();
     $('#messyTasks').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -33224,7 +33244,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     box.innerHTML = R2.map(x => `<div class="gcard" style="margin-top:6px"><b>${esc(x.src)}</b> — matched by ${esc(x.key)}<div><b>${x.onlyHere.length}</b> ID${x.onlyHere.length === 1 ? '' : 's'} only in this sheet: ${list(x.onlyHere)}</div><div><b>${x.onlyOther.length}</b> only in the other file: ${list(x.onlyOther)}</div>${x.dupOther ? `<div style="color:var(--bad)">⚠ ${x.dupOther} repeated ID${x.dupOther > 1 ? 's' : ''} in the other file (the last one was used)</div>` : ''}</div>`).join('')
       + '<button class="btn ghost small" type="button" id="mergeRepDl">⬇ Unmatched IDs (Excel)</button>';
     $('#mergeRepDl').onclick = () => { const wb = XLSX.utils.book_new(), aoa = [['File', 'ID', 'Found only in']]; R2.forEach(x => { x.onlyHere.forEach(i => aoa.push([x.src, i, 'this sheet'])); x.onlyOther.forEach(i => aoa.push([x.src, i, 'the other file'])); });
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Unmatched'); XLSX.writeFile(wb, `${(state.file || 'data').replace(/\.[^.]+$/, '')} - unmatched IDs.xlsx`); }; }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Unmatched'); XLSX.writeFile(wb, `${baseName()} - unmatched IDs.xlsx`); }; }
   function mergeSheet(ws, src) {
     {
       const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: false });
@@ -33394,7 +33414,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     else if (b.id === 'gridSave') {
       const ws = XLSX.utils.json_to_sheet(state.data.rows, { header: state.data.headers }), wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, (state.sheet || 'Data').slice(0, 31));
-      XLSX.writeFile(wb, (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' (edited).xlsx');
+      XLSX.writeFile(wb, baseName() + ' (edited).xlsx');
     }
     else if (d.hmove) { const [i, k] = d.hmove.split(',').map(Number); moveColumn(i, k); }
     else if (d.hdel) deleteColumn(d.hdel);
@@ -34375,7 +34395,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     $('#lgVars').innerHTML = reps.length ? reps.map(v => `<label class="check" style="margin:0"><input type="checkbox" data-lgv="${esc(v.id)}" checked><span>${esc(v.label)} (${v.cols.length})</span></label>`).join('') : '<span class="legend-note">No repeated measures found (step 2 makes them from names such as VAS_Baseline, VAS_M1).</span>';
     $('#lgGo').disabled = $('#lgDl').disabled = !reps.length; $('#lgInfo').textContent = reps.length ? `${state.data.rows.length} patients → up to ${state.data.rows.length * Math.max(...reps.map(v => v.cols.length))} rows` : ''; };
   $('#lgDl').onclick = () => { const L = longSheet(), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([L.headers, ...L.rows.map(r => L.headers.map(h => r[h]))]), 'Long');
-    XLSX.writeFile(wb, (state.file || 'data').replace(/\.[^.]+$/, '') + ' - long.xlsx'); };
+    XLSX.writeFile(wb, baseName() + ' - long.xlsx'); };
   $('#lgGo').onclick = () => { const L = longSheet(); if (!L.rows.length) return; if (!confirm(`Replace the sheet by its long form (${L.rows.length} rows, one per visit)? Undo restores it.`)) return;
     editSheet(() => { state.data = L; state.cfg = detect(state.data); }, 'Wide to long'); renderPrep(); toggleTool('longBox'); toast(`Long sheet: ${L.rows.length} rows (${L.headers[0]}, Visit, …)`); };
   /* ---------- compare this sheet with another version of the file ---------- */
@@ -35580,7 +35600,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       kids.push(P(`Table ${k}: ${title}`, { bold: true, before: 240, after: 80, size: 22 }), new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [head, ...rows] }),
         P(`Data are presented as mean ± SD or median (IQR) and frequency (%).${m.note ? ' ' + m.note : ''}`, { it: true, size: 18, before: 60 })); });
     const doc = new Document({ creator: 'Prof MSE Easy Stat', title: 'Shell tables', sections: [{ children: [P(`${(cfg.study && cfg.study.title) || 'Study'} — shell tables`, { bold: true, size: 28, after: 120 }), P('The tables planned for the results, before the data: replace xx with the values.', { it: true, color: '555555', after: 120 }), ...kids] }] });
-    saveUrl(URL.createObjectURL(await window.docx.Packer.toBlob(doc)), `${(state.file || 'Study').replace(/\.[^.]+$/, '')} - shell tables.docx`); toast(`${k} shell table${k === 1 ? '' : 's'} saved`);
+    saveUrl(URL.createObjectURL(await window.docx.Packer.toBlob(doc)), `${baseName()} - shell tables.docx`); toast(`${k} shell table${k === 1 ? '' : 's'} saved`);
   }
   let tbDrag = null;
   $('#tablesBoard').addEventListener('dragstart', e => { const c = e.target.closest('[data-tvid]'); if (c) { tbDrag = c.dataset.tvid; e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); } });
@@ -36918,7 +36938,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const isActive = n => $('#p' + n).classList.contains('active');
   function readUiIntoCfg() {
     const cfg = state.cfg; if (!cfg) return;
-    cfg.study.title = $('#studyTitle').value; cfg.study.software = $('#software').value;
+    cfg.study.title = $('#studyTitle').value; cfg.study.software = $('#software').value; cfg.study.project = ($('#projName') || {}).value || ''; projTitle();
     if (isActive(2)) readVariables();
     if (isActive(3)) {
       document.querySelectorAll('[data-tp]').forEach(el => cfg.tpLabels[el.dataset.tp] = el.value.trim() || el.dataset.tp);
@@ -37541,7 +37561,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       });
       const blob = await Report.buildResults({ items }, { layout: { twocol: 'standard', tables: 'compact' }[xpo().view] || xpo().view, title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - Results by variable.docx';
+      a.download = baseName() + ' - Results by variable.docx';
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('Results by variable downloaded');
     } catch (err) { console.error(err); toast('Word export failed: ' + err.message); }
@@ -37607,7 +37627,8 @@ if (typeof module !== 'undefined') module.exports = Sav;
   }
   function renderFormatBar() {
     const r = report();
-    document.querySelectorAll('[data-format]').forEach(b => b.classList.toggle('on', b.dataset.format === r.format));
+    if (r.format === 'thesis' && !r.thesisPage) r.thesisPage = 'a4';
+    document.querySelectorAll('[data-format]').forEach(b => b.classList.toggle('on', b.dataset.format === r.format && (!b.dataset.tpage || (r.thesisPage || 'a4') === b.dataset.tpage)));
     $('#fmtThesis').style.display = r.format === 'thesis' ? '' : 'none';
     $('#fmtPaper').style.display = r.format === 'paper' ? '' : 'none';
     $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
@@ -37880,7 +37901,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   async function thesisChapters() { if (!state.result) return; busy(true);
     try { syncEdits(); const r = exportModel(state.result); if (effOptions().figPanels) await panelize(r); r.methodsParts = fullMethods(); r.methods = ''; r.discussionParts = discussionDraft();
       const wo = { ...wordOptions(), chapters: true }; let blob = await Report.build(r, wo); if (state.wordTemplate) blob = await applyTemplate(blob, state.wordTemplate.bytes);
-      saveUrl(URL.createObjectURL(blob), (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - Thesis chapters.docx'); toast('Patients and Methods, Results and the Discussion draft saved'); }
+      saveUrl(URL.createObjectURL(blob), baseName() + ' - Thesis chapters.docx'); toast('Patients and Methods, Results and the Discussion draft saved'); }
     catch (err) { console.error(err); toast('Could not make it: ' + err.message); } finally { busy(false); } }
   function abstractTable() { const r = state.result, gs = activeGroups(), gl = gs.map(g => state.cfg.groupLabels[g] || g), rows = [];
     (r.sections || []).forEach(sec => { const M = sec.meta || {}; let list = Array.isArray(M.res) ? M.res : [];
@@ -38417,7 +38438,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   renderRepSnaps();
   $('#fmtBar').addEventListener('click', e => {
     const b = e.target.closest('[data-format]'); if (!b) return;
-    report().format = b.dataset.format; renderFormatBar(); runAnalysis();
+    report().format = b.dataset.format; if (b.dataset.tpage) report().thesisPage = b.dataset.tpage; renderFormatBar(); runAnalysis();
   });
   $('#fmtBar').addEventListener('change', e => {
     const r = report();
@@ -38942,6 +38963,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (o.bodyAlign === 'left') pg.align = 'left';
     const pb = cmNum(o.paraBefore, 0, 48), pa = cmNum(o.paraAfter, 0, 48), fi = cmNum(o.firstIndent, 0.01, 3);
     if (pb !== null) pg.before = Math.round(pb * 20); if (pa !== null) pg.after = Math.round(pa * 20); if (fi) pg.indent = TW(fi);
+    else if (rp.format === 'thesis' && String(o.firstIndent ?? '').trim() === '') pg.indent = TW(1); // thesis: 1 cm unless a value (0 = none) is typed
+    if (rp.format === 'thesis' && rp.thesisPage === 'a4') pg.bodySize = 2 * ((+o.bodySize || 12) + 2); // thesis A4: every text 2 pt larger than on B5, headings unchanged
     return pg;
   }
   // Word's mirror margins (a document setting the docx library does not write)
@@ -38974,7 +38997,24 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const m0 = MARGIN_CM[o.pageMargin] || 2.54, [t, r, b, l] = pg.mar ? pg.mar.map(x => x / 567) : [m0, m0, m0, m0];
     return { o, pg, w, h, t, r, b, l, g: (pg.gutter || 0) / 567, hd: pg.hdr !== undefined ? pg.hdr / 567 : 1.25, fd: pg.ftr !== undefined ? pg.ftr / 567 : 1.25 };
   }
+  function renderTextStyles() { const tbl = $('#tsTbl'); if (!tbl || !state.cfg || tbl.contains(document.activeElement) && tbl.innerHTML) return; const o = state.cfg.options, ts = o.textStyles || {}, sh = thesisShift(), body = (+o.bodySize || 12) + sh;
+    const def = k => k === 'body' ? body : k === 'table' ? (+o.tableFontSize || 10) + sh : k === 'comment' || k === 'tabCap' || k === 'figCap' ? body : k === 'foot' ? 9 + sh : k === 'figNote' ? 10 + sh : TS_ROWS.find(r => r[0] === k)[2];
+    const yn = (k, p, dis) => `<select data-ts="${k}.${p}" style="width:auto" ${dis ? 'disabled' : ''}>${[['', 'auto'], ['yes', 'yes'], ['no', 'no']].map(([v, l]) => `<option value="${v}" ${((ts[k] || {})[p] || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+    const val = (k, p) => k === 'body' ? ({ size: o.bodySize === '12' ? '' : o.bodySize, align: o.bodyAlign === 'left' ? 'left' : '', before: o.paraBefore, after: o.paraAfter })[p] ?? '' : k === 'table' ? (p === 'size' ? (o.tableFontSize === '10' ? '' : o.tableFontSize) : '') : (ts[k] || {})[p] ?? '';
+    tbl.innerHTML = `<thead><tr><th>Text</th><th>Size (pt)</th><th>Bold</th><th>Italic</th><th>Alignment</th><th>Space before (pt)</th><th>Space after (pt)</th></tr></thead><tbody>${TS_ROWS.map(([k, l]) => { const lim = k === 'body' || k === 'table';
+      return `<tr><td><b>${l}</b></td><td><input type="number" min="6" max="40" step="0.5" data-ts="${k}.size" value="${esc(val(k, 'size'))}" placeholder="${def(k)}" style="width:70px"></td><td>${yn(k, 'bold', lim)}</td><td>${yn(k, 'italic', lim)}</td>
+        <td><select data-ts="${k}.align" style="width:auto" ${k === 'table' ? 'disabled' : ''}>${[['', 'auto'], ['left', 'left'], ['center', 'centre'], ['justify', 'justify'], ['right', 'right']].filter(([v]) => k !== 'body' || ['', 'left'].includes(v)).map(([v, t]) => `<option value="${v}" ${val(k, 'align') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+        <td><input type="number" min="0" max="72" data-ts="${k}.before" value="${esc(val(k, 'before'))}" placeholder="auto" style="width:64px" ${k === 'table' ? 'disabled' : ''}></td><td><input type="number" min="0" max="72" data-ts="${k}.after" value="${esc(val(k, 'after'))}" placeholder="auto" style="width:64px" ${k === 'table' ? 'disabled' : ''}></td></tr>`; }).join('')}</tbody>`;
+    const n = $('#tsNote'); if (n) n.textContent = `Size, bold, italic, alignment and spacing of each kind of text in the Word file. Empty = automatic (shown in grey)${sh ? '; Thesis A4: automatic sizes are 2 pt larger than on B5, headings unchanged' : ''}.`; }
+  const tsRead = e => { const t = e.target, k0 = t.dataset && t.dataset.ts; if (!k0 || !state.cfg) return; const [k, p] = k0.split('.'), o = state.cfg.options, v = t.value.trim();
+    if (k === 'body') { if (p === 'size') o.bodySize = v || '12'; if (p === 'align') o.bodyAlign = v === 'left' ? 'left' : 'justify'; if (p === 'before') o.paraBefore = v; if (p === 'after') o.paraAfter = v; if (e.type === 'change') { const set = (id, x) => { const el = $('#' + id); if (el) el.value = x; }; set('optBodySize', o.bodySize); set('optBodyAlign', o.bodyAlign); set('optParaBefore', o.paraBefore); set('optParaAfter', o.paraAfter); } return; }
+    if (k === 'table') { o.tableFontSize = v || '10'; const el = $('#optTableFontSize'); if (el) el.value = o.tableFontSize; return; }
+    o.textStyles = o.textStyles || {}; o.textStyles[k] = { ...(o.textStyles[k] || {}), [p]: v }; };
+  // read before the page setup redraws (capture phase), on every key and on every choice
+  document.addEventListener('input', tsRead, true); document.addEventListener('change', tsRead, true);
+  document.addEventListener('click', e => { if (e.target.id !== 'tsReset' || !state.cfg) return; state.cfg.options.textStyles = {}; renderTextStyles(); toast('Text styles back to automatic'); });
   function renderPageSetup() {
+    renderTextStyles();
     if (!state.cfg || !$('#pgPreview')) return;
     marginBoxes();
     document.querySelectorAll('#p11 [data-rx]').forEach(el => { const v = report()[el.dataset.rx]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v ?? ''); });
@@ -39303,7 +39343,13 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     return [...out, ...app.map((s, i) => i ? s : { ...s, chapterHead: 'Appendix' })]; }
   $('#btnRerun').onclick = () => runAnalysis();
   // the options of the Word file, from the steps and the report format
-  function wordOptions() {
+  // text styles (step 11) and the thesis A4 sizes go into the Word options
+  const TS_ROWS = [['h1', 'Heading 1 (Results, chapter)', 15], ['h2', 'Heading 2 (sections)', 13], ['body', 'Paragraph', 12], ['comment', 'Comment of a table', null], ['tabCap', 'Table caption', null], ['figCap', 'Figure caption', null], ['table', 'Table text', 10], ['foot', 'Table footnote', 9], ['figNote', 'Figure note', 10]];
+  const thesisShift = () => { const rp = report(); return rp.format === 'thesis' && rp.thesisPage === 'a4' ? 2 : 0; };
+  function wordOptions() { const w = wordOptions0(), o = state.cfg.options, sh = thesisShift(), ts = JSON.parse(JSON.stringify(o.textStyles || {}));
+    if (sh) { w.tableLook = { ...(w.tableLook || {}), size: (+(w.tableLook || {}).size || +o.tableFontSize || 10) + sh }; [['foot', 9], ['figNote', 10]].forEach(([k, d]) => { ts[k] = ts[k] || {}; if (!(+ts[k].size > 0)) ts[k].size = d + sh; }); }
+    w.textStyles = ts; return w; }
+  function wordOptions0() {
     const o = effOptions(), rp = report(), r0 = state.result, plan0 = r0 ? exportPlan(r0) : null;
     const extras = { cover: rp.cover ? { candidate: rp.coverCandidate, supervisor: rp.coverSupervisor, dept: rp.coverDept, date: rp.coverDate } : null, toc: !!rp.toc, wordStyles: !!rp.wordStyles,
       headNum: !!rp.headNum, lineNumbers: !!rp.lineNumbers, twoCol: !!rp.twoCol, watermark: String(rp.watermark || '').trim(), abbrFoot: !!rp.abbrFoot,
@@ -39316,7 +39362,11 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
         tableNewPage: rp.format === 'thesis' ? !!rp.newPage : rp.format === 'paper' ? false : !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: pageOptions(o, rp), listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), footerText: String(o.footerText || '').trim(), tableLook: { autoFit: !!o.autoFit, width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figWidthCm: o.figWidthCm, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, capAbove: !!o.capAbove, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings, tableIntro: !!o.tableIntro };
   }
-  const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
+  const baseName = () => { const pn = state.cfg && state.cfg.study && String(state.cfg.study.project || '').trim(); return pn ? safeName(pn) : (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, ''); };
+  // the project name: the browser tab and the saved file names
+  const TITLE0 = document.title;
+  function projTitle() { const pn = state.cfg && state.cfg.study && String(state.cfg.study.project || '').trim(); document.title = pn ? `${pn} — Prof MSE Easy Stat` : TITLE0; }
+  { const pi = document.getElementById('projName'); if (pi) pi.addEventListener('input', () => { if (!state.cfg) return; state.cfg.study.project = pi.value; projTitle(); }); }
   const saveUrl = (url, name) => { try { window.__onExport && window.__onExport(name); } catch (e) { /* none */ } const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
   const safeName = t => String(t).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
   // every exported table to Excel, one sheet each, with the merged cells of the Word table
@@ -39600,7 +39650,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       versionSave(blob);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;
+      a.download = baseName() + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('Word report downloaded'); await masterSeparate();
@@ -39758,7 +39808,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       state.data = j.data; state.cfg = cfg; state.file = j.file || fname; state.messy = null; state.cleanLog = j.cleanLog || []; state.cellLog = j.cellLog || []; state.snapshots = j.snapshots || []; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
       state.undo = []; state.redo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
       $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option value="${esc(state.sheet)}">${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
-      $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value;
+      $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value; if ($('#projName')) $('#projName').value = cfg.study.project || ''; projTitle();
       $('#to2').disabled = false; renderGrid(); renderPrep(); $('#hdrRow').innerHTML = '<option>1</option>';
       // leave no step active, so the controls of the old project are not read into the opened one
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -39840,7 +39890,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (state.data && !confirm('Start a new project? The current data and settings are cleared (save the project first to keep them).')) return;
     Object.assign(state, { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, pendingCfg: null, pendingEdits: null, undo: [], redo: [], messy: null });
     try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* ignore */ }
-    $('#sheetBox').style.display = 'none'; $('#fileName').textContent = ''; $('#studyTitle').value = ''; $('#file').value = '';
+    $('#sheetBox').style.display = 'none'; $('#fileName').textContent = ''; $('#studyTitle').value = ''; if ($('#projName')) $('#projName').value = ''; $('#file').value = '';
     $('#to2').disabled = true; $('#report').innerHTML = '';
     go(1); toast('New project — upload an Excel file or open an example');
   };
@@ -44210,7 +44260,7 @@ html.ux2-review #report textarea{border-color:transparent;background:transparent
     try { if (st.result) { const t = U.abstractTable(), pv = cfg.variables.find(v => v.role === 'primary'), row = t.rows.find(r0 => pv && r0[0].startsWith(pv.label)) || t.rows[0]; if (row) prim = `${row[0]}: ${row.slice(-2).join(', P ')}`; } } catch (e) { /* none */ }
     const EB = window.EasyBuilder; return { phase: EB ? EB.phase : 'analyse', n: st.data ? st.data.rows.length : 0, prim, tasks: (o.tasks || []).filter(t => !t.done).length, ver: (o.dataVersion || {}).name || '', stage: X.checklistStage ? X.checklistStage() : '' }; }
   async function keepInLibrary(silent) { const j = U.projectObj(); if (!j) { U.toast('Nothing to keep yet'); return; } const id = S().libId || ('p' + Date.now().toString(36)); S().libId = id; const old = await libGet(id).catch(() => null);
-    const name = (old && old.name) || (j.cfg && j.cfg.study && j.cfg.study.title) || String(j.file || 'Study').replace(/\.[^.]+$/, '');
+    const pn = j.cfg && j.cfg.study && String(j.cfg.study.project || '').trim(), name = pn || (old && old.name) || (j.cfg && j.cfg.study && j.cfg.study.title) || String(j.file || 'Study').replace(/\.[^.]+$/, '');
     await libPut({ id, name, tags: old ? old.tags : [], archived: old ? old.archived : false, at: Date.now(), sum: summary(), json: j }); log('Kept in My projects'); if (!silent) U.toast(`“${name}” kept in My projects (this browser)`); }
   async function projects(showArch = false, tag = '') { let all = []; try { all = await libAll(); } catch (e) { U.toast('This browser does not allow keeping projects (private window?)'); return; }
     const tags = [...new Set(all.flatMap(p => p.tags || []))].sort(), list = all.filter(p => !!p.archived === showArch && (!tag || (p.tags || []).includes(tag))).sort((a, b) => b.at - a.at);
@@ -44226,7 +44276,7 @@ html.ux2-review #report textarea{border-color:transparent;background:transparent
       if (k === 'keep') { await keepInLibrary(); return projects(showArch, tag); } if (k === 'arch0') return projects(!showArch, tag);
       if (k === 'open' && rec) { if (S().data && !confirm(`Open “${rec.name}”? The open project is replaced (keep it here first if needed).`)) return; U.openAny(rec.json, rec.json.file); S().libId = rec.id; p.classList.remove('open'); return; }
       if (k === 'tag' && rec) { const t = prompt('Tags, separated by commas (e.g. Thesis, Paper 1, Conference):', (rec.tags || []).join(', ')); if (t === null) return; rec.tags = t.split(',').map(x => x.trim()).filter(Boolean); await libPut(rec); return projects(showArch, tag); }
-      if (k === 'ren' && rec) { const t = prompt('Name of the project:', rec.name); if (!t) return; rec.name = t.trim(); await libPut(rec); return projects(showArch, tag); }
+      if (k === 'ren' && rec) { const t = prompt('Name of the project:', rec.name); if (!t) return; rec.name = t.trim(); if (rec.json && rec.json.cfg && rec.json.cfg.study) rec.json.cfg.study.project = rec.name; if (S().libId === rec.id && S().cfg) { S().cfg.study.project = rec.name; const pi = document.getElementById('projName'); if (pi) pi.value = rec.name; } await libPut(rec); return projects(showArch, tag); }
       if (k === 'arch' && rec) { rec.archived = !rec.archived; await libPut(rec); return projects(showArch, tag); }
       if (k === 'file' && rec) { U.saveUrl(URL.createObjectURL(new Blob([JSON.stringify(rec.json)], { type: 'application/json' })), `${rec.name} - project.easystat.json`); return; }
       if (k === 'del' && rec && confirm(`Delete “${rec.name}” from this browser? This cannot be undone.`)) { await libDel(id); if (S().libId === id) S().libId = null; return projects(showArch, tag); } };

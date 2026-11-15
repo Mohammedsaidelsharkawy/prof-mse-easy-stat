@@ -791,6 +791,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="card">
       <h2>Report details</h2>
       <div class="grid g2">
+        <div><label class="f">Project name (names the saved files and the entry in My projects)</label><input type="text" id="projName" placeholder="e.g. PRF thesis — results chapter"></div>
         <div><label class="f">Study title (optional, printed at top of report)</label><input type="text" id="studyTitle" placeholder="e.g. PRF versus Ozone for chronic shoulder pain"></div>
         <div><label class="f">Software statement (first sentence of Statistical Analysis)</label>
           <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA)."></div>
@@ -1549,6 +1550,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         </div>
       </div>
     </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Text styles</h2><span class="spacer"></span><span class="legend-note" id="tsNote">Size, bold, italic, alignment and spacing of each kind of text in the Word file. Empty = automatic (shown in grey).</span></div>
+      <div class="tbl-wrap"><table class="t" id="tsTbl"></table></div>
+      <div class="row" style="margin-top:6px"><button class="btn ghost small" type="button" id="tsReset">↺ Automatic text styles</button></div>
+    </div>
     <div class="nav"><button class="btn ghost" data-go="10">← Back</button><button class="btn ghost small" data-reset="11" type="button" title="Every option of this step back to its default">↺ Defaults for this step</button><button class="btn primary" data-go="12">Run report →</button></div>
   </section>
 
@@ -1568,7 +1574,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div id="fmtBar">
         <label class="f">Report format</label>
         <div class="fmt-cards">
-          <button type="button" class="fmt-card" data-format="thesis"><b>🎓 Thesis</b><span>Full results chapter: every table with its comment, figures after each table, optional chapter numbering (Table 4.1) and subheadings.</span></button>
+          <button type="button" class="fmt-card" data-format="thesis" data-tpage="a4"><b>🎓 Thesis — A4</b><span>Full results chapter on A4 pages: every text 2 pt larger than B5 (headings unchanged), first-line indent 1 cm.</span></button><button type="button" class="fmt-card" data-format="thesis" data-tpage="b5"><b>🎓 Thesis — B5</b><span>Full results chapter on B5 pages (17.6 × 25 cm): every table with its comment, figures after each table, first-line indent 1 cm.</span></button>
           <button type="button" class="fmt-card" data-format="paper"><b>📄 Journal paper</b><span>Concise: short statistical analysis, one Results text citing tables and figures, compact three-line tables, a few figures, word counts.</span></button>
           <button type="button" class="fmt-card" data-format="custom"><b>⚙ As configured</b><span>Exactly the settings chosen in steps 4–9.</span></button>
         </div>

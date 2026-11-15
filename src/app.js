@@ -294,7 +294,7 @@
     if (!o) return;
     if (state.data && !confirm('Open this messy dataset? The current data and settings are replaced.')) return;
     const ex = Examples.getMessy(o.dataset.mopen);
-    state.pendingCfg = null; $('#studyTitle').value = '';
+    state.pendingCfg = null; $('#studyTitle').value = ''; if ($('#projName')) $('#projName').value = '';
     openWorkbook(ex.book(XLSX), ex.id + '.xlsx');
     state.messy = ex.id; $('#prepBox').open = true; renderMessyTasks();
     $('#messyTasks').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -651,7 +651,7 @@
     box.innerHTML = R2.map(x => `<div class="gcard" style="margin-top:6px"><b>${esc(x.src)}</b> — matched by ${esc(x.key)}<div><b>${x.onlyHere.length}</b> ID${x.onlyHere.length === 1 ? '' : 's'} only in this sheet: ${list(x.onlyHere)}</div><div><b>${x.onlyOther.length}</b> only in the other file: ${list(x.onlyOther)}</div>${x.dupOther ? `<div style="color:var(--bad)">⚠ ${x.dupOther} repeated ID${x.dupOther > 1 ? 's' : ''} in the other file (the last one was used)</div>` : ''}</div>`).join('')
       + '<button class="btn ghost small" type="button" id="mergeRepDl">⬇ Unmatched IDs (Excel)</button>';
     $('#mergeRepDl').onclick = () => { const wb = XLSX.utils.book_new(), aoa = [['File', 'ID', 'Found only in']]; R2.forEach(x => { x.onlyHere.forEach(i => aoa.push([x.src, i, 'this sheet'])); x.onlyOther.forEach(i => aoa.push([x.src, i, 'the other file'])); });
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Unmatched'); XLSX.writeFile(wb, `${(state.file || 'data').replace(/\.[^.]+$/, '')} - unmatched IDs.xlsx`); }; }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Unmatched'); XLSX.writeFile(wb, `${baseName()} - unmatched IDs.xlsx`); }; }
   function mergeSheet(ws, src) {
     {
       const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: false });
@@ -821,7 +821,7 @@
     else if (b.id === 'gridSave') {
       const ws = XLSX.utils.json_to_sheet(state.data.rows, { header: state.data.headers }), wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, (state.sheet || 'Data').slice(0, 31));
-      XLSX.writeFile(wb, (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' (edited).xlsx');
+      XLSX.writeFile(wb, baseName() + ' (edited).xlsx');
     }
     else if (d.hmove) { const [i, k] = d.hmove.split(',').map(Number); moveColumn(i, k); }
     else if (d.hdel) deleteColumn(d.hdel);
@@ -1802,7 +1802,7 @@
     $('#lgVars').innerHTML = reps.length ? reps.map(v => `<label class="check" style="margin:0"><input type="checkbox" data-lgv="${esc(v.id)}" checked><span>${esc(v.label)} (${v.cols.length})</span></label>`).join('') : '<span class="legend-note">No repeated measures found (step 2 makes them from names such as VAS_Baseline, VAS_M1).</span>';
     $('#lgGo').disabled = $('#lgDl').disabled = !reps.length; $('#lgInfo').textContent = reps.length ? `${state.data.rows.length} patients → up to ${state.data.rows.length * Math.max(...reps.map(v => v.cols.length))} rows` : ''; };
   $('#lgDl').onclick = () => { const L = longSheet(), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([L.headers, ...L.rows.map(r => L.headers.map(h => r[h]))]), 'Long');
-    XLSX.writeFile(wb, (state.file || 'data').replace(/\.[^.]+$/, '') + ' - long.xlsx'); };
+    XLSX.writeFile(wb, baseName() + ' - long.xlsx'); };
   $('#lgGo').onclick = () => { const L = longSheet(); if (!L.rows.length) return; if (!confirm(`Replace the sheet by its long form (${L.rows.length} rows, one per visit)? Undo restores it.`)) return;
     editSheet(() => { state.data = L; state.cfg = detect(state.data); }, 'Wide to long'); renderPrep(); toggleTool('longBox'); toast(`Long sheet: ${L.rows.length} rows (${L.headers[0]}, Visit, …)`); };
   /* ---------- compare this sheet with another version of the file ---------- */
@@ -3007,7 +3007,7 @@
       kids.push(P(`Table ${k}: ${title}`, { bold: true, before: 240, after: 80, size: 22 }), new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [head, ...rows] }),
         P(`Data are presented as mean ± SD or median (IQR) and frequency (%).${m.note ? ' ' + m.note : ''}`, { it: true, size: 18, before: 60 })); });
     const doc = new Document({ creator: 'Prof MSE Easy Stat', title: 'Shell tables', sections: [{ children: [P(`${(cfg.study && cfg.study.title) || 'Study'} — shell tables`, { bold: true, size: 28, after: 120 }), P('The tables planned for the results, before the data: replace xx with the values.', { it: true, color: '555555', after: 120 }), ...kids] }] });
-    saveUrl(URL.createObjectURL(await window.docx.Packer.toBlob(doc)), `${(state.file || 'Study').replace(/\.[^.]+$/, '')} - shell tables.docx`); toast(`${k} shell table${k === 1 ? '' : 's'} saved`);
+    saveUrl(URL.createObjectURL(await window.docx.Packer.toBlob(doc)), `${baseName()} - shell tables.docx`); toast(`${k} shell table${k === 1 ? '' : 's'} saved`);
   }
   let tbDrag = null;
   $('#tablesBoard').addEventListener('dragstart', e => { const c = e.target.closest('[data-tvid]'); if (c) { tbDrag = c.dataset.tvid; e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); } });
@@ -4345,7 +4345,7 @@
   const isActive = n => $('#p' + n).classList.contains('active');
   function readUiIntoCfg() {
     const cfg = state.cfg; if (!cfg) return;
-    cfg.study.title = $('#studyTitle').value; cfg.study.software = $('#software').value;
+    cfg.study.title = $('#studyTitle').value; cfg.study.software = $('#software').value; cfg.study.project = ($('#projName') || {}).value || ''; projTitle();
     if (isActive(2)) readVariables();
     if (isActive(3)) {
       document.querySelectorAll('[data-tp]').forEach(el => cfg.tpLabels[el.dataset.tp] = el.value.trim() || el.dataset.tp);
@@ -4968,7 +4968,7 @@
       });
       const blob = await Report.buildResults({ items }, { layout: { twocol: 'standard', tables: 'compact' }[xpo().view] || xpo().view, title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - Results by variable.docx';
+      a.download = baseName() + ' - Results by variable.docx';
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('Results by variable downloaded');
     } catch (err) { console.error(err); toast('Word export failed: ' + err.message); }
@@ -5034,7 +5034,8 @@
   }
   function renderFormatBar() {
     const r = report();
-    document.querySelectorAll('[data-format]').forEach(b => b.classList.toggle('on', b.dataset.format === r.format));
+    if (r.format === 'thesis' && !r.thesisPage) r.thesisPage = 'a4';
+    document.querySelectorAll('[data-format]').forEach(b => b.classList.toggle('on', b.dataset.format === r.format && (!b.dataset.tpage || (r.thesisPage || 'a4') === b.dataset.tpage)));
     $('#fmtThesis').style.display = r.format === 'thesis' ? '' : 'none';
     $('#fmtPaper').style.display = r.format === 'paper' ? '' : 'none';
     $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
@@ -5307,7 +5308,7 @@
   async function thesisChapters() { if (!state.result) return; busy(true);
     try { syncEdits(); const r = exportModel(state.result); if (effOptions().figPanels) await panelize(r); r.methodsParts = fullMethods(); r.methods = ''; r.discussionParts = discussionDraft();
       const wo = { ...wordOptions(), chapters: true }; let blob = await Report.build(r, wo); if (state.wordTemplate) blob = await applyTemplate(blob, state.wordTemplate.bytes);
-      saveUrl(URL.createObjectURL(blob), (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - Thesis chapters.docx'); toast('Patients and Methods, Results and the Discussion draft saved'); }
+      saveUrl(URL.createObjectURL(blob), baseName() + ' - Thesis chapters.docx'); toast('Patients and Methods, Results and the Discussion draft saved'); }
     catch (err) { console.error(err); toast('Could not make it: ' + err.message); } finally { busy(false); } }
   function abstractTable() { const r = state.result, gs = activeGroups(), gl = gs.map(g => state.cfg.groupLabels[g] || g), rows = [];
     (r.sections || []).forEach(sec => { const M = sec.meta || {}; let list = Array.isArray(M.res) ? M.res : [];
@@ -5844,7 +5845,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   renderRepSnaps();
   $('#fmtBar').addEventListener('click', e => {
     const b = e.target.closest('[data-format]'); if (!b) return;
-    report().format = b.dataset.format; renderFormatBar(); runAnalysis();
+    report().format = b.dataset.format; if (b.dataset.tpage) report().thesisPage = b.dataset.tpage; renderFormatBar(); runAnalysis();
   });
   $('#fmtBar').addEventListener('change', e => {
     const r = report();
@@ -6369,6 +6370,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (o.bodyAlign === 'left') pg.align = 'left';
     const pb = cmNum(o.paraBefore, 0, 48), pa = cmNum(o.paraAfter, 0, 48), fi = cmNum(o.firstIndent, 0.01, 3);
     if (pb !== null) pg.before = Math.round(pb * 20); if (pa !== null) pg.after = Math.round(pa * 20); if (fi) pg.indent = TW(fi);
+    else if (rp.format === 'thesis' && String(o.firstIndent ?? '').trim() === '') pg.indent = TW(1); // thesis: 1 cm unless a value (0 = none) is typed
+    if (rp.format === 'thesis' && rp.thesisPage === 'a4') pg.bodySize = 2 * ((+o.bodySize || 12) + 2); // thesis A4: every text 2 pt larger than on B5, headings unchanged
     return pg;
   }
   // Word's mirror margins (a document setting the docx library does not write)
@@ -6401,7 +6404,24 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const m0 = MARGIN_CM[o.pageMargin] || 2.54, [t, r, b, l] = pg.mar ? pg.mar.map(x => x / 567) : [m0, m0, m0, m0];
     return { o, pg, w, h, t, r, b, l, g: (pg.gutter || 0) / 567, hd: pg.hdr !== undefined ? pg.hdr / 567 : 1.25, fd: pg.ftr !== undefined ? pg.ftr / 567 : 1.25 };
   }
+  function renderTextStyles() { const tbl = $('#tsTbl'); if (!tbl || !state.cfg || tbl.contains(document.activeElement) && tbl.innerHTML) return; const o = state.cfg.options, ts = o.textStyles || {}, sh = thesisShift(), body = (+o.bodySize || 12) + sh;
+    const def = k => k === 'body' ? body : k === 'table' ? (+o.tableFontSize || 10) + sh : k === 'comment' || k === 'tabCap' || k === 'figCap' ? body : k === 'foot' ? 9 + sh : k === 'figNote' ? 10 + sh : TS_ROWS.find(r => r[0] === k)[2];
+    const yn = (k, p, dis) => `<select data-ts="${k}.${p}" style="width:auto" ${dis ? 'disabled' : ''}>${[['', 'auto'], ['yes', 'yes'], ['no', 'no']].map(([v, l]) => `<option value="${v}" ${((ts[k] || {})[p] || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+    const val = (k, p) => k === 'body' ? ({ size: o.bodySize === '12' ? '' : o.bodySize, align: o.bodyAlign === 'left' ? 'left' : '', before: o.paraBefore, after: o.paraAfter })[p] ?? '' : k === 'table' ? (p === 'size' ? (o.tableFontSize === '10' ? '' : o.tableFontSize) : '') : (ts[k] || {})[p] ?? '';
+    tbl.innerHTML = `<thead><tr><th>Text</th><th>Size (pt)</th><th>Bold</th><th>Italic</th><th>Alignment</th><th>Space before (pt)</th><th>Space after (pt)</th></tr></thead><tbody>${TS_ROWS.map(([k, l]) => { const lim = k === 'body' || k === 'table';
+      return `<tr><td><b>${l}</b></td><td><input type="number" min="6" max="40" step="0.5" data-ts="${k}.size" value="${esc(val(k, 'size'))}" placeholder="${def(k)}" style="width:70px"></td><td>${yn(k, 'bold', lim)}</td><td>${yn(k, 'italic', lim)}</td>
+        <td><select data-ts="${k}.align" style="width:auto" ${k === 'table' ? 'disabled' : ''}>${[['', 'auto'], ['left', 'left'], ['center', 'centre'], ['justify', 'justify'], ['right', 'right']].filter(([v]) => k !== 'body' || ['', 'left'].includes(v)).map(([v, t]) => `<option value="${v}" ${val(k, 'align') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+        <td><input type="number" min="0" max="72" data-ts="${k}.before" value="${esc(val(k, 'before'))}" placeholder="auto" style="width:64px" ${k === 'table' ? 'disabled' : ''}></td><td><input type="number" min="0" max="72" data-ts="${k}.after" value="${esc(val(k, 'after'))}" placeholder="auto" style="width:64px" ${k === 'table' ? 'disabled' : ''}></td></tr>`; }).join('')}</tbody>`;
+    const n = $('#tsNote'); if (n) n.textContent = `Size, bold, italic, alignment and spacing of each kind of text in the Word file. Empty = automatic (shown in grey)${sh ? '; Thesis A4: automatic sizes are 2 pt larger than on B5, headings unchanged' : ''}.`; }
+  const tsRead = e => { const t = e.target, k0 = t.dataset && t.dataset.ts; if (!k0 || !state.cfg) return; const [k, p] = k0.split('.'), o = state.cfg.options, v = t.value.trim();
+    if (k === 'body') { if (p === 'size') o.bodySize = v || '12'; if (p === 'align') o.bodyAlign = v === 'left' ? 'left' : 'justify'; if (p === 'before') o.paraBefore = v; if (p === 'after') o.paraAfter = v; if (e.type === 'change') { const set = (id, x) => { const el = $('#' + id); if (el) el.value = x; }; set('optBodySize', o.bodySize); set('optBodyAlign', o.bodyAlign); set('optParaBefore', o.paraBefore); set('optParaAfter', o.paraAfter); } return; }
+    if (k === 'table') { o.tableFontSize = v || '10'; const el = $('#optTableFontSize'); if (el) el.value = o.tableFontSize; return; }
+    o.textStyles = o.textStyles || {}; o.textStyles[k] = { ...(o.textStyles[k] || {}), [p]: v }; };
+  // read before the page setup redraws (capture phase), on every key and on every choice
+  document.addEventListener('input', tsRead, true); document.addEventListener('change', tsRead, true);
+  document.addEventListener('click', e => { if (e.target.id !== 'tsReset' || !state.cfg) return; state.cfg.options.textStyles = {}; renderTextStyles(); toast('Text styles back to automatic'); });
   function renderPageSetup() {
+    renderTextStyles();
     if (!state.cfg || !$('#pgPreview')) return;
     marginBoxes();
     document.querySelectorAll('#p11 [data-rx]').forEach(el => { const v = report()[el.dataset.rx]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v ?? ''); });
@@ -6730,7 +6750,13 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     return [...out, ...app.map((s, i) => i ? s : { ...s, chapterHead: 'Appendix' })]; }
   $('#btnRerun').onclick = () => runAnalysis();
   // the options of the Word file, from the steps and the report format
-  function wordOptions() {
+  // text styles (step 11) and the thesis A4 sizes go into the Word options
+  const TS_ROWS = [['h1', 'Heading 1 (Results, chapter)', 15], ['h2', 'Heading 2 (sections)', 13], ['body', 'Paragraph', 12], ['comment', 'Comment of a table', null], ['tabCap', 'Table caption', null], ['figCap', 'Figure caption', null], ['table', 'Table text', 10], ['foot', 'Table footnote', 9], ['figNote', 'Figure note', 10]];
+  const thesisShift = () => { const rp = report(); return rp.format === 'thesis' && rp.thesisPage === 'a4' ? 2 : 0; };
+  function wordOptions() { const w = wordOptions0(), o = state.cfg.options, sh = thesisShift(), ts = JSON.parse(JSON.stringify(o.textStyles || {}));
+    if (sh) { w.tableLook = { ...(w.tableLook || {}), size: (+(w.tableLook || {}).size || +o.tableFontSize || 10) + sh }; [['foot', 9], ['figNote', 10]].forEach(([k, d]) => { ts[k] = ts[k] || {}; if (!(+ts[k].size > 0)) ts[k].size = d + sh; }); }
+    w.textStyles = ts; return w; }
+  function wordOptions0() {
     const o = effOptions(), rp = report(), r0 = state.result, plan0 = r0 ? exportPlan(r0) : null;
     const extras = { cover: rp.cover ? { candidate: rp.coverCandidate, supervisor: rp.coverSupervisor, dept: rp.coverDept, date: rp.coverDate } : null, toc: !!rp.toc, wordStyles: !!rp.wordStyles,
       headNum: !!rp.headNum, lineNumbers: !!rp.lineNumbers, twoCol: !!rp.twoCol, watermark: String(rp.watermark || '').trim(), abbrFoot: !!rp.abbrFoot,
@@ -6743,7 +6769,11 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
         tableNewPage: rp.format === 'thesis' ? !!rp.newPage : rp.format === 'paper' ? false : !!o.tableNewPage, tabStart: +rp.tabStart || 1, figStart: +rp.figStart || 1, italicP: !!o.italicP, title: state.cfg.study.title, branding: o.branding, logo: LOGO, font: o.font, tableStyle: o.tableStyle, tableCapAlign: o.tableCapAlign, page: pageOptions(o, rp), listTF: !!o.listTF, headerText: String(o.headerText || '').trim(), footerText: String(o.footerText || '').trim(), tableLook: { autoFit: !!o.autoFit, width: o.tableWidth, size: o.tableFontSize, head: o.tableHead, bands: o.tableBands, left: o.firstColLeft, pad: o.tablePad, font: o.tableFont && o.tableFont !== 'same' ? o.tableFont : undefined, decAlign: !!o.decAlign, pColor: o.pColor, sigSym: o.sigSym }, splitRows: o.splitRows, figWidth: o.figWidth, figWidthCm: o.figWidthCm, figPerRow: o.figPerRow, figPlacement: o.figPlacement, captionStyle: o.captionStyle,
         orientation: o.orientation, tableCaption: o.tableCaption, commentPlace: o.commentPlace, figRef: !!o.figRef, boldSigText: !!o.boldSigText, capAbove: !!o.capAbove, commentMerge: o.commentMerge, keyFindings: !!o.keyFindings, tableIntro: !!o.tableIntro };
   }
-  const baseName = () => (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '');
+  const baseName = () => { const pn = state.cfg && state.cfg.study && String(state.cfg.study.project || '').trim(); return pn ? safeName(pn) : (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, ''); };
+  // the project name: the browser tab and the saved file names
+  const TITLE0 = document.title;
+  function projTitle() { const pn = state.cfg && state.cfg.study && String(state.cfg.study.project || '').trim(); document.title = pn ? `${pn} — Prof MSE Easy Stat` : TITLE0; }
+  { const pi = document.getElementById('projName'); if (pi) pi.addEventListener('input', () => { if (!state.cfg) return; state.cfg.study.project = pi.value; projTitle(); }); }
   const saveUrl = (url, name) => { try { window.__onExport && window.__onExport(name); } catch (e) { /* none */ } const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
   const safeName = t => String(t).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
   // every exported table to Excel, one sheet each, with the merged cells of the Word table
@@ -7027,7 +7057,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       versionSave(blob);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;
+      a.download = baseName() + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('Word report downloaded'); await masterSeparate();
@@ -7185,7 +7215,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       state.data = j.data; state.cfg = cfg; state.file = j.file || fname; state.messy = null; state.cleanLog = j.cleanLog || []; state.cellLog = j.cellLog || []; state.snapshots = j.snapshots || []; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
       state.undo = []; state.redo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
       $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option value="${esc(state.sheet)}">${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
-      $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value;
+      $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value; if ($('#projName')) $('#projName').value = cfg.study.project || ''; projTitle();
       $('#to2').disabled = false; renderGrid(); renderPrep(); $('#hdrRow').innerHTML = '<option>1</option>';
       // leave no step active, so the controls of the old project are not read into the opened one
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -7267,7 +7297,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (state.data && !confirm('Start a new project? The current data and settings are cleared (save the project first to keep them).')) return;
     Object.assign(state, { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, pendingCfg: null, pendingEdits: null, undo: [], redo: [], messy: null });
     try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* ignore */ }
-    $('#sheetBox').style.display = 'none'; $('#fileName').textContent = ''; $('#studyTitle').value = ''; $('#file').value = '';
+    $('#sheetBox').style.display = 'none'; $('#fileName').textContent = ''; $('#studyTitle').value = ''; if ($('#projName')) $('#projName').value = ''; $('#file').value = '';
     $('#to2').disabled = true; $('#report').innerHTML = '';
     go(1); toast('New project — upload an Excel file or open an example');
   };
