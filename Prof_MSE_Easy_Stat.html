@@ -31456,7 +31456,9 @@ const Report = (() => {
   function styledPara(text, o) {
     const { Paragraph } = D(), st = o.pStyle, al = st ? STYLE_ALIGN[st] : 'both';
     const explicit = o.after !== undefined || o.before !== undefined || o.line !== undefined;
-    return new Paragraph({ ...(st ? { style: st } : {}), ...(o.align && o.align !== al ? { alignment: o.align } : {}),
+    // the first-line indent: body paragraphs only (not headings, captions, tables, notes or bullet lines)
+    const ind = !st && !o.align && !o.cap && o.size === undefined && INDENT && text && !/^\s*•/.test(text) ? { indent: { firstLine: INDENT } } : {};
+    return new Paragraph({ ...(st ? { style: st } : {}), ...ind, ...(o.align && o.align !== al ? { alignment: o.align } : {}),
       ...(!st && explicit ? { spacing: { after: o.after ?? 160, line: o.line ?? LINE, lineRule: D().LineRuleType.AUTO, before: o.before ?? 0 } } : {}),
       keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: [...runs(text, { ...o, styled: true, bold: o.styleBold ? undefined : o.bold, size: o.forceSize }),
@@ -31469,7 +31471,7 @@ const Report = (() => {
     return new Paragraph({
       alignment: o.align || BODY_ALIGN,
       spacing: TEMPLATE && o.line === undefined ? { after, before } : { after, line: o.line ?? LINE, before },
-      ...(body && INDENT && text ? { indent: { firstLine: INDENT } } : {}),
+      ...(body && INDENT && text && !/^\s*•/.test(text) ? { indent: { firstLine: INDENT } } : {}),
       keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: [...runs(text, o), ...(o.note ? runs((/[.!?]$/.test(text.trim()) ? ' ' : '. ') + o.note, { ...o, bold: false, size: o.noteSize || o.size }) : [])]
     });
@@ -31481,7 +31483,7 @@ const Report = (() => {
     const o = tsOn('comment') ? { ...o0, italic: tsYN('comment', 'italic', o0.italic), bold: tsYN('comment', 'bold', o0.bold), forceSize: tsSz('comment', undefined), size: STYLED ? undefined : tsSz('comment', o0.size), align: tsAl('comment', o0.align), after: tsSp('comment', 'after', o0.after), before: tsSp('comment', 'before', o0.before) } : o0;
     if (!o.boldSig) return para(text, o);
     const { Paragraph, AlignmentType } = D(), ss = String(text).match(SENT) || [text];
-    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, ...(o.align ? { alignment: o.align } : {}), children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.forceSize })) });
+    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, ...(o.align ? { alignment: o.align } : INDENT ? { indent: { firstLine: INDENT } } : {}), children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.forceSize })) });
     return new Paragraph({ alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, line: LINE, ...(PARA_BEFORE ? { before: PARA_BEFORE } : {}) }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}), keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.size })) });
   }
@@ -31863,7 +31865,7 @@ const Report = (() => {
       title: opts.title || 'Statistical report',
       ...(opts.toc ? { features: { updateFields: true } } : {}),
       ...(Object.keys(footnotes).length ? { footnotes } : {}),
-      styles: STYLED ? { default: { ...hDef(), document: { run: { font: BODY_FONT, size: BODY_SZ }, paragraph: { alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, before: PARA_BEFORE, line: LINE, lineRule: D().LineRuleType.AUTO }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}) } } },
+      styles: STYLED ? { default: { ...hDef(), document: { run: { font: BODY_FONT, size: BODY_SZ }, paragraph: { alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, before: PARA_BEFORE, line: LINE, lineRule: D().LineRuleType.AUTO } } } },
         paragraphStyles: [...hsList(),
           { id: 'Caption', name: 'caption', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: true }, paragraph: { alignment: AlignmentType.CENTER, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
           { id: 'CaptionTitle', name: 'Caption Title', basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { italics: true }, paragraph: { alignment: AlignmentType.LEFT, spacing: { after: 120, line: 276, lineRule: D().LineRuleType.AUTO }, keepNext: true } },
