@@ -250,6 +250,18 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**👥 Groups (step 2)**
+- **Name the groups**: Group A, B, C · Group I, II, III · Group 1, 2, 3 · First, Second group · Control group then Group A, B (follows the order and the control group; each label stays editable).
+- **Short name** and **description** of each group (e.g. “Basal–Bolus Insulin”, “Patients will receive insulin glargine …”); descriptions written in the future tense are turned into the past tense (“received”, “were given”), with a preview and a “keep as typed” tick.
+- The descriptions fill the group boxes of the **flowchart**, and an **opening paragraph of the results** (“A total of 60 patients were enrolled and randomly allocated into two groups: Group A, Basal–Bolus Insulin (n=30): patients received …”) as a paragraph or a bullet list — editable in step 11.
+- **Group headings in the report**: the label, the label with the short name, or the short name only.
+- **↺ Reset grouping**: every group included, no merges, the original order and labels, no control group, no combined column (with Undo).
+- The **flowchart text** writes the numbers one to nine in words (counts written as n = 5, numbers after type / grade / stage / day … and before units keep their digits).
+
+**🖼 Figures at 300 dpi**: figures and the flowchart in the Word file are drawn at 300 dpi at the text width (150 or 600 dpi in step 7, *Figure resolution in Word*); the figure export dialog starts at 300 dpi.
+
+**Fix**: in a repeated measure, a column already chosen no longer appears in “+ Add a column…” (column names with double spaces were matched wrongly); the same fix for every list of column names.
+
 **🎨 Default chart colours**: new projects use the **Office 2013 - 2022** palette (blue, orange, grey, gold …); saved projects keep their own colours.
 
 **📈 ROC curves (round 10)** — new options under *More for the ROC curves* in the ROC card

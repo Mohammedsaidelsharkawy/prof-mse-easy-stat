@@ -97,7 +97,7 @@
   function batch() { const st = S(); if (!st.cfg || !st.result) { U.toast('Set up the analysis and run the report (step 12) first; the batch uses this setup'); return; }
     const cols = st.data.headers.filter(h => { const n = new Set(st.data.rows.map(r => r[h]).filter(v => !U.isMissing(v))).size; return n >= 2 && n <= 30 && h !== st.cfg.groupCol; });
     const p = panel('tlBatchP', 'Batch reports', `<p class="legend-note">The current setup (variables, tests, options, analyses) is run again for each part and a Word file is saved for each.</p>
-      <h4>Each level of a column</h4><div class="row" style="gap:6px"><select id="btCol">${cols.map(h => `<option>${esc(h)}</option>`).join('')}</select><button class="btn primary small" type="button" id="btGo">One report per level</button></div>
+      <h4>Each level of a column</h4><div class="row" style="gap:6px"><select id="btCol">${cols.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('')}</select><button class="btn primary small" type="button" id="btGo">One report per level</button></div>
       <h4>Other files with the same columns</h4><div class="row" style="gap:6px"><button class="btn primary small" type="button" id="btFiles">Choose files…</button><input type="file" id="btFileIn" accept=".xlsx,.xls,.csv" multiple hidden></div><div id="btOut" class="legend-note" style="margin-top:8px"></div>`);
     const out = t => { $('#btOut').innerHTML += esc(t) + '<br>'; };
     const runOne = async (data, name) => { const keep = { data: st.data, file: st.file, result: st.result }; st.data = data; st.file = name; st.result = null;

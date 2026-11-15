@@ -28,7 +28,7 @@
       <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end"><div><label class="f">Text column</label><select id="caCol"></select></div><label class="check" style="margin:0 0 6px"><input type="checkbox" id="caSplit"><span>Several answers per cell (split at , ; / +)</span></label><button class="btn ghost small" type="button" id="caGo">Suggest groups</button></div><div id="caOut"></div></details>`;
   home.parentNode.insertBefore(card, home.nextSibling);
   const fill = () => { if (!S().data) return; const c = S().cfg; $('#vwId').innerHTML = opts(c && c.idCols[0]); $('#vwCol').innerHTML = opts(); $('#vwBase').innerHTML = '<option value="first">Each patient\'s first visit</option>' + opts().replace(/<option /g, '<option data-col="1" ');
-    $('#agDob').innerHTML = opts(S().data.headers.find(h => /dob|birth/i.test(h))); $('#agAt').innerHTML = '<option value="__today">Today</option>' + opts(); $('#caCol').innerHTML = S().data.headers.filter(h => S().data.rows.some(r => typeof r[h] === 'string' && isNaN(+r[h]))).map(h => `<option>${esc(h)}</option>`).join(''); };
+    $('#agDob').innerHTML = opts(S().data.headers.find(h => /dob|birth/i.test(h))); $('#agAt').innerHTML = '<option value="__today">Today</option>' + opts(); $('#caCol').innerHTML = S().data.headers.filter(h => S().data.rows.some(r => typeof r[h] === 'string' && isNaN(+r[h]))).map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join(''); };
   card.addEventListener('toggle', fill, true); const prev = $('#preview'); if (prev) new MutationObserver(() => { if (card.querySelector('details[open]')) return; fill(); }).observe(prev, { childList: true });
 
   /* ---------- 11. visit windows ---------- */

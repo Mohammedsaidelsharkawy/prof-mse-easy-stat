@@ -2748,6 +2748,7 @@ const Analysis = (() => {
     return [{ ...data, rows, headers }, { ...cfg, variables: vars, __groupItems: groupItems }];
   }
   function run(data, cfg) {
+    cfgOpts = cfg.options || {};
     // false discovery rate: run once to collect the P values, then again with the adjusted ones
     if ((cfg.options.fdr || cfg.options.padj) && !cfg.__fdr) {
       P_HOOK = { mode: 'record', list: [] }; let first;
@@ -4071,7 +4072,7 @@ const Analysis = (() => {
         rows[0] = [{ t: [b.g], b: true, rs: rows.length, grp: true, left: true }, ...rows[0]]; out.push(...rows); });
       sec.rows = out;
     });
-    return { sections, used, groups: gl, gN, k, methods: (opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN), flowCaption: flowCaption(cfg),
+    return { sections, used, groups: gl, gN, k, methods: (opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: numWords9(opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN)), groupIntro: groupIntroText(cfg, groups, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
@@ -4314,6 +4315,30 @@ const Analysis = (() => {
     s.push(`A two-sided P ≤ ${o.alpha} was considered significant.`);
     return s.join(' ');
   }
+  // the flowchart text: whole numbers 1 to 9 written as words (journal style), not counts written as n = 5, decimals, percentages or ranges
+  const NUM9 = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+  function numWords9(t) { if (!t || cfgOpt('flowNumWords') === false) return t;
+    return t.replace(/(?<![\w.,=≤≥<>±%/:–-])(?<![=≤≥<>]\s)(?<!\bn\s?=\s?)(?<!\b(?:[Tt]ype|[Gg]rade|[Ss]tage|[Cc]lass|[Dd]ay|[Ww]eek|[Mm]onth|[Yy]ear|[Vv]isit|[Pp]hase|[Ll]evel|[Ss]tep|[Cc]ycle|[Vv]ersion|[Ll]ead|[Dd]ose|[Ss]core|[Tt]able|[Ff]igure|[Ff]ig\.|[Gg]roup|[Aa]rm|ASA|NYHA|GCS|Killip|COVID|[Ss]ite|[Cc]entre|[Cc]enter|[Ww]ard|[Rr]ound|[Tt]rial|[Pp]art|[Cc]hapter|[Ss]ection)\s)([1-9])(?![\w.,%/:–-]|\s*%|\s*[–-]\s*\d|\s*(?:h|hr|hrs|min|s|sec|mg|g|kg|mL|ml|L|mm|cm|m|µg|mcg|IU|U|mmol|mEq|°C|bpm|x|×)\b)/g, (m, n, off) => { const w = NUM9[+n], start = off === 0 || /[.!?]\s*$/.test(t.slice(0, off)); return start ? w[0].toUpperCase() + w.slice(1) : w; }); }
+  let cfgOpts = {}; const cfgOpt = k => cfgOpts[k];
+  // future tense of a protocol ("patients will receive …") turned into the past tense of a report ("patients received …")
+  const IRREG = { give: 'given', take: 'taken', undergo: 'underwent', have: 'had', receive: 'received', be: 'were', get: 'got', go: 'went', do: 'did', make: 'made', keep: 'kept', begin: 'began', eat: 'ate', drink: 'drank', choose: 'chose', send: 'sent', put: 'put', set: 'set', run: 'ran', see: 'saw', write: 'wrote', hold: 'held', stop: 'stopped', continue: 'continued', start: 'started', use: 'used', follow: 'followed', remain: 'remained', stay: 'stayed', perform: 'performed', apply: 'applied', allocate: 'allocated' };
+  const pastOf = v => IRREG[v.toLowerCase()] ? IRREG[v.toLowerCase()] : /e$/.test(v) ? v + 'd' : /[^aeiou]y$/.test(v) ? v.slice(0, -1) + 'ied' : v + 'ed';
+  function pastTense(t) { if (!t) return t; let x = String(t);
+    x = x.replace(/\b(will|shall)\s+be\s+(\w+)/gi, (m, w, pp) => { const subjPl = true; return `${subjPl ? 'were' : 'was'} ${pp}`; })
+      .replace(/\b(will|shall)\s+(not\s+)?(\w+)/gi, (m, w, neg, v) => neg ? `did not ${v}` : pastOf(v))
+      .replace(/\bis\s+(given|administered|performed|done|applied|started|continued|adjusted|allocated|randomi[sz]ed|assigned|treated|followed|measured|assessed|managed|prescribed)\b/gi, 'was $1')
+      .replace(/\bare\s+(given|administered|performed|done|applied|started|continued|adjusted|allocated|randomi[sz]ed|assigned|treated|followed|measured|assessed|managed|prescribed)\b/gi, 'were $1')
+      .replace(/\bundergoes\b/gi, 'underwent').replace(/\breceives\b/gi, 'received');
+    return x; }
+  // the opening paragraph of the results: how many patients and the groups, each with its description (past tense)
+  function groupIntroText(cfg, groups, gl, gN) { const o = { groupIntro: cfg.groupIntro, groupIntroStyle: cfg.groupIntroStyle, groupDescKeep: cfg.groupDescKeep }, desc = cfg.groupDesc || {}, short = cfg.groupShort || {}, has = groups.some(g => String(desc[g] || '').trim());
+    const mode = o.groupIntro || 'auto'; if (mode === 'off' || (mode === 'auto' && !has) || cfg.noGroups || groups.length < 2) return '';
+    const n = (gN || []).reduce((a, b) => a + (+b || 0), 0), rand = cfg.consort && cfg.consort.enabled && /consort|cluster|crossover/.test(cfg.consort.type || 'consort'), keep = o.groupDescKeep;
+    const item = (g, i) => { const d0 = String(desc[g] || '').trim(), d = keep ? d0 : pastTense(d0), sh = String(short[g] || '').trim(), lab0 = gl[i], lab = sh && lab0 !== sh ? lab0.replace(`: ${sh}`, '') : lab0;
+      return { head: `${lab}${sh && lab !== sh ? `, ${sh}` : ''} (n=${gN ? gN[i] : '?'})`, d: d ? d.replace(/\s*\.?\s*$/, '') : '' }; };
+    const its = groups.map(item), lead = `A total of ${n} patients were ${rand ? 'enrolled and randomly allocated' : 'included and divided'} into ${NUM9[groups.length] || groups.length} groups${rand || !cfg.groupCol ? '' : ` according to ${lowerFirst(columnLabel(cfg, cfg.groupCol))}`}`;
+    if (o.groupIntroStyle === 'bullets') return `${lead}:\n${its.map(x => `• ${x.head}${x.d ? `: ${x.d}.` : '.'}`).join('\n')}`;
+    return `${lead}: ${its.map(x => `${x.head}${x.d ? `: ${lowerFirst(x.d)}` : ''}`).join('; ')}.`; }
   function introConcise(cfg, gl) {
     const c = cfg.consort;
     if (!c || !c.enabled) return '';
@@ -4697,5 +4722,5 @@ const Analysis = (() => {
     return { ...s, head, rows: [...rows, ...tail], tpCols: true };
   }
   const HX = { encode, encodeOwn, eventName, pTxt, plain, lowerFirst, cap, listJoin, fmt, fmtP, columnLabel, columnKind, levelsOf, toNum, toCat, S, ROC_CUT, selectModel };
-  return { HX: () => HX, timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { pastTense, numWords9, HX: () => HX, timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();

@@ -316,6 +316,8 @@ const Report = (() => {
       children.push(opts.abbrFoot ? abbrPara(model.methods, footnotes) : para(model.methods)); arAfter(model.methods);
     }
     if (!opts.bare && (model.consort || model.sections.length)) children.push(H1('Results', brand));
+    // the opening paragraph: the patients and the groups with their descriptions (a paragraph or a bullet list)
+    if (!opts.bare && model.groupIntro) String(model.groupIntro).split('\n').map(t => t.trim()).filter(Boolean).forEach(t => children.push(para(t, /^•/.test(t) ? { indent: 360 } : {})));
     let fig = opts.figStart || 1, tab = opts.tabStart || 1; // numbering may continue from an earlier chapter or paper
     if (model.consort) {
       // the flowchart paragraph points at the flowchart figure (a cross-reference field with automatic numbers)

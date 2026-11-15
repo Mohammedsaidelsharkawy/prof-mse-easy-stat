@@ -818,7 +818,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="grid g3"><div><label class="f">Study design</label><select id="groupMode"><option value="groups">Compare groups (a group column)</option><option value="one">One group — all patients together</option></select></div>
         <div id="groupColBox"><label class="f">Group column</label><select id="groupCol"></select><div class="row" style="gap:4px;margin-top:4px"><select id="groupCombo" style="width:auto" title="A second column: each combination becomes a group (e.g. treatment × sex)"></select><button class="btn ghost small" id="groupComboGo" type="button">× Combine</button></div><label class="check" style="margin-top:6px" title="The report starts with the results of every patient together (one group), then compares the groups"><input type="checkbox" id="allFirst"><span>Also give the results of all patients as one group first</span></label></div></div>
       <p class="legend-note">One group: tables describe all patients; repeated measures are compared over time within the same patients (paired t-test / Wilcoxon, repeated-measures ANOVA / Friedman).</p>
-      <div class="tbl-wrap" style="margin-top:12px"><table class="t" id="groupsTbl"></table></div>
+      <div id="groupTools" style="margin-top:10px"></div><div class="tbl-wrap" style="margin-top:12px"><table class="t" id="groupsTbl"></table></div>
       <p class="legend-note">Use ↑/↓ to set the column order of groups in tables.</p>
     </div>
     <div class="card">
@@ -1265,7 +1265,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Chart font</label><select id="optChartFont"><option value="sans" selected>Segoe UI</option><option value="arial">Arial</option><option value="calibri">Calibri</option><option value="times">Times New Roman</option></select></div>
         <div><label class="f">Bar width</label><select id="optBarWidth"><option value="thin">Thin</option><option value="normal" selected>Normal</option><option value="wide">Wide</option></select></div>
         <div><label class="f">Y axis (lines &amp; box plots)</label><select id="optYAxis"><option value="auto" selected>Auto</option><option value="zero">Always start at zero</option><option value="fit">Fit to the data</option></select></div>
-        <div><label class="f">Image resolution</label><select id="optRes"><option value="1" selected>Standard</option><option value="2">High (2×, for print)</option></select></div>
+        <div><label class="f">Figure resolution in Word</label><select id="optRes"><option value="300" selected>300 dpi (print)</option><option value="150">150 dpi (smaller file)</option><option value="600">600 dpi</option></select></div>
         <div><label class="f">Significance on figures</label><select id="optSigLabel"><option value="stars" selected>Stars (*, **, ***)</option><option value="p">Exact P values (P = 0.013)</option><option value="both">Stars and P values</option><option value="letters">Letters a, b, c (3+ groups)</option></select></div>
         <div><label class="f">Panel style</label><select id="optPanelStyle"><option value="classic" selected>Classic (axes with arrows)</option><option value="minimal">Minimal (no axis lines)</option><option value="grey">Grey background, white grid</option></select></div>
         <div><label class="f">Axis numbers</label><select id="optAxisSize"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></div>

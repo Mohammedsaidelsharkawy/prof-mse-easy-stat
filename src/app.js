@@ -16,7 +16,7 @@
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'office2013', effect: true, within: false, fisher: true, branding: false,
     commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, clinWord: false, testInText: false, tableIntro: false, limits: false, discuss: false, conclusion: false, subSummary: false, formerLatter: false, numWords: false, spelling: '', hedge: '', voice: '', tense: '', esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, changeTable: false, noteSyms: 'letters', nsWord: 'insig', whyTest: false, figHowTo: false, commentOrder: 'ns', pText: '', figSummary: false, abbrFoot: true, figNoteParts: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figWidthCm: '15', figPerRow: 1, valueLabels: false,
-    chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 1,
+    chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 300,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
     welch: false, dunn: true, chiPost: true, mixed: false, normality: 'sw', catEffect: 'rr',
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
@@ -53,8 +53,13 @@
   // chart palette and drawing style from the options
   const chartPalette = o => o.palette === 'custom' ? o.customColors : o.palette;
   // the flowchart drawn in the figures' font, text size and colours (step 7 option)
-  const flowStyled = c => { const o = state.cfg && state.cfg.options; if (!c || !o || !o.flowSameStyle) return c; return { ...c, style: { ...(c.style || {}), font: o.chartFont || (c.style || {}).font, textSize: o.chartText === 'normal' ? 'normal' : 'large', color: '', pillColor: '', arrowColor: '' } }; };
-  const chartStyle = o => ({ unitLine: !!o.figUnitLine, stackSort: !!o.figStackSort, watermark: String(o.figWatermark || '').trim(), text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: o.chartRes, grid: o.gridlines, arrows: o.axisArrows,
+  // the group descriptions (step 2, past tense) fill the empty description of each group box of the flowchart
+  const flowDesc = c => { const cfg = state.cfg; if (!c || !cfg || cfg.flowDesc === false || !Array.isArray(c.groups) || !cfg.groupDesc) return c; const act = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false);
+    if (!act.some(g => String(cfg.groupDesc[g] || '').trim())) return c; return { ...c, groups: c.groups.map((g, i) => { const d = String(cfg.groupDesc[act[i]] || '').trim(); return g.description || !d ? g : { ...g, description: cfg.groupDescKeep ? d : Analysis.pastTense(d) }; }) }; };
+  const flowStyled = c0 => { const c = flowDesc(c0), o = state.cfg && state.cfg.options; if (!c || !o || !o.flowSameStyle) return c; return { ...c, style: { ...(c.style || {}), font: o.chartFont || (c.style || {}).font, textSize: o.chartText === 'normal' ? 'normal' : 'large', color: '', pillColor: '', arrowColor: '' } }; };
+  // figures in the Word file: drawn so that a figure as wide as the text (about 16 cm) has the chosen dpi (300 by default); older settings: 1 = 300, 2 = 600 dpi
+  const resOf = v => { const n = +v, dpi = n === 2 ? 600 : n >= 72 ? n : 300; return dpi * 6.3 / 1500; };
+  const chartStyle = o => ({ unitLine: !!o.figUnitLine, stackSort: !!o.figStackSort, watermark: String(o.figWatermark || '').trim(), text: o.chartText, aspect: o.chartAspect, barFill: o.barFill, yAxis: o.yAxis, legend: o.legendPos, res: resOf(o.chartRes), grid: o.gridlines, arrows: o.axisArrows,
     legendSize: o.legendSize, legendTitle: o.legendTitle.trim(), legendFrame: o.legendFrame, barWidth: o.barWidth, boxMean: o.boxMean, font: o.chartFont, frame: o.figFrame,
     sigLabel: o.sigLabel, panel: o.panelStyle === 'classic' ? '' : o.panelStyle, axisSize: o.axisSize, titleSize: o.titleSize, valueSize: o.valueSize, boxMeanVal: !!o.boxMeanVal, series: o.seriesStyle, lineWeight: o.lineWeight, errBars: o.errBars, errColor: o.errColor, gridStyle: o.gridStyle, ticks: o.yTicks, pLead: +o.pLead !== 0 });
 
@@ -213,7 +218,7 @@
   function openWorkbook(wb, name) {
     state.wb = wb; state.file = name; state.hdr = { row: 1, two: false, auto: true }; state.cleanLog = [{ time: new Date().toLocaleString(), what: `Opened ${name}` }]; state.snapshots = []; if (state.grid) { state.grid.cf = {}; state.grid.rowsOnly = null; }
     $('#fileName').textContent = name;
-    $('#sheetSel').innerHTML = wb.SheetNames.filter(s => !['_EasyStatSetup', 'Lists'].includes(s)).map(s => `<option>${esc(s)}</option>`).join('');
+    $('#sheetSel').innerHTML = wb.SheetNames.filter(s => !['_EasyStatSetup', 'Lists'].includes(s)).map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
     $('#sheetBox').style.display = '';
     selectSheet(wb.SheetNames[0]);
   }
@@ -560,7 +565,7 @@
     { const cur = $('#missCol').value; $('#missCol').innerHTML = '<option value="">All columns</option>' + h.map(c => `<option ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join(''); }
     $('#mergeKey').innerHTML = h.map(c => `<option ${cfg && cfg.idCols[0] === c ? 'selected' : ''}>${esc(c)}</option>`).join('');
     const others = state.wb ? state.wb.SheetNames.filter(n => n !== state.sheet) : [];
-    $('#mergeSheet').innerHTML = others.map(n => `<option>${esc(n)}</option>`).join('');
+    $('#mergeSheet').innerHTML = others.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
     $('#mergeSheetBox').style.display = $('#mergeSheetGo').style.display = others.length ? '' : 'none';
     $('#stackSheets').style.display = others.length ? '' : 'none'; $('#visitSheets').style.display = others.length ? '' : 'none';
     renderFilters(); renderStep1Tools();
@@ -705,7 +710,7 @@
     renderGrid(); renderStepper();
   }
   $('#groupComboGo').onclick = () => { const cfg = state.cfg, b = $('#groupCombo').value; if (!cfg || !b || !cfg.groupCol) { toast('Choose the second column'); return; } readUiIntoCfg();
-    const a = cfg.groupCol, name = `${a}_x_${b}`.replace(/\s+/g, '_');
+    const a = cfg.groupCol, name = `${a}_x_${b}`.replace(/\s+/g, '_'); cfg.groupColOrig = cfg.groupColOrig || a;
     editSheet(() => { if (!state.data.headers.includes(name)) { state.data.headers.splice(state.data.headers.indexOf(a) + 1, 0, name); }
       state.data.rows.forEach(r => { r[name] = isMissing(r[a]) || isMissing(r[b]) ? null : `${String(r[a]).trim()} · ${String(r[b]).trim()}`; }); });
     cfg.groupCol = name; cfg.variables.forEach(v => { if (v.cols[0].col === name) v.include = false; }); setGroups(cfg); renderVariables();
@@ -899,7 +904,7 @@
   function toggleTool(id) { const on = $('#' + id).style.display === 'none'; TOOL_BOXES.forEach(b => { $('#' + b).style.display = b === id && on ? '' : 'none'; }); return on; }
   $('#gridFind').onclick = () => {
     const on = toggleTool('findBox');
-    if (on) { $('#frCol').innerHTML = '<option value="">All columns</option>' + state.data.headers.map(h => `<option>${esc(h)}</option>`).join(''); $('#frFind').focus(); }
+    if (on) { $('#frCol').innerHTML = '<option value="">All columns</option>' + state.data.headers.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join(''); $('#frFind').focus(); }
   };
   $('#frGo').onclick = () => {
     const f = $('#frFind').value, r = $('#frRepl').value, col = $('#frCol').value, whole = $('#frWhole').checked, cs = $('#frCase').checked;
@@ -1562,7 +1567,7 @@
   $('#groupsTbl').addEventListener('change', e => {
     const m = e.target.closest('[data-gmerge]'), c = e.target.closest('[data-gctrl]'), cfg = state.cfg;
     if (m) { readUiIntoCfg(); if (m.value) cfg.groupMerge[m.dataset.gmerge] = m.value; else delete cfg.groupMerge[m.dataset.gmerge]; cfg.consort = null; renderVariables(); toast(m.value ? `${cfg.groupLabels[m.dataset.gmerge]} is analysed as part of ${cfg.groupLabels[m.value]}` : 'Groups kept apart'); }
-    if (c) { readUiIntoCfg(); const g = c.dataset.gctrl; cfg.groupOrder = [g, ...cfg.groupOrder.filter(x => x !== g)]; cfg.consort = null; renderVariables(); toast(`${cfg.groupLabels[g]} is the control group (first in tables)`); }
+    if (c) { readUiIntoCfg(); const g = c.dataset.gctrl; cfg.groupOrder = [g, ...cfg.groupOrder.filter(x => x !== g)]; cfg.groupCtrl = g; cfg.consort = null; applyScheme(cfg); renderVariables(); toast(`${cfg.groupLabels[g]} is the control group (first in tables)`); }
   });
   // subgroup analysis
   function renderSubgroup() {
@@ -1767,7 +1772,7 @@
     const vals = state.data.rows.map(r => { const v = Analysis.toNum(r[col]); return isFinite(v) ? +cv[2](v).toFixed(dp) : null; });
     let made; editSheet(() => { made = addColumn($('#unName').value, vals, col); }, `${col} converted (${cv[1]})`); toggleTool('unitBox'); toast(`New column ${made}: ${cv[1]}`); };
   /* ---------- sort the sheet, keep the filtered patients, delete empty rows and columns ---------- */
-  $('#gridSortT').onclick = () => { if (!toggleTool('sortBox')) return; const h = state.data.headers, o = h.map(c => `<option>${esc(c)}</option>`).join('');
+  $('#gridSortT').onclick = () => { if (!toggleTool('sortBox')) return; const h = state.data.headers, o = h.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
     $('#soCol1').innerHTML = o; $('#soCol2').innerHTML = '<option value="">—</option>' + o; const n = state.cfg ? Analysis.filterRows(state.cfg, state.data.rows).length : state.data.rows.length;
     $('#soKeep').disabled = n === state.data.rows.length; $('#soKeep').textContent = `Keep only the ${n} patients of “Analyse only some patients”`; };
   $('#soGo').onclick = () => { const keys = [[$('#soCol1').value, +$('#soDir1').value], [$('#soCol2').value, +$('#soDir2').value]].filter(k => k[0]);
@@ -2155,6 +2160,37 @@
       cfg.variables.sort((a, b) => a.pos - b.pos);
     } else if (v) v.include = on;
   }
+  /* ---------- group names, descriptions and reset ---------- */
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'], ORD = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth'];
+  const SCHEMES = [['', 'Keep the values / my labels'], ['letter', 'Group A, Group B, Group C …'], ['roman', 'Group I, Group II, Group III …'], ['number', 'Group 1, Group 2, Group 3 …'], ['ordinal', 'First group, Second group …'], ['ctrl', 'Control group, then Group A, Group B …']];
+  function applyScheme(cfg) { const sc = cfg.groupScheme; if (!sc || cfg.noGroups) return; const act = cfg.groupOrder.filter(g => cfg.groupInclude[g] !== false && !(cfg.groupMerge || {})[g]);
+    act.forEach((g, i) => { const j = sc === 'ctrl' ? i - 1 : i; cfg.groupLabels[g] = sc === 'ctrl' && i === 0 ? 'Control group' : sc === 'letter' || sc === 'ctrl' ? `Group ${String.fromCharCode(65 + j)}` : sc === 'roman' ? `Group ${ROMAN[j] || j + 1}` : sc === 'number' ? `Group ${j + 1}` : `${ORD[j] || `Group ${j + 1}`} group`.replace('Group ' + (j + 1) + ' group', 'Group ' + (j + 1)); }); }
+  function renderGroupTools() { const box = $('#groupTools'), cfg = state.cfg; if (!box) return; if (cfg.noGroups) { box.innerHTML = ''; return; }
+    const sel = (id, opts, v) => `<select id="${id}" style="width:auto">${opts.map(([k, l]) => `<option value="${esc(k)}" ${(v || '') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    box.innerHTML = `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div><label class="f">Name the groups</label>${sel('grpScheme', SCHEMES, cfg.groupScheme)}</div>
+      <div><label class="f">Group headings in the report</label>${sel('grpHead', [['', 'Label (Group A)'], ['both', 'Label and short name (Group A: Basal–Bolus Insulin)'], ['short', 'Short name only']], cfg.groupHead)}</div>
+      <div><label class="f">Opening paragraph of the results</label>${sel('grpIntro', [['auto', 'When the groups have descriptions'], ['on', 'Always'], ['off', 'No']], cfg.groupIntro || 'auto')}</div>
+      <div><label class="f">Written as</label>${sel('grpIntroStyle', [['', 'A paragraph'], ['bullets', 'A bullet list']], cfg.groupIntroStyle)}</div>
+      <label class="check" style="margin:0 0 6px"><input type="checkbox" id="grpKeep" ${cfg.groupDescKeep ? 'checked' : ''}><span>Keep descriptions as typed (no past tense)</span></label>
+      <label class="check" style="margin:0 0 6px"><input type="checkbox" id="grpFlow" ${cfg.flowDesc !== false ? 'checked' : ''}><span>Descriptions in the flowchart</span></label>
+      <span class="spacer"></span><button class="btn ghost small" type="button" id="grpReset" title="Every group included, no merges, the original order and labels, no control group marked, no combined column">↺ Reset grouping</button></div>`;
+    $('#grpScheme').onchange = e => { readUiIntoCfg(); cfg.groupScheme = e.target.value; if (!cfg.groupScheme) cfg.groupOrder.forEach(g => { cfg.groupLabels[g] = groupName(g); }); applyScheme(cfg); cfg.consort = null; renderVariables(); };
+    $('#grpHead').onchange = e => { cfg.groupHead = e.target.value; };
+    $('#grpIntro').onchange = e => { cfg.groupIntro = e.target.value; };
+    $('#grpIntroStyle').onchange = e => { cfg.groupIntroStyle = e.target.value; };
+    $('#grpKeep').onchange = e => { readUiIntoCfg(); cfg.groupDescKeep = e.target.checked; renderVariables(); };
+    $('#grpFlow').onchange = e => { cfg.flowDesc = e.target.checked; };
+    $('#grpReset').onclick = () => { readUiIntoCfg(); const keys = ['groupCol', 'groupOrder', 'groupLabels', 'groupInclude', 'groupMerge', 'groupScheme', 'groupCtrl', 'groupColOrig', 'consort'], snap = JSON.stringify(Object.fromEntries(keys.map(k => [k, cfg[k]])));
+      if (cfg.groupColOrig) { cfg.groupCol = cfg.groupColOrig; cfg.variables.forEach(v => { if (v.cols[0].col === cfg.groupCol) v.include = false; }); }
+      delete cfg.groupColOrig; cfg.groupMerge = {}; cfg.groupScheme = ''; delete cfg.groupCtrl; setGroups(cfg); renderVariables();
+      const undo = () => { const o = JSON.parse(snap); keys.forEach(k => { if (o[k] === undefined) delete cfg[k]; else cfg[k] = o[k]; }); renderVariables(); };
+      if (window.EasyUX2 && EasyUX2.undoToast) EasyUX2.undoToast('Grouping reset', undo); else toast('Grouping reset'); };
+  }
+  $('#groupsTbl').addEventListener('input', e => { if (e.target.dataset.glabel !== undefined && state.cfg.groupScheme) { state.cfg.groupScheme = ''; const s0 = $('#grpScheme'); if (s0) s0.value = ''; } });
+  // the labels used in the report: the label, the label with the short name, or the short name only (step 2)
+  function reportGroupLabels(cfg) { const sh = cfg.groupShort || {}, out = { ...cfg.groupLabels }; if (!cfg.groupHead) return out;
+    Object.keys(out).forEach(g => { const s0 = String(sh[g] || '').trim(); if (!s0) return; out[g] = cfg.groupHead === 'short' ? s0 : `${out[g]}: ${s0}`; }); return out; }
   function setGroups(cfg) {
     const seen = [];
     state.data.rows.forEach(r => { const g = Analysis.groupOf(cfg, r); if (g !== null && !seen.includes(g)) seen.push(g); });
@@ -2171,7 +2207,7 @@
     renderCalcForm();
     const cfg = state.cfg, { headers } = state.data;
     $('#groupCol').innerHTML = headers.map(h => `<option ${h === cfg.groupCol ? 'selected' : ''}>${esc(h)}</option>`).join('');
-    $('#groupCombo').innerHTML = '<option value="">× another column…</option>' + headers.filter(h => h !== cfg.groupCol && (n => n >= 2 && n <= 8)(columnInfo(state.data.rows, h).distinct.length)).map(h => `<option>${esc(h)}</option>`).join('');
+    $('#groupCombo').innerHTML = '<option value="">× another column…</option>' + headers.filter(h => h !== cfg.groupCol && (n => n >= 2 && n <= 8)(columnInfo(state.data.rows, h).distinct.length)).map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('');
     // study design: compare the groups of a column, or analyse every patient as one group
     $('#groupMode').value = cfg.noGroups ? 'one' : 'groups';
     $('#groupColBox').style.display = cfg.noGroups ? 'none' : '';
@@ -2180,12 +2216,13 @@
     { const af = $('#allFirst'); if (af) { af.checked = !!cfg.allFirst; af.onchange = e => { cfg.allFirst = e.target.checked; toast(cfg.allFirst ? 'The report starts with all patients as one group, then compares the groups' : 'Only the comparison of the groups'); }; } }
     $('#groupCol').onchange = e => { readUiIntoCfg(); cfg.groupCol = e.target.value; cfg.variables.forEach(v => { if (v.cols[0].col === cfg.groupCol) v.include = false; }); setGroups(cfg); renderVariables(); };
     cfg.groupMerge = cfg.groupMerge || {};
-    $('#groupsTbl').innerHTML = `<thead><tr><th>Use</th><th>Value in Excel</th><th>Label in report</th><th>n</th><th>Order</th><th title="Analyse this group as part of another group">Merge into</th><th title="The control (reference) group comes first in tables and comparisons">Control</th></tr></thead><tbody>${
+    $('#groupsTbl').innerHTML = `<thead><tr><th>Use</th><th>Value in Excel</th><th>Label in report</th><th>n</th><th>Order</th><th title="Analyse this group as part of another group">Merge into</th><th title="The control (reference) group comes first in tables and comparisons">Control</th>${cfg.noGroups ? '' : '<th title="Optional, e.g. Basal–Bolus Insulin">Short name</th><th title="What the group received or who is in it — for the flowchart and the opening paragraph of the results (future tense is turned into past tense)">Description</th>'}</tr></thead><tbody>${
       cfg.groupOrder.map((g, i) => `<tr><td><input type="checkbox" data-ginc="${esc(g)}" ${cfg.groupInclude[g] !== false ? 'checked' : ''} ${cfg.noGroups ? 'disabled' : ''}></td><td class="mono">${g === Analysis.ALL_GROUP ? '(every row)' : esc(g)}</td>
       <td><input type="text" data-glabel="${esc(g)}" value="${esc(cfg.groupLabels[g])}"></td><td>${groupN(g)}</td>
       <td><button class="btn ghost small" data-gmove="${i},-1">↑</button> <button class="btn ghost small" data-gmove="${i},1">↓</button></td>
       <td>${cfg.noGroups ? '' : `<select data-gmerge="${esc(g)}" style="width:auto"><option value="">—</option>${cfg.groupOrder.filter(x => x !== g).map(x => `<option value="${esc(x)}" ${cfg.groupMerge[g] === x ? 'selected' : ''}>${esc(cfg.groupLabels[x] || x)}</option>`).join('')}</select>`}</td>
-      <td>${cfg.noGroups ? '' : `<input type="radio" name="gctrl" data-gctrl="${esc(g)}" ${i === 0 ? 'checked' : ''}>`}</td></tr>`).join('')}</tbody>`;
+      <td>${cfg.noGroups ? '' : `<input type="radio" name="gctrl" data-gctrl="${esc(g)}" ${i === 0 ? 'checked' : ''}>`}</td>${cfg.noGroups ? '' : `<td><input type="text" data-gshort="${esc(g)}" value="${esc((cfg.groupShort || {})[g] || '')}" placeholder="optional" style="min-width:120px"></td><td><textarea data-gdesc="${esc(g)}" rows="2" style="min-width:260px" placeholder="e.g. Patients will receive …">${esc((cfg.groupDesc || {})[g] || '')}</textarea>${(cfg.groupDesc || {})[g] && !cfg.groupDescKeep && Analysis.pastTense(cfg.groupDesc[g]) !== cfg.groupDesc[g] ? `<div class="legend-note">→ ${esc(Analysis.pastTense(cfg.groupDesc[g]))}</div>` : ''}</td>`}</tr>`).join('')}</tbody>`;
+    renderGroupTools();
     if (cfg.groupOrder.length > 6 && !cfg.noGroups) toast('The group column has many values — is it the right column?');
 
     const groups = activeGroups();
@@ -2256,7 +2293,7 @@
     readUiIntoCfg();
     const [i, d] = b.dataset.gmove.split(',').map(Number), o = state.cfg.groupOrder, j = i + d;
     if (j < 0 || j >= o.length) return;
-    [o[i], o[j]] = [o[j], o[i]]; state.cfg.consort = null; renderVariables();
+    [o[i], o[j]] = [o[j], o[i]]; state.cfg.consort = null; applyScheme(state.cfg); renderVariables();
   });
   $('#varsTbl').addEventListener('change', e => {
     if (e.target.dataset.k === 'split') { readUiIntoCfg(); renderVariables(); return; }
@@ -2288,7 +2325,7 @@
       <table class="t"><thead><tr><th>#</th><th>Column</th><th>Timepoint label</th><th></th></tr></thead><tbody>${repEdit.cols.map((c, i) => `<tr>
         <td>${i + 1}</td><td class="mono">${esc(c.col)}</td><td><input type="text" data-reptp="${i}" value="${esc(c.label ?? tpText(c.tp))}"></td>
         <td><button class="btn ghost small" data-repmove="${i},-1" type="button">↑</button> <button class="btn ghost small" data-repmove="${i},1" type="button">↓</button> <button class="btn ghost small" data-repdel="${i}" type="button">✕</button></td></tr>`).join('') || '<tr><td colspan="4" class="legend-note">Add at least two columns.</td></tr>'}</tbody></table>
-      <div class="row" style="margin-top:8px"><select id="repAdd" style="max-width:320px"><option value="">+ Add a column…</option>${avail.map(h => `<option>${esc(h)}</option>`).join('')}</select>
+      <div class="row" style="margin-top:8px"><select id="repAdd" style="max-width:320px"><option value="">+ Add a column…</option>${avail.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('')}</select>
         <span class="spacer"></span><button class="btn ghost" data-repact="cancel" type="button">Cancel</button><button class="btn primary" data-repact="save" type="button">Save repeated measure</button></div>
     </div>`;
   }
@@ -2375,11 +2412,12 @@
   // option controls of steps 4–8 show the saved options
   function renderOptions() {
     const o = state.cfg.options;
+    if (+o.chartRes === 1 || o.chartRes === undefined || o.chartRes === '') o.chartRes = 300; else if (+o.chartRes === 2) o.chartRes = 600; // older settings
     // column choices of step 4: clustering, strata and the per-protocol population
     if (state.data) { const h = state.data.headers, opt = list => '<option value="">— none —</option>' + list.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
       const cats = h.filter(c => c !== state.cfg.groupCol && (n => n >= 2 && n <= 40)(columnInfo(state.data.rows, c).distinct.length));
       $('#optClusterCol').innerHTML = opt(h.filter(c => c !== state.cfg.groupCol)); $('#optTwoFactor').innerHTML = opt(cats.filter(c => columnInfo(state.data.rows, c).distinct.length <= 4)); $('#optStrataCol').innerHTML = opt(cats); $('#optPpCol').innerHTML = opt(cats);
-      $('#optPpVal').innerHTML = o.ppCol ? columnInfo(state.data.rows, o.ppCol).distinct.map(v => `<option>${esc(v)}</option>`).join('') : '<option value="">—</option>'; }
+      $('#optPpVal').innerHTML = o.ppCol ? columnInfo(state.data.rows, o.ppCol).distinct.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('') : '<option value="">—</option>'; }
     for (const [k, [id, box]] of Object.entries(OPTION_FIELDS)) $('#' + id)[box ? 'checked' : 'value'] = o[k];
     const gNames = state.data && !state.cfg.noGroups ? activeGroups().map(g => state.cfg.groupLabels[g] || g) : [];
     $('#customColors').innerHTML = o.customColors.map((col, i) => `<label class="cc"><input type="color" data-ccol="${i}" value="${esc(col)}" title="${esc(gNames[i] || `Colour ${i + 1}`)}"><span>${esc(gNames[i] || `Colour ${i + 1}`)}</span></label>`).join('');
@@ -3362,8 +3400,8 @@
     const th = cfg.tableHeads || {}, groups = cfg.noGroups ? [] : activeGroups();
     $('#tableHeadsBox').innerHTML = groups.length > 1 ? groups.map(g => `<div><label class="f">${esc(cfg.groupLabels[g] || g)}</label><input type="text" data-thead="${esc(g)}" value="${esc(th[g] || '')}" placeholder="${esc(cfg.groupLabels[g] || g)}"></div>`).join('') : '<p class="legend-note">No study groups.</p>';
     const tabs = [...new Set(cfg.variables.filter(v => v.include !== false && v.kind === 'single' && v.table).map(v => v.table))];
-    $('#mtFrom').innerHTML = tabs.map(t => `<option>${esc(t)}</option>`).join(''); $('#mtInto').innerHTML = tabs.map((t, i) => `<option ${i === 1 ? 'selected' : ''}>${esc(t)}</option>`).join('');
-    const ts = tableStyles(); $('#tsList').innerHTML = '<option value="">— saved table styles —</option>' + Object.keys(ts).map(n => `<option>${esc(n)}</option>`).join('');
+    $('#mtFrom').innerHTML = tabs.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join(''); $('#mtInto').innerHTML = tabs.map((t, i) => `<option ${i === 1 ? 'selected' : ''}>${esc(t)}</option>`).join('');
+    const ts = tableStyles(); $('#tsList').innerHTML = '<option value="">— saved table styles —</option>' + Object.keys(ts).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
   }
   $('#tableHeadsBox').addEventListener('input', e => { const g = e.target.dataset.thead; if (g === undefined) return; const th = state.cfg.tableHeads = state.cfg.tableHeads || {};
     if (e.target.value.trim()) th[g] = e.target.value; else delete th[g]; });
@@ -4063,13 +4101,13 @@
       <label class="check"><input type="checkbox" data-c="itt" ${c.itt ? 'checked' : ''}><span><b>Intention-to-treat and per-protocol</b> populations instead of “Analysed”</span></label>` : ''}
       ${t === 'crossover' ? `<div><label class="f">Washout</label><input type="text" data-c="washout" value="${esc(c.washout || '')}" placeholder="e.g. 2 weeks"></div>` : ''}
       <div><label class="f">Footnote under the flowchart</label><textarea data-c="footnote" style="min-height:44px">${esc(c.footnote || '')}</textarea></div>
-      ${t !== 'prisma' && t !== 'stard' ? `<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><label class="f" style="margin:0">Reasons from a column</label><select id="cReasonCol">${cols.map(h => `<option>${esc(h)}</option>`).join('')}</select>
+      ${t !== 'prisma' && t !== 'stard' ? `<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><label class="f" style="margin:0">Reasons from a column</label><select id="cReasonCol">${cols.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('')}</select>
         <select id="cReasonTo"><option value="excluded">→ Excluded (enrolment)</option><option value="lost">→ Lost to follow-up (per group)</option><option value="exAnalysis">→ Excluded from analysis (per group)</option></select><button class="btn ghost small" id="cReasonGo" type="button">Fill</button></div>
         <p class="legend-note" style="margin:2px 0 0">Every non-empty value of the column is a reason; patients are counted per reason (and per group).</p>` : ''}
       <div class="row" style="gap:6px;margin-top:6px"><label class="f" style="margin:0">Enrolment timeline (report table and chart) from the date column</label><select id="cTimeline"><option value="">— none —</option>${cols.map(h => `<option ${state.cfg.timeline && state.cfg.timeline.col === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>
       ${t !== 'prisma' && t !== 'stard' ? `<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"><label class="f" style="margin:0">Patients per centre in the “Analysed” boxes</label><select data-c="centreCol"><option value="">— none —</option>${cols.map(h => `<option ${c.centreCol === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>
       <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><label class="f" style="margin:0">Lost per visit from a repeated variable</label><select id="cVisitVar">${state.cfg.variables.filter(v => v.kind === 'repeated').map(v => `<option value="${esc(v.id)}">${esc(v.label)}</option>`).join('') || '<option value="">— no repeated variable —</option>'}</select><button class="btn ghost small" id="cVisitGo" type="button">Fill “Lost to follow-up”</button></div>
-      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><label class="f" style="margin:0">Missing values of a column</label><select id="cMissCol">${cols.map(h => `<option>${esc(h)}</option>`).join('')}</select><select id="cMissTo"><option value="lost">→ Lost to follow-up</option><option value="exAnalysis">→ Excluded from analysis</option></select><button class="btn ghost small" id="cMissGo" type="button">Count</button></div>` : ''}
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px"><label class="f" style="margin:0">Missing values of a column</label><select id="cMissCol">${cols.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('')}</select><select id="cMissTo"><option value="lost">→ Lost to follow-up</option><option value="exAnalysis">→ Excluded from analysis</option></select><button class="btn ghost small" id="cMissGo" type="button">Count</button></div>` : ''}
       ${trial ? `<h3 style="margin-top:12px">Randomisation list</h3><div class="grid g4"><div><label class="f">Patients</label><input type="number" id="rlN" min="2" value="${c.groups.reduce((a2, g) => a2 + (+g.allocated || 0), 0) || 60}"></div>
         <div><label class="f">Block sizes</label><input type="text" id="rlBlocks" value="4, 6" placeholder="e.g. 4, 6 (random mix)"></div><div><label class="f">Allocation ratio</label><input type="text" id="rlRatio" value="${c.groups.map(() => 1).join(':')}"></div>
         <div><label class="f">Strata (optional)</label><input type="text" id="rlStrata" placeholder="e.g. Male, Female"></div><div><label class="f">Seed</label><input type="number" id="rlSeed" value="2024"></div>
@@ -4241,7 +4279,7 @@
   $('#cEnglish').onclick = () => { document.querySelectorAll('#p9 [data-fsl]').forEach(el => { el.value = ''; }); readConsort(); drawConsortPreview(); };
   // flowchart styles saved in this browser
   const FS_KEY = 'pmse-flow-styles', flowStyles = () => { try { return JSON.parse(localStorage.getItem(FS_KEY) || '{}'); } catch (e) { return {}; } };
-  const renderFlowStyles = () => { $('#cStyleList').innerHTML = '<option value="">— saved flowchart styles —</option>' + Object.keys(flowStyles()).map(n => `<option>${esc(n)}</option>`).join(''); };
+  const renderFlowStyles = () => { $('#cStyleList').innerHTML = '<option value="">— saved flowchart styles —</option>' + Object.keys(flowStyles()).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join(''); };
   $('#cStyleSave').onclick = () => { readConsort(); const name = (prompt('Name of this flowchart style:', 'My flowchart style') || '').trim(); if (!name) return; const all = flowStyles(); all[name] = state.cfg.consort.style;
     try { localStorage.setItem(FS_KEY, JSON.stringify(all)); } catch (e) { toast('This browser does not allow saving'); return; } renderFlowStyles(); $('#cStyleList').value = name; toast(`Flowchart style “${name}” saved`); };
   $('#cStyleApply').onclick = () => { const st = flowStyles()[$('#cStyleList').value]; if (!st) return; state.cfg.consort.style = JSON.parse(JSON.stringify(st)); renderConsortForm(); toast('Flowchart style applied'); };
@@ -4317,6 +4355,8 @@
     const cfg = state.cfg;
     document.querySelectorAll('[data-glabel]').forEach(el => cfg.groupLabels[el.dataset.glabel] = el.value.trim() || (el.dataset.glabel === Analysis.ALL_GROUP ? 'All patients' : el.dataset.glabel));
     document.querySelectorAll('[data-ginc]').forEach(el => cfg.groupInclude[el.dataset.ginc] = el.checked);
+    document.querySelectorAll('[data-gshort]').forEach(el => { cfg.groupShort = cfg.groupShort || {}; cfg.groupShort[el.dataset.gshort] = el.value.trim(); });
+    document.querySelectorAll('[data-gdesc]').forEach(el => { cfg.groupDesc = cfg.groupDesc || {}; cfg.groupDesc[el.dataset.gdesc] = el.value.trim(); });
     document.querySelectorAll('#varsTbl tr[data-vid]').forEach(tr => {
       const v = cfg.variables.find(x => x.id === tr.dataset.vid); if (!v) return;
       tr.querySelectorAll('[data-k]').forEach(el => {
@@ -4795,7 +4835,7 @@
   });
   // saved views of this step
   const XV_KEY = 'pmse-xp-views', xpViews = () => { try { return JSON.parse(localStorage.getItem(XV_KEY) || '{}'); } catch (e) { return {}; } };
-  const renderXpViews = () => { $('#xpViewList').innerHTML = '<option value="">— saved views —</option>' + Object.keys(xpViews()).map(n => `<option>${esc(n)}</option>`).join(''); };
+  const renderXpViews = () => { $('#xpViewList').innerHTML = '<option value="">— saved views —</option>' + Object.keys(xpViews()).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join(''); };
   $('#xpViewSave').onclick = () => { const name = (prompt('Name of this view:', 'My view') || '').trim(); if (!name) return; const all = xpViews(); const { q, tq, ...keep } = xpo(); all[name] = keep;
     try { localStorage.setItem(XV_KEY, JSON.stringify(all)); } catch (e) { toast('This browser does not allow saving'); return; } renderXpViews(); $('#xpViewList').value = name; toast(`View “${name}” saved`); };
   $('#xpViewList').onchange = e => { const v = xpViews()[e.target.value]; if (!v) return; state.cfg.explore = { ...xpo(), ...v }; renderExplore(); toast(`View “${e.target.value}” applied`); };
@@ -4846,7 +4886,7 @@
     const r = state.result, plan = exportPlan(r), o = effOptions(), lab = n => Report.figLabel(n, o.captionStyle), out = [];
     if (r.abstract && plan.rep.abstract) out.push('Results for the abstract', r.abstract, '');
     if (!isOut('methods')) out.push('Statistical analysis', r.methods, '');
-    out.push('Results'); if (r.intro) out.push(r.intro); if (r.narrative) out.push(r.narrative);
+    out.push('Results'); if (r.groupIntro) out.push(r.groupIntro); if (r.intro) out.push(r.intro); if (r.narrative) out.push(r.narrative);
     if (plan.consortOn && r.consort) out.push(`${lab(plan.consortNum)} ${r.flowCaption}`);
     r.sections.forEach(s => { if (plan.tabNum.get(s)) out.push('', `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : ':'} ${s.title}`, s.footnote || ''); if (s.comment && !plan.paper && o.commentPlace !== 'none') out.push(s.comment);
       s.figures.forEach(f => { if (plan.figNum.get(f)) out.push(`${lab(plan.figNum.get(f))} ${f.caption}${f.note ? ' ' + f.note : ''}`); }); });
@@ -5115,7 +5155,7 @@
     if (!md) out.push(['\\documentclass{article}', '\\usepackage[utf8]{inputenc}', '\\usepackage{booktabs}', '\\usepackage{graphicx}', `\\title{${tex(state.cfg.study.title || 'Statistical report')}}`, '\\begin{document}', '\\maketitle'].join('\n'));
     else out.push(`# ${state.cfg.study.title || 'Statistical report'}`);
     if (!isOut('methods') && r.methods) out.push(H(2, 'Statistical analysis'), P(r.methods));
-    out.push(H(2, 'Results')); if (r.intro) out.push(P(r.intro)); if (r.narrative && plan.paper) out.push(P(r.narrative));
+    out.push(H(2, 'Results')); if (r.groupIntro) r.groupIntro.split('\n').forEach(t => out.push(P(t))); if (r.intro) out.push(P(r.intro)); if (r.narrative && plan.paper) out.push(P(r.narrative));
     r.sections.forEach(s => { if (!plan.tabNum.get(s)) return; const head = headText(s.head), grid = tableRowsText(s.rows), cap = `Table ${plan.tabNum.get(s)}: ${s.title}`;
       if (md) out.push(`**${cap}**`, '', `| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...grid.map(l => `| ${head.map((_, j) => (l[j] ?? '').replace(/\|/g, '\\|')).join(' | ')} |`), '', `*${s.footnote || ''}*`);
       else out.push(['\\begin{table}[ht]\\centering\\small', `\\caption{${tex(s.title)}}`, `\\begin{tabular}{${head.map((_, j) => j ? 'c' : 'l').join('')}}\\toprule`, head.map(tex).join(' & ') + ' \\\\ \\midrule',
@@ -5804,7 +5844,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     setTimeout(() => {
       try {
         syncAssessed(ensureConsort());
-        const cfg = { ...state.cfg, options: effOptions() };
+        const cfg = { ...state.cfg, options: effOptions(), groupLabels: reportGroupLabels(state.cfg) };
         const res = Analysis.run(state.data, cfg);
         postRepeated(res, state.cfg);
         if (cfg.options.rmImpute === 'locf') res.methods += ' Missing follow-up values were replaced by the last observation carried forward.';
@@ -5869,7 +5909,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         const pal = chartPalette(cfg.options);
         const gl = res.groups;
         if (cfg.consort.enabled) {
-          const cv = Charts.consort(flowStyled(cfg.consort), gl, pal);
+          const cv = Charts.consort(flowStyled(cfg.consort), gl, pal, resOf(cfg.options.chartRes) * 1500 / 1200); // the flowchart image: the chosen dpi at the text width
           res.consort = { url: cv.toDataURL('image/png'), w: cv.width, h: cv.height };
         }
         if (cfg.options.rmLayout === 'cols') res.sections = res.sections.map(Analysis.timepointsAsColumns);
@@ -5994,6 +6034,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     const r = state.result; if (!r || !$('#edMethods')) return;
     r.methods = $('#edMethods').value;
     if ($('#edIntro')) r.intro = $('#edIntro').value;
+    if ($('#edGroupIntro')) r.groupIntro = $('#edGroupIntro').value;
     document.querySelectorAll('[data-comment]').forEach(t => { r.sections[+t.dataset.comment].comment = t.value; });
     document.querySelectorAll('[data-fcap]').forEach(t => { const [si, fi] = t.dataset.fcap.split(':').map(Number); r.sections[si].figures[fi].caption = t.value; });
     document.querySelectorAll('[data-fnote]').forEach(t => { const [si, fi] = t.dataset.fnote.split(':').map(Number); r.sections[si].figures[fi].note = t.value; });
@@ -6070,6 +6111,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     if (plan.paper && plan.rep.abstract) html += `<div class="report-sec"><h3>Results for the abstract</h3><textarea id="edAbstract">${esc(r.abstract)}</textarea><div class="legend-note">${words(r.abstract)} words</div></div>`;
     html += `<div class="report-sec${off('methods')}"><div class="row"><h3>Statistical analysis</h3><span class="spacer"></span>${exBox('methods', 'Include')}</div><textarea id="edMethods">${esc(r.methods)}</textarea>${plan.paper ? `<div class="legend-note">${words(r.methods)} words</div>` : ''}</div>`;
     html += `<div class="report-sec"><h3>Results</h3>`;
+    if (r.groupIntro) html += `<div class="legend-note" style="margin-top:6px">Opening paragraph of the results (the groups, step 2)</div><textarea id="edGroupIntro" rows="${Math.min(8, 2 + (r.groupIntro.match(/\n/g) || []).length)}">${esc(r.groupIntro)}</textarea>`;
     if (r.consort) html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${plan.consortOn ? lab(plan.consortNum) : 'Not exported:'} ${esc(r.flowCaption)}</div></div>`;
     const wl = +report().wordLimit; if (wl) { const n = words(r.narrative || '') + words(r.intro || '') + (plan.paper ? 0 : r.sections.reduce((t, s) => t + words(s.comment || ''), 0));
       html += `<div class="chip ${n > wl ? 'warn' : 'ok'}" style="display:block;margin:6px 0">${n > wl ? '⚠' : '✓'} Results: ${n} words (limit ${wl})${n > wl ? ` — ${n - wl} over` : ''}</div>`; }
@@ -6777,7 +6819,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const flowPt = () => report().format === 'paper' ? 470 : 600;
   // an export item: its file name, its size at res 1, its width in the report and how to draw it at a resolution
   const chartItem = (f, name, o) => {
-    const res1 = +o.chartRes || 1, w = (f.w || 1500 * res1) / res1, h = (f.h || 820 * res1) / res1;
+    const res1 = resOf(o.chartRes), w = (f.w || 1500 * res1) / res1, h = (f.h || 820 * res1) / res1;
     return { name, w, h, pt: (FIG_PT[o.figWidth] || FIG_PT.full)[o.figPerRow === 2 || +o.figPerRow === 2 ? 1 : 0],
       draw: (res, text) => Charts.draw({ ...f.spec, title: figTitle(f, o) }, figPal(f, o), { ...chartStyle(o), ...(f.fmtStyle || {}), res, ...(text ? { text } : {}) }),
       svg: text => Charts.drawSVG({ ...f.spec, title: figTitle(f, o) }, figPal(f, o), { ...chartStyle(o), ...(f.fmtStyle || {}), ...(text ? { text } : {}) }) };
@@ -6793,7 +6835,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     $('#fxList').innerHTML = items.map((it, i) => `<label class="check"><input type="checkbox" data-fx="${i}" ${!preselect || preselect.includes(i) ? 'checked' : ''}><span>${esc(it.name)}</span></label>`).join('');
     $('#fxList').style.display = items.length > 1 ? '' : 'none';
     $('#fxAll').style.display = $('#fxNone').style.display = items.length > 1 ? '' : 'none';
-    try { const p = JSON.parse(localStorage.getItem('easystat.figExport') || '{}'); ['Format', 'Dpi', 'Width', 'Color', 'Zip'].forEach(k => { if (p[k] && $('#fx' + k).querySelector(`option[value="${p[k]}"]`)) $('#fx' + k).value = p[k]; }); } catch (e) { /* defaults */ }
+    try { const p = JSON.parse(localStorage.getItem('easystat.figExport') || '{}'); ['Format', 'Width', 'Color', 'Zip'].forEach(k => { if (p[k] && $('#fx' + k).querySelector(`option[value="${p[k]}"]`)) $('#fx' + k).value = p[k]; }); } catch (e) { /* defaults */ }
     fxUpdate();
     $('#figDlg').showModal();
   }
@@ -7068,12 +7110,12 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   function reportEdits() {
     const r = state.result; if (!r) return null;
     syncEdits();
-    return { methods: r.methods, intro: r.intro, summary: r.summary, narrative: r.narrativeEdited ? r.narrative : undefined, abstract: r.abstractEdited ? r.abstract : undefined,
+    return { methods: r.methods, intro: r.intro, groupIntro: r.groupIntro, summary: r.summary, narrative: r.narrativeEdited ? r.narrative : undefined, abstract: r.abstractEdited ? r.abstract : undefined,
       sections: Object.fromEntries(r.sections.map(s => [s.key, { title: s.title, comment: s.comment }])),
       figures: Object.fromEntries(r.sections.flatMap(s => s.figures.map(f => [f.key, { caption: f.caption, note: f.note }]))) };
   }
   function applyEdits(r, e) {
-    ['methods', 'intro', 'summary'].forEach(k => { if (typeof e[k] === 'string' && r[k] !== undefined) r[k] = e[k]; });
+    ['methods', 'intro', 'groupIntro', 'summary'].forEach(k => { if (typeof e[k] === 'string' && r[k] !== undefined) r[k] = e[k]; });
     if (typeof e.narrative === 'string') { r.narrative = e.narrative; r.narrativeEdited = true; }
     if (typeof e.abstract === 'string') { r.abstract = e.abstract; r.abstractEdited = true; }
     r.sections.forEach(s => {
@@ -7115,7 +7157,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       cfg.tpInclude = cfg.tpInclude || {}; cfg.advanced = cfg.advanced || []; cfg.exportExclude = cfg.exportExclude || {}; cfg.report = { ...DEFAULT_REPORT, ...(cfg.report || {}) };
       state.data = j.data; state.cfg = cfg; state.file = j.file || fname; state.messy = null; state.cleanLog = j.cleanLog || []; state.cellLog = j.cellLog || []; state.snapshots = j.snapshots || []; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
       state.undo = []; state.redo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
-      $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option>${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
+      $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option value="${esc(state.sheet)}">${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
       $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value;
       $('#to2').disabled = false; renderGrid(); renderPrep(); $('#hdrRow').innerHTML = '<option>1</option>';
       // leave no step active, so the controls of the old project are not read into the opened one
