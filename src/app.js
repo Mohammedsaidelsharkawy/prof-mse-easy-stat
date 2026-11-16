@@ -294,7 +294,7 @@
     if (!o) return;
     if (state.data && !confirm('Open this messy dataset? The current data and settings are replaced.')) return;
     const ex = Examples.getMessy(o.dataset.mopen);
-    state.pendingCfg = null; $('#studyTitle').value = ''; if ($('#projName')) $('#projName').value = '';
+    state.pendingCfg = null; $('#studyTitle').value = ''; if ($('#projName')) $('#projName').value = ''; if ($('#studyType')) $('#studyType').value = '';
     openWorkbook(ex.book(XLSX), ex.id + '.xlsx');
     state.messy = ex.id; $('#prepBox').open = true; renderMessyTasks();
     $('#messyTasks').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -4049,13 +4049,15 @@
     prisma: 'PRISMA 2020 — for systematic reviews and meta-analyses: records identified, screened, assessed and included. Later numbers follow from those entered.',
     factorial: 'CONSORT for 2 × 2 factorial trials: each study group is one combination of the two factors (e.g. A + B, A + placebo, placebo + B, placebo + placebo).'
   };
+  // the flowchart that fits the type of the study (step 1)
+  const flowTypeOf = cfg => ({ rct: 'consort', nrct: 'consort', pcohort: 'strobe', rcohort: 'strobe', casecontrol: 'strobe', cross: 'strobe', diagnostic: 'stard', review: 'prisma', prepost: 'strobe', series: 'strobe' })[(cfg.study || {}).type] || (cfg.noGroups ? 'strobe' : 'consort');
   function ensureConsort() {
     const cfg = state.cfg, groups = activeGroups();
     const ns = groups.map(groupN), total = ns.reduce((a, b) => a + b, 0);
     if (!cfg.consort || cfg.consort.groups.length !== groups.length) {
       const prev = cfg.consort;
       cfg.consort = {
-        enabled: prev ? prev.enabled : true, type: prev ? prev.type : cfg.noGroups ? 'strobe' : 'consort', assessed: total,
+        enabled: prev ? prev.enabled : true, type: prev ? prev.type : flowTypeOf(cfg), assessed: total,
         excluded: [{ text: 'Not meeting inclusion criteria', n: 0 }, { text: 'Declined to participate', n: 0 }],
         groups: groups.map((g, i) => ({ allocated: ns[i], description: '', lost: 0, lostReason: '', excludedAnalysis: 0, excludedReason: '', analysed: ns[i] }))
       };
@@ -4376,7 +4378,7 @@
   const isActive = n => $('#p' + n).classList.contains('active');
   function readUiIntoCfg() {
     const cfg = state.cfg; if (!cfg) return;
-    cfg.study.title = $('#studyTitle').value; cfg.study.software = $('#software').value; cfg.study.project = ($('#projName') || {}).value || ''; projTitle();
+    cfg.study.title = $('#studyTitle').value; cfg.study.software = $('#software').value; cfg.study.project = ($('#projName') || {}).value || ''; cfg.study.type = ($('#studyType') || {}).value || ''; projTitle();
     if (isActive(2)) readVariables();
     if (isActive(3)) {
       document.querySelectorAll('[data-tp]').forEach(el => cfg.tpLabels[el.dataset.tp] = el.value.trim() || el.dataset.tp);
@@ -4999,7 +5001,7 @@
       });
       const blob = await Report.buildResults({ items }, { layout: { twocol: 'standard', tables: 'compact' }[xpo().view] || xpo().view, title: 'Results by variable', subtitle: [state.cfg.study.title, `${state.data.rows.length} patients · ${x.k > 1 ? x.groups.join(', ') : 'one group'}`].filter(Boolean).join(' — '), font: o.font });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      a.download = baseName() + ' - Results by variable.docx';
+      a.download = datedName(baseName() + ' - Results by variable.docx');
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('Results by variable downloaded');
     } catch (err) { console.error(err); toast('Word export failed: ' + err.message); }
@@ -6808,7 +6810,15 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const TITLE0 = document.title;
   function projTitle() { const pn = state.cfg && state.cfg.study && String(state.cfg.study.project || '').trim(); document.title = pn ? `${pn} — Prof MSE Easy Stat` : TITLE0; }
   { const pi = document.getElementById('projName'); if (pi) pi.addEventListener('input', () => { if (!state.cfg) return; state.cfg.study.project = pi.value; projTitle(); }); }
-  const saveUrl = (url, name) => { try { window.__onExport && window.__onExport(name); } catch (e) { /* none */ } const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+  { const ty = document.getElementById('studyType'); if (ty) ty.addEventListener('change', () => { if (!state.cfg) return; state.cfg.study.type = ty.value; const c = state.cfg.consort; if (c && ty.value) { const t = flowTypeOf(state.cfg); if (c.type !== t && !(t === 'consort' && /cluster|crossover/.test(c.type))) toast(`For this type of study the flowchart is usually ${t.toUpperCase()} — change it in step 9 if needed`); } }); }
+  // file names: “Project name - Results - 2026-11-16.docx” — the report and the saved project are “Results”, other files keep what they hold, all dated
+  const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  function datedName(name) { const n = String(name || ''), base = baseName(); if (!base || !n.startsWith(base) || /\d{4}-\d{2}-\d{2}/.test(n.slice(base.length))) return n;
+    const m = /^(.*?)((?:\.easystat)?\.[A-Za-z0-9]+)$/.exec(n); if (!m) return n; let rest = m[1].slice(base.length).replace(/^\s*-\s*/, '').replace(/^\((.*)\)$/, '$1').trim();
+    if (!rest || /^(statistical report|thesis results|paper results|project)$/i.test(rest)) rest = 'Results';
+    return `${base} - ${rest} - ${todayStr()}${m[2]}`; }
+  if (window.XLSX && !XLSX.__dated) { const w0 = XLSX.writeFile; XLSX.writeFile = (wb, name, o) => w0(wb, datedName(name), o); XLSX.__dated = true; }
+  const saveUrl = (url, name0) => { const name = datedName(name0); try { window.__onExport && window.__onExport(name); } catch (e) { /* none */ } const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
   const safeName = t => String(t).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
   // every exported table to Excel, one sheet each, with the merged cells of the Word table
   // a cell note: double-click a table cell of the report preview
@@ -7091,7 +7101,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       versionSave(blob);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = baseName() + ` - ${{ thesis: 'Thesis results', paper: 'Paper results' }[report().format] || 'Statistical report'}.docx`;
+      a.download = datedName(baseName() + ' - Results.docx');
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('Word report downloaded'); await masterSeparate();
@@ -7227,7 +7237,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       phase: window.EasyBuilder ? window.EasyBuilder.phase : 'analyse', ...ph, ...(state.data ? { data: state.data, cfg: state.cfg, edits: reportEdits() || state.pendingEdits || null, cleanLog: state.cleanLog || [], cellLog: state.cellLog || [], snapshots: state.snapshots || [] } : {}) };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(proj)], { type: 'application/json' }));
-    a.download = String(proj.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, '') + ' - project.easystat.json';
+    a.download = datedName(baseName() + ' - Results.easystat.json');
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     toast('Project saved — open it later with 📂 Open project');
   };
@@ -7249,7 +7259,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       state.data = j.data; state.cfg = cfg; state.file = j.file || fname; state.messy = null; state.cleanLog = j.cleanLog || []; state.cellLog = j.cellLog || []; state.snapshots = j.snapshots || []; state.sheet = j.sheet || 'Data'; state.wb = null; state.result = null;
       state.undo = []; state.redo = []; state.grid.page = 0; state.grid.sort = null; state.pendingCfg = null; state.pendingEdits = j.edits || null;
       $('#fileName').textContent = `${state.file} (project)`; $('#sheetSel').innerHTML = `<option value="${esc(state.sheet)}">${esc(state.sheet)}</option>`; $('#sheetBox').style.display = '';
-      $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value; if ($('#projName')) $('#projName').value = cfg.study.project || ''; projTitle();
+      $('#studyTitle').value = cfg.study.title || ''; $('#software').value = cfg.study.software || $('#software').value; if ($('#projName')) $('#projName').value = cfg.study.project || ''; if ($('#studyType')) $('#studyType').value = cfg.study.type || ''; projTitle();
       $('#to2').disabled = false; renderGrid(); renderPrep(); $('#hdrRow').innerHTML = '<option>1</option>';
       // leave no step active, so the controls of the old project are not read into the opened one
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -7331,7 +7341,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (state.data && !confirm('Start a new project? The current data and settings are cleared (save the project first to keep them).')) return;
     Object.assign(state, { file: null, wb: null, sheet: null, data: null, cfg: null, result: null, pendingCfg: null, pendingEdits: null, undo: [], redo: [], messy: null });
     try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* ignore */ }
-    $('#sheetBox').style.display = 'none'; $('#fileName').textContent = ''; $('#studyTitle').value = ''; if ($('#projName')) $('#projName').value = ''; $('#file').value = '';
+    $('#sheetBox').style.display = 'none'; $('#fileName').textContent = ''; $('#studyTitle').value = ''; if ($('#projName')) $('#projName').value = ''; if ($('#studyType')) $('#studyType').value = ''; $('#file').value = '';
     $('#to2').disabled = true; $('#report').innerHTML = '';
     go(1); toast('New project — upload an Excel file or open an example');
   };

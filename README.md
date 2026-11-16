@@ -250,6 +250,8 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🗂 Project details (step 1)**: **Type of the study** beside the project name (RCT, non-randomised trial, prospective / retrospective cohort, case-control, cross-sectional, diagnostic accuracy, before–after, case series, systematic review, other) — a new flowchart takes the matching type (CONSORT, STROBE, STARD, PRISMA). **File names**: the Word report, the PDF and the saved project are named “Project name - Results - date” (e.g. *PRP thesis - Results - 2026-11-16.docx*); other files keep what they hold (*PRP thesis - Tables - 2026-11-16.xlsx*); without a project name, the data file's name is used.
+
 **🧾 Statistical analysis paragraph (step 6)**: detail (full, detailed — also variances, Fisher's rule, missing data, exact P values and two-sided CIs — or concise), layout (one paragraph, three paragraphs, or a list), heading (Statistical analysis, Statistical methods, Data analysis …), P ≤ or P <, and the software, normality, effect-estimate and significance sentences each kept or left out; the flowchart text full or concise. The **journal paper** format now writes the full statistical analysis and flowchart text by default (concise on request).
 
 **☰ More menu**: no duplicates — the task list once (task board), and distinct names for tools that sounded alike (Analyses at a glance / Project dashboard, Settings / Variable templates, Display settings).
