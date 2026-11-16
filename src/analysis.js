@@ -4075,7 +4075,7 @@ const Analysis = (() => {
         rows[0] = [{ t: [b.g], b: true, rs: rows.length, grp: true, left: true }, ...rows[0]]; out.push(...rows); });
       sec.rows = out;
     });
-    return { sections, used, groups: gl, gN, k, methods: (opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: numWords9(opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN)), groupIntro: groupIntroText(cfg, groups, gl, gN), flowCaption: flowCaption(cfg),
+    return { sections, used, groups: gl, gN, k, methods: (opts.methodsDetail === 'concise' ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: numWords9(opts.flowDetail === 'concise' ? introConcise(cfg, gl) : introText(cfg, gl, gN)), groupIntro: groupIntroText(cfg, groups, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
@@ -4361,6 +4361,20 @@ const Analysis = (() => {
   }
 
   /* ---------- auto-written text ---------- */
+  // the statistical analysis paragraph as chosen in step 6: more detail, the standard sentences kept or left out, P ≤ or P <, one paragraph, several or a list
+  function methodsFinish(s0, used, cfg) { const o = cfg.options || {}; let s = s0.filter(Boolean);
+    const isSoft = (x, i) => i === 0 && x === String(cfg.study.software || '').trim().replace(/\.?$/, '.'), isNorm = x => /normality|Shapiro|Kolmogorov|skewness and kurtosis/i.test(x) && !/^Quantitative/.test(x), isEff = x => /^Effect estimates were reported/.test(x), isSig = x => /considered statistically significant/.test(x);
+    if (o.methodsDetail === 'detailed') { const extra = [];
+      if (used.has('param') && !s.some(x => /Levene/.test(x))) extra.push("Homogeneity of variances was assessed with Levene's test.");
+      if (used.has('cat')) extra.push("Fisher's exact test was used when more than 20% of the cells had an expected count below 5.");
+      extra.push('Missing values were not imputed; each analysis included the patients with available data.', 'Exact P values were reported, and values below 0.001 were reported as P < 0.001.');
+      if (o.effect) extra.push('All confidence intervals were two-sided at the 95% level.');
+      const at = s.findIndex(isSig); s.splice(at < 0 ? s.length : at, 0, ...extra.filter(x => !s.includes(x))); }
+    s = s.filter((x, i) => !(o.mSoftware === false && isSoft(x, i)) && !(o.mNormality === false && isNorm(x)) && !(o.mEffect === false && isEff(x)) && !(o.mSig === false && isSig(x)));
+    if (o.mSigSign === 'lt') s = s.map(x => isSig(x) ? x.replace(/P value ≤ /, 'P value < ') : x);
+    if (o.methodsLayout === 'bullets') return s.map(x => '• ' + x).join('\n');
+    if (o.methodsLayout === 'split') { const head = [], tail = [], mid = []; s.forEach((x, i) => { if (isSoft(x, i) || isNorm(x)) head.push(x); else if (isSig(x)) tail.push(x); else mid.push(x); }); return [head, mid, tail].filter(a => a.length).map(a => a.join(' ')).join('\n'); }
+    return s.join(' '); }
   function methodsText(used, k, cfg) {
     const o = cfg.options, s = [];
     s.push(cfg.study.software.trim().replace(/\.?$/, '.'));
@@ -4508,7 +4522,7 @@ const Analysis = (() => {
     else if (o.fdr) s.push('P values between the groups were adjusted for multiple comparisons across the report with the Benjamini-Hochberg false discovery rate.');
     if (+o.confLevel && +o.confLevel !== 95) s.push(`Confidence intervals are ${o.confLevel}%.`);
     s.push(`A ${used.has('oneSided') ? 'one' : 'two'} tailed P value ≤ ${o.alpha} was considered statistically significant${used.has('oneSided') ? ` (testing whether the first group was ${o.alternative === 'greater' ? 'greater' : 'less'} than the second)` : ''}.`);
-    return s.join(' ');
+    return methodsFinish(s, used, cfg);
   }
 
   // dates as ISO text, d/m/y text or Excel serial numbers → [year, month]

@@ -35,5 +35,15 @@
   (function menu() { const more = $('.ux-menu') || $('.top-actions'); if (!more) return; const add = (label, title, fn) => { const b = document.createElement('button'); b.className = 'btn light small'; b.type = 'button'; b.textContent = label; b.title = title; b.onclick = fn; more.appendChild(b); };
     add('🎚 ROC cut-off explorer', 'Move the cut-off of a ROC test and see the 2×2 table, sensitivity, specificity, PPV, NPV and LRs; use it in the report', explorer);
     add('🧮 Diagnostic study sample size', 'Patients needed to estimate sensitivity, specificity (Buderer) or an AUC (Hanley-McNeil) with a chosen precision', sampleSize); })();
+  // the ☰ More menu without duplicates: the same task list once (the task board), and distinct names for tools that sounded alike
+  (function dedupeMenu() { const menu = $('.ux-menu'); if (!menu) return; const ren = (el, icon, text, title) => { if (!el) return; el.innerHTML = `${icon} <span class="tl">${text}</span>`; if (title) el.title = title; };
+    const t = document.getElementById('orgTasksB'); if (t) t.remove();
+    ren(document.getElementById('tlDash'), '📈', 'Analyses at a glance', 'Data, variables, analyses, figures, warnings and exports at a glance');
+    ren(document.getElementById('uxView'), '🔤', 'Display settings', 'Text size, density, contrast, font, motion, layout');
+    ren(document.getElementById('tlTpl'), '🧩', 'Settings templates', 'Reusable settings of steps 4–12, such as “RCT thesis” (not the variables)');
+    ren(document.getElementById('orgTplB'), '🧩', 'Variable templates', 'The setup of each variable, applied to the next study by matching the column names');
+    const vs = [...menu.querySelectorAll('select')].find(x => /how much of the app/i.test(x.title || '')); if (vs && vs.options[0]) vs.options[0].textContent = '👤 Show the app for…';
+    // any other item whose visible name repeats an earlier one is removed
+    const seen = new Set(); [...menu.children].forEach(c => { if (c.classList.contains('ux-msearch')) return; const k = c.textContent.replace(/\s+/g, ' ').trim().toLowerCase(); if (c.tagName === 'SELECT') return; if (seen.has(k)) c.remove(); else seen.add(k); }); })();
   window.EasyRocUI = { explorer, sampleSize };
 })();

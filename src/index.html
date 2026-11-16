@@ -1232,6 +1232,23 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <p class="legend-note">Every comment can still be edited by hand in the report preview (step 12).</p>
     </div>
     <div class="card">
+      <div class="row"><h2 style="margin:0">Statistical analysis paragraph</h2><span class="spacer"></span><span class="legend-note">The paragraph that describes the tests (Word: under its own heading).</span></div>
+      <div class="grid g4" style="margin-top:8px">
+        <div><label class="f">Detail</label><select id="optMethodsDetail"><option value="full" selected>Full — every test, with the descriptive statistics</option><option value="detailed">Detailed — also variances, Fisher's rule, missing data, exact P values</option><option value="concise">Concise — short (journal word limits)</option></select></div>
+        <div><label class="f">Layout</label><select id="optMethodsLayout"><option value="para" selected>One paragraph</option><option value="split">Three paragraphs (software and normality · tests · significance)</option><option value="bullets">A list, one sentence per line</option></select></div>
+        <div><label class="f">Heading</label><select id="optMethodsHeading"><option value="" selected>Statistical analysis</option><option value="Statistical methods">Statistical methods</option><option value="Data analysis">Data analysis</option><option value="Statistical analysis and data presentation">Statistical analysis and data presentation</option></select></div>
+        <div><label class="f">Significance written as</label><select id="optMSigSign"><option value="le" selected>P value ≤ 0.05</option><option value="lt">P value &lt; 0.05</option></select></div>
+        <div><label class="f">Flowchart text</label><select id="optFlowDetail"><option value="full" selected>Full — every step with its numbers</option><option value="concise">Concise — one or two sentences</option></select></div>
+      </div>
+      <div class="row" style="gap:14px;flex-wrap:wrap;margin-top:6px">
+        <label class="check"><input type="checkbox" id="optMSoftware" checked><span>Software sentence (step 1)</span></label>
+        <label class="check"><input type="checkbox" id="optMNormality" checked><span>Normality test sentence</span></label>
+        <label class="check"><input type="checkbox" id="optMEffect" checked><span>Effect estimates sentence</span></label>
+        <label class="check"><input type="checkbox" id="optMSig" checked><span>Significance level sentence</span></label>
+      </div>
+      <p class="legend-note">The voice of the methods (passive / “we”) is under Comments above; the text can still be edited in step 12.</p>
+    </div>
+    <div class="card">
       <div class="row"><h2 style="margin:0">Comment preview</h2><span class="spacer"></span><span class="legend-note">The comment written for a table of your own data, redrawn as you change the options above.</span></div>
       <div id="comPrevPick" class="row" style="gap:6px;flex-wrap:wrap;margin:6px 0"></div><div class="paper-prev" id="comPreview"></div>
     </div>

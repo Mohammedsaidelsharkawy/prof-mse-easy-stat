@@ -329,8 +329,9 @@ const Report = (() => {
     // the thesis chapters: Patients and Methods with its parts
     if (model.methodsParts) { children.push(H1('Patients and Methods', brand)); model.methodsParts.forEach(([h, t]) => { children.push(para(h, { bold: true, after: 60 })); String(t).split(/\n+/).forEach(x => children.push(opts.abbrFoot ? abbrPara(x, footnotes) : para(x))); }); }
     else if (model.methods) {
-      children.push(H1(opts.paper ? 'Statistical analysis' : 'Statistical Analysis', brand));
-      children.push(opts.abbrFoot ? abbrPara(model.methods, footnotes) : para(model.methods)); arAfter(model.methods);
+      children.push(H1(opts.methodsHeading || (opts.paper ? 'Statistical analysis' : 'Statistical Analysis'), brand));
+      // one paragraph, several paragraphs, or a list (step 6)
+      String(model.methods).split(/\n+/).map(t => t.trim()).filter(Boolean).forEach(t => children.push(opts.abbrFoot ? abbrPara(t, footnotes) : para(t))); arAfter(model.methods);
     }
     if (!opts.bare && (model.consort || model.sections.length)) children.push(H1('Results', brand));
     // the opening paragraph: the patients and the groups with their descriptions (a paragraph or a bullet list)

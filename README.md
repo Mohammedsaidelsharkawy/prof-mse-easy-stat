@@ -250,6 +250,10 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🧾 Statistical analysis paragraph (step 6)**: detail (full, detailed — also variances, Fisher's rule, missing data, exact P values and two-sided CIs — or concise), layout (one paragraph, three paragraphs, or a list), heading (Statistical analysis, Statistical methods, Data analysis …), P ≤ or P <, and the software, normality, effect-estimate and significance sentences each kept or left out; the flowchart text full or concise. The **journal paper** format now writes the full statistical analysis and flowchart text by default (concise on request).
+
+**☰ More menu**: no duplicates — the task list once (task board), and distinct names for tools that sounded alike (Analyses at a glance / Project dashboard, Settings / Variable templates, Display settings).
+
 **📄 Report (step 12) and page setup (step 11)**
 - **Thesis — A4** and **Thesis — B5** formats. Thesis A4: every text 2 pt larger than on B5 (paragraphs 14 pt, tables 12 pt, footnotes 11 pt, figure notes 12 pt), headings unchanged. Both: **first-line indent 1 cm** by default (type 0 in page setup for none).
 - **Indentation**: “First-line indent applies to” — paragraphs and comments only (default) or all text; and in the text styles table a **first-line** and a **left** indent (cm) for each kind of text (headings, paragraphs, comments, captions, footnotes).

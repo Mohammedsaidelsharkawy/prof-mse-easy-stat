@@ -1232,6 +1232,23 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <p class="legend-note">Every comment can still be edited by hand in the report preview (step 12).</p>
     </div>
     <div class="card">
+      <div class="row"><h2 style="margin:0">Statistical analysis paragraph</h2><span class="spacer"></span><span class="legend-note">The paragraph that describes the tests (Word: under its own heading).</span></div>
+      <div class="grid g4" style="margin-top:8px">
+        <div><label class="f">Detail</label><select id="optMethodsDetail"><option value="full" selected>Full — every test, with the descriptive statistics</option><option value="detailed">Detailed — also variances, Fisher's rule, missing data, exact P values</option><option value="concise">Concise — short (journal word limits)</option></select></div>
+        <div><label class="f">Layout</label><select id="optMethodsLayout"><option value="para" selected>One paragraph</option><option value="split">Three paragraphs (software and normality · tests · significance)</option><option value="bullets">A list, one sentence per line</option></select></div>
+        <div><label class="f">Heading</label><select id="optMethodsHeading"><option value="" selected>Statistical analysis</option><option value="Statistical methods">Statistical methods</option><option value="Data analysis">Data analysis</option><option value="Statistical analysis and data presentation">Statistical analysis and data presentation</option></select></div>
+        <div><label class="f">Significance written as</label><select id="optMSigSign"><option value="le" selected>P value ≤ 0.05</option><option value="lt">P value &lt; 0.05</option></select></div>
+        <div><label class="f">Flowchart text</label><select id="optFlowDetail"><option value="full" selected>Full — every step with its numbers</option><option value="concise">Concise — one or two sentences</option></select></div>
+      </div>
+      <div class="row" style="gap:14px;flex-wrap:wrap;margin-top:6px">
+        <label class="check"><input type="checkbox" id="optMSoftware" checked><span>Software sentence (step 1)</span></label>
+        <label class="check"><input type="checkbox" id="optMNormality" checked><span>Normality test sentence</span></label>
+        <label class="check"><input type="checkbox" id="optMEffect" checked><span>Effect estimates sentence</span></label>
+        <label class="check"><input type="checkbox" id="optMSig" checked><span>Significance level sentence</span></label>
+      </div>
+      <p class="legend-note">The voice of the methods (passive / “we”) is under Comments above; the text can still be edited in step 12.</p>
+    </div>
+    <div class="card">
       <div class="row"><h2 style="margin:0">Comment preview</h2><span class="spacer"></span><span class="legend-note">The comment written for a table of your own data, redrawn as you change the options above.</span></div>
       <div id="comPrevPick" class="row" style="gap:6px;flex-wrap:wrap;margin:6px 0"></div><div class="paper-prev" id="comPreview"></div>
     </div>
@@ -28365,7 +28382,7 @@ const Analysis = (() => {
         rows[0] = [{ t: [b.g], b: true, rs: rows.length, grp: true, left: true }, ...rows[0]]; out.push(...rows); });
       sec.rows = out;
     });
-    return { sections, used, groups: gl, gN, k, methods: (opts.paperStyle ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: numWords9(opts.paperStyle ? introConcise(cfg, gl) : introText(cfg, gl, gN)), groupIntro: groupIntroText(cfg, groups, gl, gN), flowCaption: flowCaption(cfg),
+    return { sections, used, groups: gl, gN, k, methods: (opts.methodsDetail === 'concise' ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: numWords9(opts.flowDetail === 'concise' ? introConcise(cfg, gl) : introText(cfg, gl, gN)), groupIntro: groupIntroText(cfg, groups, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
@@ -28651,6 +28668,20 @@ const Analysis = (() => {
   }
 
   /* ---------- auto-written text ---------- */
+  // the statistical analysis paragraph as chosen in step 6: more detail, the standard sentences kept or left out, P ≤ or P <, one paragraph, several or a list
+  function methodsFinish(s0, used, cfg) { const o = cfg.options || {}; let s = s0.filter(Boolean);
+    const isSoft = (x, i) => i === 0 && x === String(cfg.study.software || '').trim().replace(/\.?$/, '.'), isNorm = x => /normality|Shapiro|Kolmogorov|skewness and kurtosis/i.test(x) && !/^Quantitative/.test(x), isEff = x => /^Effect estimates were reported/.test(x), isSig = x => /considered statistically significant/.test(x);
+    if (o.methodsDetail === 'detailed') { const extra = [];
+      if (used.has('param') && !s.some(x => /Levene/.test(x))) extra.push("Homogeneity of variances was assessed with Levene's test.");
+      if (used.has('cat')) extra.push("Fisher's exact test was used when more than 20% of the cells had an expected count below 5.");
+      extra.push('Missing values were not imputed; each analysis included the patients with available data.', 'Exact P values were reported, and values below 0.001 were reported as P < 0.001.');
+      if (o.effect) extra.push('All confidence intervals were two-sided at the 95% level.');
+      const at = s.findIndex(isSig); s.splice(at < 0 ? s.length : at, 0, ...extra.filter(x => !s.includes(x))); }
+    s = s.filter((x, i) => !(o.mSoftware === false && isSoft(x, i)) && !(o.mNormality === false && isNorm(x)) && !(o.mEffect === false && isEff(x)) && !(o.mSig === false && isSig(x)));
+    if (o.mSigSign === 'lt') s = s.map(x => isSig(x) ? x.replace(/P value ≤ /, 'P value < ') : x);
+    if (o.methodsLayout === 'bullets') return s.map(x => '• ' + x).join('\n');
+    if (o.methodsLayout === 'split') { const head = [], tail = [], mid = []; s.forEach((x, i) => { if (isSoft(x, i) || isNorm(x)) head.push(x); else if (isSig(x)) tail.push(x); else mid.push(x); }); return [head, mid, tail].filter(a => a.length).map(a => a.join(' ')).join('\n'); }
+    return s.join(' '); }
   function methodsText(used, k, cfg) {
     const o = cfg.options, s = [];
     s.push(cfg.study.software.trim().replace(/\.?$/, '.'));
@@ -28798,7 +28829,7 @@ const Analysis = (() => {
     else if (o.fdr) s.push('P values between the groups were adjusted for multiple comparisons across the report with the Benjamini-Hochberg false discovery rate.');
     if (+o.confLevel && +o.confLevel !== 95) s.push(`Confidence intervals are ${o.confLevel}%.`);
     s.push(`A ${used.has('oneSided') ? 'one' : 'two'} tailed P value ≤ ${o.alpha} was considered statistically significant${used.has('oneSided') ? ` (testing whether the first group was ${o.alternative === 'greater' ? 'greater' : 'less'} than the second)` : ''}.`);
-    return s.join(' ');
+    return methodsFinish(s, used, cfg);
   }
 
   // dates as ISO text, d/m/y text or Excel serial numbers → [year, month]
@@ -31715,8 +31746,9 @@ const Report = (() => {
     // the thesis chapters: Patients and Methods with its parts
     if (model.methodsParts) { children.push(H1('Patients and Methods', brand)); model.methodsParts.forEach(([h, t]) => { children.push(para(h, { bold: true, after: 60 })); String(t).split(/\n+/).forEach(x => children.push(opts.abbrFoot ? abbrPara(x, footnotes) : para(x))); }); }
     else if (model.methods) {
-      children.push(H1(opts.paper ? 'Statistical analysis' : 'Statistical Analysis', brand));
-      children.push(opts.abbrFoot ? abbrPara(model.methods, footnotes) : para(model.methods)); arAfter(model.methods);
+      children.push(H1(opts.methodsHeading || (opts.paper ? 'Statistical analysis' : 'Statistical Analysis'), brand));
+      // one paragraph, several paragraphs, or a list (step 6)
+      String(model.methods).split(/\n+/).map(t => t.trim()).filter(Boolean).forEach(t => children.push(opts.abbrFoot ? abbrPara(t, footnotes) : para(t))); arAfter(model.methods);
     }
     if (!opts.bare && (model.consort || model.sections.length)) children.push(H1('Results', brand));
     // the opening paragraph: the patients and the groups with their descriptions (a paragraph or a bullet list)
@@ -32616,7 +32648,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'office2013', effect: true, within: false, fisher: true, branding: false,
     commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, clinWord: false, testInText: false, tableIntro: false, limits: false, discuss: false, conclusion: false, subSummary: false, formerLatter: false, numWords: false, spelling: '', hedge: '', voice: '', tense: '', esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, changeTable: false, noteSyms: 'letters', nsWord: 'insig', whyTest: false, figHowTo: false, commentOrder: 'ns', pText: '', figSummary: false, abbrFoot: true, figNoteParts: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figWidthCm: '15', figPerRow: 1, valueLabels: false,
-    chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 300, effNoBase: true,
+    chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 300, effNoBase: true, methodsDetail: 'full', methodsLayout: 'para', methodsHeading: '', mSigSign: 'le', flowDetail: 'full', mSoftware: true, mNormality: true, mEffect: true, mSig: true,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
     welch: false, dunn: true, chiPost: true, mixed: false, normality: 'sw', catEffect: 'rr',
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
@@ -32632,7 +32664,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   // option key → [element id, checkbox?]
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
-    tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], effNoBase: ['optEffNoBase', true], within: ['optWithin', true], fisher: ['optFisher', true],
+    tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], effNoBase: ['optEffNoBase', true], methodsDetail: ['optMethodsDetail'], methodsLayout: ['optMethodsLayout'], methodsHeading: ['optMethodsHeading'], mSigSign: ['optMSigSign'], flowDetail: ['optFlowDetail'], mSoftware: ['optMSoftware', true], mNormality: ['optMNormality', true], mEffect: ['optMEffect', true], mSig: ['optMSig', true], within: ['optWithin', true], fisher: ['optFisher', true],
     branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], clinWord: ['optClinWord', true], testInText: ['optTestInText', true], tableIntro: ['optTableIntro', true], limits: ['optLimits', true], discuss: ['optDiscuss', true], conclusion: ['optConclusion', true], subSummary: ['optSubSummary', true], formerLatter: ['optFormerLatter', true], numWords: ['optNumWords', true], spelling: ['optSpelling'], hedge: ['optHedge'], voice: ['optVoice'], tense: ['optTense'], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], changeTable: ['optChangeTable', true], noteSyms: ['optNoteSyms'], nsWord: ['optNsWord'], whyTest: ['optWhyTest', true], figHowTo: ['optFigHowTo', true], commentOrder: ['optCommentOrder'], pText: ['optPText'], figSummary: ['optFigSummary', true], abbrFoot: ['optAbbrFoot', true], figNoteParts: ['optFigNoteParts', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figWidthCm: ['optFigWidthCm'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], flowSameStyle: ['optFlowSame', true], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
@@ -39389,7 +39421,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const thesisShift = () => { const rp = report(); return rp.format === 'thesis' && rp.thesisPage === 'a4' ? 2 : 0; };
   function wordOptions() { const w = wordOptions0(), o = state.cfg.options, sh = thesisShift(), ts = JSON.parse(JSON.stringify(o.textStyles || {}));
     if (sh) { w.tableLook = { ...(w.tableLook || {}), size: (+(w.tableLook || {}).size || +o.tableFontSize || 10) + sh }; [['foot', 9], ['figNote', 10]].forEach(([k, d]) => { ts[k] = ts[k] || {}; if (!(+ts[k].size > 0)) ts[k].size = d + sh; }); }
-    w.textStyles = ts; return w; }
+    w.textStyles = ts; if (o.methodsHeading) w.methodsHeading = o.methodsHeading; return w; }
   function wordOptions0() {
     const o = effOptions(), rp = report(), r0 = state.result, plan0 = r0 ? exportPlan(r0) : null;
     const extras = { cover: rp.cover ? { candidate: rp.coverCandidate, supervisor: rp.coverSupervisor, dept: rp.coverDept, date: rp.coverDate } : null, toc: !!rp.toc, wordStyles: !!rp.wordStyles,
@@ -45619,6 +45651,16 @@ html.e-cb .chip.ok,html.e-cb .ux2-st.auto{color:#1565C0!important}html.e-cb .chi
   (function menu() { const more = $('.ux-menu') || $('.top-actions'); if (!more) return; const add = (label, title, fn) => { const b = document.createElement('button'); b.className = 'btn light small'; b.type = 'button'; b.textContent = label; b.title = title; b.onclick = fn; more.appendChild(b); };
     add('🎚 ROC cut-off explorer', 'Move the cut-off of a ROC test and see the 2×2 table, sensitivity, specificity, PPV, NPV and LRs; use it in the report', explorer);
     add('🧮 Diagnostic study sample size', 'Patients needed to estimate sensitivity, specificity (Buderer) or an AUC (Hanley-McNeil) with a chosen precision', sampleSize); })();
+  // the ☰ More menu without duplicates: the same task list once (the task board), and distinct names for tools that sounded alike
+  (function dedupeMenu() { const menu = $('.ux-menu'); if (!menu) return; const ren = (el, icon, text, title) => { if (!el) return; el.innerHTML = `${icon} <span class="tl">${text}</span>`; if (title) el.title = title; };
+    const t = document.getElementById('orgTasksB'); if (t) t.remove();
+    ren(document.getElementById('tlDash'), '📈', 'Analyses at a glance', 'Data, variables, analyses, figures, warnings and exports at a glance');
+    ren(document.getElementById('uxView'), '🔤', 'Display settings', 'Text size, density, contrast, font, motion, layout');
+    ren(document.getElementById('tlTpl'), '🧩', 'Settings templates', 'Reusable settings of steps 4–12, such as “RCT thesis” (not the variables)');
+    ren(document.getElementById('orgTplB'), '🧩', 'Variable templates', 'The setup of each variable, applied to the next study by matching the column names');
+    const vs = [...menu.querySelectorAll('select')].find(x => /how much of the app/i.test(x.title || '')); if (vs && vs.options[0]) vs.options[0].textContent = '👤 Show the app for…';
+    // any other item whose visible name repeats an earlier one is removed
+    const seen = new Set(); [...menu.children].forEach(c => { if (c.classList.contains('ux-msearch')) return; const k = c.textContent.replace(/\s+/g, ' ').trim().toLowerCase(); if (c.tagName === 'SELECT') return; if (seen.has(k)) c.remove(); else seen.add(k); }); })();
   window.EasyRocUI = { explorer, sampleSize };
 })();
 </script>
