@@ -3850,7 +3850,10 @@
   function advMore(a, sel, box) {
     const t = a.type, out = [], cols = state.data ? state.data.headers : [], lab = c => Analysis.columnLabel(state.cfg, c), rowsA = analysedRows(), kindOf = c => Analysis.columnKind(state.cfg, rowsA, c), catCols = cols.filter(c => kindOf(c) !== 'numeric' && c !== a.outcome), numCols = cols.filter(c => kindOf(c) === 'numeric' && c !== a.outcome);
     const head = h => `<div class="adv-sep" style="grid-column:1/-1;margin-top:6px">${h}</div>`, inp = (k, l, ph, ty = 'text') => `<div><label class="f">${l}</label><input type="${ty}" data-af="${k}" value="${esc(a[k] ?? '')}" placeholder="${esc(ph)}"></div>`;
-    if (t === 'roc') {
+    if (t === 'roc') { const ai = state.cfg.advanced.indexOf(a), tests = (a.predictors || []).filter(c => c !== a.outcome && kindOf(c) === 'numeric');
+      out.push(`<div style="grid-column:1/-1" class="row"><button class="btn primary small" type="button" data-rocexp="${ai}">🎚 Cut-off explorer</button><span class="legend-note">Move the cut-off of a test and see the 2×2 table and every measure; “Use this cut-off” puts it below.</span></div>`);
+      if (tests.length) out.push(`<details style="grid-column:1/-1" ${Object.values(a.mcuts || {}).some(v => String(v).trim()) || Object.values(a.cutLists || {}).some(v => String(v).trim()) ? 'open' : ''}><summary class="legend-note" style="cursor:pointer"><b>My cut-off values</b> — a cut-off of your own for a test (used instead of the method above), and the values for the table of several cut-offs</summary>
+        <table class="t" style="margin-top:6px"><thead><tr><th>Test</th><th>My cut-off (positive when ≥, or ≤ for lower values)</th><th>Values for the table of several cut-offs</th></tr></thead><tbody>${tests.map(c => `<tr><td><b>${esc(lab(c))}</b></td><td><input type="text" data-af="mcuts.${esc(c)}" value="${esc((a.mcuts || {})[c] || '')}" placeholder="method above" style="width:120px"></td><td><input type="text" data-af="cutLists.${esc(c)}" value="${esc((a.cutLists || {})[c] || '')}" placeholder="e.g. 2; 3.5; 5 (empty = percentiles)" style="width:240px"></td></tr>`).join('')}</tbody></table></details>`);
       out.push(head('More for the ROC curves'), `<div>${box('rocCuts', 'Table of several cut-offs (with rule-in and rule-out)')}</div>`, `<div>${box('cutCI', 'Optimal cut-off with its 95% CI (bootstrap)')}</div>`, `<div>${box('prevTab', 'PPV and NPV at other prevalences (table and curve)')}</div>`,
         `<div>${box('pAuc', 'Partial AUC at high specificity')}</div>`, ...(a.pAuc ? [inp('pAucSpec', 'Partial AUC from specificity (%)', '90', 'number')] : []), `<div>${box('grey', 'Two cut-offs: rule-out, grey zone, rule-in')}</div>`, `<div>${box('prCurve', 'Precision-recall curve')}</div>`,
         `<div>${box('ssPlot', 'Sensitivity and specificity by cut-off (figure)')}</div>`, `<div>${box('stard2x2', '2×2 table of each test at its cut-off (STARD)')}</div>`, `<div>${box('fagan', 'Fagan nomogram (pre- to post-test probability)')}</div>`,
@@ -3955,7 +3958,7 @@
   function readAdvanced() {
     document.querySelectorAll('[data-adv]').forEach(card => {
       const a = state.cfg.advanced[+card.dataset.adv]; if (!a) return;
-      card.querySelectorAll('[data-af]').forEach(el => { const k = el.dataset.af, v = el.type === 'checkbox' ? el.checked : el.value, dot = k.indexOf('.'); if (dot > 0 && ['refs', 'scales'].includes(k.slice(0, dot))) { const k1 = k.slice(0, dot); a[k1] = { ...(a[k1] || {}), [k.slice(dot + 1)]: v }; } else a[k] = v; });
+      card.querySelectorAll('[data-af]').forEach(el => { const k = el.dataset.af, v = el.type === 'checkbox' ? el.checked : el.value, dot = k.indexOf('.'); if (dot > 0 && ['refs', 'scales', 'mcuts', 'cutLists'].includes(k.slice(0, dot))) { const k1 = k.slice(0, dot); a[k1] = { ...(a[k1] || {}), [k.slice(dot + 1)]: v }; } else a[k] = v; });
       a.predictors = [...card.querySelectorAll('[data-apred]')].filter(el => el.checked).map(el => el.dataset.apred);
     });
   }
@@ -3972,6 +3975,7 @@
     renderAdvanced();
   });
   $('#advList').addEventListener('click', e => {
+    { const x = e.target.closest('[data-rocexp]'); if (x) { readUiIntoCfg(); if (window.EasyRocUI) window.EasyRocUI.explorer(+x.dataset.rocexp); return; } }
     const cf = e.target.closest('[data-cfafill]');
     if (cf) { readAdvanced(); const a = state.cfg.advanced[+cf.dataset.cfafill], cols = a.predictors || [], rows = analysedRows().filter(r => cols.every(c => isFinite(Analysis.toNum(r[c]))));
       if (cols.length < 4 || rows.length < 10) { toast('Tick at least 4 numeric items first'); return; }
@@ -6810,7 +6814,9 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const TITLE0 = document.title;
   function projTitle() { const pn = state.cfg && state.cfg.study && String(state.cfg.study.project || '').trim(); document.title = pn ? `${pn} — Prof MSE Easy Stat` : TITLE0; }
   { const pi = document.getElementById('projName'); if (pi) pi.addEventListener('input', () => { if (!state.cfg) return; state.cfg.study.project = pi.value; projTitle(); }); }
-  { const ty = document.getElementById('studyType'); if (ty) ty.addEventListener('change', () => { if (!state.cfg) return; state.cfg.study.type = ty.value; const c = state.cfg.consort; if (c && ty.value) { const t = flowTypeOf(state.cfg); if (c.type !== t && !(t === 'consort' && /cluster|crossover/.test(c.type))) toast(`For this type of study the flowchart is usually ${t.toUpperCase()} — change it in step 9 if needed`); } }); }
+  { const ty = document.getElementById('studyType'); if (ty) ty.addEventListener('change', () => { if (!state.cfg) return; state.cfg.study.type = ty.value; const c = state.cfg.consort; if (c && ty.value) { const t = flowTypeOf(state.cfg); if (c.type !== t && !(t === 'consort' && /cluster|crossover|factorial/.test(c.type))) {
+      // a flowchart already made: ask before changing it
+      if (confirm(`You already have a ${String(c.type).toUpperCase()} flowchart.\n\nFor ${ty.selectedOptions[0].textContent.toLowerCase()} the flowchart is usually ${t.toUpperCase()}.\n\nOK — change it to ${t.toUpperCase()}\nCancel — keep the ${String(c.type).toUpperCase()} flowchart`)) { if ($('#cForm') && isActive(9)) readConsort(); c.type = t; if (isActive(9)) renderConsortForm(); toast(`Flowchart changed to ${t.toUpperCase()}`); } else toast(`${String(c.type).toUpperCase()} flowchart kept`); } } }); }
   // file names: “Project name - Results - 2026-11-16.docx” — the report and the saved project are “Results”, other files keep what they hold, all dated
   const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   function datedName(name) { const n = String(name || ''), base = baseName(); if (!base || !n.startsWith(base) || /\d{4}-\d{2}-\d{2}/.test(n.slice(base.length))) return n;

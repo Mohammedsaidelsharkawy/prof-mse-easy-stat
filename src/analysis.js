@@ -1153,7 +1153,9 @@ const Analysis = (() => {
       const rs = rows.filter(r => toCat(r[a.outcome]) !== null && isFinite(toNum(r[col])));
       const pos = rs.map(r => toCat(r[a.outcome]) === a.positive);
       if (pos.filter(Boolean).length < 2 || pos.filter(x => !x).length < 2) return { col, label: columnLabel(cfg, col), r: null };
-      const vals = rs.map(r => toNum(r[col])); return { col, label: columnLabel(cfg, col), r: S.roc(vals, pos, cutM, { direction: dir, manual, costM: costM(pos) }), vals, pos };
+      // a cut-off typed for this test (step 8, or chosen in the cut-off explorer) is used for it; the others keep the chosen method
+      const own = parseFloat(String((a.mcuts || {})[col] ?? '').replace(',', '.')), mine = isFinite(own); if (mine) used.add('rocCut:manual');
+      const vals = rs.map(r => toNum(r[col])); return { col, label: columnLabel(cfg, col), r: S.roc(vals, pos, mine ? 'manual' : cutM, { direction: dir, manual: mine ? own : manual, costM: costM(pos) }), vals, pos, ownCut: mine };
     });
     // all test variables combined into one score: the predicted probability of a logistic model
     const complete = rows.filter(r => toCat(r[a.outcome]) !== null && tests.every(c => isFinite(toNum(r[c]))));
@@ -1227,6 +1229,7 @@ const Analysis = (() => {
       if (ranked.length > 1) sent.push(`Ranked by AUC: ${listJoin(ranked.map(x => `${nm(x)} (${fmt(x.r.auc, 3)}${x.r.p <= alpha ? '' : ', not significant'})`))}.`);
     }
     const f = [`*: Significant as P value ≤ ${alpha}`, 'AUC: Area under the curve', 'CI: Confidence interval (DeLong)', 'PPV: Positive predictive value', 'NPV: Negative predictive value', ROC_CUT[cutM][1], ...(a.aucScale === 'hosmer' ? ['AUC interpretation (Hosmer & Lemeshow): ≥0.9 outstanding, 0.8-0.9 excellent, 0.7-0.8 acceptable, 0.6-0.7 poor'] : [])];
+    if (cutM !== 'manual' && res.some(x => x.ownCut)) f.push(`${listJoin(res.filter(x => x.ownCut).map(x => plain(x.label)))}: cut-off chosen in advance`);
     if (res.some(x => x.r && x.r.cutoff.fallback)) f.push(`${listJoin(res.filter(x => x.r && x.r.cutoff.fallback).map(x => x.combined ? 'combined model' : plain(x.label)))}: no cut-off reached the target, Youden index used`);
     if (ciAll) f.push(`95% CI in brackets: exact (Clopper-Pearson) for sensitivity, specificity, PPV, NPV and accuracy${a.lr ? ', log method for likelihood ratios' : ''}`);
     else if (a.ci) f.push('Sensitivity and specificity with exact (Clopper-Pearson) 95% CI');

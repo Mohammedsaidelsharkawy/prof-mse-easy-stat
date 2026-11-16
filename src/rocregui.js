@@ -5,8 +5,8 @@
   const esc = U.esc, S = () => U.state, $ = s => document.querySelector(s), pct = v => isFinite(v) ? `${(100 * v).toFixed(1)}%` : '—';
 
   /* ---------- R10: move the cut-off and see every measure ---------- */
-  function explorer() { const st = S(); if (!st.data || !st.cfg) { U.toast('Open your data first'); return; }
-    const rocs = (st.cfg.advanced || []).filter(a => a.type === 'roc' && a.outcome && a.positive && (a.predictors || []).length); if (!rocs.length) { U.toast('Add a ROC analysis (step 8) first'); return; }
+  function explorer(only) { const st = S(); if (!st.data || !st.cfg) { U.toast('Open your data first'); return; }
+    const rocs = (st.cfg.advanced || []).filter((a, i) => a.type === 'roc' && a.outcome && a.positive && (a.predictors || []).length && (only === undefined || i === +only)); if (!rocs.length) { U.toast(only === undefined ? 'Add a ROC analysis (step 8) first' : 'Choose the outcome, its positive value and at least one test first'); return; }
     const opts = rocs.flatMap((a, ai) => a.predictors.map(c => [`${ai}|${c}`, `${Analysis.columnLabel(st.cfg, c)} → ${Analysis.columnLabel(st.cfg, a.outcome)} = ${a.positive}`]));
     const p = X.panel('rocExplorer', '🎚 ROC cut-off explorer', `<label class="f">Test</label><select id="rxT">${opts.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select><div id="rxBody" style="margin-top:8px"></div>`);
     const draw = () => { const [ai, col] = $('#rxT').value.split('|'), a = rocs[+ai], rows = Analysis.filterRows(st.cfg, st.data.rows).filter(r => Analysis.toCat(r[a.outcome]) !== null && isFinite(Analysis.toNum(r[col]))), v = rows.map(r => Analysis.toNum(r[col])), pos = rows.map(r => Analysis.toCat(r[a.outcome]) === a.positive);
@@ -17,7 +17,7 @@
         $('#rxOut').innerHTML = `<h3 style="margin:8px 0">Cut-off ${hi ? '≥' : '≤'} ${c}${you ? ' ★' : ''}</h3><table class="t"><thead><tr><th></th><th>With</th><th>Without</th></tr></thead><tbody><tr><td>Test positive</td><td>${m.tp}</td><td>${m.fp}</td></tr><tr><td>Test negative</td><td>${m.fn}</td><td>${m.tn}</td></tr></tbody></table>
           <table class="t" style="margin-top:6px"><tbody>${[['Sensitivity', pct(m.sens)], ['Specificity', pct(m.spec)], ['PPV', pct(m.ppv)], ['NPV', pct(m.npv)], ['Accuracy', pct((m.tp + m.tn) / v.length)], ['LR+', isFinite(m.lrP) ? m.lrP.toFixed(2) : '∞'], ['LR−', isFinite(m.lrN) ? m.lrN.toFixed(2) : '∞'], ['Youden index', (m.sens + m.spec - 1).toFixed(3)]].map(([k, x]) => `<tr><td>${k}</td><td><b>${x}</b></td></tr>`).join('')}</tbody></table>
           <button class="btn primary small" type="button" id="rxUse" style="margin-top:8px">Use this cut-off in the report</button>`;
-        $('#rxUse').onclick = () => { a.cutoff = 'manual'; a.manualCut = String(c); a.direction = hi ? 'higher' : 'lower'; U.toast(`The ROC analysis now uses the cut-off ${c} — run the report again (step 12)`); if (U.renderAdvanced) U.renderAdvanced(); }; };
+        $('#rxUse').onclick = () => { a.mcuts = { ...(a.mcuts || {}), [col]: String(c) }; U.toast(`${Analysis.columnLabel(st.cfg, col)}: cut-off ${hi ? '≥' : '≤'} ${c} — in “My cut-off values” of the ROC card; run the report again (step 12)`); if (U.renderAdvanced) U.renderAdvanced(); }; };
       $('#rxS').oninput = show; show(); };
     $('#rxT').onchange = draw; draw(); }
 
