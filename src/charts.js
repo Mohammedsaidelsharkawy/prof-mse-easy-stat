@@ -556,7 +556,7 @@ const Charts = (() => {
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
         // a group without data: no bar, "no data" at its place
-        if (v == null || !isFinite(v)) { ctx.fillStyle = '#777'; ctx.font = F(600, 24 * VL); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('no data', x0 + w / 2, y(Math.max(sc.min, 0)) - 6); return; }
+        if (v == null || !isFinite(v)) { /* a group without data stays empty */ return; }
         fillBar(ctx, st, color, perGroup ? ci : si, x0, y(v), w, y(Math.max(sc.min, 0)) - y(v));
         const cx = x0 + w / 2; hit(cx, y(v), `${perGroup ? spec.categories[ci] : `${s.name} · ${spec.categories[ci]}`}: ${+v.toPrecision(4)}${spec.percent ? '%' : ''}`);
         if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4), v, color);
@@ -679,7 +679,7 @@ const Charts = (() => {
       const slots = perGroup ? 1 : ns;
       const gw = cw * widthOf(st, perGroup ? 0.36 : 0.8), bw = gw / slots;
       spec.series.forEach((s, si) => s.data.forEach((arr, ci) => {
-        if (!arr.length) { ctx.fillStyle = '#777'; ctx.font = F(600, 24 * VL); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('no data', L + cw * ci + (cw - gw) / 2 + bw * (si + 0.5), y(sc.min) - 6); return; }
+        if (!arr.length) { /* a group without data stays empty */ return; }
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const b = boxStats(arr), w = bw * 0.62, cx = L + cw * ci + (cw - gw) / 2 + bw * (si + 0.5);
         ctx.setLineDash(perGroup ? [] : shapes ? DASHES[si % 6] : si === 2 ? [12, 7] : []);

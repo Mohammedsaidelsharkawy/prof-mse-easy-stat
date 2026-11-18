@@ -488,6 +488,35 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
 #figDlg .fx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
 #figDlg .fx-grid select,#figDlg .fx-grid input{width:100%}
 #fxInfo{min-height:1.4em}
+
+/* phones and small tablets: nothing wider than the screen, controls large enough to tap, text readable */
+@media (max-width:640px){
+  select,input,textarea{max-width:100%!important}
+  .colpick-box{left:auto!important;right:0!important;max-width:calc(100vw - 24px)}
+  .ux2-st,.ty,td.s,.step .sub,.step small{font-size:11px!important}
+  .grid>*,.row>*,.flt>*,.gen-row>*{min-width:0}
+  .row{flex-wrap:wrap}
+  label.check span,.legend-note,td,th,.gen-ctl,h2,h3,h4{overflow-wrap:anywhere}
+  .card table.t,table.rt,table.ux2-tbl,.mb-exp table,.xp-sumcopy{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tbl-wrap,.fig-prev,.xp-half-data,.paper-prev{max-width:100%;overflow-x:auto}
+  .gen-ctl{white-space:normal;max-width:100%;display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px}
+  .toast,.ux2-toast{max-width:calc(100vw - 24px);left:12px!important;right:12px!important;transform:none!important}
+  .ux2-panel{width:auto!important;max-width:none!important;left:8px!important;right:8px!important}
+  .card{padding:14px}
+  .legend-note,.hint,.chip,small{font-size:12.5px}
+  .btn,select,input[type=text],input[type=number],input[type=search],input[type=date],input:not([type]){min-height:38px}
+  .btn.small{min-height:34px}
+  .nav{flex-wrap:wrap;gap:8px}.nav .btn{flex:1 1 auto}
+  img,canvas,svg{max-width:100%;height:auto}
+  .fmt-card,.mb-exp{max-width:100%}
+  /* the header: the title on its own line, the buttons below it, wrapping (never over the title) */
+  .top-in{flex-wrap:wrap;row-gap:6px}
+  .top-actions{flex:1 1 100%;flex-wrap:wrap;justify-content:flex-start;margin-left:0}
+  .top-actions>.ux-more{margin-left:auto}
+}
+/* the step bar on phones: the small status words only under the current step */
+@media (max-width:700px){.step:not(.active) .ux2-st{display:none}.step.active .ux2-st{white-space:nowrap}}
+@media (pointer:coarse){input[type=checkbox],input[type=radio]{width:20px;height:20px}}
 </style>
 </head>
 <body>
@@ -949,6 +978,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="grid g2">
         <div>
           <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
+          <label class="check"><input type="checkbox" id="optZeroCats" checked><span><b>Show every category, even with 0 patients</b> — the labelled codes (1 = Strongly disagree … 5 = Strongly agree) and the missing answers of common scales, in tables and figures</span></label>
           <label class="check"><input type="checkbox" id="optEffNoBase" checked><span><b>No effect size in the baseline table</b> (CONSORT) — tables named “Baseline …” / “Demographic …”, or whose variables all have the baseline role</span></label>
           <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — paired t / Wilcoxon for two timepoints; repeated-measures ANOVA (Greenhouse-Geisser) or Friedman for more, with Bonferroni post hoc versus the first timepoint</span></label>
           <label class="check"><input type="checkbox" id="optWelch"><span><b>Welch's ANOVA + Games-Howell</b> post hoc when variances are unequal (Levene P &lt; 0.05), 3+ groups</span></label>

@@ -4,7 +4,17 @@ const Analysis = (() => {
   const POSITIVE = /^(yes|y|true|positive|present|1|done|completed|pos)$/i;
   const NEG_OF = { yes: 'No', y: 'N', true: 'False', positive: 'Negative', present: 'Absent', 1: '0', done: 'Not done', pos: 'Neg' }, POS_OF = { no: 'Yes', n: 'Y', false: 'True', negative: 'Positive', absent: 'Present', 0: '1', 'not done': 'Done', neg: 'Pos' };
   const NEGATIVE = /^(no|n|false|negative|absent|0|not done|neg)$/i;
-  function catLevels(v, present) { const declared = v.levels && v.levels.length ? v.levels : [], levels = declared.filter(l => present.includes(l)); present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
+  // well-known answer scales: when the data use some of their answers, every answer is shown (with 0 patients if none chose it)
+  const SCALES = [['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree'], ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree'],
+    ['Very dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very satisfied'], ['Very unsatisfied', 'Unsatisfied', 'Neutral', 'Satisfied', 'Very satisfied'], ['Never', 'Rarely', 'Sometimes', 'Often', 'Always'],
+    ['Poor', 'Fair', 'Good', 'Very good', 'Excellent'], ['Very poor', 'Poor', 'Fair', 'Good', 'Excellent'], ['Poor', 'Fair', 'Good', 'Excellent'], ['None', 'Mild', 'Moderate', 'Severe'], ['Absent', 'Mild', 'Moderate', 'Severe'],
+    ['Mild', 'Moderate', 'Severe'], ['Not at all', 'Several days', 'More than half the days', 'Nearly every day'], ['Very unlikely', 'Unlikely', 'Neutral', 'Likely', 'Very likely'], ['Low', 'Medium', 'High'], ['Low', 'Moderate', 'High']];
+  function scaleOf(levels) { const L = levels.map(l => String(l).trim().toLowerCase()); if (L.length < 2) return null;
+    const fits = SCALES.filter(sc => L.every(l => sc.some(x => x.toLowerCase() === l))).sort((a, b) => a.length - b.length);
+    if (!fits.length) return null; const sc = fits[0]; return sc.map(x => levels.find(l => String(l).trim().toLowerCase() === x.toLowerCase()) ?? (String(levels[0])[0] === String(levels[0])[0].toLowerCase() ? x.toLowerCase() : x)); }
+  function catLevels(v, present) { const declared = v.levels && v.levels.length ? v.levels : [], zero = cfgOpts.zeroCats !== false && v.type === 'categorical';
+    let levels = zero ? [...declared] : declared.filter(l => present.includes(l)); present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
+    if (zero && !v.noScale) { const sc = scaleOf(levels); if (sc && sc.length > levels.length) levels = [...sc, ...levels.filter(l => !sc.includes(l))]; }
     // a yes/no variable whose data hold only one answer (all No, all 0, all Yes …): the other answer is kept with 0 patients
     const pair = declared.length === 2 && declared.some(l => POSITIVE.test(String(l))) && declared.some(l => NEGATIVE.test(String(l)));
     if (pair) { const pos = declared.find(l => POSITIVE.test(String(l))), neg = declared.find(l => NEGATIVE.test(String(l))); if (levels.length <= 2 && levels.every(l => l === pos || l === neg)) return [pos, neg]; }
@@ -2699,7 +2709,8 @@ const Analysis = (() => {
     const rows = data.rows.map(r => { const o = { ...r }; cols.forEach(c => { if (c in o) o[c] = lab(c, o[c]); }); return o; });
     const variables = cfg.variables.map(v => {
       const m = v.cols.length && maps[v.cols[0].col];
-      return m && v.levels ? { ...v, levels: [...new Set(v.levels.map(l => lab(v.cols[0].col, l)))] } : v;
+      if (!m) return v; const allL = cfg.options && cfg.options.zeroCats === false ? [] : Object.keys(m).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(k => m[k]);
+      return { ...v, levels: [...new Set([...allL, ...(v.levels || []).map(l => lab(v.cols[0].col, l))])] };
     });
     const advanced = (cfg.advanced || []).map(a => {
       const b = { ...a };

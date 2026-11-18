@@ -250,6 +250,10 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**📊 Categories with 0 patients** (step 5, on by default): every category is shown in tables and figures even when nobody chose it — the labelled codes of a variable (e.g. 1 = Strongly Disagree … 5 = Strongly Agree) and the missing answers of common scales (agree / disagree, satisfied / dissatisfied, never … always, poor … excellent, none … severe, low / high), in the scale's order; the test leaves out the empty categories.
+**Figures**: a group without data is left empty (no “no data” text).
+**📱 Phones**: no screen is wider than the phone any more (tables and wide lists scroll inside their box, drop-downs fit, rows wrap); the header buttons wrap under the title; the step bar shows its status only under the current step; buttons and fields are large enough to tap; small text is at least 11 px.
+
 **📈 ROC card (step 8)**: a **🎚 Cut-off explorer** button for the card's tests (“Use this cut-off” sets that test's own cut-off); **My cut-off values** — a cut-off typed for each test (used instead of the chosen method, noted in the footnote) and the values for the table of several cut-offs (empty = percentiles).
 **Type of the study**: when a flowchart already exists, you are asked whether to change it to the matching type or keep it.
 

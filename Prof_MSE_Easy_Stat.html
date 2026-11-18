@@ -488,6 +488,35 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
 #figDlg .fx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
 #figDlg .fx-grid select,#figDlg .fx-grid input{width:100%}
 #fxInfo{min-height:1.4em}
+
+/* phones and small tablets: nothing wider than the screen, controls large enough to tap, text readable */
+@media (max-width:640px){
+  select,input,textarea{max-width:100%!important}
+  .colpick-box{left:auto!important;right:0!important;max-width:calc(100vw - 24px)}
+  .ux2-st,.ty,td.s,.step .sub,.step small{font-size:11px!important}
+  .grid>*,.row>*,.flt>*,.gen-row>*{min-width:0}
+  .row{flex-wrap:wrap}
+  label.check span,.legend-note,td,th,.gen-ctl,h2,h3,h4{overflow-wrap:anywhere}
+  .card table.t,table.rt,table.ux2-tbl,.mb-exp table,.xp-sumcopy{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tbl-wrap,.fig-prev,.xp-half-data,.paper-prev{max-width:100%;overflow-x:auto}
+  .gen-ctl{white-space:normal;max-width:100%;display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px}
+  .toast,.ux2-toast{max-width:calc(100vw - 24px);left:12px!important;right:12px!important;transform:none!important}
+  .ux2-panel{width:auto!important;max-width:none!important;left:8px!important;right:8px!important}
+  .card{padding:14px}
+  .legend-note,.hint,.chip,small{font-size:12.5px}
+  .btn,select,input[type=text],input[type=number],input[type=search],input[type=date],input:not([type]){min-height:38px}
+  .btn.small{min-height:34px}
+  .nav{flex-wrap:wrap;gap:8px}.nav .btn{flex:1 1 auto}
+  img,canvas,svg{max-width:100%;height:auto}
+  .fmt-card,.mb-exp{max-width:100%}
+  /* the header: the title on its own line, the buttons below it, wrapping (never over the title) */
+  .top-in{flex-wrap:wrap;row-gap:6px}
+  .top-actions{flex:1 1 100%;flex-wrap:wrap;justify-content:flex-start;margin-left:0}
+  .top-actions>.ux-more{margin-left:auto}
+}
+/* the step bar on phones: the small status words only under the current step */
+@media (max-width:700px){.step:not(.active) .ux2-st{display:none}.step.active .ux2-st{white-space:nowrap}}
+@media (pointer:coarse){input[type=checkbox],input[type=radio]{width:20px;height:20px}}
 </style>
 </head>
 <body>
@@ -949,6 +978,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="grid g2">
         <div>
           <label class="check"><input type="checkbox" id="optEffect" checked><span><b>Effect estimates</b> — mean / median difference and relative risk with 95% CI</span></label>
+          <label class="check"><input type="checkbox" id="optZeroCats" checked><span><b>Show every category, even with 0 patients</b> — the labelled codes (1 = Strongly disagree … 5 = Strongly agree) and the missing answers of common scales, in tables and figures</span></label>
           <label class="check"><input type="checkbox" id="optEffNoBase" checked><span><b>No effect size in the baseline table</b> (CONSORT) — tables named “Baseline …” / “Demographic …”, or whose variables all have the baseline role</span></label>
           <label class="check"><input type="checkbox" id="optWithin"><span><b>Within-group change over time</b> — paired t / Wilcoxon for two timepoints; repeated-measures ANOVA (Greenhouse-Geisser) or Friedman for more, with Bonferroni post hoc versus the first timepoint</span></label>
           <label class="check"><input type="checkbox" id="optWelch"><span><b>Welch's ANOVA + Games-Howell</b> post hoc when variances are unequal (Levene P &lt; 0.05), 3+ groups</span></label>
@@ -24311,7 +24341,17 @@ const Analysis = (() => {
   const POSITIVE = /^(yes|y|true|positive|present|1|done|completed|pos)$/i;
   const NEG_OF = { yes: 'No', y: 'N', true: 'False', positive: 'Negative', present: 'Absent', 1: '0', done: 'Not done', pos: 'Neg' }, POS_OF = { no: 'Yes', n: 'Y', false: 'True', negative: 'Positive', absent: 'Present', 0: '1', 'not done': 'Done', neg: 'Pos' };
   const NEGATIVE = /^(no|n|false|negative|absent|0|not done|neg)$/i;
-  function catLevels(v, present) { const declared = v.levels && v.levels.length ? v.levels : [], levels = declared.filter(l => present.includes(l)); present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
+  // well-known answer scales: when the data use some of their answers, every answer is shown (with 0 patients if none chose it)
+  const SCALES = [['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree'], ['Strongly disagree', 'Disagree', 'Neither agree nor disagree', 'Agree', 'Strongly agree'],
+    ['Very dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very satisfied'], ['Very unsatisfied', 'Unsatisfied', 'Neutral', 'Satisfied', 'Very satisfied'], ['Never', 'Rarely', 'Sometimes', 'Often', 'Always'],
+    ['Poor', 'Fair', 'Good', 'Very good', 'Excellent'], ['Very poor', 'Poor', 'Fair', 'Good', 'Excellent'], ['Poor', 'Fair', 'Good', 'Excellent'], ['None', 'Mild', 'Moderate', 'Severe'], ['Absent', 'Mild', 'Moderate', 'Severe'],
+    ['Mild', 'Moderate', 'Severe'], ['Not at all', 'Several days', 'More than half the days', 'Nearly every day'], ['Very unlikely', 'Unlikely', 'Neutral', 'Likely', 'Very likely'], ['Low', 'Medium', 'High'], ['Low', 'Moderate', 'High']];
+  function scaleOf(levels) { const L = levels.map(l => String(l).trim().toLowerCase()); if (L.length < 2) return null;
+    const fits = SCALES.filter(sc => L.every(l => sc.some(x => x.toLowerCase() === l))).sort((a, b) => a.length - b.length);
+    if (!fits.length) return null; const sc = fits[0]; return sc.map(x => levels.find(l => String(l).trim().toLowerCase() === x.toLowerCase()) ?? (String(levels[0])[0] === String(levels[0])[0].toLowerCase() ? x.toLowerCase() : x)); }
+  function catLevels(v, present) { const declared = v.levels && v.levels.length ? v.levels : [], zero = cfgOpts.zeroCats !== false && v.type === 'categorical';
+    let levels = zero ? [...declared] : declared.filter(l => present.includes(l)); present.forEach(l => { if (!levels.includes(l)) levels.push(l); });
+    if (zero && !v.noScale) { const sc = scaleOf(levels); if (sc && sc.length > levels.length) levels = [...sc, ...levels.filter(l => !sc.includes(l))]; }
     // a yes/no variable whose data hold only one answer (all No, all 0, all Yes …): the other answer is kept with 0 patients
     const pair = declared.length === 2 && declared.some(l => POSITIVE.test(String(l))) && declared.some(l => NEGATIVE.test(String(l)));
     if (pair) { const pos = declared.find(l => POSITIVE.test(String(l))), neg = declared.find(l => NEGATIVE.test(String(l))); if (levels.length <= 2 && levels.every(l => l === pos || l === neg)) return [pos, neg]; }
@@ -27006,7 +27046,8 @@ const Analysis = (() => {
     const rows = data.rows.map(r => { const o = { ...r }; cols.forEach(c => { if (c in o) o[c] = lab(c, o[c]); }); return o; });
     const variables = cfg.variables.map(v => {
       const m = v.cols.length && maps[v.cols[0].col];
-      return m && v.levels ? { ...v, levels: [...new Set(v.levels.map(l => lab(v.cols[0].col, l)))] } : v;
+      if (!m) return v; const allL = cfg.options && cfg.options.zeroCats === false ? [] : Object.keys(m).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map(k => m[k]);
+      return { ...v, levels: [...new Set([...allL, ...(v.levels || []).map(l => lab(v.cols[0].col, l))])] };
     });
     const advanced = (cfg.advanced || []).map(a => {
       const b = { ...a };
@@ -29851,7 +29892,7 @@ const Charts = (() => {
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const x0 = L + cw * ci + (cw - gw) / 2 + bw * si + bw * 0.06, w = bw * 0.88;
         // a group without data: no bar, "no data" at its place
-        if (v == null || !isFinite(v)) { ctx.fillStyle = '#777'; ctx.font = F(600, 24 * VL); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('no data', x0 + w / 2, y(Math.max(sc.min, 0)) - 6); return; }
+        if (v == null || !isFinite(v)) { /* a group without data stays empty */ return; }
         fillBar(ctx, st, color, perGroup ? ci : si, x0, y(v), w, y(Math.max(sc.min, 0)) - y(v));
         const cx = x0 + w / 2; hit(cx, y(v), `${perGroup ? spec.categories[ci] : `${s.name} · ${spec.categories[ci]}`}: ${+v.toPrecision(4)}${spec.percent ? '%' : ''}`);
         if (s.err && s.err[ci] != null && isFinite(s.err[ci])) errBar(cx, v - s.err[ci], v + s.err[ci], Math.min(14, w / 4), v, color);
@@ -29974,7 +30015,7 @@ const Charts = (() => {
       const slots = perGroup ? 1 : ns;
       const gw = cw * widthOf(st, perGroup ? 0.36 : 0.8), bw = gw / slots;
       spec.series.forEach((s, si) => s.data.forEach((arr, ci) => {
-        if (!arr.length) { ctx.fillStyle = '#777'; ctx.font = F(600, 24 * VL); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText('no data', L + cw * ci + (cw - gw) / 2 + bw * (si + 0.5), y(sc.min) - 6); return; }
+        if (!arr.length) { /* a group without data stays empty */ return; }
         const color = perGroup ? pal[ci % pal.length] : pal[si % pal.length];
         const b = boxStats(arr), w = bw * 0.62, cx = L + cw * ci + (cw - gw) / 2 + bw * (si + 0.5);
         ctx.setLineDash(perGroup ? [] : shapes ? DASHES[si % 6] : si === 2 ? [12, 7] : []);
@@ -32651,7 +32692,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     decimals: 2, alpha: 0.05, chartStyle: 'auto', palette: 'office2013', effect: true, within: false, fisher: true, branding: false,
     commentStyle: 'concise', notSig: false, tableStyle: 'grid', font: 'Times New Roman', unitsInText: true, clinWord: false, testInText: false, tableIntro: false, limits: false, discuss: false, conclusion: false, subSummary: false, formerLatter: false, numWords: false, spelling: '', hedge: '', voice: '', tense: '', esCol: false, refCol: false, noteCol: false, hideNs: false, boldMax: false, transpose: false, missTable: false, autoFit: false, abbrEnd: false, changeTable: false, noteSyms: 'letters', nsWord: 'insig', whyTest: false, figHowTo: false, commentOrder: 'ns', pText: '', figSummary: false, abbrFoot: true, figNoteParts: false, tableSort: '', twoFactor: '', welchUnequalN: false, permAll: false, nnt: false, evalue: false, bayesEst: false, powerCol: false, assumptions: false, catCI: '', clusterCol: '', strataCol: '', ppCol: '', ppVal: '', correlation: false, corrWhich: 'sig', corrN: 'all', corrFit: 'linear', corrNote: 'coef', corrPt: 'normal', corrGroup: false, corrZero: false, corrHeat: false, sigMarks: true, points: false,
     figures: 'all', errorBar: 'sd', figWidth: 'full', figWidthCm: '15', figPerRow: 1, valueLabels: false,
-    chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 300, effNoBase: true, methodsDetail: 'full', methodsLayout: 'para', methodsHeading: '', mSigSign: 'le', flowDetail: 'full', mSoftware: true, mNormality: true, mEffect: true, mSig: true,
+    chartText: 'normal', flowSameStyle: false, chartAspect: 'wide', barFill: 'gradient', yAxis: 'auto', legendPos: 'bottom', chartRes: 300, effNoBase: true, zeroCats: true, methodsDetail: 'full', methodsLayout: 'para', methodsHeading: '', mSigSign: 'le', flowDetail: 'full', mSoftware: true, mNormality: true, mEffect: true, mSig: true,
     gridlines: true, axisArrows: true, nLabels: false, legendSize: 'normal', legendTitle: '', legendFrame: false,
     welch: false, dunn: true, chiPost: true, mixed: false, normality: 'sw', catEffect: 'rr',
     figPlacement: 'after', captionStyle: 'colon', chartTitle: false,
@@ -32667,7 +32708,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   // option key → [element id, checkbox?]
   const OPTION_FIELDS = {
     decimals: ['optDec'], alpha: ['optAlpha'], chartStyle: ['optChart'], palette: ['optPal'], commentStyle: ['optComment'],
-    tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], effNoBase: ['optEffNoBase', true], methodsDetail: ['optMethodsDetail'], methodsLayout: ['optMethodsLayout'], methodsHeading: ['optMethodsHeading'], mSigSign: ['optMSigSign'], flowDetail: ['optFlowDetail'], mSoftware: ['optMSoftware', true], mNormality: ['optMNormality', true], mEffect: ['optMEffect', true], mSig: ['optMSig', true], within: ['optWithin', true], fisher: ['optFisher', true],
+    tableStyle: ['optTable'], font: ['optFont'], effect: ['optEffect', true], effNoBase: ['optEffNoBase', true], zeroCats: ['optZeroCats', true], methodsDetail: ['optMethodsDetail'], methodsLayout: ['optMethodsLayout'], methodsHeading: ['optMethodsHeading'], mSigSign: ['optMSigSign'], flowDetail: ['optFlowDetail'], mSoftware: ['optMSoftware', true], mNormality: ['optMNormality', true], mEffect: ['optMEffect', true], mSig: ['optMSig', true], within: ['optWithin', true], fisher: ['optFisher', true],
     branding: ['optBrand', true], notSig: ['optNotSig', true], unitsInText: ['optUnitsInText', true], clinWord: ['optClinWord', true], testInText: ['optTestInText', true], tableIntro: ['optTableIntro', true], limits: ['optLimits', true], discuss: ['optDiscuss', true], conclusion: ['optConclusion', true], subSummary: ['optSubSummary', true], formerLatter: ['optFormerLatter', true], numWords: ['optNumWords', true], spelling: ['optSpelling'], hedge: ['optHedge'], voice: ['optVoice'], tense: ['optTense'], esCol: ['optEsCol', true], refCol: ['optRefCol', true], noteCol: ['optNoteCol', true], hideNs: ['optHideNs', true], boldMax: ['optBoldMax', true], transpose: ['optTranspose', true], missTable: ['optMissTable', true], autoFit: ['optAutoFit', true], abbrEnd: ['optAbbrEnd', true], changeTable: ['optChangeTable', true], noteSyms: ['optNoteSyms'], nsWord: ['optNsWord'], whyTest: ['optWhyTest', true], figHowTo: ['optFigHowTo', true], commentOrder: ['optCommentOrder'], pText: ['optPText'], figSummary: ['optFigSummary', true], abbrFoot: ['optAbbrFoot', true], figNoteParts: ['optFigNoteParts', true], tableSort: ['optTableSort'], twoFactor: ['optTwoFactor'], welchUnequalN: ['optWelchUnequalN', true], permAll: ['optPermAll', true], nnt: ['optNnt', true], evalue: ['optEvalue', true], bayesEst: ['optBayesEst', true], powerCol: ['optPowerCol', true], assumptions: ['optAssumptions', true], catCI: ['optCatCI'], clusterCol: ['optClusterCol'], strataCol: ['optStrataCol'], ppCol: ['optPpCol'], ppVal: ['optPpVal'], correlation: ['optCorr', true], corrWhich: ['optCorrWhich'], corrN: ['optCorrN'], corrFit: ['optCorrFit'], corrNote: ['optCorrNote'], corrPt: ['optCorrPt'], corrGroup: ['optCorrGroup', true], corrZero: ['optCorrZero', true], corrHeat: ['optCorrHeat', true], sigMarks: ['optSigMarks', true], points: ['optPoints', true],
     figures: ['optFigures'], errorBar: ['optErrorBar'], figWidth: ['optFigWidth'], figWidthCm: ['optFigWidthCm'], figPerRow: ['optFigPerRow'], valueLabels: ['optValueLabels', true],
     chartText: ['optChartText'], flowSameStyle: ['optFlowSame', true], chartAspect: ['optAspect'], barFill: ['optBarFill'], yAxis: ['optYAxis'], legendPos: ['optLegend'], chartRes: ['optRes'],
