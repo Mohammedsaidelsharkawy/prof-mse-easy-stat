@@ -4065,6 +4065,27 @@ const Analysis = (() => {
         return `The most frequent ${one} was ${lowerFirst(plain(top.v.label))} (${fmt(top.p, 1)}%)${k > 1 ? (sig.length ? `; ${listJoin(sig.map(v => lowerFirst(plain(v.label))))} differed significantly between the groups` : `; no ${one} differed significantly between the groups`) : ''}.`; });
       if (add.length) sec.comment = [sec.comment, ...add].filter(Boolean).join(' ');
     });
+    // C3, C4, C1: for each table (its own settings in cfg.tableOpts, else the step 6 options): the groups with the highest and lowest mean,
+    // the values against a normal range given in step 2, and the length of the comment
+    { const TO = cfg.tableOpts || {}, optOf = (sec, key) => { const t = Object.keys(TO).find(n => sec.title && sec.title.startsWith(n + ' of the studied')); const x = t ? (TO[t] || {})[key] : undefined; return x === undefined || x === '' ? opts[key] : x; };
+      const dx = opts.decimals ?? 1, meanOf = (rs, col) => { const a = rs.map(r => toNum(r[col])).filter(isFinite); return a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN; };
+      sections.forEach(sec => { if (sec.kind !== 'single' || !sec.meta) return;
+        const nums = [...(sec.meta.res || []).filter(x => x.v && x.num).map(x => ({ v: x.v, p: x.num.p })), ...(sec.meta.rawVars || []).map(id => ({ v: cfg.variables.find(v => v.id === id), p: NaN })).filter(x => x.v)];
+        const add = [], ex = optOf(sec, 'extremeGroup');
+        if (ex && ex !== '0' && k > 1) nums.forEach(({ v, p }) => { if (ex === 'sig' && !(p <= alpha)) return; const m = byGroup.map(rs => meanOf(rs, v.cols[0].col)); if (!m.every(isFinite)) return;
+          const hi = m.indexOf(Math.max(...m)), lo = m.indexOf(Math.min(...m)), lab = lowerFirst(plain(v.label)); if (hi === lo) return;
+          add.push(k === 2 ? `The mean ${lab} was higher in ${gl[hi]} (${fmt(m[hi], dx)}) than in ${gl[lo]} (${fmt(m[lo], dx)}).` : `The highest mean ${lab} was in ${gl[hi]} (${fmt(m[hi], dx)}) and the lowest in ${gl[lo]} (${fmt(m[lo], dx)}).`); });
+        if (!['0', 0, false].includes(optOf(sec, 'normalCompare'))) nums.forEach(({ v }) => { const lo = parseFloat(v.normLo), hi = parseFloat(v.normHi); if (!isFinite(lo) && !isFinite(hi)) return;
+          const col = v.cols[0].col, all = rows.map(r => toNum(r[col])).filter(isFinite); if (!all.length) return; const lab = lowerFirst(plain(v.label)), u = v.unit ? ' ' + v.unit : '';
+          const range = isFinite(lo) && isFinite(hi) ? `${fmt(lo, dx)}–${fmt(hi, dx)}${u}` : isFinite(lo) ? `≥ ${fmt(lo, dx)}${u}` : `≤ ${fmt(hi, dx)}${u}`;
+          const pa = isFinite(hi) ? 100 * all.filter(x => x > hi).length / all.length : 0, pb = isFinite(lo) ? 100 * all.filter(x => x < lo).length / all.length : 0;
+          const where = m => isFinite(hi) && m > hi ? 'above' : isFinite(lo) && m < lo ? 'below' : 'within';
+          const ms = (k > 1 ? byGroup : [rows]).map(rs => meanOf(rs, col)), w = ms.map(where);
+          const meanTxt = k > 1 ? (w.every(x => x === w[0]) ? `the mean was ${w[0]} it in all the groups` : `the mean was ${listJoin(ms.map((m, g) => `${w[g]} it in ${gl[g]} (${fmt(m, dx)})`))}`) : `the mean (${fmt(ms[0], dx)}) was ${w[0]} it`;
+          const out = [pa ? `${fmt(pa, 1)}% of the patients were above it` : '', pb ? `${fmt(pb, 1)}% below it` : ''].filter(Boolean);
+          add.push(`Against the normal range of ${lab} (${range}), ${meanTxt}${out.length ? `; ${listJoin(out)}` : '; all the patients were within it'}.`); });
+        if (add.length) sec.comment = [sec.comment, ...add].filter(Boolean).join(' ');
+        const len = optOf(sec, 'comLen'); if (len === 'short' || len === 'medium') { const ss = sentencesOf(sec.comment); if (ss.length) sec.comment = ss.slice(0, len === 'short' ? 2 : 4).join(' ').trim(); } }); }
     // item groups (step 2, e.g. Co-morbidities: HTN, DM, COPD): in each table the items of a group come together, the group's name in the first column
     // (one cell over all its rows) and each item in the second column; an item with several rows (categories, or mean and range) gets "item: row"
     if (cfg.groupHeadings !== false) sections.forEach(sec => {
@@ -4075,6 +4096,11 @@ const Analysis = (() => {
       sec.rows.forEach(r => { if (left > 0) { blocks[blocks.length - 1].rows.push(r); left--; return; } blocks.push({ g: grpOf.get(txt(r[0])) || null, rows: [r] }); left = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); });
       const cnt = {}; blocks.forEach(b => { if (b.g) cnt[b.g] = (cnt[b.g] || 0) + 1; });
       if (!Object.values(cnt).some(n => n >= 2)) return;
+      // A2: or a heading row with the group's name across the table, its items indented under it
+      if (cfg.groupLayout === 'indent') { const W = sec.head.reduce((t, h) => t + ((typeof h === 'object' && h.span) || 1), 0), out = [], done = new Set();
+        blocks.forEach(b => { if (!b.g || cnt[b.g] < 2) { out.push(...b.rows); return; } if (done.has(b.g)) return; done.add(b.g); out.push([{ t: [b.g], b: true, span: W, left: true, grp: true }]);
+          blocks.filter(x => x.g === b.g).forEach(x => x.rows.forEach((r, ri) => { out.push(ri === 0 ? [{ ...r[0], t: ['\u2003' + txt(r[0])], ind: true, left: true }, ...r.slice(1)] : r); })); });
+        sec.rows = out; return; }
       // two label columns are needed (the group, then the item): a table with one gets a second
       const h0 = typeof sec.head[0] === 'object' ? sec.head[0] : { t: sec.head[0] }, L = h0.span || 1;
       if (L === 1) { sec.head = [{ ...h0, span: 2 }, ...sec.head.slice(1)]; blocks.forEach(b => b.rows.forEach((r, ri) => { if (ri === 0) r[0] = { ...r[0], span: (r[0].span || 1) + 1 }; })); }

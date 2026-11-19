@@ -250,6 +250,14 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🗂 Item groups as heading rows** (step 2, beside “Heading rows in the tables”): the group's name in a row across the table with its items indented under it, or (default) the name in a merged first column.
+**💬 Comment of each table** (step 6): length (full / medium / short), the highest and lowest group named (no / significant only / every number), and the comparison with normal values — for one table, the others follow the step 6 options (new there too: *Comment length*, *Name the highest and lowest group*, *Compare with normal values*).
+**Normal range of a variable** (step 6, Comment of each variable): low – high; the comment then says where the mean lies in each group and what % of the patients were above or below it.
+**🎨 Figure templates** (step 7, Format figure): 💾 Save this look under a name, then apply it to one figure or to every figure — kept in the browser and in the saved project.
+**Significance brackets for chosen pairs only** (Format figure → Data labels): e.g. `1-2, 1-3`, or `none`.
+**🖱 Right-click menu** on a table or a figure in step 12: its own tools (copy, Word, PNG, PDF, lock, explain…) in one menu; Shift + right-click gives the browser's menu.
+**📁 Auto-save to a folder** (header, Chrome / Edge): the project written to a folder on the computer every few minutes.
+
 **📊 Categories with 0 patients** (step 5, on by default): every category is shown in tables and figures even when nobody chose it — the labelled codes of a variable (e.g. 1 = Strongly Disagree … 5 = Strongly Agree) and the missing answers of common scales (agree / disagree, satisfied / dissatisfied, never … always, poor … excellent, none … severe, low / high), in the scale's order; the test leaves out the empty categories.
 **Figures**: a group without data is left empty (no “no data” text).
 **📱 Phones**: no screen is wider than the phone any more (tables and wide lists scroll inside their box, drop-downs fit, rows wrap); the header buttons wrap under the title; the step bar shows its status only under the current step; buttons and fields are large enough to tap; small text is at least 11 px.

@@ -1249,6 +1249,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div><label class="f">Comments of the tables</label><select id="optCommentMerge"><option value="table" selected>One paragraph with each table</option><option value="combined">One combined results paragraph (Word)</option></select></div>
         <div><label class="f">Effect size labels (Cohen's d)</label><select id="optEffConv"><option value="cohen" selected>Cohen — 0.2 / 0.5 / 0.8</option><option value="sawilowsky">Sawilowsky — very small … huge</option><option value="ferguson">Ferguson — 0.41 / 1.15 / 2.70</option></select></div>
         <div><label class="f">Word limit per comment</label><input type="number" min="0" step="10" id="optComMaxWords" placeholder="none"></div>
+        <div><label class="f">Comment length</label><select id="optComLen"><option value="" selected>Full</option><option value="medium">Medium (4 sentences)</option><option value="short">Short (2 sentences)</option></select></div>
+        <div><label class="f">Name the highest and lowest group</label><select id="optExtremeGroup"><option value="" selected>No</option><option value="sig">Significant results only</option><option value="all">Every number</option></select></div>
+        <div><label class="f">Compare with normal values (ranges below, in Comment of each variable)</label><select id="optNormalCompare"><option value="1" selected>Yes, where a range is given</option><option value="0">No</option></select></div>
         <div><label class="f">Word limit of the abstract results</label><input type="number" min="0" step="10" id="optAbsMaxWords" placeholder="none"></div>
       </div>
       <h3>Your own wording</h3>
@@ -1285,6 +1288,10 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="card">
       <div class="row"><h2 style="margin:0">Comment of each variable</h2><span class="spacer"></span><span class="legend-note">A different comment for some variables: another style, one sentence, none, or your own text. The others follow the options above.</span></div>
       <div class="tbl-wrap" style="max-height:420px"><table class="t" id="varComTbl"></table></div>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Comment of each table</h2><span class="spacer"></span><span class="legend-note">The length of a table's comment, the highest and lowest group, and the normal values — for one table, the others follow the options above.</span></div>
+      <div class="tbl-wrap" style="max-height:360px"><table class="t" id="tblComTbl"></table></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="5">← Back</button><button class="btn ghost small" data-reset="6" type="button" title="Every option of this step back to its default">↺ Defaults for this step</button><button class="btn primary" data-go="7">Next: Figures →</button></div>
   </section>
