@@ -48,7 +48,7 @@
       const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); setBtn(`📁 Auto-saved ${t}`); if (!quiet) U.toast(`Saved to the folder “${dir.name}” as ${nameOf()}`);
     } catch (err) { console.error(err); setBtn('📁 Auto-save stopped'); stop(); U.toast('Auto-save to the folder failed (permission?) — turn it on again'); } }
   function stop() { clearInterval(timer); timer = null; }
-  function setBtn(t) { const b = $('#r13Auto'); if (b) { b.textContent = t; b.classList.toggle('primary', !!timer); } }
+  function setBtn(t) { const b = $('#r13Auto'); if (b) { b.textContent = t; b.classList.toggle('primary', !!timer); } const m = $('#uxMore'); if (m) m.classList.toggle('r13-on', !!timer); }
   async function choose() {
     if (dir && timer) { if (confirm(`Auto-saving every ${mins} minutes to the folder “${dir.name}”.\n\nOK: stop auto-saving. Cancel: keep it on.`)) { stop(); dir = null; setBtn('📁 Auto-save to a folder'); U.toast('Auto-save to the folder stopped'); } return; }
     if (!window.showDirectoryPicker) { alert('This browser cannot write to a folder. Use Chrome or Edge on a computer — or 💾 Save project (Ctrl+S), which also keeps versions in the browser (☰ More → Versions).'); return; }
@@ -57,7 +57,7 @@
     stop(); timer = setInterval(() => writeNow(true), mins * 60000); setBtn('📁 Auto-save on'); await writeNow(false);
   }
   (function mount() { const sv = $('#btnSaveProj'); if (!sv) return; const b = document.createElement('button'); b.className = 'btn light small'; b.id = 'r13Auto'; b.type = 'button';
-    b.title = 'Save the project into a folder on this computer every few minutes (Chrome / Edge). Click again to stop.'; b.textContent = '📁 Auto-save to a folder'; b.onclick = choose; sv.after(b); })();
+    b.title = 'Save the project into a folder on this computer every few minutes (Chrome / Edge). Click again to stop.'; b.textContent = '📁 Auto-save to a folder'; b.onclick = choose; const menu = document.querySelector('.ux-menu'); if (menu) { b.className = 'btn ghost small'; menu.appendChild(b); } else sv.after(b); })();
   addEventListener('beforeunload', () => { if (dir && timer) writeNow(true); });
   window.EasyR13 = { autosaveNow: () => writeNow(false) };
 })();
