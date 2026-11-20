@@ -26951,33 +26951,68 @@ const Analysis = (() => {
   }
   // the analysis sees the labels in place of the codes; the sheet keeps its codes
   /* ---------- row filter: analyse only the rows that meet every condition (e.g. Age ≥ 18, Centre = A) ---------- */
-  const FILTER_OPS = { eq: '=', ne: '≠', gt: '>', ge: '≥', lt: '<', le: '≤', blank: 'is blank', notblank: 'is not blank', has: 'contains' };
+  const FILTER_OPS = { eq: '=', ne: '≠', gt: '>', ge: '≥', lt: '<', le: '≤', between: 'between', in: 'is one of', blank: 'is blank', notblank: 'is not blank', has: 'contains' };
+  const listOf = t => String(t ?? '').split(/[,;|]+/).map(x => x.trim()).filter(Boolean);
   function rowPasses(r, f) {
     const v = r[f.col], c = toCat(v), want = String(f.val ?? '').trim();
     if (f.op === 'blank') return c === null;
     if (f.op === 'notblank') return c !== null;
     if (c === null) return false;
     if (f.op === 'has') return c.toLowerCase().includes(want.toLowerCase());
+    if (f.op === 'in') return listOf(want).some(w => { const a = toNum(v), b = toNum(w); return isFinite(a) && isFinite(b) ? a === b : c.toLowerCase() === w.toLowerCase(); });
     const a = toNum(v), b = toNum(want), num = isFinite(a) && isFinite(b);
+    if (f.op === 'between') { const b2 = toNum(f.val2); return isFinite(a) && isFinite(b) && isFinite(b2) && a >= Math.min(b, b2) && a <= Math.max(b, b2); }
     if (f.op === 'eq') return num ? a === b : c.toLowerCase() === want.toLowerCase();
     if (f.op === 'ne') return num ? a !== b : c.toLowerCase() !== want.toLowerCase();
     if (!num) return false;
     return f.op === 'gt' ? a > b : f.op === 'ge' ? a >= b : f.op === 'lt' ? a < b : a <= b;
   }
-  const activeFilters = cfg => (cfg.rowFilter || []).filter(f => f && f.on !== false && f.col && f.op && (['blank', 'notblank'].includes(f.op) || String(f.val ?? '').trim() !== ''));
+  const activeFilters = cfg => (cfg.rowFilter || []).filter(f => f && f.on !== false && f.col && f.op && (['blank', 'notblank'].includes(f.op) || (String(f.val ?? '').trim() !== '' && (f.op !== 'between' || String(f.val2 ?? '').trim() !== ''))));
+  // the conditions joined by AND / OR (AND first, as in SPSS), with brackets: f.join is how a condition joins the one before it, f.open / f.close its brackets
+  const condTree = fs => fs.some(f => f.join === 'or' || +f.open > 0 || +f.close > 0);
+  function condEval(fs, r) {
+    if (!condTree(fs)) return fs.every(f => rowPasses(r, f));
+    const tk = []; fs.forEach((f, i) => { if (i) tk.push(f.join === 'or' ? 'or' : 'and'); for (let k = 0; k < (+f.open || 0); k++) tk.push('('); tk.push(f); for (let k = 0; k < (+f.close || 0); k++) tk.push(')'); });
+    let i = 0;
+    const atom = () => { const t = tk[i]; if (t === '(') { i++; const x = orE(); if (tk[i] === ')') i++; return x; } i++; return t && typeof t === 'object' ? rowPasses(r, t) : false; };
+    const andE = () => { let x = atom(); while (tk[i] === 'and') { i++; const y = atom(); x = x && y; } return x; };
+    const orE = () => { let x = andE(); while (tk[i] === 'or') { i++; const y = andE(); x = x || y; } return x; };
+    const out = orE(); return out;
+  }
   // an optional random sample (seeded, so the same seed gives the same patients), taken after the conditions; the sheet order is kept
-  const sampleOn = cfg => !!(cfg.sample && cfg.sample.on && +cfg.sample.n >= 2);
+  // kind 'exact' (default): exactly n patients, from the first `from` rows when given; kind 'pct': about pct% of the patients
+  const sampleOn = cfg => !!(cfg.sample && cfg.sample.on && (cfg.sample.kind === 'pct' ? +cfg.sample.pct > 0 && +cfg.sample.pct < 100 : +cfg.sample.n >= 2));
+  const rangeOn = cfg => { const c = cfg.caseRange; return !!(c && c.on && (c.dateCol ? (c.d1 || c.d2) : (+c.from > 0 || +c.to > 0))); };
+  const fvarOn = cfg => !!(cfg.filterVar && cfg.filterVar.on && cfg.filterVar.col);
+  const selectionOn = cfg => !!(activeFilters(cfg).length || sampleOn(cfg) || rangeOn(cfg) || fvarOn(cfg));
+  const dateOf = x => { if (x === null || x === undefined || x === '') return NaN; if (x instanceof Date) return x.getTime(); const n = toNum(x); if (isFinite(n) && n > 20000 && n < 80000) return Math.round((n - 25569) * 864e5); const t = Date.parse(String(x)); return isFinite(t) ? t : NaN; };
+  const flagOn = x => { const c = toCat(x); if (c === null) return false; const n = toNum(x); if (isFinite(n)) return n !== 0; return !/^(no|n|false|0|none|absent|negative|-)$/i.test(c.trim()); };
   function filterRows(cfg, rows) {
-    const fs = activeFilters(cfg); let out = fs.length ? rows.filter(r => fs.every(f => rowPasses(r, f))) : rows;
-    if (sampleOn(cfg) && out.length > +cfg.sample.n) {
+    let out = rows;
+    if (rangeOn(cfg)) { const c = cfg.caseRange;
+      if (c.dateCol) { const a = c.d1 ? dateOf(c.d1) : -Infinity, b = c.d2 ? dateOf(c.d2) + 864e5 - 1 : Infinity; out = out.filter(r => { const t = dateOf(r[c.dateCol]); return isFinite(t) && t >= a && t <= b; }); }
+      else { const a = Math.max(1, +c.from || 1), b = +c.to > 0 ? +c.to : Infinity; out = out.filter((_, i) => i + 1 >= a && i + 1 <= b); } }
+    if (fvarOn(cfg)) out = out.filter(r => flagOn(r[cfg.filterVar.col]));
+    const fa = activeFilters(cfg), fs = fa.filter(f => !f.sys), fx = fa.filter(f => f.sys); // sys: added by the app (subgroups), always joined by AND
+    if (fs.length) out = out.filter(r => condEval(fs, r)); if (fx.length) out = out.filter(r => fx.every(f => rowPasses(r, f)));
+    if (sampleOn(cfg)) {
       let s = (+cfg.sample.seed || 1) >>> 0; const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-      const ix = out.map((_, i) => i); for (let i = ix.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [ix[i], ix[j]] = [ix[j], ix[i]]; }
-      const keep = new Set(ix.slice(0, +cfg.sample.n)); out = out.filter((_, i) => keep.has(i));
+      if (cfg.sample.kind === 'pct') { const q = +cfg.sample.pct / 100; out = out.filter(() => rnd() < q); }
+      else { const pool = +cfg.sample.from > 0 ? out.slice(0, +cfg.sample.from) : out;
+        if (pool.length > +cfg.sample.n || pool !== out) { const ix = pool.map((_, i) => i); for (let i = ix.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [ix[i], ix[j]] = [ix[j], ix[i]]; }
+          const keep = new Set(ix.slice(0, +cfg.sample.n)); out = pool.filter((_, i) => keep.has(i)); } }
     }
     return out;
   }
-  const filterText = cfg => [activeFilters(cfg).map(f => `${columnLabel(cfg, f.col)} ${FILTER_OPS[f.op]}${['blank', 'notblank'].includes(f.op) ? '' : ' ' + f.val}`).join(' and '),
-    sampleOn(cfg) ? `${activeFilters(cfg).length ? 'from whom ' : ''}a random sample of ${+cfg.sample.n} patients was drawn (seed ${+cfg.sample.seed || 1})` : ''].filter(Boolean).join(', ');
+  const condWords = (cfg, f) => `${columnLabel(cfg, f.col)} ${FILTER_OPS[f.op]}${['blank', 'notblank'].includes(f.op) ? '' : f.op === 'between' ? ` ${f.val} and ${f.val2}` : f.op === 'in' ? ` ${listOf(f.val).join(', ')}` : ' ' + f.val}`;
+  const condText = cfg => { const fs = activeFilters(cfg).filter(f => !f.sys); if (!condTree(fs)) return fs.map(f => condWords(cfg, f)).join(' and ');
+    return fs.map((f, i) => `${i ? (f.join === 'or' ? ' or ' : ' and ') : ''}${'('.repeat(+f.open || 0)}${condWords(cfg, f)}${')'.repeat(+f.close || 0)}`).join(''); };
+  const filterText = cfg => { const c = cfg.caseRange, sm = cfg.sample || {}, pre = [];
+    if (rangeOn(cfg)) pre.push(c.dateCol ? `${columnLabel(cfg, c.dateCol)} ${c.d1 && c.d2 ? `from ${c.d1} to ${c.d2}` : c.d1 ? `from ${c.d1}` : `up to ${c.d2}`}` : `rows ${+c.from || 1} to ${+c.to > 0 ? +c.to : 'the last'} of the sheet`);
+    if (fvarOn(cfg)) pre.push(`${columnLabel(cfg, cfg.filterVar.col)} = yes`);
+    const cond = [...pre, condText(cfg)].filter(Boolean).join(' and ');
+    return [cond, sampleOn(cfg) ? `${cond ? 'from whom ' : ''}${sm.kind === 'pct' ? `a random sample of about ${+sm.pct}% of the patients was drawn` : `a random sample of ${+sm.n} patients${+sm.from > 0 ? ` (from the first ${+sm.from})` : ''} was drawn`} (seed ${+sm.seed || 1})` : ''].filter(Boolean).join(', '); };
+  const hasCond = cfg => !!(activeFilters(cfg).length || rangeOn(cfg) || fvarOn(cfg));
 
   // abbreviations that explain themselves in a footnote when the option is on
   const ABBR = { BMI: 'Body mass index', VAS: 'Visual analogue scale', NRS: 'Numeric rating scale', SBP: 'Systolic blood pressure', DBP: 'Diastolic blood pressure', MAP: 'Mean arterial pressure',
@@ -27040,7 +27075,7 @@ const Analysis = (() => {
   }
   function withValueLabels(data, cfg) {
     [data, cfg] = prepareVariables(data, cfg);
-    if (activeFilters(cfg).length || sampleOn(cfg)) data = { ...data, rows: filterRows(cfg, data.rows) };
+    if (selectionOn(cfg)) data = { ...data, rows: filterRows(cfg, data.rows) };
     const maps = {};
     (cfg.variables || []).forEach(v => {
       if (v.type !== 'categorical' || !v.valueLabels) return;
@@ -28459,7 +28494,7 @@ const Analysis = (() => {
         rows[0] = [{ t: [b.g], b: true, rs: rows.length, grp: true, left: true }, ...rows[0]]; out.push(...rows); });
       sec.rows = out;
     });
-    return { sections, used, groups: gl, gN, k, methods: (opts.methodsDetail === 'concise' ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: numWords9(opts.flowDetail === 'concise' ? introConcise(cfg, gl) : introText(cfg, gl, gN)), groupIntro: groupIntroText(cfg, groups, gl, gN), flowCaption: flowCaption(cfg),
+    return { sections, used, groups: gl, gN, k, methods: (opts.methodsDetail === 'concise' ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (hasCond(cfg) ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: numWords9(opts.flowDetail === 'concise' ? introConcise(cfg, gl) : introText(cfg, gl, gN)), groupIntro: groupIntroText(cfg, groups, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
@@ -29124,7 +29159,7 @@ const Analysis = (() => {
     return { ...s, head, rows: [...rows, ...tail], tpCols: true };
   }
   const HX = { encode, encodeOwn, eventName, pTxt, plain, lowerFirst, cap, listJoin, fmt, fmtP, columnLabel, columnKind, levelsOf, toNum, toCat, S, ROC_CUT, selectModel };
-  return { pastTense, numWords9, HX: () => HX, timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { pastTense, numWords9, HX: () => HX, timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, selectionOn, condText, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();
 
 /* Prof MSE Easy Stat — round 10: more for ROC curves and regression models. Each option of the ROC, linear, logistic and Cox
@@ -31723,7 +31758,10 @@ const Report = (() => {
     // track occupied columns from row spans to compute each cell's column index
     const occupied = [];
     const trs = [];
-    const headRow = new TableRow({ tableHeader: true, children: (() => { let c = 0; return headCells.map(h => { const cell = mkCell(h, c, true); c += h.span || 1; return cell; }); })() });
+    // a header row above the columns (Split File, compare groups: the name of each subgroup over its columns); a cell spanning both header rows is left out of the second
+    const top = Array.isArray(look.headTop) && look.headTop.length ? look.headTop.map(h => typeof h === 'string' ? { t: h } : h) : null, skip0 = !!(top && top[0].rs > 1);
+    if (top) trs.push(new TableRow({ tableHeader: true, children: (() => { let c = 0; return top.map(h => { const cell = mkCell(h, c, true); c += h.span || 1; return cell; }); })() }));
+    const headRow = new TableRow({ tableHeader: true, children: (() => { let c = skip0 ? (headCells[0].span || 1) : 0; return (skip0 ? headCells.slice(1) : headCells).map(h => { const cell = mkCell(h, c, true); c += h.span || 1; return cell; }); })() });
     trs.push(headRow);
     let bandNo = -1;
     rows.forEach((r, ri) => {
@@ -31896,7 +31934,7 @@ const Report = (() => {
         // thesis: each table starts on a new page (from its subheading, comment or caption, whichever comes first)
         let brk = !!opts.tableNewPage;
         const first = () => { const b = brk; brk = false; return b; };
-        const wideT = opts.orientation === 'auto' && nColsOf(s.head) > 7;
+        const wideT = (opts.orientation === 'auto' && nColsOf(s.head) > 7) || (!!s.landscape && opts.orientation !== 'landscape');
         if (wideT) { turns.push({ at: children.length, land: true }); PAGE_W = landW; brk = false; }
         // chapter-numbered subheadings: 4.1, 4.2 …
         if (opts.sectionHeads) children.push(subheading(opts.headNum ? `${(opts.numberPrefix || '').replace(/\.$/, '') || '1'}.${++headN} ${s.title}` : s.title, brand, first()));
@@ -31912,7 +31950,7 @@ const Report = (() => {
         const headAr = AR ? s.head.map(h => { const c = typeof h === 'string' ? { t: h } : { ...h }, a = AR.head(c.t); return a ? { ...c, t: [c.t, a] } : c; }) : s.head;
         (s.keepPage ? [s.rows] : chunks(s.rows)).forEach((part, pi) => {
           if (pi > 0) { const cont = `${num} (continued)`; children.push(opts.tableCaption === 'apa' ? para(cont, { bold: true, align: D().AlignmentType.LEFT, after: 120, line: 276, keepNext: true, before: 200 }) : caption(cont, { before: 200, align: D().AlignmentType.LEFT })); }
-          children.push(table(headAr, part, brand, s.tstyle || opts.tableStyle, { ...opts.tableLook, ...(s.tlook || {}), ...(s.keepPage ? { keep: true } : {}) }));
+          children.push(table(headAr, part, brand, s.tstyle || opts.tableStyle, { ...opts.tableLook, ...(s.tlook || {}), ...(s.keepPage ? { keep: true } : {}), ...(s.headTop ? { headTop: s.headTop } : {}) }));
         });
         children.push(para(s.footnote, tsOn('foot') ? { size: tsSz('foot', 18), bold: tsYN('foot', 'bold', undefined), italic: tsYN('foot', 'italic', undefined), align: tsAl('foot', undefined), line: 240, after: tsSp('foot', 'after', 160), before: tsSp('foot', 'before', 60), tsIndent: tsInd('foot') } : STYLED ? { pStyle: 'TableNote' } : { size: 18, line: 240, after: 160, before: 60 }));
         if (AR && s.footnote) children.push(arPara(AR.footnote(s.footnote), { size: 18, line: 240, after: 160 }));
@@ -33238,7 +33276,9 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const desc = info.numeric && nums.length ? `num · ${Analysis.fmt(Math.min(...nums), 2)}–${Analysis.fmt(Math.max(...nums), 2)}` : `text · ${info.distinct.length} values`;
       return `<td class="${fz(ci)}">${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
     const edited = new Map(); ((state.cfg && state.cfg.cellLog) || []).forEach(e => edited.set(e.key + '|' + e.col, e));
-    const body = shown.map(i => `<tr class="${chk[rowKey(rows[i], i)] ? 'rchk' : ''}"><td class="rn"><button class="rchk-btn" type="button" data-rchk="${i}" title="${chk[rowKey(rows[i], i)] ? `Checked by ${esc(chk[rowKey(rows[i], i)].who)} on ${esc(chk[rowKey(rows[i], i)].at)} — click to undo` : 'Mark this row as checked against the source'}">${chk[rowKey(rows[i], i)] ? '☑' : '☐'}</button>${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
+    // Select Cases: the patients left out of the analysis greyed and struck through, as in SPSS
+    const outSel = state.cfg && Analysis.selectionOn(state.cfg) ? (keep => new Set(rows.map((r, i) => keep.has(r) ? -1 : i).filter(i => i >= 0)))(new Set(Analysis.filterRows(state.cfg, rows))) : null;
+    const body = shown.map(i => `<tr class="${chk[rowKey(rows[i], i)] ? 'rchk' : ''}${outSel && outSel.has(i) ? ' sel-out' : ''}" ${outSel && outSel.has(i) ? 'title="Not selected (Select Cases): left out of the analysis"' : ''}><td class="rn"><button class="rchk-btn" type="button" data-rchk="${i}" title="${chk[rowKey(rows[i], i)] ? `Checked by ${esc(chk[rowKey(rows[i], i)].who)} on ${esc(chk[rowKey(rows[i], i)].at)} — click to undo` : 'Mark this row as checked against the source'}">${chk[rowKey(rows[i], i)] ? '☑' : '☐'}</button>${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
       headers.map((h, ci) => { const ed = edited.get(rowKey(rows[i], i) + '|' + h); return `<td class="${cc(h, ci)}${g.hlMissing && isMissing(rows[i][h]) ? ' miss' : ''}${isOut(h, rows[i][h]) ? ' gout' : ''}${ed ? ' edited' : ''}" title="${ed ? esc(`Edited by ${ed.who} on ${ed.at}: ${ed.old ?? '(blank)'} → ${ed.now ?? '(blank)'}`) : esc(rows[i][h] ?? '')}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`; }).join('')}</tr>`).join('');
     $('#preview').innerHTML = `<thead><tr><th class="rn">#</th>${head}</tr></thead><tbody>${summary}${body || `<tr><td colspan="${headers.length + 1}" class="legend-note">No rows match.</td></tr>`}</tbody>`;
     const rn = tbl.querySelector('th.rn'); if (rn) tbl.style.setProperty('--rnw', rn.getBoundingClientRect().width + 'px');
@@ -33280,16 +33320,17 @@ if (typeof module !== 'undefined') module.exports = Sav;
     renderFilters(); renderStep1Tools();
   }
   const filterNote = (cfg, n, kept) => { const sm = cfg.sample && cfg.sample.on, c = (cfg.rowFilter || []).length;
-    return !c && !sm ? 'All patients are analysed.' : `${kept} of ${n} patients analysed${c ? ` (${c > 1 ? 'all the conditions' : 'the condition'})` : ''}${sm ? `${c ? ',' : ' —'} random sample of ${cfg.sample.n}, seed ${cfg.sample.seed}` : ''}`; };
+    return !Analysis.selectionOn(cfg) ? (c || sm ? `All ${n} patients are analysed (the conditions are off).` : 'All patients are analysed.') : `${kept} of ${n} patients analysed — ${Analysis.filterText(cfg)}`; };
   function renderFilters() {
     const cfg = state.cfg; if (!cfg) return;
     cfg.rowFilter = cfg.rowFilter || [];
     const h = state.data.headers, ops = Object.entries(Analysis.FILTER_OPS);
     $('#filterList').innerHTML = cfg.rowFilter.map((f, i) => `<div class="flt" data-fi="${i}">
-      <input type="checkbox" data-ff="on" ${f.on !== false ? 'checked' : ''} title="Use this condition">
+      ${i ? `<select data-ff="join" style="width:auto" title="How this condition joins the one before it (AND is applied before OR)"><option value="and">AND</option><option value="or" ${f.join === 'or' ? 'selected' : ''}>OR</option></select>` : ''}
+      <input type="checkbox" data-ff="on" ${f.on !== false ? 'checked' : ''} title="Use this condition">${+f.open ? `<b title="Brackets: edit them in 🔎 Select Cases">${'('.repeat(+f.open)}</b>` : ''}
       <select data-ff="col">${h.map(c => `<option ${c === f.col ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
       <select data-ff="op">${ops.map(([k, t]) => `<option value="${k}" ${k === f.op ? 'selected' : ''}>${t}</option>`).join('')}</select>
-      <input type="text" data-ff="val" value="${esc(f.val ?? '')}" list="fltVals${i}" style="width:140px;${['blank', 'notblank'].includes(f.op) ? 'display:none' : ''}" placeholder="value">
+      <input type="text" data-ff="val" value="${esc(f.val ?? '')}" list="fltVals${i}" style="width:140px;${['blank', 'notblank'].includes(f.op) ? 'display:none' : ''}" placeholder="${f.op === 'in' ? 'values, separated by commas' : 'value'}">${f.op === 'between' ? `<span>and</span><input type="text" data-ff="val2" value="${esc(f.val2 ?? '')}" style="width:90px" placeholder="value">` : ''}${+f.close ? `<b>${')'.repeat(+f.close)}</b>` : ''}
       <datalist id="fltVals${i}">${columnInfo(state.data.rows, f.col).distinct.slice(0, 50).map(v => `<option value="${esc(v)}">`).join('')}</datalist>
       <button class="btn ghost small" data-fdel="${i}" type="button" title="Remove">✕</button></div>`).join('');
     const n = state.data.rows.length, kept = Analysis.filterRows(cfg, state.data.rows).length;
@@ -33302,9 +33343,9 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const el = e.target.closest('[data-ff]'); if (!el) return;
     const f = state.cfg.rowFilter[+el.closest('[data-fi]').dataset.fi], k = el.dataset.ff;
     f[k] = k === 'on' ? el.checked : el.value;
-    afterFilter(k !== 'val');
+    afterFilter(k !== 'val' && k !== 'val2');
   });
-  $('#filterList').addEventListener('input', e => { const el = e.target.closest('[data-ff="val"]'); if (!el) return; state.cfg.rowFilter[+el.closest('[data-fi]').dataset.fi].val = el.value; afterFilter(false); });
+  $('#filterList').addEventListener('input', e => { const el = e.target.closest('[data-ff="val"], [data-ff="val2"]'); if (!el) return; state.cfg.rowFilter[+el.closest('[data-fi]').dataset.fi][el.dataset.ff] = el.value; afterFilter(false); });
   function afterFilter(redraw) {
     state.cfg.consort = null; state.result = null;
     if (redraw) renderFilters();
@@ -34037,7 +34078,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   $('#fmNew').onclick = () => { fmSave(); editSheet(() => { state.data.rows.push(Object.fromEntries(state.data.headers.map(h => [h, null]))); }, 'Form: new patient'); fmRow = state.data.rows.length - 1; fmRender(); $('#fmFields input').focus(); };
   $('#fmClose').onclick = () => { fmSave(); $('#formDlg').close(); };
   // random sample
-  const readSample = () => { state.cfg.sample = { on: $('#sampleOn').checked, n: +$('#sampleN').value || 30, seed: +$('#sampleSeed').value || 1 }; state.result = null; state.cfg.consort = null; renderFilters(); renderGrid(); };
+  const readSample = () => { state.cfg.sample = { ...(state.cfg.sample || {}), kind: 'exact', on: $('#sampleOn').checked, n: +$('#sampleN').value || 30, seed: +$('#sampleSeed').value || 1 }; state.result = null; state.cfg.consort = null; renderFilters(); renderGrid(); };
   ['#sampleOn', '#sampleN', '#sampleSeed'].forEach(id => { $(id).onchange = readSample; });
 
   /* ---------- step 2, more: warnings, per-variable settings, selection, drag order, tables, categorising, setup CSV, subgroups ---------- */
@@ -34295,7 +34336,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     const cfg = state.cfg, rows = state.data.rows;
     return state.data.headers.filter(h => !cfg.idCols.includes(h) && (h === cfg.groupCol || ((n => n >= 2 && n <= 12)(columnInfo(rows, h).distinct.length) && Analysis.columnKind(cfg, rows, h) === 'categorical')));
   }
-  const readSub = () => { state.cfg.subgroup = { cols: [...document.querySelectorAll('[data-subcol]')].filter(x => x.checked).map(x => x.dataset.subcol), overall: $('#subOverall').checked }; state.cfg.consort = null; };
+  const readSub = () => { state.cfg.subgroup = { ...(state.cfg.subgroup || {}), cols: [...document.querySelectorAll('[data-subcol]')].filter(x => x.checked).map(x => x.dataset.subcol), overall: $('#subOverall').checked }; state.cfg.consort = null; };
   $('#subCols').onchange = $('#subOverall').onchange = readSub;
   $('#subAll').onclick = () => { document.querySelectorAll('[data-subcol]').forEach(x => { x.checked = true; }); readSub(); };
   $('#subNone').onclick = () => { document.querySelectorAll('[data-subcol]').forEach(x => { x.checked = false; }); readSub(); };
@@ -36783,6 +36824,9 @@ if (typeof module !== 'undefined') module.exports = Sav;
         excluded: [{ text: 'Not meeting inclusion criteria', n: 0 }, { text: 'Declined to participate', n: 0 }],
         groups: groups.map((g, i) => ({ allocated: ns[i], description: '', lost: 0, lostReason: '', excludedAnalysis: 0, excludedReason: '', analysed: ns[i] }))
       };
+      // Select Cases: the patients not selected in a box of their own ("excluded by the selection")
+      if (Analysis.selectionOn(cfg) && cfg.selFlow !== false) { const all = state.data.rows.filter(r => groups.includes(Analysis.groupOf(cfg, r))).length, out = all - total;
+        if (out > 0) { cfg.consort.assessed = all; cfg.consort.excluded = [{ text: `Not selected for this analysis (${Analysis.filterText(cfg)})`, n: out }, ...cfg.consort.excluded]; } }
     }
     const c = cfg.consort, branch = name => ({ name, n: 0, noRef: 0, present: 0, absent: 0, inconclusive: 0 });
     c.type = c.type || 'consort';
@@ -37171,6 +37215,37 @@ if (typeof module !== 'undefined') module.exports = Sav;
         cell.t = [...(cell.t || [''])]; cell.t[cell.t.length - 1] = `${cell.t[cell.t.length - 1]}${m}`; marks.push(`${m} ${txt}`); });
       if (marks.length) s.footnote = `${(s.footnote || '').replace(/\s*\.?\s*$/, s.footnote ? '.' : '')} ${marks.join(' ')}`.trim(); });
   }
+  // Split File, "Compare groups": each table once, a block of columns for each subgroup under its name (a header row above the columns);
+  // a table whose rows differ between the subgroups stays one table per subgroup
+  const colsOf = h => h.reduce((t, c) => t + ((c && typeof c === 'object' && c.span) || 1), 0);
+  function splitCells(rows, L) { const occ = [];
+    return rows.map((r, ri) => { let col = 0; const lab = [], dat = [];
+      r.forEach(c => { while (occ[ri] && occ[ri][col]) col++; (col < L ? lab : dat).push({ c, col }); const sp = c.span || 1;
+        if ((c.rs || 1) > 1) for (let k = 1; k < c.rs; k++) { occ[ri + k] = occ[ri + k] || []; for (let q = 0; q < sp; q++) occ[ri + k][col + q] = true; }
+        col += sp; });
+      return { lab, dat }; }); }
+  const sfTxt = c => (Array.isArray(c.t) ? c.t : [c.t]).join(' ');
+  function splitCompare(runs, splitName) {
+    const out = [], n = runs.length;
+    runs[0].r.sections.forEach(s0 => {
+      const parts = runs.map(R => R.r.sections.find(x => x.title === s0.title));
+      const own = () => runs.forEach((R, i) => { const s = parts[i]; if (!s) return; s.title = `${s.title} — ${R.name}`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (${R.name})`; }); out.push(s); });
+      const head0 = (s0.head || []).map(h => typeof h === 'string' ? { t: h } : h), L = head0.length ? (head0[0].span || 1) : 0, W = colsOf(head0), D = W - L;
+      if (!L || D < 1 || !s0.rows || !parts.every(p => p && p.rows && p.rows.length === s0.rows.length && colsOf(p.head) === W)) { own(); return; }
+      const split = parts.map(p => splitCells(p.rows, L)), labKey = sp => sp.map(r => r.lab.map(x => sfTxt(x.c)).join('|')).join('\n');
+      if (split.some(sp => labKey(sp) !== labKey(split[0]))) { own(); return; }
+      const rows = split[0].map((r0, ri) => {
+        const lab = r0.lab.map(x => x.col + (x.c.span || 1) > L ? { ...x.c, span: (x.c.span || 1) + (n - 1) * D } : x.c);
+        return [...lab, ...split.flatMap(sp => sp[ri].dat.map(x => x.c))]; });
+      const datHead = parts.map(p => p.head.map(h => typeof h === 'string' ? { t: h } : h).slice(1));
+      const head = [head0[0], ...datHead.flat()];
+      const s = { ...s0, title: `${s0.title.replace(/\s*\.$/, '')}, by ${lowerFirstApp(splitName)}`, rows, head, headTop: [{ ...head0[0], rs: 2 }, ...runs.map(R => ({ t: R.short, span: D }))],
+        comment: parts.map((p, i) => p.comment ? `${runs[i].name} (n = ${runs[i].n}): ${p.comment}` : '').filter(Boolean).join(' '),
+        figures: parts.flatMap((p, i) => (p.figures || []).map(f => ({ ...f, caption: `${f.caption} (${runs[i].name})` }))), splitCmp: true, landscape: L + n * D > 7 };
+      s.key = s.title; out.push(s);
+    });
+    return out;
+  }
   function htmlTable(head, rows, sec) {
     const h = head.map(c => typeof c === 'string' ? { t: c } : c);
     const o0 = state.cfg.options, tl = (sec && sec.tlook) || {}, o = sec && (sec.tstyle || sec.tlook) ? { ...o0, tableStyle: sec.tstyle || o0.tableStyle, tableFont: tl.font || o0.tableFont, tableFontSize: tl.size || o0.tableFontSize, tableHead: tl.head || o0.tableHead, tableBands: tl.bands ?? o0.tableBands, tablePad: tl.pad || o0.tablePad } : o0, bg = HEAD_BG[o.tableHead] || '', thStyle = bg ? `style="background:${bg};${o.tableHead === 'navy' ? 'color:#fff' : ''}"` : '';
@@ -37183,7 +37258,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const first = cover === 0; if (first) { if (!(r[0] && r[0].ind)) band++; cover = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); } else cover--;
       return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td data-rc="${ri}:${ci}" ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${c.grey ? 'grey' : ''} ${c.sub && ci === 0 ? 'sub' : ''} ${c.grp ? 'grp' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${(o.firstColLeft && first && ci === 0) || c.ind || c.left ? 'left' : ''}"${pcolOn && (c.t || []).length === 1 && sigRe.test(String(c.t[0])) ? ` style="color:${pcol}"` : ''}>${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
     }).join('');
-    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.tableFont && o.tableFont !== 'same' ? o.tableFont : o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.tableFont && o.tableFont !== 'same' ? o.tableFont : o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead>${sec && sec.headTop ? `<tr>${sec.headTop.map(c => `<th ${c.span > 1 ? `colspan="${c.span}"` : ''} ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr>` : ''}<tr>${(sec && sec.headTop && sec.headTop[0].rs > 1 ? h.slice(1) : h).map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
@@ -38635,8 +38710,8 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         // sensitivity analysis: every table again in the per-protocol population
         const ppc = cfg.options.ppCol, ppv = cfg.options.ppVal;
         if (ppc && ppv !== '' && state.data.headers.includes(ppc)) {
-          try { const r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true }], advanced: [] });
-            const nPP = Analysis.filterRows({ ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true }] }, state.data.rows).length;
+          try { const r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true, sys: true }], advanced: [] });
+            const nPP = Analysis.filterRows({ ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true, sys: true }] }, state.data.rows).length;
             r2.sections.forEach(s => { s.title = `${s.title} — per-protocol population`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (per-protocol)`; }); res.sections.push(s); });
             res.methods += ` As a sensitivity analysis, all comparisons were repeated in the per-protocol population (${ppc} = ${ppv}; n=${nPP}).`; } catch (e) { console.error(e); } }
         // all patients as one group first (descriptive, with the group column as a variable), then the comparison of the groups
@@ -38648,21 +38723,30 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
             const r1 = Analysis.run(state.data, c1); postRepeated(r1, c1);
             r1.sections.forEach(s => { s.title = `${s.title.replace(/\s+of the studied (groups|patients)$/, '')} — all patients`; s.key = s.title; s.allPart = true; s.figures.forEach(f => { f.caption = `${f.caption} (all patients)`; }); });
             res.sections = [...r1.sections, ...res.sections]; res.methods += ' The results of all patients were first described as one group, and then compared between the groups.'; } catch (e) { console.error(e); } }
+        // Split File (like SPSS): the analysis repeated within each subgroup — tables organised by subgroup, or the subgroups side by side in one table
         const sg = state.cfg.subgroup, sgCols = subCols(sg).filter(c => state.data.headers.includes(c));
-        if (sgCols.length) {
-          const subs = [], done = [];
-          sgCols.forEach(col => {
-            const isG = col === state.cfg.groupCol, lab = Analysis.columnLabel(state.cfg, col), lvName = l => isG ? (state.cfg.groupLabels[l] || l) : valueLabel(col, l);
-            const lv = isG ? activeGroups() : Analysis.levelsOf(state.cfg, Analysis.filterRows(state.cfg, state.data.rows), col);
-            lv.forEach(l => {
-              let r2; try { r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col, op: 'eq', val: l, on: true }], advanced: [], ...(isG ? { groupInclude: Object.fromEntries(cfg.groupOrder.map(g => [g, g === l])), timeline: null } : {}) }); } catch (e) { return; }
-              const name = `${lab}: ${lvName(l)}`;
-              r2.sections.forEach(s => { s.title = `${s.title} — ${name}`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (${name})`; }); subs.push(s); });
-            });
-            done.push(`${lowerFirstApp(lab)} (${lv.map(lvName).join(', ')})`);
-          });
+        if (sgCols.length && sg.mode !== 'off') {
+          const cmp = sg.mode === 'compare', minN = +sg.minN || 0, base = Analysis.filterRows(state.cfg, state.data.rows);
+          const info = sgCols.map(col => { const isG = col === state.cfg.groupCol, lab = Analysis.columnLabel(state.cfg, col), lvName = l => isG ? (state.cfg.groupLabels[l] || l) : valueLabel(col, l);
+            return { col, isG, lab, lvName, lv: isG ? activeGroups() : Analysis.levelsOf(state.cfg, base, col) }; });
+          const combos = sg.combine === 'all' && info.length > 1 ? info.reduce((acc, x) => acc.flatMap(a => x.lv.map(l => [...a, { x, l }])), [[]]) : info.flatMap(x => x.lv.map(l => [{ x, l }]));
+          const byVar = sg.combine === 'all' && info.length > 1 ? [combos] : info.map(x => combos.filter(c => c[0].x === x));
+          const subs = [], done = [], skipped = [];
+          byVar.forEach(sets => { const runs = [];
+            sets.forEach(set => {
+              const g = set.find(o => o.x.isG), c2 = { ...cfg, ...(sg.mode ? { variables: cfg.variables.map(v => v.cols && v.cols.length === 1 && set.some(o => o.x.col === v.cols[0].col) ? { ...v, include: false } : v) } : {}), rowFilter: [...(cfg.rowFilter || []), ...set.map(o => ({ col: o.x.col, op: 'eq', val: o.l, on: true, sys: true }))], advanced: [], ...(g ? { groupInclude: Object.fromEntries(cfg.groupOrder.map(x => [x, x === g.l])), timeline: null } : {}) };
+              const name = set.map(o => `${o.x.lab}: ${o.x.lvName(o.l)}`).join(' · '), short = set.map(o => o.x.lvName(o.l)).join(' · ');
+              const n = Analysis.filterRows(c2, state.data.rows).length; if (minN && n < minN) { skipped.push(`${name} (n = ${n})`); return; }
+              let r2; try { r2 = Analysis.run(state.data, c2); } catch (e) { return; }
+              runs.push({ name, short, n, r: r2 }); });
+            if (!runs.length) return;
+            if (cmp && runs.length > 1) subs.push(...splitCompare(runs, sets[0].map(o => o.x.lab).join(' and ')));
+            else runs.forEach(R => R.r.sections.forEach(s => { s.title = `${s.title} — ${R.name}`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (${R.name})`; }); subs.push(s); }));
+            const labs = sets[0].map(o => lowerFirstApp(o.x.lab));
+            done.push(labs.length > 1 ? `each combination of ${labs.slice(0, -1).join(', ')} and ${labs[labs.length - 1]}` : `${labs[0]} (${runs.map(R => R.short).join(', ')})`); });
           res.sections = [...(sg.overall !== false ? res.sections : []), ...subs];
-          if (done.length) res.methods += ` Subgroup analyses were performed within each category of ${done.length > 1 ? done.slice(0, -1).join(', ') + ' and ' + done[done.length - 1] : done[0]}.`;
+          if (done.length) res.methods += ` Subgroup analyses were performed within each category of ${done.length > 1 ? done.slice(0, -1).join(', ') + ' and ' + done[done.length - 1] : done[0]}${cmp ? ', with the subgroups presented side by side' : ''}.`.replace('each category of each combination', 'each combination');
+          if (skipped.length) res.methods += ` Subgroups with fewer than ${minN} patients were not analysed (${skipped.join('; ')}).`;
         }
         // a journal style's P wording also goes into the table footnotes
         if (report().style !== 'none' && cfg.options.pWord !== 'P value') res.sections.forEach(s => { s.footnote = s.footnote.replace(/\bP value\b/g, cfg.options.pWord); });
@@ -40121,6 +40205,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   window.EasyUI = { advDefaults, loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
     renderAdvanced, renderVariables, renderOptions, schedulePreview: () => schedulePreview(), chartStyle: o => chartStyle(o), chartPalette: o => chartPalette(o), renameColumn: (a, b) => renameColumn(a, b), projectObj, openAny, healthItems, abstractTable, reportBlob: () => reportBlob(), exportedFigures: () => exportedFigures(), resultsDeck: () => resultsDeck(), buildPptx: (f, t) => buildPptx(f, t), sharePack, glossary: () => GLOSSARY, exportModel: r => exportModel(r), wordOptions: () => wordOptions(), aRows: () => aRows(), aOuts: () => aOuts(), aEffect: (v, r, g) => aEffect(v, r, g), aVal: (v, r) => aVal(v, r), aLev: v => aLev(v), isBin: v => isBin(v), vLab: v => vLab(v), combos: () => (state.combos = state.combos || []), applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
+  Object.assign(window.EasyUI, { renderFilters, renderSubgroup, refreshGroups, subCands, subCols, columnInfo, valueLabel, afterFilter });
 })();
 
 /* Prof MSE Easy Stat — interface layer: tour, command palette, navigation aids, display settings, sheet helpers,
@@ -45843,6 +45928,203 @@ html.e-cb .chip.ok,html.e-cb .ux2-st.auto{color:#1565C0!important}html.e-cb .chi
     b.title = 'Save the project into a folder on this computer every few minutes (Chrome / Edge). Click again to stop.'; b.textContent = '📁 Auto-save to a folder'; b.onclick = choose; sv.after(b); })();
   addEventListener('beforeunload', () => { if (dir && timer) writeNow(true); });
   window.EasyR13 = { autosaveNow: () => writeNow(false) };
+})();
+
+/* Prof MSE Easy Stat — Select Cases and Split File, as in SPSS (Data menu).
+   Select Cases: all cases, a condition (AND / OR, brackets), a random sample, a range of rows or dates, a filter variable;
+   unselected cases filtered out (greyed in the sheet), copied to a new dataset, or deleted.
+   Split File: off, compare groups (the subgroups side by side in one table) or organise output by groups (tables for each subgroup). */
+(() => {
+  const U = window.EasyUI; if (!U || typeof Analysis === 'undefined') return;
+  const A = Analysis, S = () => U.state, $ = s => document.querySelector(s), esc = U.esc;
+  const css = document.createElement('style');
+  css.textContent = `.dgrid tr.sel-out td:not(.rn){color:#9a9a9a;text-decoration:line-through}.dgrid tr.sel-out td.rn{opacity:.55}
+.sc-badge{white-space:nowrap}.sc-badge.on{background:#FFF4D6;border-color:#E5B53A;color:#5a4300}
+.sc-dlg fieldset{border:1px solid var(--line,#ddd);border-radius:10px;padding:6px 10px 8px;margin:0 0 10px}.sc-dlg legend{font-weight:700;padding:0 4px}
+.sc-dlg .sc-opt{display:block;margin:6px 0 2px}.sc-dlg .sc-sub{margin:2px 0 6px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sc-dlg .sc-sub.off{opacity:.45;pointer-events:none}.sc-dlg input[type=number]{width:80px}.sc-dlg select{width:auto;max-width:100%}
+.sc-cond{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:4px 0;border-bottom:1px dashed var(--line,#e5e5e5)}.sc-cond input[type=text]{width:120px}
+.sc-words{background:var(--soft,#f6f2fc);border-radius:8px;padding:6px 8px;margin:6px 0;font-size:13px}.sc-count{font-weight:700}
+.sc-two{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:start}.sc-two select[multiple]{width:100%;min-height:150px}
+.sc-arrows{display:flex;flex-direction:column;gap:6px;padding-top:24px}
+@media (max-width:640px){.sc-two{grid-template-columns:1fr}.sc-arrows{flex-direction:row;padding-top:0}.sc-cond input[type=text]{width:100px}}`;
+  document.head.appendChild(css);
+  const clone = x => JSON.parse(JSON.stringify(x === undefined ? null : x));
+  const OPS = Object.entries(A.FILTER_OPS);
+  const colsAll = () => (S().data && S().data.headers) || [];
+  const lab = c => { try { return A.columnLabel(S().cfg, c); } catch (e) { return c; } };
+  const optCols = (cur, list = colsAll()) => list.map(c => `<option value="${esc(c)}" ${c === cur ? 'selected' : ''}>${esc(lab(c) === c ? c : `${lab(c)} (${c})`)}</option>`).join('');
+
+  /* ---------- the status badges in the header ---------- */
+  function badges() {
+    const cfg = S().cfg, d = S().data, sel = $('#scBadge'), spl = $('#sfBadge'); if (!sel || !spl) return;
+    if (!cfg || !d) { sel.textContent = '🔎 Filter: off'; spl.textContent = '🧩 Split: off'; sel.classList.remove('on'); spl.classList.remove('on'); return; }
+    const on = A.selectionOn(cfg), n = d.rows.length, k = on ? A.filterRows(cfg, d.rows).length : n;
+    sel.textContent = on ? `🔎 Filter: ${k} of ${n}` : '🔎 Filter: off'; sel.classList.toggle('on', on); sel.title = on ? `Select Cases: ${A.filterText(cfg)}` : 'Select Cases: all patients are analysed';
+    const sg = cfg.subgroup || {}, sc = (U.subCols ? U.subCols(sg) : sg.cols || []).filter(c => d.headers.includes(c)), son = sc.length && sg.mode !== 'off';
+    spl.textContent = son ? `🧩 Split: by ${sc.map(lab).join(sg.combine === 'all' ? ' × ' : ', ')}` : '🧩 Split: off'; spl.classList.toggle('on', !!son);
+    spl.title = son ? `Split File: ${sg.mode === 'compare' ? 'compare groups (side by side)' : 'organise output by groups'}` : 'Split File: analyse all cases, no subgroups';
+  }
+  setInterval(badges, 1500);
+
+  /* ---------- Select Cases ---------- */
+  let D = null; // the dialog's working copy; OK applies it
+  function draftFrom(cfg) {
+    const conds = clone(cfg.rowFilter || []).filter(f => !f.sys), sm = clone(cfg.sample || {}), cr = clone(cfg.caseRange || {}), fv = clone(cfg.filterVar || {});
+    const mode = conds.some(f => f.on !== false) ? 'if' : sm.on ? 'random' : cr.on ? 'range' : fv.on ? 'var' : 'all';
+    return { mode, conds: conds.length ? conds.map(f => ({ ...f, on: true })) : [{ col: colsAll().find(h => h !== cfg.groupCol && !(cfg.idCols || []).includes(h)) || colsAll()[0], op: 'eq', val: '', on: true }],
+      sample: { kind: sm.kind || 'exact', pct: sm.pct || 50, n: sm.n || 30, from: sm.from || '', seed: sm.seed || 1 },
+      range: { by: cr.dateCol ? 'date' : 'rows', from: cr.from || 1, to: cr.to || '', dateCol: cr.dateCol || '', d1: cr.d1 || '', d2: cr.d2 || '' },
+      fvar: fv.col || '', output: 'filter', flow: cfg.selFlow !== false };
+  }
+  // the selection the dialog describes, as the analysis reads it
+  function cfgOf(dr) {
+    const cfg = S().cfg, sys = (cfg.rowFilter || []).filter(f => f.sys), m = dr.mode;
+    return { ...cfg, rowFilter: [...dr.conds.map(f => ({ ...f, on: m === 'if' })), ...sys],
+      sample: { kind: dr.sample.kind, pct: +dr.sample.pct, n: +dr.sample.n, from: +dr.sample.from || '', seed: +dr.sample.seed || 1, on: m === 'random' },
+      caseRange: dr.range.by === 'date' ? { on: m === 'range', dateCol: dr.range.dateCol, d1: dr.range.d1, d2: dr.range.d2 } : { on: m === 'range', from: +dr.range.from || 1, to: +dr.range.to || '' },
+      filterVar: { on: m === 'var' && !!dr.fvar, col: dr.fvar } };
+  }
+  function condRow(f, i) {
+    const vals = U.columnInfo ? U.columnInfo(S().data.rows, f.col).distinct.slice(0, 60) : [];
+    const br = (k, ch) => `<select data-sck="${k}" title="${ch === '(' ? 'Opening' : 'Closing'} brackets">${[0, 1, 2, 3].map(n => `<option value="${n}" ${(+f[k] || 0) === n ? 'selected' : ''}>${n ? ch.repeat(n) : ch === '(' ? '·' : '·'}</option>`).join('')}</select>`;
+    return `<div class="sc-cond" data-sci="${i}">${i ? `<select data-sck="join"><option value="and">AND</option><option value="or" ${f.join === 'or' ? 'selected' : ''}>OR</option></select>` : '<span class="legend-note" style="min-width:42px">IF</span>'}
+      ${br('open', '(')}<select data-sck="col">${optCols(f.col)}</select><select data-sck="op">${OPS.map(([k, t]) => `<option value="${k}" ${k === f.op ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      ${['blank', 'notblank'].includes(f.op) ? '' : `<input type="text" data-sck="val" value="${esc(f.val ?? '')}" list="scVals${i}" placeholder="${f.op === 'in' ? 'a, b, c' : 'value'}">`}${f.op === 'between' ? `<span>and</span><input type="text" data-sck="val2" value="${esc(f.val2 ?? '')}" placeholder="value">` : ''}
+      <datalist id="scVals${i}">${vals.map(v => `<option value="${esc(v)}">`).join('')}</datalist>${br('close', ')')}
+      <button class="btn ghost small" type="button" data-scdel="${i}" title="Remove this condition">✕</button></div>`;
+  }
+  function selectDialog() {
+    if (!S().data || !S().cfg) { U.toast('Open a data file first'); return; }
+    D = D && D.__open ? D : draftFrom(S().cfg); D.__open = true; drawSelect();
+  }
+  function drawSelect() {
+    const d = D, cols = colsAll(), sub = m => `sc-sub ${d.mode === m ? '' : 'off'}`, r = (m, t) => `<label class="sc-opt"><input type="radio" name="scMode" value="${m}" ${d.mode === m ? 'checked' : ''}> ${t}</label>`;
+    const p = window.EasyUX2.panel('scPanel', '🔎 Select Cases', `<div class="sc-dlg">
+      <fieldset><legend>Select</legend>
+        ${r('all', '<b>All cases</b>')}
+        ${r('if', '<b>If condition is satisfied</b>')}<div class="${sub('if')}" style="display:block">${d.conds.map(condRow).join('')}
+          <div class="row" style="gap:6px;margin-top:6px"><button class="btn ghost small" type="button" data-scact="add">＋ Add condition</button><span class="legend-note">AND is applied before OR; use the brackets to change that.</span></div></div>
+        ${r('random', '<b>Random sample of cases</b>')}<div class="${sub('random')}">
+          <label><input type="radio" name="scSk" value="pct" ${d.sample.kind === 'pct' ? 'checked' : ''}> Approximately <input type="number" min="1" max="99" data-scs="pct" value="${esc(d.sample.pct)}"> % of all cases</label></div>
+          <div class="${sub('random')}"><label><input type="radio" name="scSk" value="exact" ${d.sample.kind !== 'pct' ? 'checked' : ''}> Exactly <input type="number" min="2" data-scs="n" value="${esc(d.sample.n)}"> cases from the first <input type="number" min="0" data-scs="from" value="${esc(d.sample.from)}" placeholder="all"> cases</label></div>
+          <div class="${sub('random')}"><label>Seed <input type="number" min="1" data-scs="seed" value="${esc(d.sample.seed)}"></label><span class="legend-note">the same seed gives the same patients</span></div>
+        ${r('range', '<b>Based on case range</b>')}<div class="${sub('range')}"><label><input type="radio" name="scRb" value="rows" ${d.range.by !== 'date' ? 'checked' : ''}> Rows from <input type="number" min="1" data-scr="from" value="${esc(d.range.from)}"> to <input type="number" min="1" data-scr="to" value="${esc(d.range.to)}" placeholder="last"></label></div>
+          <div class="${sub('range')}"><label><input type="radio" name="scRb" value="date" ${d.range.by === 'date' ? 'checked' : ''}> Date</label><select data-scr="dateCol"><option value="">— column —</option>${optCols(d.range.dateCol)}</select> from <input type="date" data-scr="d1" value="${esc(d.range.d1)}"> to <input type="date" data-scr="d2" value="${esc(d.range.d2)}"></div>
+        ${r('var', '<b>Use filter variable</b>')}<div class="${sub('var')}"><select data-scf="1"><option value="">— column —</option>${optCols(d.fvar, cols)}</select><span class="legend-note">keeps the rows where it is 1, yes or any value other than 0 / no / blank</span></div>
+      </fieldset>
+      <div class="sc-words" id="scWords"></div>
+      <fieldset><legend>Output</legend>
+        <label class="sc-opt"><input type="radio" name="scOut" value="filter" ${d.output === 'filter' ? 'checked' : ''}> <b>Filter out unselected cases</b> <span class="legend-note">— kept in the data, greyed and struck through in the sheet</span></label>
+        <label class="sc-opt"><input type="radio" name="scOut" value="copy" ${d.output === 'copy' ? 'checked' : ''}> <b>Copy selected cases to a new dataset</b> <span class="legend-note">— a snapshot (step 1 › Snapshots) and an Excel file; the data stay whole</span></label>
+        <label class="sc-opt"><input type="radio" name="scOut" value="delete" ${d.output === 'delete' ? 'checked' : ''}> <b>Delete unselected cases</b> <span class="legend-note">— removed from the data (Undo restores them)</span></label>
+        <label class="check" style="margin:6px 0 0"><input type="checkbox" data-scflow ${d.flow ? 'checked' : ''}><span>A box for the patients not selected in the flowchart</span></label>
+      </fieldset>
+      <div class="row" style="gap:6px;justify-content:flex-end"><button class="btn ghost small" type="button" data-scact="reset">↺ Reset</button><button class="btn ghost small" type="button" data-scact="cancel">Cancel</button><button class="btn primary small" type="button" data-scact="ok">OK</button></div></div>`);
+    p.querySelector('.x').onclick = () => { D = null; p.classList.remove('open'); };
+    words();
+  }
+  function words() { const w = $('#scWords'); if (!w || !D) return; const c = cfgOf(D), n = S().data.rows.length, on = A.selectionOn(c), k = on ? A.filterRows(c, S().data.rows).length : n;
+    w.innerHTML = on ? `<span class="sc-count">${k} of ${n} patients</span> selected — ${esc(A.filterText(c))}.` : D.mode === 'all' ? `<span class="sc-count">All ${n} patients</span> are analysed.` : `<span class="sc-count">${n} of ${n}</span> — the selection is not complete yet.`; }
+  const readField = t => { const d = D; if (!d) return;
+    const ci = t.closest('[data-sci]'); if (ci && t.dataset.sck) { const f = d.conds[+ci.dataset.sci], k = t.dataset.sck; f[k] = t.value; if (k === 'op' || k === 'col') return 'redraw'; return; }
+    if (t.name === 'scMode') { d.mode = t.value; return 'redraw'; }
+    if (t.name === 'scSk') { d.sample.kind = t.value; return; } if (t.dataset.scs) { d.sample[t.dataset.scs] = t.value; return; }
+    if (t.name === 'scRb') { d.range.by = t.value; return; } if (t.dataset.scr) { d.range[t.dataset.scr] = t.value; if (t.dataset.scr === 'dateCol' && t.value) d.range.by = 'date'; return 'redraw'; }
+    if (t.dataset.scf) { d.fvar = t.value; return; } if (t.name === 'scOut') { d.output = t.value; return; } if (t.dataset.scflow !== undefined) { d.flow = t.checked; } };
+  document.addEventListener('input', e => { if (!e.target.closest || !e.target.closest('#scPanel')) return; if (e.target.type === 'radio' || e.target.tagName === 'SELECT') return; readField(e.target); words(); });
+  document.addEventListener('change', e => { if (!e.target.closest || !e.target.closest('#scPanel')) return; if (readField(e.target) === 'redraw') drawSelect(); else words(); });
+  document.addEventListener('click', e => { const b = e.target.closest('#scPanel [data-scact], #scPanel [data-scdel]'); if (!b || !D) return;
+    if (b.dataset.scdel !== undefined) { D.conds.splice(+b.dataset.scdel, 1); if (!D.conds.length) D.conds.push({ col: colsAll()[0], op: 'eq', val: '', on: true }); drawSelect(); return; }
+    const k = b.dataset.scact;
+    if (k === 'add') { D.mode = 'if'; D.conds.push({ col: D.conds[D.conds.length - 1].col, op: 'eq', val: '', on: true, join: 'and' }); drawSelect(); return; }
+    if (k === 'reset') { const o = D.output; D = { ...draftFrom({ ...S().cfg, rowFilter: [], sample: {}, caseRange: {}, filterVar: {} }), output: o, __open: true }; drawSelect(); return; }
+    if (k === 'cancel') { D = null; $('#scPanel').classList.remove('open'); return; }
+    if (k === 'ok') applySelect(); });
+  function applySelect() {
+    const d = D, cfg = S().cfg, c = cfgOf(d), n = S().data.rows.length;
+    if (d.mode === 'if') { const bal = d.conds.reduce((t, f) => t + (+f.open || 0) - (+f.close || 0), 0); if (bal !== 0) { alert(`The brackets do not match: ${bal > 0 ? bal + ' “(” not closed' : -bal + ' “)” too many'}.`); return; } }
+    if (d.mode === 'var' && !d.fvar) { alert('Choose the filter variable.'); return; }
+    if (d.mode === 'range' && d.range.by === 'date' && !d.range.dateCol) { alert('Choose the date column.'); return; }
+    const keep = A.selectionOn(c) ? A.filterRows(c, S().data.rows) : S().data.rows, out = n - keep.length;
+    if (d.mode !== 'all' && !keep.length) { alert('No patient meets this selection — nothing was changed.'); return; }
+    const setSel = () => { cfg.rowFilter = c.rowFilter; cfg.sample = c.sample; cfg.caseRange = c.caseRange; cfg.filterVar = c.filterVar; cfg.selFlow = d.flow; };
+    const off = () => { (cfg.rowFilter || []).forEach(f => { if (!f.sys) f.on = false; }); if (cfg.sample) cfg.sample.on = false; if (cfg.caseRange) cfg.caseRange.on = false; if (cfg.filterVar) cfg.filterVar.on = false; };
+    const done = msg => { D = null; $('#scPanel').classList.remove('open'); cfg.consort = null; S().result = null; try { U.renderFilters(); } catch (e) { /* step 1 not drawn yet */ } try { U.renderGrid(); } catch (e) { /* no grid */ } badges(); U.toast(msg); };
+    if (d.output === 'filter' || d.mode === 'all') { setSel(); done(d.mode === 'all' ? 'All patients are analysed' : `${keep.length} of ${n} patients selected`); return; }
+    if (d.output === 'copy') {
+      const desc = A.filterText(c), snap = { name: `Selected cases: ${desc}`.slice(0, 120), time: new Date().toLocaleString(), data: { ...clone(S().data), rows: clone(keep) }, cfg: (() => { const x = clone({ ...cfg, ...c }); (x.rowFilter || []).forEach(f => { f.on = false; }); ['sample', 'caseRange', 'filterVar'].forEach(k => { if (x[k]) x[k].on = false; }); return x; })() };
+      S().snapshots = S().snapshots || []; if (S().snapshots.length >= 8) S().snapshots.shift(); S().snapshots.push(snap);
+      try { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(keep, { header: S().data.headers }), 'Selected cases'); XLSX.writeFile(wb, `${(U.baseName && U.baseName()) || 'Data'} - selected cases.xlsx`); } catch (e) { console.error(e); }
+      done(`${keep.length} patients copied: a snapshot (step 1 › Snapshots) and an Excel file — the data on screen are unchanged`); return; }
+    if (d.output === 'delete') {
+      if (!out) { done('Every patient is selected — nothing to delete'); return; }
+      if (!confirm(`Delete the ${out} patients who are not selected? Undo (Ctrl+Z) restores them.`)) return;
+      const ks = new Set(keep); U.editSheet(() => { S().data.rows = S().data.rows.filter(r => ks.has(r)); off(); try { U.refreshGroups(); } catch (e) { /* groups redrawn later */ } }, `Select Cases: deleted ${out} unselected patients (${A.filterText(c)})`);
+      try { U.renderPrep(); } catch (e) { /* not on step 1 */ } done(`${out} unselected patients deleted`); }
+  }
+
+  /* ---------- Split File ---------- */
+  let F = null;
+  function splitDialog() {
+    if (!S().data || !S().cfg) { U.toast('Open a data file first'); return; }
+    const sg = S().cfg.subgroup || {}, cols = (U.subCols ? U.subCols(sg) : sg.cols || []).filter(c => colsAll().includes(c));
+    F = F && F.__open ? F : { mode: cols.length && sg.mode !== 'off' ? (sg.mode === 'compare' ? 'compare' : 'organize') : 'off', cols: [...cols], combine: sg.combine === 'all' ? 'all' : 'each', overall: sg.overall !== false, minN: sg.minN ?? 5, __open: true };
+    drawSplit();
+  }
+  function drawSplit() {
+    const f = F, cands = U.subCands ? U.subCands() : colsAll(), avail = cands.filter(c => !f.cols.includes(c)), dis = f.mode === 'off' ? 'disabled' : '';
+    const r = (m, t, note) => `<label class="sc-opt"><input type="radio" name="sfMode" value="${m}" ${f.mode === m ? 'checked' : ''}> <b>${t}</b>${note ? ` <span class="legend-note">— ${note}</span>` : ''}</label>`;
+    const p = window.EasyUX2.panel('sfPanel', '🧩 Split File', `<div class="sc-dlg">
+      <fieldset><legend>Split</legend>${r('off', 'Analyze all cases, do not create groups')}${r('compare', 'Compare groups', 'one table, the subgroups side by side (a wide table turns to a landscape page)')}${r('organize', 'Organize output by groups', 'tables, figures and comments for each subgroup')}</fieldset>
+      <fieldset ${dis}><legend>Groups based on</legend><div class="sc-two">
+        <div><label class="f">Variables (categorical, 2–12 categories)</label><select multiple id="sfAvail" size="8">${avail.map(c => `<option value="${esc(c)}">${esc(lab(c))}${c === S().cfg.groupCol ? ' (group)' : ''}</option>`).join('')}</select></div>
+        <div class="sc-arrows"><button class="btn ghost small" type="button" data-sfact="in" title="Add">➡</button><button class="btn ghost small" type="button" data-sfact="out" title="Remove">⬅</button></div>
+        <div><label class="f">Groups based on</label><select multiple id="sfIn" size="8">${f.cols.map(c => `<option value="${esc(c)}">${esc(lab(c))}</option>`).join('')}</select>
+          <div class="row" style="gap:4px;margin-top:4px"><button class="btn ghost small" type="button" data-sfact="up" title="Move up">▲</button><button class="btn ghost small" type="button" data-sfact="down" title="Move down">▼</button></div></div></div>
+        ${f.cols.length > 1 ? `<label class="sc-opt"><input type="radio" name="sfComb" value="all" ${f.combine === 'all' ? 'checked' : ''}> Every combination of the variables (as SPSS: e.g. Male · Diabetic)</label><label class="sc-opt"><input type="radio" name="sfComb" value="each" ${f.combine !== 'all' ? 'checked' : ''}> Each variable separately</label>` : ''}
+        <label class="check" style="margin:6px 0 2px"><input type="checkbox" id="sfOverall" ${f.overall ? 'checked' : ''}><span>Also the tables of all the patients</span></label>
+        <label style="display:block;margin-top:4px">Skip subgroups with fewer than <input type="number" min="0" id="sfMin" value="${esc(f.minN)}" style="width:70px"> patients</label>
+      </fieldset>
+      <div class="sc-words" id="sfWords"></div>
+      <div class="row" style="gap:6px;justify-content:flex-end"><button class="btn ghost small" type="button" data-sfact="reset">↺ Reset</button><button class="btn ghost small" type="button" data-sfact="cancel">Cancel</button><button class="btn primary small" type="button" data-sfact="ok">OK</button></div></div>`);
+    p.querySelector('.x').onclick = () => { F = null; p.classList.remove('open'); };
+    splitWords();
+  }
+  function splitWords() { const w = $('#sfWords'); if (!w || !F) return; const f = F;
+    if (f.mode === 'off' || !f.cols.length) { w.textContent = f.mode === 'off' ? 'All patients are analysed together.' : 'Choose at least one variable.'; return; }
+    const rows = A.filterRows(S().cfg, S().data.rows), lv = c => A.levelsOf(S().cfg, rows, c), nm = (c, l) => c === S().cfg.groupCol ? (S().cfg.groupLabels[l] || l) : (U.valueLabel ? U.valueLabel(c, l) : l);
+    const sets = f.combine === 'all' && f.cols.length > 1 ? f.cols.reduce((acc, c) => acc.flatMap(a => lv(c).map(l => [...a, [c, l]])), [[]]) : f.cols.flatMap(c => lv(c).map(l => [[c, l]]));
+    const sizes = sets.map(s => [s.map(([c, l]) => nm(c, l)).join(' · '), rows.filter(r => s.every(([c, l]) => String(r[c] ?? '').trim().toLowerCase() === String(l).trim().toLowerCase() || (A.toNum(r[c]) === A.toNum(l) && isFinite(A.toNum(l))))).length]);
+    const small = sizes.filter(x => +f.minN && x[1] < +f.minN);
+    w.innerHTML = `<b>${sets.length} subgroup${sets.length > 1 ? 's' : ''}</b>: ${sizes.map(([t, n]) => `${esc(t)} (n = ${n})`).join(', ')}${small.length ? `<br><span class="legend-note">Skipped as smaller than ${+f.minN}: ${small.map(x => esc(x[0])).join(', ')}</span>` : ''}`; }
+  const sel = id => [...$(id).selectedOptions].map(o => o.value);
+  document.addEventListener('change', e => { const t = e.target; if (!t.closest || !t.closest('#sfPanel') || !F) return;
+    if (t.name === 'sfMode') { F.mode = t.value; if (F.mode !== 'off' && !F.cols.length && U.subCands) { /* nothing chosen yet */ } drawSplit(); return; }
+    if (t.name === 'sfComb') { F.combine = t.value; } if (t.id === 'sfOverall') F.overall = t.checked; if (t.id === 'sfMin') F.minN = +t.value || 0; splitWords(); });
+  document.addEventListener('dblclick', e => { const o = e.target.closest('#sfAvail option, #sfIn option'); if (!o || !F) return; const c = o.value; if (o.parentElement.id === 'sfAvail') F.cols.push(c); else F.cols = F.cols.filter(x => x !== c); if (F.mode === 'off') F.mode = 'organize'; drawSplit(); });
+  document.addEventListener('click', e => { const b = e.target.closest('#sfPanel [data-sfact]'); if (!b || !F) return; const k = b.dataset.sfact;
+    if (k === 'in') { const s = sel('#sfAvail'); if (!s.length) return; F.cols.push(...s); if (F.mode === 'off') F.mode = 'organize'; drawSplit(); return; }
+    if (k === 'out') { const s = sel('#sfIn'); F.cols = F.cols.filter(c => !s.includes(c)); drawSplit(); return; }
+    if (k === 'up' || k === 'down') { const s = sel('#sfIn')[0]; if (!s) return; const i = F.cols.indexOf(s), j = k === 'up' ? i - 1 : i + 1; if (j < 0 || j >= F.cols.length) return; [F.cols[i], F.cols[j]] = [F.cols[j], F.cols[i]]; drawSplit(); [...$('#sfIn').options].forEach(o => { o.selected = o.value === s; }); return; }
+    if (k === 'reset') { F = { mode: 'off', cols: [], combine: 'each', overall: true, minN: 5, __open: true }; drawSplit(); return; }
+    if (k === 'cancel') { F = null; $('#sfPanel').classList.remove('open'); return; }
+    if (k === 'ok') { const f = F; if (f.mode !== 'off' && !f.cols.length) { alert('Choose at least one variable to split by, or “Analyze all cases”.'); return; }
+      const cfg = S().cfg; cfg.subgroup = { cols: f.mode === 'off' ? [] : [...f.cols], overall: f.overall, mode: f.mode, combine: f.combine, minN: +f.minN || 0 };
+      cfg.consort = null; S().result = null; F = null; $('#sfPanel').classList.remove('open'); try { U.renderSubgroup(); } catch (e) { /* step 2 not drawn yet */ } badges();
+      U.toast(f.mode === 'off' ? 'Split File off: all patients together' : `Split File: ${f.mode === 'compare' ? 'compare groups' : 'organise output by groups'}`); } });
+
+  /* ---------- the buttons: header badges, the ☰ More menu, step 1 (filter) and step 2 (subgroups) ---------- */
+  const btn = (id, text, title, fn, cls = 'btn light small') => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; if (id) b.id = id; b.textContent = text; b.title = title; b.onclick = fn; return b; };
+  (function mount() {
+    const more = $('.ux-more'), top = more && more.parentElement;
+    if (top) { top.insertBefore(btn('scBadge', '🔎 Filter: off', 'Select Cases', selectDialog, 'btn light small sc-badge'), more); top.insertBefore(btn('sfBadge', '🧩 Split: off', 'Split File', splitDialog, 'btn light small sc-badge'), more); }
+    const menu = $('.ux-menu'); if (menu) { menu.appendChild(btn('', '🔎 Select Cases…', 'Choose the patients to analyse (as SPSS: Data › Select Cases)', selectDialog, 'btn ghost small')); menu.appendChild(btn('', '🧩 Split File…', 'Repeat the analysis in subgroups (as SPSS: Data › Split File)', splitDialog, 'btn ghost small')); }
+    const fa = $('#filterAdd'); if (fa) fa.after(btn('', '🔎 Select Cases…', 'AND / OR with brackets, random samples, row or date ranges, a filter variable — and what to do with the others', selectDialog, 'btn ghost small'));
+    const sa = $('#subNone'); if (sa) sa.after(btn('', '🧩 Split File…', 'Compare the subgroups side by side, or tables for each subgroup; combinations of two variables; small subgroups skipped', splitDialog, 'btn ghost small'));
+    badges();
+  })();
+  window.EasySelect = { selectDialog, splitDialog, badges };
 })();
 </script>
 </body>

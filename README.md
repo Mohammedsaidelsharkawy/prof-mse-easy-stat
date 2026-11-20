@@ -250,6 +250,10 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🔎 Select Cases** (as SPSS, Data › Select Cases; from the header badge “Filter: 39 of 60”, ☰ More, or step 1): all cases · **if condition is satisfied** (rows joined by AND / OR, with brackets; =, ≠, >, ≥, <, ≤, between, is one of, contains, blank) · **random sample** (about N% of the cases, or exactly N cases from the first M, with a seed) · **case range** (rows from–to, or a date column between two dates) · **filter variable** (rows where it is 1 / yes). Output: filter out the others (kept in the data, greyed and struck through in the sheet), copy the selected cases to a new dataset (a snapshot and an Excel file), or delete the others (Undo restores them). The methods say which patients were analysed, and the flowchart gets a “not selected” box.
+**🧩 Split File** (as SPSS, Data › Split File; header badge “Split: by Sex”, ☰ More, or step 2): analyse all cases · **compare groups** — one table, the subgroups side by side under a header row with their names (Word: merged header cells; wide tables on landscape pages) · **organise output by groups** — tables, figures and comments for each subgroup. Several variables: every combination (Male · Diabetic …) or each variable separately; subgroups smaller than N patients skipped with a note; optionally the tables of all patients too.
+Step 1's condition list also has AND / OR and “between”.
+
 **🗂 Item groups as heading rows** (step 2, beside “Heading rows in the tables”): the group's name in a row across the table with its items indented under it, or (default) the name in a merged first column.
 **💬 Comment of each table** (step 6): length (full / medium / short), the highest and lowest group named (no / significant only / every number), and the comparison with normal values — for one table, the others follow the step 6 options (new there too: *Comment length*, *Name the highest and lowest group*, *Compare with normal values*).
 **Normal range of a variable** (step 6, Comment of each variable): low – high; the comment then says where the mean lies in each group and what % of the patients were above or below it.

@@ -229,7 +229,10 @@ const Report = (() => {
     // track occupied columns from row spans to compute each cell's column index
     const occupied = [];
     const trs = [];
-    const headRow = new TableRow({ tableHeader: true, children: (() => { let c = 0; return headCells.map(h => { const cell = mkCell(h, c, true); c += h.span || 1; return cell; }); })() });
+    // a header row above the columns (Split File, compare groups: the name of each subgroup over its columns); a cell spanning both header rows is left out of the second
+    const top = Array.isArray(look.headTop) && look.headTop.length ? look.headTop.map(h => typeof h === 'string' ? { t: h } : h) : null, skip0 = !!(top && top[0].rs > 1);
+    if (top) trs.push(new TableRow({ tableHeader: true, children: (() => { let c = 0; return top.map(h => { const cell = mkCell(h, c, true); c += h.span || 1; return cell; }); })() }));
+    const headRow = new TableRow({ tableHeader: true, children: (() => { let c = skip0 ? (headCells[0].span || 1) : 0; return (skip0 ? headCells.slice(1) : headCells).map(h => { const cell = mkCell(h, c, true); c += h.span || 1; return cell; }); })() });
     trs.push(headRow);
     let bandNo = -1;
     rows.forEach((r, ri) => {
@@ -402,7 +405,7 @@ const Report = (() => {
         // thesis: each table starts on a new page (from its subheading, comment or caption, whichever comes first)
         let brk = !!opts.tableNewPage;
         const first = () => { const b = brk; brk = false; return b; };
-        const wideT = opts.orientation === 'auto' && nColsOf(s.head) > 7;
+        const wideT = (opts.orientation === 'auto' && nColsOf(s.head) > 7) || (!!s.landscape && opts.orientation !== 'landscape');
         if (wideT) { turns.push({ at: children.length, land: true }); PAGE_W = landW; brk = false; }
         // chapter-numbered subheadings: 4.1, 4.2 …
         if (opts.sectionHeads) children.push(subheading(opts.headNum ? `${(opts.numberPrefix || '').replace(/\.$/, '') || '1'}.${++headN} ${s.title}` : s.title, brand, first()));
@@ -418,7 +421,7 @@ const Report = (() => {
         const headAr = AR ? s.head.map(h => { const c = typeof h === 'string' ? { t: h } : { ...h }, a = AR.head(c.t); return a ? { ...c, t: [c.t, a] } : c; }) : s.head;
         (s.keepPage ? [s.rows] : chunks(s.rows)).forEach((part, pi) => {
           if (pi > 0) { const cont = `${num} (continued)`; children.push(opts.tableCaption === 'apa' ? para(cont, { bold: true, align: D().AlignmentType.LEFT, after: 120, line: 276, keepNext: true, before: 200 }) : caption(cont, { before: 200, align: D().AlignmentType.LEFT })); }
-          children.push(table(headAr, part, brand, s.tstyle || opts.tableStyle, { ...opts.tableLook, ...(s.tlook || {}), ...(s.keepPage ? { keep: true } : {}) }));
+          children.push(table(headAr, part, brand, s.tstyle || opts.tableStyle, { ...opts.tableLook, ...(s.tlook || {}), ...(s.keepPage ? { keep: true } : {}), ...(s.headTop ? { headTop: s.headTop } : {}) }));
         });
         children.push(para(s.footnote, tsOn('foot') ? { size: tsSz('foot', 18), bold: tsYN('foot', 'bold', undefined), italic: tsYN('foot', 'italic', undefined), align: tsAl('foot', undefined), line: 240, after: tsSp('foot', 'after', 160), before: tsSp('foot', 'before', 60), tsIndent: tsInd('foot') } : STYLED ? { pStyle: 'TableNote' } : { size: 18, line: 240, after: 160, before: 60 }));
         if (AR && s.footnote) children.push(arPara(AR.footnote(s.footnote), { size: 18, line: 240, after: 160 }));

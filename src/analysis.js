@@ -2607,33 +2607,68 @@ const Analysis = (() => {
   }
   // the analysis sees the labels in place of the codes; the sheet keeps its codes
   /* ---------- row filter: analyse only the rows that meet every condition (e.g. Age ≥ 18, Centre = A) ---------- */
-  const FILTER_OPS = { eq: '=', ne: '≠', gt: '>', ge: '≥', lt: '<', le: '≤', blank: 'is blank', notblank: 'is not blank', has: 'contains' };
+  const FILTER_OPS = { eq: '=', ne: '≠', gt: '>', ge: '≥', lt: '<', le: '≤', between: 'between', in: 'is one of', blank: 'is blank', notblank: 'is not blank', has: 'contains' };
+  const listOf = t => String(t ?? '').split(/[,;|]+/).map(x => x.trim()).filter(Boolean);
   function rowPasses(r, f) {
     const v = r[f.col], c = toCat(v), want = String(f.val ?? '').trim();
     if (f.op === 'blank') return c === null;
     if (f.op === 'notblank') return c !== null;
     if (c === null) return false;
     if (f.op === 'has') return c.toLowerCase().includes(want.toLowerCase());
+    if (f.op === 'in') return listOf(want).some(w => { const a = toNum(v), b = toNum(w); return isFinite(a) && isFinite(b) ? a === b : c.toLowerCase() === w.toLowerCase(); });
     const a = toNum(v), b = toNum(want), num = isFinite(a) && isFinite(b);
+    if (f.op === 'between') { const b2 = toNum(f.val2); return isFinite(a) && isFinite(b) && isFinite(b2) && a >= Math.min(b, b2) && a <= Math.max(b, b2); }
     if (f.op === 'eq') return num ? a === b : c.toLowerCase() === want.toLowerCase();
     if (f.op === 'ne') return num ? a !== b : c.toLowerCase() !== want.toLowerCase();
     if (!num) return false;
     return f.op === 'gt' ? a > b : f.op === 'ge' ? a >= b : f.op === 'lt' ? a < b : a <= b;
   }
-  const activeFilters = cfg => (cfg.rowFilter || []).filter(f => f && f.on !== false && f.col && f.op && (['blank', 'notblank'].includes(f.op) || String(f.val ?? '').trim() !== ''));
+  const activeFilters = cfg => (cfg.rowFilter || []).filter(f => f && f.on !== false && f.col && f.op && (['blank', 'notblank'].includes(f.op) || (String(f.val ?? '').trim() !== '' && (f.op !== 'between' || String(f.val2 ?? '').trim() !== ''))));
+  // the conditions joined by AND / OR (AND first, as in SPSS), with brackets: f.join is how a condition joins the one before it, f.open / f.close its brackets
+  const condTree = fs => fs.some(f => f.join === 'or' || +f.open > 0 || +f.close > 0);
+  function condEval(fs, r) {
+    if (!condTree(fs)) return fs.every(f => rowPasses(r, f));
+    const tk = []; fs.forEach((f, i) => { if (i) tk.push(f.join === 'or' ? 'or' : 'and'); for (let k = 0; k < (+f.open || 0); k++) tk.push('('); tk.push(f); for (let k = 0; k < (+f.close || 0); k++) tk.push(')'); });
+    let i = 0;
+    const atom = () => { const t = tk[i]; if (t === '(') { i++; const x = orE(); if (tk[i] === ')') i++; return x; } i++; return t && typeof t === 'object' ? rowPasses(r, t) : false; };
+    const andE = () => { let x = atom(); while (tk[i] === 'and') { i++; const y = atom(); x = x && y; } return x; };
+    const orE = () => { let x = andE(); while (tk[i] === 'or') { i++; const y = andE(); x = x || y; } return x; };
+    const out = orE(); return out;
+  }
   // an optional random sample (seeded, so the same seed gives the same patients), taken after the conditions; the sheet order is kept
-  const sampleOn = cfg => !!(cfg.sample && cfg.sample.on && +cfg.sample.n >= 2);
+  // kind 'exact' (default): exactly n patients, from the first `from` rows when given; kind 'pct': about pct% of the patients
+  const sampleOn = cfg => !!(cfg.sample && cfg.sample.on && (cfg.sample.kind === 'pct' ? +cfg.sample.pct > 0 && +cfg.sample.pct < 100 : +cfg.sample.n >= 2));
+  const rangeOn = cfg => { const c = cfg.caseRange; return !!(c && c.on && (c.dateCol ? (c.d1 || c.d2) : (+c.from > 0 || +c.to > 0))); };
+  const fvarOn = cfg => !!(cfg.filterVar && cfg.filterVar.on && cfg.filterVar.col);
+  const selectionOn = cfg => !!(activeFilters(cfg).length || sampleOn(cfg) || rangeOn(cfg) || fvarOn(cfg));
+  const dateOf = x => { if (x === null || x === undefined || x === '') return NaN; if (x instanceof Date) return x.getTime(); const n = toNum(x); if (isFinite(n) && n > 20000 && n < 80000) return Math.round((n - 25569) * 864e5); const t = Date.parse(String(x)); return isFinite(t) ? t : NaN; };
+  const flagOn = x => { const c = toCat(x); if (c === null) return false; const n = toNum(x); if (isFinite(n)) return n !== 0; return !/^(no|n|false|0|none|absent|negative|-)$/i.test(c.trim()); };
   function filterRows(cfg, rows) {
-    const fs = activeFilters(cfg); let out = fs.length ? rows.filter(r => fs.every(f => rowPasses(r, f))) : rows;
-    if (sampleOn(cfg) && out.length > +cfg.sample.n) {
+    let out = rows;
+    if (rangeOn(cfg)) { const c = cfg.caseRange;
+      if (c.dateCol) { const a = c.d1 ? dateOf(c.d1) : -Infinity, b = c.d2 ? dateOf(c.d2) + 864e5 - 1 : Infinity; out = out.filter(r => { const t = dateOf(r[c.dateCol]); return isFinite(t) && t >= a && t <= b; }); }
+      else { const a = Math.max(1, +c.from || 1), b = +c.to > 0 ? +c.to : Infinity; out = out.filter((_, i) => i + 1 >= a && i + 1 <= b); } }
+    if (fvarOn(cfg)) out = out.filter(r => flagOn(r[cfg.filterVar.col]));
+    const fa = activeFilters(cfg), fs = fa.filter(f => !f.sys), fx = fa.filter(f => f.sys); // sys: added by the app (subgroups), always joined by AND
+    if (fs.length) out = out.filter(r => condEval(fs, r)); if (fx.length) out = out.filter(r => fx.every(f => rowPasses(r, f)));
+    if (sampleOn(cfg)) {
       let s = (+cfg.sample.seed || 1) >>> 0; const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-      const ix = out.map((_, i) => i); for (let i = ix.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [ix[i], ix[j]] = [ix[j], ix[i]]; }
-      const keep = new Set(ix.slice(0, +cfg.sample.n)); out = out.filter((_, i) => keep.has(i));
+      if (cfg.sample.kind === 'pct') { const q = +cfg.sample.pct / 100; out = out.filter(() => rnd() < q); }
+      else { const pool = +cfg.sample.from > 0 ? out.slice(0, +cfg.sample.from) : out;
+        if (pool.length > +cfg.sample.n || pool !== out) { const ix = pool.map((_, i) => i); for (let i = ix.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [ix[i], ix[j]] = [ix[j], ix[i]]; }
+          const keep = new Set(ix.slice(0, +cfg.sample.n)); out = pool.filter((_, i) => keep.has(i)); } }
     }
     return out;
   }
-  const filterText = cfg => [activeFilters(cfg).map(f => `${columnLabel(cfg, f.col)} ${FILTER_OPS[f.op]}${['blank', 'notblank'].includes(f.op) ? '' : ' ' + f.val}`).join(' and '),
-    sampleOn(cfg) ? `${activeFilters(cfg).length ? 'from whom ' : ''}a random sample of ${+cfg.sample.n} patients was drawn (seed ${+cfg.sample.seed || 1})` : ''].filter(Boolean).join(', ');
+  const condWords = (cfg, f) => `${columnLabel(cfg, f.col)} ${FILTER_OPS[f.op]}${['blank', 'notblank'].includes(f.op) ? '' : f.op === 'between' ? ` ${f.val} and ${f.val2}` : f.op === 'in' ? ` ${listOf(f.val).join(', ')}` : ' ' + f.val}`;
+  const condText = cfg => { const fs = activeFilters(cfg).filter(f => !f.sys); if (!condTree(fs)) return fs.map(f => condWords(cfg, f)).join(' and ');
+    return fs.map((f, i) => `${i ? (f.join === 'or' ? ' or ' : ' and ') : ''}${'('.repeat(+f.open || 0)}${condWords(cfg, f)}${')'.repeat(+f.close || 0)}`).join(''); };
+  const filterText = cfg => { const c = cfg.caseRange, sm = cfg.sample || {}, pre = [];
+    if (rangeOn(cfg)) pre.push(c.dateCol ? `${columnLabel(cfg, c.dateCol)} ${c.d1 && c.d2 ? `from ${c.d1} to ${c.d2}` : c.d1 ? `from ${c.d1}` : `up to ${c.d2}`}` : `rows ${+c.from || 1} to ${+c.to > 0 ? +c.to : 'the last'} of the sheet`);
+    if (fvarOn(cfg)) pre.push(`${columnLabel(cfg, cfg.filterVar.col)} = yes`);
+    const cond = [...pre, condText(cfg)].filter(Boolean).join(' and ');
+    return [cond, sampleOn(cfg) ? `${cond ? 'from whom ' : ''}${sm.kind === 'pct' ? `a random sample of about ${+sm.pct}% of the patients was drawn` : `a random sample of ${+sm.n} patients${+sm.from > 0 ? ` (from the first ${+sm.from})` : ''} was drawn`} (seed ${+sm.seed || 1})` : ''].filter(Boolean).join(', '); };
+  const hasCond = cfg => !!(activeFilters(cfg).length || rangeOn(cfg) || fvarOn(cfg));
 
   // abbreviations that explain themselves in a footnote when the option is on
   const ABBR = { BMI: 'Body mass index', VAS: 'Visual analogue scale', NRS: 'Numeric rating scale', SBP: 'Systolic blood pressure', DBP: 'Diastolic blood pressure', MAP: 'Mean arterial pressure',
@@ -2696,7 +2731,7 @@ const Analysis = (() => {
   }
   function withValueLabels(data, cfg) {
     [data, cfg] = prepareVariables(data, cfg);
-    if (activeFilters(cfg).length || sampleOn(cfg)) data = { ...data, rows: filterRows(cfg, data.rows) };
+    if (selectionOn(cfg)) data = { ...data, rows: filterRows(cfg, data.rows) };
     const maps = {};
     (cfg.variables || []).forEach(v => {
       if (v.type !== 'categorical' || !v.valueLabels) return;
@@ -4115,7 +4150,7 @@ const Analysis = (() => {
         rows[0] = [{ t: [b.g], b: true, rs: rows.length, grp: true, left: true }, ...rows[0]]; out.push(...rows); });
       sec.rows = out;
     });
-    return { sections, used, groups: gl, gN, k, methods: (opts.methodsDetail === 'concise' ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (activeFilters(cfg).length ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: numWords9(opts.flowDetail === 'concise' ? introConcise(cfg, gl) : introText(cfg, gl, gN)), groupIntro: groupIntroText(cfg, groups, gl, gN), flowCaption: flowCaption(cfg),
+    return { sections, used, groups: gl, gN, k, methods: (opts.methodsDetail === 'concise' ? methodsConcise(used, k, cfg) : methodsText(used, k, cfg)) + (filterText(cfg) ? (hasCond(cfg) ? ` The analysis included only patients with ${filterText(cfg)}.` : ` For this analysis, ${filterText(cfg)}.`) : ''), intro: numWords9(opts.flowDetail === 'concise' ? introConcise(cfg, gl) : introText(cfg, gl, gN)), groupIntro: groupIntroText(cfg, groups, gl, gN), flowCaption: flowCaption(cfg),
       summary: opts.summary ? keyFindings(sections) : '' };
   }
 
@@ -4780,5 +4815,5 @@ const Analysis = (() => {
     return { ...s, head, rows: [...rows, ...tail], tpCols: true };
   }
   const HX = { encode, encodeOwn, eventName, pTxt, plain, lowerFirst, cap, listJoin, fmt, fmtP, columnLabel, columnKind, levelsOf, toNum, toCat, S, ROC_CUT, selectModel };
-  return { pastTense, numWords9, HX: () => HX, timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { pastTense, numWords9, HX: () => HX, timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, selectionOn, condText, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();

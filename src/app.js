@@ -529,7 +529,9 @@
       const desc = info.numeric && nums.length ? `num · ${Analysis.fmt(Math.min(...nums), 2)}–${Analysis.fmt(Math.max(...nums), 2)}` : `text · ${info.distinct.length} values`;
       return `<td class="${fz(ci)}">${desc}<br><span class="${miss ? 'miss-n' : ''}">${miss} missing</span></td>`; }).join('')}</tr>`;
     const edited = new Map(); ((state.cfg && state.cfg.cellLog) || []).forEach(e => edited.set(e.key + '|' + e.col, e));
-    const body = shown.map(i => `<tr class="${chk[rowKey(rows[i], i)] ? 'rchk' : ''}"><td class="rn"><button class="rchk-btn" type="button" data-rchk="${i}" title="${chk[rowKey(rows[i], i)] ? `Checked by ${esc(chk[rowKey(rows[i], i)].who)} on ${esc(chk[rowKey(rows[i], i)].at)} — click to undo` : 'Mark this row as checked against the source'}">${chk[rowKey(rows[i], i)] ? '☑' : '☐'}</button>${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
+    // Select Cases: the patients left out of the analysis greyed and struck through, as in SPSS
+    const outSel = state.cfg && Analysis.selectionOn(state.cfg) ? (keep => new Set(rows.map((r, i) => keep.has(r) ? -1 : i).filter(i => i >= 0)))(new Set(Analysis.filterRows(state.cfg, rows))) : null;
+    const body = shown.map(i => `<tr class="${chk[rowKey(rows[i], i)] ? 'rchk' : ''}${outSel && outSel.has(i) ? ' sel-out' : ''}" ${outSel && outSel.has(i) ? 'title="Not selected (Select Cases): left out of the analysis"' : ''}><td class="rn"><button class="rchk-btn" type="button" data-rchk="${i}" title="${chk[rowKey(rows[i], i)] ? `Checked by ${esc(chk[rowKey(rows[i], i)].who)} on ${esc(chk[rowKey(rows[i], i)].at)} — click to undo` : 'Mark this row as checked against the source'}">${chk[rowKey(rows[i], i)] ? '☑' : '☐'}</button>${i + 1}${g.edit ? `<span class="gr-btns"><button data-rmove="${i},-1" title="Move up" type="button">↑</button><button data-rmove="${i},1" title="Move down" type="button">↓</button><button data-rdel="${i}" title="Delete row" type="button">✕</button></span>` : ''}</td>${
       headers.map((h, ci) => { const ed = edited.get(rowKey(rows[i], i) + '|' + h); return `<td class="${cc(h, ci)}${g.hlMissing && isMissing(rows[i][h]) ? ' miss' : ''}${isOut(h, rows[i][h]) ? ' gout' : ''}${ed ? ' edited' : ''}" title="${ed ? esc(`Edited by ${ed.who} on ${ed.at}: ${ed.old ?? '(blank)'} → ${ed.now ?? '(blank)'}`) : esc(rows[i][h] ?? '')}"${g.edit ? ` contenteditable="true" data-cell="${i}" data-col="${esc(h)}"` : ''}>${esc(rows[i][h] ?? '')}</td>`; }).join('')}</tr>`).join('');
     $('#preview').innerHTML = `<thead><tr><th class="rn">#</th>${head}</tr></thead><tbody>${summary}${body || `<tr><td colspan="${headers.length + 1}" class="legend-note">No rows match.</td></tr>`}</tbody>`;
     const rn = tbl.querySelector('th.rn'); if (rn) tbl.style.setProperty('--rnw', rn.getBoundingClientRect().width + 'px');
@@ -571,16 +573,17 @@
     renderFilters(); renderStep1Tools();
   }
   const filterNote = (cfg, n, kept) => { const sm = cfg.sample && cfg.sample.on, c = (cfg.rowFilter || []).length;
-    return !c && !sm ? 'All patients are analysed.' : `${kept} of ${n} patients analysed${c ? ` (${c > 1 ? 'all the conditions' : 'the condition'})` : ''}${sm ? `${c ? ',' : ' —'} random sample of ${cfg.sample.n}, seed ${cfg.sample.seed}` : ''}`; };
+    return !Analysis.selectionOn(cfg) ? (c || sm ? `All ${n} patients are analysed (the conditions are off).` : 'All patients are analysed.') : `${kept} of ${n} patients analysed — ${Analysis.filterText(cfg)}`; };
   function renderFilters() {
     const cfg = state.cfg; if (!cfg) return;
     cfg.rowFilter = cfg.rowFilter || [];
     const h = state.data.headers, ops = Object.entries(Analysis.FILTER_OPS);
     $('#filterList').innerHTML = cfg.rowFilter.map((f, i) => `<div class="flt" data-fi="${i}">
-      <input type="checkbox" data-ff="on" ${f.on !== false ? 'checked' : ''} title="Use this condition">
+      ${i ? `<select data-ff="join" style="width:auto" title="How this condition joins the one before it (AND is applied before OR)"><option value="and">AND</option><option value="or" ${f.join === 'or' ? 'selected' : ''}>OR</option></select>` : ''}
+      <input type="checkbox" data-ff="on" ${f.on !== false ? 'checked' : ''} title="Use this condition">${+f.open ? `<b title="Brackets: edit them in 🔎 Select Cases">${'('.repeat(+f.open)}</b>` : ''}
       <select data-ff="col">${h.map(c => `<option ${c === f.col ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
       <select data-ff="op">${ops.map(([k, t]) => `<option value="${k}" ${k === f.op ? 'selected' : ''}>${t}</option>`).join('')}</select>
-      <input type="text" data-ff="val" value="${esc(f.val ?? '')}" list="fltVals${i}" style="width:140px;${['blank', 'notblank'].includes(f.op) ? 'display:none' : ''}" placeholder="value">
+      <input type="text" data-ff="val" value="${esc(f.val ?? '')}" list="fltVals${i}" style="width:140px;${['blank', 'notblank'].includes(f.op) ? 'display:none' : ''}" placeholder="${f.op === 'in' ? 'values, separated by commas' : 'value'}">${f.op === 'between' ? `<span>and</span><input type="text" data-ff="val2" value="${esc(f.val2 ?? '')}" style="width:90px" placeholder="value">` : ''}${+f.close ? `<b>${')'.repeat(+f.close)}</b>` : ''}
       <datalist id="fltVals${i}">${columnInfo(state.data.rows, f.col).distinct.slice(0, 50).map(v => `<option value="${esc(v)}">`).join('')}</datalist>
       <button class="btn ghost small" data-fdel="${i}" type="button" title="Remove">✕</button></div>`).join('');
     const n = state.data.rows.length, kept = Analysis.filterRows(cfg, state.data.rows).length;
@@ -593,9 +596,9 @@
     const el = e.target.closest('[data-ff]'); if (!el) return;
     const f = state.cfg.rowFilter[+el.closest('[data-fi]').dataset.fi], k = el.dataset.ff;
     f[k] = k === 'on' ? el.checked : el.value;
-    afterFilter(k !== 'val');
+    afterFilter(k !== 'val' && k !== 'val2');
   });
-  $('#filterList').addEventListener('input', e => { const el = e.target.closest('[data-ff="val"]'); if (!el) return; state.cfg.rowFilter[+el.closest('[data-fi]').dataset.fi].val = el.value; afterFilter(false); });
+  $('#filterList').addEventListener('input', e => { const el = e.target.closest('[data-ff="val"], [data-ff="val2"]'); if (!el) return; state.cfg.rowFilter[+el.closest('[data-fi]').dataset.fi][el.dataset.ff] = el.value; afterFilter(false); });
   function afterFilter(redraw) {
     state.cfg.consort = null; state.result = null;
     if (redraw) renderFilters();
@@ -1328,7 +1331,7 @@
   $('#fmNew').onclick = () => { fmSave(); editSheet(() => { state.data.rows.push(Object.fromEntries(state.data.headers.map(h => [h, null]))); }, 'Form: new patient'); fmRow = state.data.rows.length - 1; fmRender(); $('#fmFields input').focus(); };
   $('#fmClose').onclick = () => { fmSave(); $('#formDlg').close(); };
   // random sample
-  const readSample = () => { state.cfg.sample = { on: $('#sampleOn').checked, n: +$('#sampleN').value || 30, seed: +$('#sampleSeed').value || 1 }; state.result = null; state.cfg.consort = null; renderFilters(); renderGrid(); };
+  const readSample = () => { state.cfg.sample = { ...(state.cfg.sample || {}), kind: 'exact', on: $('#sampleOn').checked, n: +$('#sampleN').value || 30, seed: +$('#sampleSeed').value || 1 }; state.result = null; state.cfg.consort = null; renderFilters(); renderGrid(); };
   ['#sampleOn', '#sampleN', '#sampleSeed'].forEach(id => { $(id).onchange = readSample; });
 
   /* ---------- step 2, more: warnings, per-variable settings, selection, drag order, tables, categorising, setup CSV, subgroups ---------- */
@@ -1586,7 +1589,7 @@
     const cfg = state.cfg, rows = state.data.rows;
     return state.data.headers.filter(h => !cfg.idCols.includes(h) && (h === cfg.groupCol || ((n => n >= 2 && n <= 12)(columnInfo(rows, h).distinct.length) && Analysis.columnKind(cfg, rows, h) === 'categorical')));
   }
-  const readSub = () => { state.cfg.subgroup = { cols: [...document.querySelectorAll('[data-subcol]')].filter(x => x.checked).map(x => x.dataset.subcol), overall: $('#subOverall').checked }; state.cfg.consort = null; };
+  const readSub = () => { state.cfg.subgroup = { ...(state.cfg.subgroup || {}), cols: [...document.querySelectorAll('[data-subcol]')].filter(x => x.checked).map(x => x.dataset.subcol), overall: $('#subOverall').checked }; state.cfg.consort = null; };
   $('#subCols').onchange = $('#subOverall').onchange = readSub;
   $('#subAll').onclick = () => { document.querySelectorAll('[data-subcol]').forEach(x => { x.checked = true; }); readSub(); };
   $('#subNone').onclick = () => { document.querySelectorAll('[data-subcol]').forEach(x => { x.checked = false; }); readSub(); };
@@ -4074,6 +4077,9 @@
         excluded: [{ text: 'Not meeting inclusion criteria', n: 0 }, { text: 'Declined to participate', n: 0 }],
         groups: groups.map((g, i) => ({ allocated: ns[i], description: '', lost: 0, lostReason: '', excludedAnalysis: 0, excludedReason: '', analysed: ns[i] }))
       };
+      // Select Cases: the patients not selected in a box of their own ("excluded by the selection")
+      if (Analysis.selectionOn(cfg) && cfg.selFlow !== false) { const all = state.data.rows.filter(r => groups.includes(Analysis.groupOf(cfg, r))).length, out = all - total;
+        if (out > 0) { cfg.consort.assessed = all; cfg.consort.excluded = [{ text: `Not selected for this analysis (${Analysis.filterText(cfg)})`, n: out }, ...cfg.consort.excluded]; } }
     }
     const c = cfg.consort, branch = name => ({ name, n: 0, noRef: 0, present: 0, absent: 0, inconclusive: 0 });
     c.type = c.type || 'consort';
@@ -4462,6 +4468,37 @@
         cell.t = [...(cell.t || [''])]; cell.t[cell.t.length - 1] = `${cell.t[cell.t.length - 1]}${m}`; marks.push(`${m} ${txt}`); });
       if (marks.length) s.footnote = `${(s.footnote || '').replace(/\s*\.?\s*$/, s.footnote ? '.' : '')} ${marks.join(' ')}`.trim(); });
   }
+  // Split File, "Compare groups": each table once, a block of columns for each subgroup under its name (a header row above the columns);
+  // a table whose rows differ between the subgroups stays one table per subgroup
+  const colsOf = h => h.reduce((t, c) => t + ((c && typeof c === 'object' && c.span) || 1), 0);
+  function splitCells(rows, L) { const occ = [];
+    return rows.map((r, ri) => { let col = 0; const lab = [], dat = [];
+      r.forEach(c => { while (occ[ri] && occ[ri][col]) col++; (col < L ? lab : dat).push({ c, col }); const sp = c.span || 1;
+        if ((c.rs || 1) > 1) for (let k = 1; k < c.rs; k++) { occ[ri + k] = occ[ri + k] || []; for (let q = 0; q < sp; q++) occ[ri + k][col + q] = true; }
+        col += sp; });
+      return { lab, dat }; }); }
+  const sfTxt = c => (Array.isArray(c.t) ? c.t : [c.t]).join(' ');
+  function splitCompare(runs, splitName) {
+    const out = [], n = runs.length;
+    runs[0].r.sections.forEach(s0 => {
+      const parts = runs.map(R => R.r.sections.find(x => x.title === s0.title));
+      const own = () => runs.forEach((R, i) => { const s = parts[i]; if (!s) return; s.title = `${s.title} — ${R.name}`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (${R.name})`; }); out.push(s); });
+      const head0 = (s0.head || []).map(h => typeof h === 'string' ? { t: h } : h), L = head0.length ? (head0[0].span || 1) : 0, W = colsOf(head0), D = W - L;
+      if (!L || D < 1 || !s0.rows || !parts.every(p => p && p.rows && p.rows.length === s0.rows.length && colsOf(p.head) === W)) { own(); return; }
+      const split = parts.map(p => splitCells(p.rows, L)), labKey = sp => sp.map(r => r.lab.map(x => sfTxt(x.c)).join('|')).join('\n');
+      if (split.some(sp => labKey(sp) !== labKey(split[0]))) { own(); return; }
+      const rows = split[0].map((r0, ri) => {
+        const lab = r0.lab.map(x => x.col + (x.c.span || 1) > L ? { ...x.c, span: (x.c.span || 1) + (n - 1) * D } : x.c);
+        return [...lab, ...split.flatMap(sp => sp[ri].dat.map(x => x.c))]; });
+      const datHead = parts.map(p => p.head.map(h => typeof h === 'string' ? { t: h } : h).slice(1));
+      const head = [head0[0], ...datHead.flat()];
+      const s = { ...s0, title: `${s0.title.replace(/\s*\.$/, '')}, by ${lowerFirstApp(splitName)}`, rows, head, headTop: [{ ...head0[0], rs: 2 }, ...runs.map(R => ({ t: R.short, span: D }))],
+        comment: parts.map((p, i) => p.comment ? `${runs[i].name} (n = ${runs[i].n}): ${p.comment}` : '').filter(Boolean).join(' '),
+        figures: parts.flatMap((p, i) => (p.figures || []).map(f => ({ ...f, caption: `${f.caption} (${runs[i].name})` }))), splitCmp: true, landscape: L + n * D > 7 };
+      s.key = s.title; out.push(s);
+    });
+    return out;
+  }
   function htmlTable(head, rows, sec) {
     const h = head.map(c => typeof c === 'string' ? { t: c } : c);
     const o0 = state.cfg.options, tl = (sec && sec.tlook) || {}, o = sec && (sec.tstyle || sec.tlook) ? { ...o0, tableStyle: sec.tstyle || o0.tableStyle, tableFont: tl.font || o0.tableFont, tableFontSize: tl.size || o0.tableFontSize, tableHead: tl.head || o0.tableHead, tableBands: tl.bands ?? o0.tableBands, tablePad: tl.pad || o0.tablePad } : o0, bg = HEAD_BG[o.tableHead] || '', thStyle = bg ? `style="background:${bg};${o.tableHead === 'navy' ? 'color:#fff' : ''}"` : '';
@@ -4474,7 +4511,7 @@
       const first = cover === 0; if (first) { if (!(r[0] && r[0].ind)) band++; cover = Math.max(0, ...r.map(c => (c.rs || 1) - 1)); } else cover--;
       return `<tr class="${o.tableBands && band % 2 ? 'band' : ''}">${r.map((c, ci) => `<td data-rc="${ri}:${ci}" ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${c.span > 1 ? `colspan="${c.span}"` : ''} class="${c.b ? 'b' : ''} ${c.small ? 's' : ''} ${c.hl ? 'hl' : ''} ${c.grey ? 'grey' : ''} ${c.sub && ci === 0 ? 'sub' : ''} ${c.grp ? 'grp' : ''} ${ri + (c.rs || 1) === rows.length ? 'last' : ''} ${(o.firstColLeft && first && ci === 0) || c.ind || c.left ? 'left' : ''}"${pcolOn && (c.t || []).length === 1 && sigRe.test(String(c.t[0])) ? ` style="color:${pcol}"` : ''}>${(c.t || []).map(esc).join('<br>')}</td>`).join('')}</tr>`;
     }).join('');
-    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.tableFont && o.tableFont !== 'same' ? o.tableFont : o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead><tr>${h.map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+    return `<table class="rt ${o.tableStyle === 'apa' ? 'apa' : ''} ${o.tablePad && o.tablePad !== 'normal' ? 'rt-' + o.tablePad : ''}" style="font-family:'${esc(o.tableFont && o.tableFont !== 'same' ? o.tableFont : o.font)}',serif;${+o.tableFontSize && +o.tableFontSize !== 10 ? `font-size:${(1.4 * o.tableFontSize).toFixed(1)}px` : ''}"><thead>${sec && sec.headTop ? `<tr>${sec.headTop.map(c => `<th ${c.span > 1 ? `colspan="${c.span}"` : ''} ${c.rs > 1 ? `rowspan="${c.rs}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr>` : ''}<tr>${(sec && sec.headTop && sec.headTop[0].rs > 1 ? h.slice(1) : h).map(c => `<th ${c.span ? `colspan="${c.span}"` : ''} ${o.tableStyle === 'apa' ? '' : thStyle}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   /* ---------- step 10: results by variable — every statistic and candidate test, for checking before the report ---------- */
@@ -5926,8 +5963,8 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         // sensitivity analysis: every table again in the per-protocol population
         const ppc = cfg.options.ppCol, ppv = cfg.options.ppVal;
         if (ppc && ppv !== '' && state.data.headers.includes(ppc)) {
-          try { const r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true }], advanced: [] });
-            const nPP = Analysis.filterRows({ ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true }] }, state.data.rows).length;
+          try { const r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true, sys: true }], advanced: [] });
+            const nPP = Analysis.filterRows({ ...cfg, rowFilter: [...(cfg.rowFilter || []), { col: ppc, op: 'eq', val: ppv, on: true, sys: true }] }, state.data.rows).length;
             r2.sections.forEach(s => { s.title = `${s.title} — per-protocol population`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (per-protocol)`; }); res.sections.push(s); });
             res.methods += ` As a sensitivity analysis, all comparisons were repeated in the per-protocol population (${ppc} = ${ppv}; n=${nPP}).`; } catch (e) { console.error(e); } }
         // all patients as one group first (descriptive, with the group column as a variable), then the comparison of the groups
@@ -5939,21 +5976,30 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
             const r1 = Analysis.run(state.data, c1); postRepeated(r1, c1);
             r1.sections.forEach(s => { s.title = `${s.title.replace(/\s+of the studied (groups|patients)$/, '')} — all patients`; s.key = s.title; s.allPart = true; s.figures.forEach(f => { f.caption = `${f.caption} (all patients)`; }); });
             res.sections = [...r1.sections, ...res.sections]; res.methods += ' The results of all patients were first described as one group, and then compared between the groups.'; } catch (e) { console.error(e); } }
+        // Split File (like SPSS): the analysis repeated within each subgroup — tables organised by subgroup, or the subgroups side by side in one table
         const sg = state.cfg.subgroup, sgCols = subCols(sg).filter(c => state.data.headers.includes(c));
-        if (sgCols.length) {
-          const subs = [], done = [];
-          sgCols.forEach(col => {
-            const isG = col === state.cfg.groupCol, lab = Analysis.columnLabel(state.cfg, col), lvName = l => isG ? (state.cfg.groupLabels[l] || l) : valueLabel(col, l);
-            const lv = isG ? activeGroups() : Analysis.levelsOf(state.cfg, Analysis.filterRows(state.cfg, state.data.rows), col);
-            lv.forEach(l => {
-              let r2; try { r2 = Analysis.run(state.data, { ...cfg, rowFilter: [...(cfg.rowFilter || []), { col, op: 'eq', val: l, on: true }], advanced: [], ...(isG ? { groupInclude: Object.fromEntries(cfg.groupOrder.map(g => [g, g === l])), timeline: null } : {}) }); } catch (e) { return; }
-              const name = `${lab}: ${lvName(l)}`;
-              r2.sections.forEach(s => { s.title = `${s.title} — ${name}`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (${name})`; }); subs.push(s); });
-            });
-            done.push(`${lowerFirstApp(lab)} (${lv.map(lvName).join(', ')})`);
-          });
+        if (sgCols.length && sg.mode !== 'off') {
+          const cmp = sg.mode === 'compare', minN = +sg.minN || 0, base = Analysis.filterRows(state.cfg, state.data.rows);
+          const info = sgCols.map(col => { const isG = col === state.cfg.groupCol, lab = Analysis.columnLabel(state.cfg, col), lvName = l => isG ? (state.cfg.groupLabels[l] || l) : valueLabel(col, l);
+            return { col, isG, lab, lvName, lv: isG ? activeGroups() : Analysis.levelsOf(state.cfg, base, col) }; });
+          const combos = sg.combine === 'all' && info.length > 1 ? info.reduce((acc, x) => acc.flatMap(a => x.lv.map(l => [...a, { x, l }])), [[]]) : info.flatMap(x => x.lv.map(l => [{ x, l }]));
+          const byVar = sg.combine === 'all' && info.length > 1 ? [combos] : info.map(x => combos.filter(c => c[0].x === x));
+          const subs = [], done = [], skipped = [];
+          byVar.forEach(sets => { const runs = [];
+            sets.forEach(set => {
+              const g = set.find(o => o.x.isG), c2 = { ...cfg, ...(sg.mode ? { variables: cfg.variables.map(v => v.cols && v.cols.length === 1 && set.some(o => o.x.col === v.cols[0].col) ? { ...v, include: false } : v) } : {}), rowFilter: [...(cfg.rowFilter || []), ...set.map(o => ({ col: o.x.col, op: 'eq', val: o.l, on: true, sys: true }))], advanced: [], ...(g ? { groupInclude: Object.fromEntries(cfg.groupOrder.map(x => [x, x === g.l])), timeline: null } : {}) };
+              const name = set.map(o => `${o.x.lab}: ${o.x.lvName(o.l)}`).join(' · '), short = set.map(o => o.x.lvName(o.l)).join(' · ');
+              const n = Analysis.filterRows(c2, state.data.rows).length; if (minN && n < minN) { skipped.push(`${name} (n = ${n})`); return; }
+              let r2; try { r2 = Analysis.run(state.data, c2); } catch (e) { return; }
+              runs.push({ name, short, n, r: r2 }); });
+            if (!runs.length) return;
+            if (cmp && runs.length > 1) subs.push(...splitCompare(runs, sets[0].map(o => o.x.lab).join(' and ')));
+            else runs.forEach(R => R.r.sections.forEach(s => { s.title = `${s.title} — ${R.name}`; s.key = s.title; s.figures.forEach(f => { f.caption = `${f.caption} (${R.name})`; }); subs.push(s); }));
+            const labs = sets[0].map(o => lowerFirstApp(o.x.lab));
+            done.push(labs.length > 1 ? `each combination of ${labs.slice(0, -1).join(', ')} and ${labs[labs.length - 1]}` : `${labs[0]} (${runs.map(R => R.short).join(', ')})`); });
           res.sections = [...(sg.overall !== false ? res.sections : []), ...subs];
-          if (done.length) res.methods += ` Subgroup analyses were performed within each category of ${done.length > 1 ? done.slice(0, -1).join(', ') + ' and ' + done[done.length - 1] : done[0]}.`;
+          if (done.length) res.methods += ` Subgroup analyses were performed within each category of ${done.length > 1 ? done.slice(0, -1).join(', ') + ' and ' + done[done.length - 1] : done[0]}${cmp ? ', with the subgroups presented side by side' : ''}.`.replace('each category of each combination', 'each combination');
+          if (skipped.length) res.methods += ` Subgroups with fewer than ${minN} patients were not analysed (${skipped.join('; ')}).`;
         }
         // a journal style's P wording also goes into the table footnotes
         if (report().style !== 'none' && cfg.options.pWord !== 'P value') res.sections.forEach(s => { s.footnote = s.footnote.replace(/\bP value\b/g, cfg.options.pWord); });
@@ -7412,4 +7458,5 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   window.EasyUI = { advDefaults, loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
     renderAdvanced, renderVariables, renderOptions, schedulePreview: () => schedulePreview(), chartStyle: o => chartStyle(o), chartPalette: o => chartPalette(o), renameColumn: (a, b) => renameColumn(a, b), projectObj, openAny, healthItems, abstractTable, reportBlob: () => reportBlob(), exportedFigures: () => exportedFigures(), resultsDeck: () => resultsDeck(), buildPptx: (f, t) => buildPptx(f, t), sharePack, glossary: () => GLOSSARY, exportModel: r => exportModel(r), wordOptions: () => wordOptions(), aRows: () => aRows(), aOuts: () => aOuts(), aEffect: (v, r, g) => aEffect(v, r, g), aVal: (v, r) => aVal(v, r), aLev: v => aLev(v), isBin: v => isBin(v), vLab: v => vLab(v), combos: () => (state.combos = state.combos || []), applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
+  Object.assign(window.EasyUI, { renderFilters, renderSubgroup, refreshGroups, subCands, subCols, columnInfo, valueLabel, afterFilter });
 })();
