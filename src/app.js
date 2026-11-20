@@ -67,7 +67,10 @@
 
   /* ---------- helpers ---------- */
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600); }
-  const busy = on => $('#busy').classList.toggle('show', on);
+  const busy = on => { $('#busy').classList.toggle('show', on); if (window.EasyProgress) EasyProgress.busy(on); };
+  // P1: the stages of a long task shown in the progress bar; a pause lets the screen draw them, and Cancel stops between stages
+  const stage = t => { if (window.EasyProgress) EasyProgress.stage(t); };
+  const pauseOr = async t => { stage(t); await new Promise(r => setTimeout(r, 16)); if (window.EasyProgress && EasyProgress.cancelled()) { const e = new Error('Cancelled'); e.cancelled = true; throw e; } };
   // "Month 3", "Week 12", "6 months" stay one token, so they read as timepoints
   const GLUED = new Map(); // glued token → how the sheet wrote it ("Month3" → "Month 3"), for its label
   const glue = (m, a, b) => { GLUED.set(a + b, `${a} ${b}`); return a + b; };
@@ -5054,7 +5057,7 @@
       a.download = datedName(baseName() + ' - Results by variable.docx');
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('Results by variable downloaded');
-    } catch (err) { console.error(err); toast('Word export failed: ' + err.message); }
+    } catch (err) { if (err && err.cancelled) { toast('Word export cancelled'); return; } console.error(err); toast('Word export failed: ' + err.message); }
     finally { busy(false); }
   };
   $('#xpVar').onchange = drawExplore;
@@ -5950,13 +5953,16 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   const runKey = () => state.cfg && state.data ? JSON.stringify([state.cfg, state.data.headers, state.data.rows]) : '';
   function runAnalysis() {
     syncGroupFigs();
-    busy(true);
+    busy(true); stage('Getting the data ready');
     renderFormatBar();
-    setTimeout(() => {
+    setTimeout(async () => {
+      const before = state.result;
       try {
         syncAssessed(ensureConsort());
         const cfg = { ...state.cfg, options: effOptions(), groupLabels: reportGroupLabels(state.cfg) };
+        await pauseOr('Running the tests');
         const res = Analysis.run(state.data, cfg); varComments(res, cfg);
+        await pauseOr('Writing the comments and tables');
         postRepeated(res, state.cfg);
         if (cfg.options.rmImpute === 'locf') res.methods += ' Missing follow-up values were replaced by the last observation carried forward.';
         // subgroup analysis: every table again within each category of the chosen column
@@ -5976,6 +5982,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
             const r1 = Analysis.run(state.data, c1); postRepeated(r1, c1);
             r1.sections.forEach(s => { s.title = `${s.title.replace(/\s+of the studied (groups|patients)$/, '')} — all patients`; s.key = s.title; s.allPart = true; s.figures.forEach(f => { f.caption = `${f.caption} (all patients)`; }); });
             res.sections = [...r1.sections, ...res.sections]; res.methods += ' The results of all patients were first described as one group, and then compared between the groups.'; } catch (e) { console.error(e); } }
+        if (subCols(state.cfg.subgroup).length) await pauseOr('Subgroups (Split File)');
         // Split File (like SPSS): the analysis repeated within each subgroup — tables organised by subgroup, or the subgroups side by side in one table
         const sg = state.cfg.subgroup, sgCols = subCols(sg).filter(c => state.data.headers.includes(c));
         if (sgCols.length && sg.mode !== 'off') {
@@ -6045,8 +6052,11 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         state.figTables = res.sections.filter(s => !s.figOnly).map(s => s.title).filter(Boolean);
         state.result = res; state.runKey = runKey();
         if (state.pendingEdits) { applyEdits(res, state.pendingEdits); state.pendingEdits = null; }
+        stage('Drawing the report');
         renderReport();
-      } catch (err) { console.error(err); $('#report').innerHTML = `<p style="color:var(--bad)"><b>Analysis failed:</b> ${esc(err.message)}</p>`; }
+        if (window.EasyAfterRun) try { EasyAfterRun(res, before); } catch (e) { console.error(e); }
+      } catch (err) { if (err && err.cancelled) { toast('Analysis cancelled — the previous report is kept'); return; } console.error(err);
+        $('#report').innerHTML = window.EasyFriendly ? EasyFriendly.html(err) : `<p style="color:var(--bad)"><b>Analysis failed:</b> ${esc(err.message)}</p>`; }
       finally { busy(false); }
     }, 30);
   }
@@ -7152,15 +7162,18 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     try {
       syncEdits();
       const r = exportModel(state.result);
+      await pauseOr('Arranging the figures');
       if (effOptions().figPanels) await panelize(r);
       (state.combos || []).forEach((cb, i) => r.sections.push({ kind: 'combo', title: cb.caption, head: [], rows: [], footnote: '', comment: '', tableOn: false, figures: [{ url: cb.url, w: cb.w, h: cb.h, caption: cb.caption, key: 'combo' + i }], meta: {} }));
       if (!r.methods && !r.consort && !r.sections.length) { toast('Nothing is selected for export'); return; }
       const o = effOptions(), rp = report();
       const wo = wordOptions(); if (rp.citeText && rp.refs && r.methods) { const c2 = citeMethods(r.methods, rp.citeText); r.methods = c2.text; wo.refs = c2.refs; }
       if (report().stamp && window.EasyUX2 && window.EasyUX2.stampText) r.stamp = await window.EasyUX2.stampText();
+      await pauseOr('Building the Word file');
       let blob = await Report.build(r, wo);
       if (state.wordTemplate) blob = await applyTemplate(blob, state.wordTemplate.bytes);
       if (o.pageMirror && !state.wordTemplate) blob = await mirrorMargins(blob);
+      await pauseOr('Saving');
       versionSave(blob);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -7168,7 +7181,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       toast('Word report downloaded'); await masterSeparate();
-    } catch (err) { console.error(err); toast('Word export failed: ' + err.message); }
+    } catch (err) { if (err && err.cancelled) { toast('Word export cancelled'); return; } console.error(err); toast('Word export failed: ' + err.message); }
     finally { busy(false); }
   };
 
@@ -7458,5 +7471,5 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   window.EasyUI = { advDefaults, loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
     renderAdvanced, renderVariables, renderOptions, schedulePreview: () => schedulePreview(), chartStyle: o => chartStyle(o), chartPalette: o => chartPalette(o), renameColumn: (a, b) => renameColumn(a, b), projectObj, openAny, healthItems, abstractTable, reportBlob: () => reportBlob(), exportedFigures: () => exportedFigures(), resultsDeck: () => resultsDeck(), buildPptx: (f, t) => buildPptx(f, t), sharePack, glossary: () => GLOSSARY, exportModel: r => exportModel(r), wordOptions: () => wordOptions(), aRows: () => aRows(), aOuts: () => aOuts(), aEffect: (v, r, g) => aEffect(v, r, g), aVal: (v, r) => aVal(v, r), aLev: v => aLev(v), isBin: v => isBin(v), vLab: v => vLab(v), combos: () => (state.combos = state.combos || []), applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
-  Object.assign(window.EasyUI, { renderFilters, renderSubgroup, refreshGroups, subCands, subCols, columnInfo, valueLabel, afterFilter });
+  Object.assign(window.EasyUI, { CHART_TYPES, chartKind, GLOSSARY, renderFilters, renderSubgroup, refreshGroups, subCands, subCols, columnInfo, valueLabel, afterFilter });
 })();

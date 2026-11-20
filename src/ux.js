@@ -304,7 +304,7 @@
   function crumb() { const n = activeStep(), pnl = $('#p' + n); if (!pnl || !S().data) { bc.style.display = 'none'; return; }
     const hs = [...pnl.querySelectorAll('h2,h3,h4,summary b')].filter(h => h.offsetParent && h.getBoundingClientRect().top < 160);
     const last = hs[hs.length - 1], parts = [`Step ${n} · ${U.STEPS[n - 1][0]}`]; if (last && !/^\d+ ·/.test(last.textContent.trim())) parts.push(last.textContent.replace(/\s+/g, ' ').trim().slice(0, 70));
-    bc.textContent = parts.join('  ›  '); bc.style.display = scrollY > 260 ? '' : 'none'; }
+    bc.textContent = parts.join('  ›  '); bc.style.display = scrollY > 260 ? 'block' : 'none'; }
   let ct = 0; addEventListener('scroll', () => { clearTimeout(ct); ct = setTimeout(crumb, 60); miniSpy(); }, { passive: true });
 
   /* ---------- 11. data sheet beside the step ---------- */

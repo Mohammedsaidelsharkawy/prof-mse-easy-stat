@@ -250,6 +250,17 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🖥 Easier to use (round 15)**
+- **📄 Live report** (tab on the right edge, or ☰ More): the report beside the options, re-run a moment after each change; drag its edge to resize.
+- **What changed**: after a re-run, the changed tables glow and a “3 changes ▸” chip steps through them. **Report ready** card: tables, figures, significant results, ⬇ Word.
+- **Progress with stages** (“Running the tests → Subgroups → Drawing the report”, “Building the Word file”) with elapsed time and **Cancel** (the previous report is kept); placeholders while the report draws; **friendly error cards** with “Fix it”.
+- **Step rings**: green = opened, red = needs attention, dashed = not opened yet (hover says why). **Breadcrumb** at the top while scrolling: click it for the sections of the step. **Collapse / expand** any card (remembered per project), with Collapse all / Expand all.
+- **Bulk edit** (step 2, tick variables): now also test, decimals, chart and in/out of the report; the bar stays in view. **Smart-defaults banner** in step 2: Review step by step, or Accept all → report.
+- **★ My options**: star any option; it appears at the top of every step. **🕘 Recent actions** (☰ More): what you changed, click to go back there.
+- **Keyboard**: arrow keys move between table cells, a “Skip to the report” link, a visible focus ring; every icon-only button has a name for screen readers. **Phones**: a bottom tab bar (Data · Setup · Report · More).
+- **Hover glossary**: terms in the report are underlined; hover for their meaning. **Why is this greyed out?** shows on hovering a disabled button. **First-time tips** (once each; ☰ More › Show the tips again).
+- **🧪 Sandbox** (☰ More): try anything, then leave and everything is as before. **🎨 Interface colour** and **🧩 Arrange the header** (order, and which buttons go into ☰ More). **⬇ Install as an app** when opened from a web address.
+
 **🔎 Select Cases** (as SPSS, Data › Select Cases; from the header badge “Filter: 39 of 60”, ☰ More, or step 1): all cases · **if condition is satisfied** (rows joined by AND / OR, with brackets; =, ≠, >, ≥, <, ≤, between, is one of, contains, blank) · **random sample** (about N% of the cases, or exactly N cases from the first M, with a seed) · **case range** (rows from–to, or a date column between two dates) · **filter variable** (rows where it is 1 / yes). Output: filter out the others (kept in the data, greyed and struck through in the sheet), copy the selected cases to a new dataset (a snapshot and an Excel file), or delete the others (Undo restores them). The methods say which patients were analysed, and the flowchart gets a “not selected” box.
 **🧩 Split File** (as SPSS, Data › Split File; header badge “Split: by Sex”, ☰ More, or step 2): analyse all cases · **compare groups** — one table, the subgroups side by side under a header row with their names (Word: merged header cells; wide tables on landscape pages) · **organise output by groups** — tables, figures and comments for each subgroup. Several variables: every combination (Male · Diabetic …) or each variable separately; subgroups smaller than N patients skipped with a note; optionally the tables of all patients too.
 Step 1's condition list also has AND / OR and “between”.
