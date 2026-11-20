@@ -8,8 +8,9 @@
   const css = document.createElement('style');
   css.textContent = `.dgrid tr.sel-out td:not(.rn){color:#9a9a9a;text-decoration:line-through}.dgrid tr.sel-out td.rn{opacity:.55}
 .sc-badge{white-space:nowrap}.sc-badge .sv{max-width:150px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:bottom}
-@media (max-width:1480px){.sc-badge:not(.on) .sv{display:none}.sc-badge .sv{max-width:90px}}
+@media (max-width:1580px){.sc-badge:not(.on) .sv{display:none}.sc-badge .sv{max-width:90px}}
 .top-actions{flex-wrap:wrap!important;row-gap:6px}@media (max-width:1100px){#uxMore .tl{display:none}.top-actions{gap:5px!important}}
+#btnTheme .tl{display:none}
 #uxMore.r13-on::after{content:'●';color:#7CE38B;margin-left:4px;font-size:10px}.sc-badge.on{background:#FFF4D6;border-color:#E5B53A;color:#5a4300}
 .sc-dlg fieldset{border:1px solid var(--line,#ddd);border-radius:10px;padding:6px 10px 8px;margin:0 0 10px}.sc-dlg legend{font-weight:700;padding:0 4px}
 .sc-dlg .sc-opt{display:block;margin:6px 0 2px}.sc-dlg .sc-sub{margin:2px 0 6px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -191,7 +192,7 @@
   (function mount() {
     const more = $('.ux-more'), top = more && more.parentElement;
     if (top) { top.insertBefore(btn('scBadge', '🔎 Filter: off', 'Select Cases', selectDialog, 'btn light small sc-badge'), more); top.insertBefore(btn('sfBadge', '🧩 Split: off', 'Split File', splitDialog, 'btn light small sc-badge'), more); }
-    const menu0 = $('.ux-menu'); if (menu0) ['#btnTheme', '#btnKeys'].forEach(q => { const b = $(q); if (b && b.closest('.top-actions')) { b.classList.remove('light'); b.classList.add('ghost'); menu0.appendChild(b); } });
+    const menu0 = $('.ux-menu'); if (menu0) ['#btnKeys'].forEach(q => { const b = $(q); if (b && b.closest('.top-actions')) { b.classList.remove('light'); b.classList.add('ghost'); menu0.appendChild(b); } });
     const menu = $('.ux-menu'); if (menu) { menu.appendChild(btn('', '🔎 Select Cases…', 'Choose the patients to analyse (as SPSS: Data › Select Cases)', selectDialog, 'btn ghost small')); menu.appendChild(btn('', '🧩 Split File…', 'Repeat the analysis in subgroups (as SPSS: Data › Split File)', splitDialog, 'btn ghost small')); }
     const fa = $('#filterAdd'); if (fa) fa.after(btn('', '🔎 Select Cases…', 'AND / OR with brackets, random samples, row or date ranges, a filter variable — and what to do with the others', selectDialog, 'btn ghost small'));
     const sa = $('#subNone'); if (sa) sa.after(btn('', '🧩 Split File…', 'Compare the subgroups side by side, or tables for each subgroup; combinations of two variables; small subgroups skipped', splitDialog, 'btn ghost small'));
