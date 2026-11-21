@@ -253,6 +253,8 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 **🎲 Generate or change a variable** (step 1 beside “+ Column”, a column’s menu, step 2, or ☰ More) — with the options of the Generate phase:
 - **A new variable**: number (normal, skewed, even between two values, counts) with a mean and SD for each group (or a quick Cohen’s d from one group), lowest/highest and decimals; yes/no with a % for each group; categories with a % for each group; dates. Linked to another column (correlation r, or an odds ratio for yes/no). Blank cells and outliers in %. A seed repeats the same values.
 - **Change an existing variable**: generate new values for every patient (blank cells can stay blank), **adjust** the values to new targets (numbers keep each patient’s rank; categories change the fewest patients), or **fill only the blank cells**. Starts from the column’s current values in each group.
+- **Change the type** of an existing variable (number, yes/no, categories, date): its values are then generated anew and the variable's type follows.
+- **Made from a linked column**: correlated with it, **multiplied** or **divided** by a number, or **increased / decreased** by a change given as a range (from – to) or a mean ± SD — each can differ by group (e.g. WOMAC at 12 months = baseline − 20 ± 5 in one group, − 8 ± 4 in the other); a blank stays blank.
 - A preview shows each group before and after, with the P value between the groups.
 - Generated values are not patient data: the sheet’s banner lists the simulated columns and the statistical analysis says so (on by default). Undo (Ctrl+Z) restores the data.
 
