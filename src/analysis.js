@@ -4851,6 +4851,19 @@ const Analysis = (() => {
       const seen = new Set(), add = []; TAB_ABBR.forEach(([a, full]) => { if (seen.has(full)) return; const re = new RegExp(`(^|[^A-Za-z0-9])${a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}(?![A-Za-z0-9])`); if (re.test(txt) && !new RegExp(`(^|[ ,(])${a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}: `).test(foot)) { seen.add(full); add.push(`${a}: ${full}`); } });
       if (add.length) s0.footnote = foot.trim() ? `${foot.trim().replace(/\.\s*$/, '')}, ${add.join(', ')}.` : `${add.join(', ')}.`; });
     return r; }
+  // the direction of a comparison between two groups: "higher in Group II than Group I" said the other way round, "lower in Group I than Group II"
+  // ('first': the first group of the table named first; 'last': the last group first; 'reverse': every comparison turned round); the values in
+  // the brackets that follow ("60% vs 34%") swap with the groups
+  const OPP = [['higher', 'lower'], ['greater', 'smaller'], ['longer', 'shorter'], ['larger', 'smaller'], ['better', 'worse'], ['more frequent', 'less frequent'], ['more common', 'less common'], ['more', 'less'], ['increased', 'decreased']];
+  const oppOf = w => { for (const [a, b] of OPP) { if (w === a) return b; if (w === b) return a; } return w; };
+  function flipComparisons(t, gl, mode) {
+    if (!t || !gl || gl.length < 2 || !mode || mode === 'as') return t;
+    const esc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), G = [...gl].sort((a, b) => b.length - a.length).map(esc).join('|');
+    const W = 'more frequent|less frequent|more common|less common|higher|lower|greater|smaller|longer|shorter|larger|better|worse|increased|decreased|more|less';
+    const re = new RegExp(`\\b(${W}) in (${G}) than (in )?(${G})(?![A-Za-z])( \\(([^()]*?) vs ([^()]*?)([;,)]))?`, 'g');
+    return t.replace(re, (m, w, a, inn, b, br, v1, v2, end) => { const ia = gl.indexOf(a), ib = gl.indexOf(b);
+      const flip = mode === 'reverse' || (mode === 'first' && ia > ib) || (mode === 'last' && ia < ib); if (!flip || ia < 0 || ib < 0 || a === b) return m;
+      return `${oppOf(w)} in ${b} than ${inn || ''}${a}${br ? ` (${v2} vs ${v1}${end}` : ''}`; }); }
   function polish(r, o) {
     if (!r || !r.sections) return r;
     const dict = String(o.phraseDict || '').split(/\n/).map(l => l.split(/\s*(?:=>|→)\s*/)).filter(x => x.length === 2 && x[0].trim()).map(([a, b]) => [a.trim(), b.trim()]);
@@ -4861,6 +4874,7 @@ const Analysis = (() => {
       if (o.commentTone === 'plain') t = t.replace(/\b(was|were) (in|not )significantly different\b/g, '$1 not clearly different').replace(/\bdid not differ significantly\b/g, 'did not clearly differ')
         .replace(/\bno significant difference/g, 'no clear difference').replace(/\binsignificant(ly)?\b/g, 'not clear$1').replace(/\bsignificantly\b/g, 'clearly').replace(/\bsignificant\b/g, 'clear');
       dict.forEach(([a, b]) => { t = t.split(a).join(b); });
+      if (o.commentDir && o.commentDir !== 'as') t = flipComparisons(t, r.groups, o.commentDir);
       return t;
     };
     r.sections.forEach(sec => {
@@ -4925,5 +4939,5 @@ const Analysis = (() => {
     return { ...s, head, rows: [...rows, ...tail], tpCols: true };
   }
   const HX = { encode, encodeOwn, eventName, pTxt, plain, lowerFirst, cap, listJoin, fmt, fmtP, columnLabel, columnKind, levelsOf, toNum, toCat, S, ROC_CUT, selectModel };
-  return { pastTense, numWords9, HX: () => HX, timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, selectionOn, condText, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
+  return { flipComparisons, pastTense, numWords9, HX: () => HX, timepointsAsColumns, unitOfText, run: run2, explore: explore2, relabelCI, trimWords, sentencesOf, parseValueLabels, withValueLabels, filterRows, selectionOn, condText, filterText, FILTER_OPS, outFence, OUT_RULE, groupOf, ALL_GROUP, isGroupCol, normalityTest, significantSentences, fmt, fmtP, toNum, toCat, POSITIVE, NONNORMAL_SHARE, columnLabel, columnKind, levelsOf, isNumberColumn };
 })();

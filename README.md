@@ -250,6 +250,9 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Thesis**: Heading 1 at 16 pt on A4 and 14 pt on B5; significant P values in bold in the tables.
+**Direction of the comparisons** (step 6, Wording; also per variable): as found, the first group named first (“HDL-C was significantly lower in Group I than Group II”), the last group first, or every comparison reversed — the values in the brackets swap with the groups (“44.0 ± 7.9 vs 52.1 ± 8.3”).
+
 **Step 1**: once data are open, **Report details** comes first, with **What do you want to do?** (compare groups, before / after, survival, diagnostic test, agreement, prediction model — the matching analyses are added in step 2) and **⚡ Make my report (2 choices)**.
 **☑ Tick view of the tables** (step 2, Tables of the report): one row per variable, a column per table — tick its table, **➕ New** (asks the name) or **Left out**; or tick several variables and “Put the ticked into…”.
 **Tables**: the MD / RR (95% CI) column in the same font size as the other columns.
