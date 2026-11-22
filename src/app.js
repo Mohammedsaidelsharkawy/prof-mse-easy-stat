@@ -1582,6 +1582,9 @@
     $('#subCols').innerHTML = cands.length ? cands.map(h => `<label><input type="checkbox" data-subcol="${esc(h)}" ${on.includes(h) ? 'checked' : ''}>${esc(Analysis.columnLabel(cfg, h))}${h === cfg.groupCol ? ' <span class="legend-note">group</span>' : ''} <span class="legend-note">${columnInfo(rows, h).distinct.length}</span></label>`).join('')
       : '<span class="legend-note">No categorical variables.</span>';
     $('#subOverall').checked = sg.overall !== false;
+    // other groupings: every categorical column but the group column
+    const gx = new Set(cfg.groupings || []), gc = cands.filter(h => h !== cfg.groupCol);
+    $('#grpingCols').innerHTML = gc.length ? gc.map(h => `<label><input type="checkbox" data-grping="${esc(h)}" ${gx.has(h) ? 'checked' : ''}>${esc(Analysis.columnLabel(cfg, h))} <span class="legend-note">${columnInfo(rows, h).distinct.length}</span></label>`).join('') : '<span class="legend-note">No other categorical variables.</span>';
     const qv = cfg.variables.filter(v => v.kind === 'single' && v.type === 'numeric');
     $('#qVar').innerHTML = qv.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
     renderSelBar();
@@ -1594,6 +1597,7 @@
   }
   const readSub = () => { state.cfg.subgroup = { ...(state.cfg.subgroup || {}), cols: [...document.querySelectorAll('[data-subcol]')].filter(x => x.checked).map(x => x.dataset.subcol), overall: $('#subOverall').checked }; state.cfg.consort = null; };
   $('#subCols').onchange = $('#subOverall').onchange = readSub;
+  $('#grpingCols').onchange = () => { state.cfg.groupings = [...document.querySelectorAll('[data-grping]')].filter(x => x.checked).map(x => x.dataset.grping); state.result = null; };
   $('#subAll').onclick = () => { document.querySelectorAll('[data-subcol]').forEach(x => { x.checked = true; }); readSub(); };
   $('#subNone').onclick = () => { document.querySelectorAll('[data-subcol]').forEach(x => { x.checked = false; }); readSub(); };
 
@@ -5082,7 +5086,7 @@
   };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { stamp: false, bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: true, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, forestAll: false, appFull: false, thesisPage: '', citeText: '', autoNum: true, appSheet: '', appSheetCols: '', appSheetRows: '', appSheetAllRows: false, appSheetByGroup: false, appSheetOut: 'in', appSheetFmt: 'docx', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
+  const DEFAULT_REPORT = { stamp: false, bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: true, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, forestAll: false, appFull: false, thesisPage: '', citeText: '', autoNum: true, appSheet: '', appSheetCols: '', appSheetRows: '', appSheetAllRows: false, appSheetByGroup: false, appSheetOut: 'in', appSheetFmt: 'docx', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 0, paperText: 'table', paperSig: false, paperTable: 'grid', abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
   // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
   const JOURNAL_STYLES = {
     none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
@@ -5109,13 +5113,15 @@
   const FORMAT_PRESETS = {
     custom: {},
     thesis: { figPlacement: 'after', paperStyle: false },
-    paper: { paperStyle: true, pWord: 'P', secondRow: 'none', commentPlace: 'none', figPlacement: 'end', figPerRow: 2, figWidth: 'medium', tableStyle: 'apa',
-      summary: false, commentStyle: 'concise', showStat: false, missingNote: false, chartTitle: false }
+    paper: { paperStyle: true, pWord: 'P', secondRow: 'none', commentPlace: 'after', statFoot: true,
+      summary: false, commentStyle: 'concise', showStat: false, missingNote: false }
   };
   const report = () => (state.cfg.report = { ...DEFAULT_REPORT, ...(state.cfg.report || {}) });
   function effOptions() {
     const o = { ...state.cfg.options, ...FORMAT_PRESETS[report().format], ...(JOURNAL_STYLES[report().style] || JOURNAL_STYLES.none).o };
     if (report().format === 'thesis' && o.commentPlace === 'none') o.commentPlace = 'after';
+    // the paper: all borders and no * by default (both can be changed in the paper's own settings); one Results text instead of the comments when chosen
+    if (report().format === 'paper') { const rp = report(); o.tableStyle = rp.paperTable === 'apa' ? 'apa' : 'grid'; o.sigSym = rp.paperSig ? (state.cfg.options.sigSym || '*') : ''; if (rp.paperText === 'narrative') o.commentPlace = 'none'; }
     return o;
   }
   function renderFormatBar() {
@@ -5125,7 +5131,7 @@
     $('#fmtThesis').style.display = r.format === 'thesis' ? '' : 'none';
     $('#fmtPaper').style.display = r.format === 'paper' ? '' : 'none';
     $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
-    $('#fmtNewPage').checked = r.newPage; $('#fmtPage').value = r.thesisPage || ''; $('#fmtNonSig').checked = r.nonSig;
+    $('#fmtNewPage').checked = r.newPage; $('#fmtPage').value = r.thesisPage || ''; $('#fmtNonSig').checked = r.nonSig; $('#fmtPaperText').value = r.paperText || 'table'; $('#fmtPaperTable').value = r.paperTable || 'grid'; $('#fmtPaperSig').checked = !!r.paperSig;
     $('#fmtTabStart').value = r.tabStart; $('#fmtFigStart').value = r.figStart;
     renderRepSnaps();
     document.querySelectorAll('[data-rx]').forEach(el => { const v = r[el.dataset.rx]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v ?? ''); });
@@ -5269,12 +5275,12 @@
     if (!md) out.push(['\\documentclass{article}', '\\usepackage[utf8]{inputenc}', '\\usepackage{booktabs}', '\\usepackage{graphicx}', `\\title{${tex(state.cfg.study.title || 'Statistical report')}}`, '\\begin{document}', '\\maketitle'].join('\n'));
     else out.push(`# ${state.cfg.study.title || 'Statistical report'}`);
     if (!isOut('methods') && r.methods) out.push(H(2, 'Statistical analysis'), P(r.methods));
-    out.push(H(2, 'Results')); if (r.groupIntro) r.groupIntro.split('\n').forEach(t => out.push(P(t))); if (r.intro) out.push(P(r.intro)); if (r.narrative && plan.paper) out.push(P(r.narrative));
+    out.push(H(2, 'Results')); if (r.groupIntro) r.groupIntro.split('\n').forEach(t => out.push(P(t))); if (r.intro) out.push(P(r.intro)); if (r.narrative && plan.paperNarr) out.push(P(r.narrative));
     r.sections.forEach(s => { if (!plan.tabNum.get(s)) return; const head = headText(s.head), grid = tableRowsText(s.rows), cap = `Table ${plan.tabNum.get(s)}: ${s.title}`;
       if (md) out.push(`**${cap}**`, '', `| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...grid.map(l => `| ${head.map((_, j) => (l[j] ?? '').replace(/\|/g, '\\|')).join(' | ')} |`), '', `*${s.footnote || ''}*`);
       else out.push(['\\begin{table}[ht]\\centering\\small', `\\caption{${tex(s.title)}}`, `\\begin{tabular}{${head.map((_, j) => j ? 'c' : 'l').join('')}}\\toprule`, head.map(tex).join(' & ') + ' \\\\ \\midrule',
         ...grid.map(l => head.map((_, j) => tex(l[j] ?? '')).join(' & ') + ' \\\\'), '\\bottomrule\\end{tabular}', `\\par\\footnotesize ${tex(s.footnote || '')}`, '\\end{table}'].join('\n'));
-      if (s.comment && !plan.paper && o.commentPlace !== 'none') out.push(P(s.comment));
+      if (s.comment && !plan.paperNarr && o.commentPlace !== 'none') out.push(P(s.comment));
       s.figures.forEach(f => { if (plan.figNum.get(f)) out.push(md ? `*Figure ${plan.figNum.get(f)}: ${f.caption}*` : `% Figure ${plan.figNum.get(f)}: ${tex(f.caption)} - export the figures from step 11 and add \\includegraphics here`); }); });
     if (r.summary && !isOut('summary')) out.push(H(2, 'Summary of key findings'), P(r.summary));
     if (!md) out.push('\\end{document}');
@@ -5938,6 +5944,9 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     if (e.target.id === 'fmtChapter') r.chapter = e.target.value.trim();
     else if (e.target.id === 'fmtHeads') r.sectionHeads = e.target.checked;
     else if (e.target.id === 'fmtMaxFigs') r.maxFigs = +e.target.value;
+    else if (e.target.id === 'fmtPaperText') r.paperText = e.target.value;
+    else if (e.target.id === 'fmtPaperTable') r.paperTable = e.target.value;
+    else if (e.target.id === 'fmtPaperSig') r.paperSig = e.target.checked;
     else if (e.target.id === 'fmtAbstract') r.abstract = e.target.checked;
     else if (e.target.id === 'fmtNewPage') { r.newPage = e.target.checked; return; }
     else if (e.target.id === 'fmtPage') { r.thesisPage = e.target.value; return; }
@@ -6008,6 +6017,16 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
           if (done.length) res.methods += ` Subgroup analyses were performed within each category of ${done.length > 1 ? done.slice(0, -1).join(', ') + ' and ' + done[done.length - 1] : done[0]}${cmp ? ', with the subgroups presented side by side' : ''}.`.replace('each category of each combination', 'each combination');
           if (skipped.length) res.methods += ` Subgroups with fewer than ${minN} patients were not analysed (${skipped.join('; ')}).`;
         }
+        // other groupings: the same tables with the patients classified again by another column (e.g. by sex, then by hypertension)
+        const xg = (state.cfg.groupings || []).filter(c => c && c !== state.cfg.groupCol && state.data.headers.includes(c));
+        if (xg.length) { await pauseOr('Other groupings'); const added = [], base0 = Analysis.filterRows(state.cfg, state.data.rows);
+          xg.forEach(col => { try { const lv = Analysis.levelsOf(state.cfg, base0, col); if (lv.length < 2) return; const lab = Analysis.columnLabel(state.cfg, col);
+            const c2 = { ...cfg, groupCol: col, groupOrder: lv, groupLabels: Object.fromEntries(lv.map(l => [l, valueLabel(col, l)])), groupInclude: Object.fromEntries(lv.map(l => [l, true])), groupMerge: {}, groupCtrl: lv[0], groupDesc: null,
+              consort: null, advanced: [], subgroup: null, timeline: null, groupIntro: 'off', variables: cfg.variables.map(v => v.cols && v.cols.length === 1 && v.cols[0].col === col ? { ...v, include: false } : v) };
+            const r2 = Analysis.run(state.data, c2); try { postRepeated(r2, c2); } catch (e) { /* no repeated measures */ }
+            r2.sections.forEach(s => { s.title = `${s.title.replace(/\s+of the studied (groups|patients)$/, '')} according to ${lowerFirstApp(lab)}`; s.key = s.title; s.grouping = col; s.figures.forEach(f => { f.caption = `${f.caption} (by ${lowerFirstApp(lab)})`; }); });
+            res.sections.push(...r2.sections); added.push(lowerFirstApp(lab)); } catch (e) { console.error(e); } });
+          if (added.length) res.methods += ` The patients were also classified by ${added.length > 1 ? added.slice(0, -1).join(', ') + ' and by ' + added[added.length - 1] : added[0]}, and the same comparisons were made for each classification.`; }
         // a journal style's P wording also goes into the table footnotes
         if (report().style !== 'none' && cfg.options.pWord !== 'P value') res.sections.forEach(s => { s.footnote = s.footnote.replace(/\bP value\b/g, cfg.options.pWord); });
         // P values without the leading zero: also the significance level in the footnotes
@@ -6198,7 +6217,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     order.forEach(f => figNum.set(f, pre + n++));
     const tabNum = new Map(); let t = +rep.tabStart || 1;
     r.sections.forEach(s => { if (!s.figOnly && !isOut(exKey.table(s))) tabNum.set(s, pre + t++); });
-    return { o, rep, paper, pre, kept, order, figNum, tabNum, consortNum: pre + f0, consortOn };
+    return { o, rep, paper, paperNarr: paper && rep.paperText === 'narrative', pre, kept, order, figNum, tabNum, consortNum: pre + f0, consortOn };
   }
   // the paper's Results narrative: significant findings per table, each citing its table and figure
   function paperNarrative(r, plan) {
@@ -6229,7 +6248,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
 
   function renderReport() {
     const r = state.result, plan = exportPlan(r), o = plan.o, lab = n => Report.figLabel(n, o.captionStyle);
-    if (plan.paper && !r.narrativeEdited) r.narrative = paperNarrative(r, plan);
+    if (plan.paperNarr && !r.narrativeEdited) r.narrative = paperNarrative(r, plan);
     if (plan.paper && plan.rep.abstract && !r.abstractEdited) r.abstract = Analysis.trimWords(abstractResults(r), +state.cfg.options.absMaxWords || 0);
     let html = '';
     html += `<div class="row exp-bar"><b>In the Word file:</b> <span class="legend-note">untick any section, table or figure to leave it out — numbering follows what is kept.</span><span class="spacer"></span>
@@ -6246,9 +6265,9 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     html += `<div class="report-sec"><h3>Results</h3>`;
     if (r.groupIntro) html += `<div class="legend-note" style="margin-top:6px">Opening paragraph of the results (the groups, step 2)</div><textarea id="edGroupIntro" rows="${Math.min(8, 2 + (r.groupIntro.match(/\n/g) || []).length)}">${esc(r.groupIntro)}</textarea>`;
     if (r.consort) html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${plan.consortOn ? lab(plan.consortNum) : 'Not exported:'} ${esc(r.flowCaption)}</div></div>`;
-    const wl = +report().wordLimit; if (wl) { const n = words(r.narrative || '') + words(r.intro || '') + (plan.paper ? 0 : r.sections.reduce((t, s) => t + words(s.comment || ''), 0));
+    const wl = +report().wordLimit; if (wl) { const n = words(r.narrative || '') + words(r.intro || '') + (plan.paperNarr ? 0 : r.sections.reduce((t, s) => t + words(s.comment || ''), 0));
       html += `<div class="chip ${n > wl ? 'warn' : 'ok'}" style="display:block;margin:6px 0">${n > wl ? '⚠' : '✓'} Results: ${n} words (limit ${wl})${n > wl ? ` — ${n - wl} over` : ''}</div>`; }
-    if (plan.paper) html += `<label class="f" style="margin-top:12px">Results text (written from the significant results, citing tables and figures — edit freely)</label><textarea id="edNarrative" style="min-height:180px">${esc(r.narrative)}</textarea>
+    if (plan.paperNarr) html += `<label class="f" style="margin-top:12px">Results text (written from the significant results, citing tables and figures — edit freely)</label><textarea id="edNarrative" style="min-height:180px">${esc(r.narrative)}</textarea>
       <div class="legend-note">${words(r.narrative) + words(r.intro)} words in Results · ${words(r.narrative) + words(r.intro) + words(r.methods)} words with the statistical analysis</div>`;
     html += `</div>`;
     const atEnd = o.figPlacement === 'end' || o.figPlacement === 'endType';
@@ -6261,7 +6280,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     r.sections.forEach((s, i) => {
       if (s.figOnly) { if (!atEnd) html += `<div class="report-sec"><div class="legend-note">Figure placed here (step 7)</div><div class="figs">${s.figures.map(figHtml).join('')}</div></div>`; return; }
       const tk = exKey.table(s), tOut = isOut(tk), place = s.place && o.commentPlace !== 'none' ? s.place : o.commentPlace || 'after';
-      const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}" spellcheck="true" lang="en">${esc(s.comment)}</textarea>
+      const comment = plan.paperNarr ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}" spellcheck="true" lang="en">${esc(s.comment)}</textarea>
         <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><button class="btn ghost small" data-sents="${i}" type="button" title="Keep or drop single sentences">✂ Sentences</button><button class="btn ghost small" data-srcs="${i}" type="button" title="Point at a number to see its cell in the table">🔗 Sources</button><button class="btn ghost small" data-rephrase="${i}" type="button" title="Another wording of the same comment (click again for more)">↻ Rephrase</button><button class="btn ghost small" data-revnote="${i}" type="button" title="A reviewer's or supervisor's comment on this section (a Word comment in the review copy)">💬 ${(state.cfg.revNotes || {})[s.key || s.title] ? 'Comment ✓' : 'Comment'}</button><span class="legend-note">${words(s.comment)} words · readability ${flesch(s.comment)}</span></div><div class="explain" data-explainbox="${i}"></div><div data-sentbox="${i}"></div>
         ${o.keyFindings && s.findings && s.findings.length ? `<div class="legend-note"><b>Key findings:</b><ol style="margin:4px 0 0 18px;padding:0">${s.findings.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
@@ -6490,7 +6509,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   }
   const PAGE_PRESETS = {
     thesis: { o: { pageSize: 'a4', orientation: 'portrait', pageMargin: 'custom', marTop: '2.5', marBottom: '2.5', marLeft: '3.5', marRight: '2.5', gutter: '', pageMirror: false, lineSpacing: '1.5', bodySize: '12', bodyAlign: 'justify', paraBefore: '', paraAfter: '', firstIndent: '', pageNum: 'center', pageNumFmt: 'decimal' }, r: { lineNumbers: false, twoCol: false } },
-    journal: { o: { pageSize: 'a4', orientation: 'portrait', pageMargin: 'normal', marTop: '', marBottom: '', marLeft: '', marRight: '', gutter: '', pageMirror: false, lineSpacing: '2', bodySize: '12', bodyAlign: 'left', paraBefore: '', paraAfter: '', firstIndent: '', pageNum: 'right', pageNumFmt: 'decimal', pageFirstHide: false }, r: { lineNumbers: true, twoCol: false } },
+    journal: { o: { pageSize: 'a4', orientation: 'portrait', pageMargin: 'normal', marTop: '', marBottom: '', marLeft: '', marRight: '', gutter: '', pageMirror: false, lineSpacing: '2', bodySize: '12', bodyAlign: 'justify', paraBefore: '', paraAfter: '', firstIndent: '', pageNum: 'right', pageNumFmt: 'decimal', pageFirstHide: false }, r: { lineNumbers: false, twoCol: false } },
     compact: { o: { pageMargin: 'narrow', marTop: '', marBottom: '', marLeft: '', marRight: '', gutter: '', lineSpacing: '1', bodySize: '11', paraBefore: '', paraAfter: '6', firstIndent: '' }, r: { twoCol: false } }
   };
   const PAGE_KEYS = ['indentScope', 'pageSize', 'pageW', 'pageH', 'orientation', 'pageMargin', 'marTop', 'marBottom', 'marLeft', 'marRight', 'gutter', 'pageMirror', 'hdrDist', 'ftrDist', 'font', 'bodySize', 'lineSpacing', 'bodyAlign', 'paraBefore', 'paraAfter', 'firstIndent', 'pageNum', 'pageNumFmt', 'pageStart', 'pageFirstHide', 'headerText', 'footerText', 'branding'];
@@ -6601,14 +6620,14 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (!isOut('methods') && r.methods) { B.push({ html: '<div class="h1">Statistical Analysis</div>', head: true }); P(r.methods); }
     B.push({ html: '<div class="h1">Results</div>', head: true });
     if (plan.consortOn && r.consort) { P(r.intro); img(r.consort.url, 560, 560 * r.consort.h / r.consort.w, `${lab(plan.consortNum)} ${r.flowCaption}`); }
-    if (plan.paper && r.narrative) r.narrative.split(/\n\s*\n/).forEach(t => P(t.trim()));
+    if (plan.paperNarr && r.narrative) r.narrative.split(/\n\s*\n/).forEach(t => P(t.trim()));
     r.sections.forEach(s => {
       if (plan.tabNum.get(s)) {
         const cp = s.place && o.commentPlace !== 'none' ? s.place : o.commentPlace || 'after';
-        if (s.comment && cp === 'before' && !plan.paper) P(s.comment);
+        if (s.comment && cp === 'before' && !plan.paperNarr) P(s.comment);
         B.push({ html: `<div class="cap tcap">Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : ':'} ${esc(s.title)}</div>`, head: true });
         B.push({ table: s }); B.push({ html: `<div class="foot">${esc(s.footnote || '')}</div>` });
-        if (s.comment && cp === 'after' && !plan.paper) P(s.comment);
+        if (s.comment && cp === 'after' && !plan.paperNarr) P(s.comment);
       }
       s.figures.forEach(f => { const n = plan.figNum.get(f); if (n && f.url) img(f.url, 560, 560 * f.h / f.w, `${lab(n)} ${f.caption}${f.note ? ' ' + f.note : ''}`); });
     });
@@ -6844,7 +6863,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const plan = exportPlan(r);
     return {
       ...r, methods: isOut('methods') ? '' : r.methods, consort: isOut('consort') ? null : r.consort, summary: isOut('summary') ? '' : r.summary,
-      narrative: plan.paper ? r.narrative : '', abstract: plan.paper && plan.rep.abstract ? r.abstract : '',
+      narrative: plan.paperNarr ? r.narrative : '', abstract: plan.paper && plan.rep.abstract ? r.abstract : '',
       sections: organise(r.sections.map(s => ({ ...s, tableOn: !s.figOnly && !isOut(exKey.table(s)), figures: s.figures.filter(f => plan.kept.has(f)) }))
         .filter(s => s.tableOn || s.figures.length))
     };

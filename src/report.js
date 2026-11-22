@@ -107,20 +107,20 @@ const Report = (() => {
       children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.size })) });
   }
   // headings: Word's Heading 1 / 2; with WORD_STYLES the look comes from the document's styles only (so a university template can restyle them)
-  let WORD_STYLES = false;
+  let WORD_STYLES = false, H1_SZ = 30; // Heading 1: 15 pt, 14 pt in a journal paper; headings have no space before or after
   function heading(text, brand) {
     const { Paragraph, TextRun, HeadingLevel } = D();
     if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(text)] });
     return new Paragraph({
-      heading: HeadingLevel.HEADING_1, spacing: { before: tsSp('h1', 'before', 240), after: tsSp('h1', 'after', 160) }, ...(tsAl('h1') ? { alignment: tsAl('h1') } : {}), ...tsInd('h1'),
-      children: [new TextRun({ text, bold: tsYN('h1', 'bold', true), italics: tsYN('h1', 'italic', undefined), size: tsSz('h1', 30), font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
+      heading: HeadingLevel.HEADING_1, spacing: { before: tsSp('h1', 'before', 0), after: tsSp('h1', 'after', 0) }, ...(tsAl('h1') ? { alignment: tsAl('h1') } : {}), ...tsInd('h1'),
+      children: [new TextRun({ text, bold: tsYN('h1', 'bold', true), italics: tsYN('h1', 'italic', undefined), size: tsSz('h1', H1_SZ), font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
     });
   }
   function subheading(text, brand, pageBreakBefore) {
     const { Paragraph, TextRun, HeadingLevel } = D();
     if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_2, keepNext: true, pageBreakBefore, children: [new TextRun(text)] });
     return new Paragraph({
-      heading: HeadingLevel.HEADING_2, spacing: { before: tsSp('h2', 'before', 240), after: tsSp('h2', 'after', 120) }, keepNext: true, pageBreakBefore, ...(tsAl('h2') ? { alignment: tsAl('h2') } : {}), ...tsInd('h2'),
+      heading: HeadingLevel.HEADING_2, spacing: { before: tsSp('h2', 'before', 0), after: tsSp('h2', 'after', 0) }, keepNext: true, pageBreakBefore, ...(tsAl('h2') ? { alignment: tsAl('h2') } : {}), ...tsInd('h2'),
       children: [new TextRun({ text, bold: tsYN('h2', 'bold', true), italics: tsYN('h2', 'italic', undefined), size: tsSz('h2', 26), font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
     });
   }
@@ -307,7 +307,7 @@ const Report = (() => {
     if (opts.twoCol) PAGE_W = Math.floor((PAGE_W - 708) / 2); // tables and figures fit one column
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [], footnotes = {};
-    TS = opts.textStyles || {}; TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE; STYLED = !!opts.wordStyles && !TEMPLATE; TT_SZ = 2 * (+(opts.tableLook || {}).size || 10);
+    TS = opts.textStyles || {}; H1_SZ = opts.paper ? 28 : 30; TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE; STYLED = !!opts.wordStyles && !TEMPLATE; TT_SZ = 2 * (+(opts.tableLook || {}).size || 10);
     // bilingual: AR gives the Arabic of a paragraph, heading, caption, footnote or column heading
     const AR = opts.ar || null, arAfter = (text, o) => { if (AR && text) { const t = AR.text(text); if (t) children.push(arPara(t, o)); } };
     const H1 = (t, b) => heading(AR && AR.heading(t) ? `${t} — ${AR.heading(t)}` : t, b);
@@ -481,8 +481,8 @@ const Report = (() => {
     parts.push({ land, kids: children.slice(from) });
     const hs = (id, name, size, before, after) => { const k = id === 'Heading1' ? 'h1' : 'h2'; return { id, name, basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: tsYN(k, 'bold', true), ...(tsYN(k, 'italic') !== undefined ? { italics: tsYN(k, 'italic') } : {}), size: tsSz(k, size), font: BODY_FONT, color: brand ? '1C1648' : '000000' }, paragraph: { spacing: { before: tsSp(k, 'before', before), after: tsSp(k, 'after', after) }, keepNext: true, ...(tsAl(k) ? { alignment: tsAl(k) } : {}), ...tsInd(k) } }; };
     // a heading styled in step 11 replaces Word's built-in heading style (otherwise the two styles of the same name are left as before)
-    const hDef = () => { const o = {}; [['h1', 'heading1', 'Heading1', 'Heading 1', 30, 240, 160], ['h2', 'heading2', 'Heading2', 'Heading 2', 26, 240, 120]].forEach(([k, key, id, nm, sz, b, a]) => { if (tsOn(k)) { const x = hs(id, nm, sz, b, a); o[key] = { run: x.run, paragraph: x.paragraph }; } }); return o; };
-    const hsList = () => [['h1', 'Heading1', 'Heading 1', 30, 240, 160], ['h2', 'Heading2', 'Heading 2', 26, 240, 120]].filter(([k]) => !tsOn(k)).map(([, id, nm, sz, b, a]) => hs(id, nm, sz, b, a));
+    const hDef = () => { const o = {}; [['h1', 'heading1', 'Heading1', 'Heading 1', H1_SZ, 0, 0], ['h2', 'heading2', 'Heading2', 'Heading 2', 26, 0, 0]].forEach(([k, key, id, nm, sz, b, a]) => { const x = hs(id, nm, sz, b, a); o[key] = { run: x.run, paragraph: x.paragraph }; }); return o; }; // always replaces Word's own heading style: one definition, not two
+    const hsList = () => [['h1', 'Heading1', 'Heading 1', H1_SZ, 0, 0], ['h2', 'Heading2', 'Heading 2', 26, 0, 0]].filter(() => false).map(([, id, nm, sz, b, a]) => hs(id, nm, sz, b, a));
     const doc = new Document({
       creator: 'Prof MSE Easy Stat',
       title: opts.title || 'Statistical report',

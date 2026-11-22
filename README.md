@@ -250,6 +250,12 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Report formats** — in every format: headings with no space before or after; paragraphs justified; the sentence “In line with reporting guidelines (CONSORT), effect sizes were not reported for the baseline characteristics” removed from the statistical analysis.
+**📄 Journal paper**: Heading 1 at 14 pt; each comment with its table (or one Results text, in the paper's settings); tables with all borders (or three lines); no * after significant P values (a tick brings it back); figures not included by default (“Figures in the paper”); figures otherwise as configured; no line numbering by default; numbers' rows without the “Mean ± SD / Median (IQR)” column — the footnote says it, with † marking the medians when both are used.
+**Other groupings** (step 2): the patients classified more than once — the same tables again by sex, by hypertension… (“… according to sex”), with a sentence in the statistical analysis.
+**More abbreviations** explained in the table footnotes and labels: echocardiography (LVEDD, TAPSE, GLS, E/e'…), cardiology (STEMI, PCI, NT-proBNP, MACE…), anaesthesia (TIVA, PCA, ETCO2, PACU…), ICU (PEEP, FiO2, ARDS, AKI, ECMO…), laboratory and others; short ones with two meanings (CI, VT, MR…) are left out.
+**Faster**: every step and the report about 3× faster (the report 0.9 s → 0.3 s on the knee example, the Word file 0.8 s → 0.2 s).
+
 **🎲 Generate or change a variable** (step 1 beside “+ Column”, a column’s menu, step 2, or ☰ More) — with the options of the Generate phase:
 - **A new variable**: number (normal, skewed, even between two values, counts) with a mean and SD for each group (or a quick Cohen’s d from one group), lowest/highest and decimals; yes/no with a % for each group; categories with a % for each group; dates. Linked to another column (correlation r, or an odds ratio for yes/no). Blank cells and outliers in %. A seed repeats the same values.
 - **Change an existing variable**: generate new values for every patient (blank cells can stay blank), **adjust** the values to new targets (numbers keep each patient’s rank; categories change the fewest patients), or **fill only the blank cells**. Starts from the column’s current values in each group.

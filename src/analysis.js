@@ -2678,6 +2678,62 @@ const Analysis = (() => {
     ICU: 'Intensive care unit', LOS: 'Length of stay', PONV: 'Postoperative nausea and vomiting', GCS: 'Glasgow coma scale', APACHE: 'Acute Physiology and Chronic Health Evaluation', SOFA: 'Sequential Organ Failure Assessment',
     WOMAC: 'Western Ontario and McMaster Universities Osteoarthritis Index', KL: 'Kellgren-Lawrence', FEV1: 'Forced expiratory volume in 1 second', FVC: 'Forced vital capacity', EF: 'Ejection fraction', LVEF: 'Left ventricular ejection fraction',
     PRP: 'Platelet-rich plasma', HA: 'Hyaluronic acid', DM: 'Diabetes mellitus', HTN: 'Hypertension', IHD: 'Ischaemic heart disease', CKD: 'Chronic kidney disease', COPD: 'Chronic obstructive pulmonary disease' };
+
+  // more abbreviations: echocardiography, cardiology, anaesthesia, ICU, laboratory and others — added to both lists (labels and table footnotes)
+  const ABBR_MORE = [
+    // echocardiography
+    ['LVEDD', 'Left ventricular end-diastolic diameter'], ['LVESD', 'Left ventricular end-systolic diameter'], ['LVEDV', 'Left ventricular end-diastolic volume'], ['LVESV', 'Left ventricular end-systolic volume'],
+    ['LVIDd', 'Left ventricular internal diameter in diastole'], ['LVIDs', 'Left ventricular internal diameter in systole'], ['IVSd', 'Interventricular septal thickness in diastole'], ['IVS', 'Interventricular septum'],
+    ['PWd', 'Posterior wall thickness in diastole'], ['LVPW', 'Left ventricular posterior wall'], ['LVM', 'Left ventricular mass'], ['LVMI', 'Left ventricular mass index'], ['RWT', 'Relative wall thickness'],
+    ['FS', 'Fractional shortening'], ['GLS', 'Global longitudinal strain'], ['LAVI', 'Left atrial volume index'], ['LAD', 'Left atrial diameter'], ['LA', 'Left atrium'], ['RA', 'Right atrium'], ['RV', 'Right ventricle'], ['LV', 'Left ventricle'],
+    ['TAPSE', 'Tricuspid annular plane systolic excursion'], ['RVSP', 'Right ventricular systolic pressure'], ['PASP', 'Pulmonary artery systolic pressure'], ['mPAP', 'Mean pulmonary artery pressure'], ['PAP', 'Pulmonary artery pressure'],
+    ['TR', 'Tricuspid regurgitation'], ['MR', 'Mitral regurgitation'], ['AR', 'Aortic regurgitation'], ['MS', 'Mitral stenosis'], ['AS', 'Aortic stenosis'], ['AVA', 'Aortic valve area'], ['MVA', 'Mitral valve area'],
+    ['E/A', 'Ratio of early to late mitral inflow velocity'], ["E/e'", 'Ratio of mitral inflow E velocity to early diastolic annular velocity'], ['DT', 'Deceleration time'], ['IVRT', 'Isovolumic relaxation time'],
+    ['TDI', 'Tissue Doppler imaging'], ['TTE', 'Transthoracic echocardiography'], ['TEE', 'Transoesophageal echocardiography'], ['TOE', 'Transoesophageal echocardiography'], ['IVC', 'Inferior vena cava'], ['LVOT', 'Left ventricular outflow tract'],
+    ['VTI', 'Velocity time integral'], ['RWMA', 'Regional wall motion abnormality'], ['WMSI', 'Wall motion score index'], ['SV', 'Stroke volume'], ['CO', 'Cardiac output'], ['CI', 'Cardiac index'],
+    // cardiology
+    ['ECG', 'Electrocardiogram'], ['EKG', 'Electrocardiogram'], ['MI', 'Myocardial infarction'], ['STEMI', 'ST-elevation myocardial infarction'], ['NSTEMI', 'Non-ST-elevation myocardial infarction'], ['ACS', 'Acute coronary syndrome'],
+    ['UA', 'Unstable angina'], ['CAD', 'Coronary artery disease'], ['CABG', 'Coronary artery bypass grafting'], ['PCI', 'Percutaneous coronary intervention'], ['PTCA', 'Percutaneous transluminal coronary angioplasty'],
+    ['LAD artery', 'Left anterior descending artery'], ['LCX', 'Left circumflex artery'], ['RCA', 'Right coronary artery'], ['LM', 'Left main coronary artery'], ['TIMI', 'Thrombolysis in Myocardial Infarction'],
+    ['HFrEF', 'Heart failure with reduced ejection fraction'], ['HFpEF', 'Heart failure with preserved ejection fraction'], ['HFmrEF', 'Heart failure with mildly reduced ejection fraction'], ['HF', 'Heart failure'],
+    ['BNP', 'B-type natriuretic peptide'], ['NT-proBNP', 'N-terminal pro-B-type natriuretic peptide'], ['cTnI', 'Cardiac troponin I'], ['cTnT', 'Cardiac troponin T'], ['hs-cTn', 'High-sensitivity cardiac troponin'], ['CK-MB', 'Creatine kinase-MB'],
+    ['QTc', 'Corrected QT interval'], ['LBBB', 'Left bundle branch block'], ['RBBB', 'Right bundle branch block'], ['AVB', 'Atrioventricular block'], ['SVT', 'Supraventricular tachycardia'], ['VT', 'Ventricular tachycardia'], ['VF', 'Ventricular fibrillation'],
+    ['ICD', 'Implantable cardioverter-defibrillator'], ['CRT', 'Cardiac resynchronisation therapy'], ['PPM', 'Permanent pacemaker'], ['TAVI', 'Transcatheter aortic valve implantation'], ['TAVR', 'Transcatheter aortic valve replacement'],
+    ['ACEI', 'Angiotensin-converting enzyme inhibitor'], ['ARB', 'Angiotensin receptor blocker'], ['ARNI', 'Angiotensin receptor-neprilysin inhibitor'], ['MRA', 'Mineralocorticoid receptor antagonist'], ['SGLT2i', 'Sodium-glucose cotransporter-2 inhibitor'],
+    ['DAPT', 'Dual antiplatelet therapy'], ['MACE', 'Major adverse cardiovascular events'], ['CHA2DS2-VASc', 'Congestive heart failure, Hypertension, Age ≥75 (2), Diabetes, Stroke (2), Vascular disease, Age 65–74, Sex category score'],
+    ['HAS-BLED', 'Hypertension, Abnormal renal/liver function, Stroke, Bleeding, Labile INR, Elderly, Drugs/alcohol score'], ['GRACE', 'Global Registry of Acute Coronary Events'], ['PAD', 'Peripheral arterial disease'], ['CVD', 'Cardiovascular disease'],
+    ['SCD', 'Sudden cardiac death'], ['PE', 'Pulmonary embolism'], ['CTA', 'Computed tomography angiography'], ['CMR', 'Cardiac magnetic resonance'], ['FFR', 'Fractional flow reserve'], ['IVUS', 'Intravascular ultrasound'],
+    // anaesthesia and surgery
+    ['GA', 'General anaesthesia'], ['RA block', 'Regional anaesthesia'], ['SA', 'Spinal anaesthesia'], ['EA', 'Epidural anaesthesia'], ['CSE', 'Combined spinal-epidural'], ['TAP', 'Transversus abdominis plane'], ['ESP', 'Erector spinae plane'],
+    ['PECS', 'Pectoral nerve block'], ['QLB', 'Quadratus lumborum block'], ['TIVA', 'Total intravenous anaesthesia'], ['PCA', 'Patient-controlled analgesia'], ['PCEA', 'Patient-controlled epidural analgesia'], ['MAC', 'Minimum alveolar concentration'],
+    ['BIS', 'Bispectral index'], ['ETCO2', 'End-tidal carbon dioxide'], ['EtCO2', 'End-tidal carbon dioxide'], ['ETT', 'Endotracheal tube'], ['LMA', 'Laryngeal mask airway'], ['RSI', 'Rapid sequence induction'], ['TOF', 'Train-of-four'],
+    ['PONV', 'Postoperative nausea and vomiting'], ['POCD', 'Postoperative cognitive dysfunction'], ['POD', 'Postoperative delirium'], ['PACU', 'Post-anaesthesia care unit'], ['OR time', 'Operating room time'], ['NMB', 'Neuromuscular blockade'],
+    ['MAP', 'Mean arterial pressure'], ['CVP', 'Central venous pressure'], ['IBP', 'Invasive blood pressure'], ['NIBP', 'Non-invasive blood pressure'], ['RASS', 'Richmond Agitation-Sedation Scale'], ['OAA/S', "Observer's Assessment of Alertness/Sedation"],
+    ['Mallampati', 'Mallampati airway classification'], ['ASA-PS', 'American Society of Anesthesiologists physical status'], ['EBL', 'Estimated blood loss'], ['PRBC', 'Packed red blood cells'], ['FFP', 'Fresh frozen plasma'],
+    ['ERAS', 'Enhanced recovery after surgery'], ['SSI', 'Surgical site infection'], ['LOS', 'Length of stay'], ['OSA', 'Obstructive sleep apnoea'],
+    // ICU
+    ['MV', 'Mechanical ventilation'], ['NIV', 'Non-invasive ventilation'], ['HFNC', 'High-flow nasal cannula'], ['CPAP', 'Continuous positive airway pressure'], ['BiPAP', 'Bilevel positive airway pressure'], ['PEEP', 'Positive end-expiratory pressure'],
+    ['FiO2', 'Fraction of inspired oxygen'], ['PaO2', 'Arterial partial pressure of oxygen'], ['PaCO2', 'Arterial partial pressure of carbon dioxide'], ['P/F ratio', 'PaO2/FiO2 ratio'], ['ABG', 'Arterial blood gas'], ['VT', 'Tidal volume'],
+    ['ARDS', 'Acute respiratory distress syndrome'], ['VAP', 'Ventilator-associated pneumonia'], ['AKI', 'Acute kidney injury'], ['CRRT', 'Continuous renal replacement therapy'], ['RRT', 'Renal replacement therapy'],
+    ['DIC', 'Disseminated intravascular coagulation'], ['MODS', 'Multiple organ dysfunction syndrome'], ['SIRS', 'Systemic inflammatory response syndrome'], ['qSOFA', 'Quick Sequential Organ Failure Assessment'],
+    ['SAPS', 'Simplified Acute Physiology Score'], ['NEWS', 'National Early Warning Score'], ['CAM-ICU', 'Confusion Assessment Method for the ICU'], ['CLABSI', 'Central line-associated bloodstream infection'], ['CAUTI', 'Catheter-associated urinary tract infection'],
+    ['ECMO', 'Extracorporeal membrane oxygenation'], ['IABP', 'Intra-aortic balloon pump'], ['ScvO2', 'Central venous oxygen saturation'], ['DO2', 'Oxygen delivery'], ['VO2', 'Oxygen consumption'], ['CPR', 'Cardiopulmonary resuscitation'], ['ROSC', 'Return of spontaneous circulation'],
+    // laboratory and general
+    ['RBC', 'Red blood cells'], ['MCV', 'Mean corpuscular volume'], ['MCH', 'Mean corpuscular haemoglobin'], ['RDW', 'Red cell distribution width'], ['PLT', 'Platelets'], ['MPV', 'Mean platelet volume'], ['PLR', 'Platelet-to-lymphocyte ratio'],
+    ['ALP', 'Alkaline phosphatase'], ['GGT', 'Gamma-glutamyl transferase'], ['LDH', 'Lactate dehydrogenase'], ['CK', 'Creatine kinase'], ['TC', 'Total cholesterol'], ['Na', 'Sodium'], ['K', 'Potassium'], ['Ca', 'Calcium'], ['Mg', 'Magnesium'],
+    ['ACR', 'Albumin-to-creatinine ratio'], ['UACR', 'Urine albumin-to-creatinine ratio'], ['FT4', 'Free thyroxine'], ['FT3', 'Free triiodothyronine'], ['PTH', 'Parathyroid hormone'], ['HOMA-IR', 'Homeostatic Model Assessment of Insulin Resistance'],
+    ['OGTT', 'Oral glucose tolerance test'], ['PPBG', 'Postprandial blood glucose'], ['DKA', 'Diabetic ketoacidosis'], ['T2DM', 'Type 2 diabetes mellitus'], ['T1DM', 'Type 1 diabetes mellitus'], ['NAFLD', 'Non-alcoholic fatty liver disease'],
+    ['MASLD', 'Metabolic dysfunction-associated steatotic liver disease'], ['HCV', 'Hepatitis C virus'], ['HBV', 'Hepatitis B virus'], ['HIV', 'Human immunodeficiency virus'], ['UTI', 'Urinary tract infection'], ['CAP', 'Community-acquired pneumonia'],
+    ['CT', 'Computed tomography'], ['MRI', 'Magnetic resonance imaging'], ['US', 'Ultrasound'], ['CXR', 'Chest X-ray'], ['CNS', 'Central nervous system'], ['TIA', 'Transient ischaemic attack'], ['CVA', 'Cerebrovascular accident'],
+    ['NIHSS', 'National Institutes of Health Stroke Scale'], ['mRS', 'Modified Rankin Scale'], ['QoL', 'Quality of life'], ['SF-36', '36-Item Short Form Health Survey'], ['ADL', 'Activities of daily living'], ['ROM', 'Range of motion'],
+    ['ODI', 'Oswestry Disability Index'], ['KOOS', 'Knee injury and Osteoarthritis Outcome Score'], ['IKDC', 'International Knee Documentation Committee'], ['PRP', 'Platelet-rich plasma'], ['NSAIDs', 'Non-steroidal anti-inflammatory drugs'],
+    ['PPI', 'Proton pump inhibitor'], ['OCP', 'Oral contraceptive pill'], ['PCOS', 'Polycystic ovary syndrome'], ['GA weeks', 'Gestational age'], ['IUGR', 'Intrauterine growth restriction'], ['PROM', 'Premature rupture of membranes'],
+    ['CS', 'Caesarean section'], ['NVD', 'Normal vaginal delivery'], ['NICU', 'Neonatal intensive care unit'], ['APGAR', 'Appearance, Pulse, Grimace, Activity, Respiration score'], ['BW', 'Birth weight'], ['EBM', 'Evidence-based medicine']
+  ];
+  // left out: short ones that mean several things or are ordinary words in tables (CI is also the confidence interval, VT tidal volume or tachycardia…)
+  const ABBR_AMBIG = new Set(['CI', 'K', 'Na', 'Ca', 'Mg', 'CO', 'US', 'MS', 'AS', 'AR', 'TR', 'MR', 'LA', 'RA', 'LV', 'RV', 'VT', 'SV', 'FS', 'DT', 'UA', 'CS', 'GA', 'SA', 'EA', 'LM', 'TC', 'POD', 'CAP', 'LAD', 'MAC', 'PE', 'ESP', 'TAP', 'BIS', 'TOF', 'ACR', 'CK', 'PLT']);
+  for (let i = ABBR_MORE.length - 1; i >= 0; i--) if (ABBR_AMBIG.has(ABBR_MORE[i][0]) || /\s/.test(ABBR_MORE[i][0])) ABBR_MORE.splice(i, 1);
+  ABBR_MORE.forEach(([a, full]) => { if (!/\s/.test(a) && !(a in ABBR)) ABBR[a] = full; });
   // what the analysis sees of a variable: unit after the label, Arabic or both labels, a transformation of its values, explained abbreviations
   function prepareVariables(data, cfg) {
     const o = cfg.options || {}, lang = o.labelLang || 'en';
@@ -2911,7 +2967,8 @@ const Analysis = (() => {
       if (flags.param || flags.both) dp.push(meanSdName(true));
       if (flags.nonparam || flags.both) dp.push(FMT.iqr === 'bracket' ? 'median [IQR]' : 'median (IQR)');
       if (flags.cat) dp.push('frequency (%)');
-      if (dp.length) f.push(`Data are presented as ${listJoin(dp)}`);
+      if (opts.statFoot && (flags.param || flags.both) && (flags.nonparam || flags.both)) f.push(`Data are presented as ${listJoin([meanSdName(true), `${FMT.iqr === 'bracket' ? 'median [IQR]' : 'median (IQR)'} for the variables marked †`, ...(flags.cat ? ['frequency (%)'] : [])])}`);
+      else if (dp.length) f.push(`Data are presented as ${listJoin(dp)}`);
       if (flags.effect) {
         if (flags.param && flags.nonparam) f.push('MD: Mean or median difference');
         else if (flags.param) f.push('MD: Mean difference');
@@ -3434,6 +3491,7 @@ const Analysis = (() => {
           const smdCells = smdOn ? [(() => { const v0 = smdOf(r); return { t: [isFinite(v0) ? fmt(v0, 2) + (v0 > 0.1 ? '†' : '') : '—'], rs: span }; })()] : [], adjCells = adjOn ? (() => { const a = adjFit(r); return [{ t: [a ? a.txt : '—'], rs: span, small: true }, { t: [a ? fmtP(a.p, alpha) : '—'], rs: span }]; })() : [];
           return [...cells, ...extraCells(r, span), ...(pairOn ? prs.map(([i, j]) => { const q = pairP(r).find(x => (x.i === i && x.j === j) || (x.i === j && x.j === i)); return { t: [q && isFinite(q.p) ? fmtP(q.p, alpha) : '—'], rs: span }; }) : []), ...(nntOn ? nntCells(r, span) : []), ...smdCells, ...adjCells];
         };
+        const STAT_MIX = res.some(x => x.num && x.num.param) && res.some(x => x.num && !x.num.param);
         for (const r of resRows) {
           // a sub-heading row above the variable (e.g. "Vital signs", "Laboratory")
           if (r.v.subhead && String(r.v.subhead).trim()) trows.push([{ t: [String(r.v.subhead).trim()], b: true, left: true, sub: false, subhead: true, span: ncolsOf() }]);
@@ -3444,7 +3502,8 @@ const Analysis = (() => {
             const L = cldOf(r), gcell = (dd, j, txt) => ({ t: [txt + supOf(L, j)], ...(j === maxJ ? { b: true } : {}) });
             if (opts.secondRow === 'none' || r.v.noSecond) {
               // one row: "Mean ± SD" or "Median (IQR)" in a single cell
-              trows.push([{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] }, ...pre(r, 1),
+              // journal paper: no statistic column — the name across both label columns; the footnote says mean ± SD or median (IQR), † marking the medians when both are used
+              trows.push([...(opts.statFoot ? [{ t: [r.v.label + (!P && STAT_MIX ? ' †' : '')], b: true, span: 2 }] : [{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] }]), ...pre(r, 1),
                 ...O(n.desc.map((dd, j) => gcell(dd, j, P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)))), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d); }), ...tail(r, 1)]);
             } else if (opts.secondRow === 'both') {
               // both summaries: the one the test used first, the other below it
@@ -4585,7 +4644,6 @@ const Analysis = (() => {
       if (used.has('rocCompare')) s.push('The AUCs were compared with the DeLong test for correlated ROC curves.');
     }
     [...used].filter(k => k.startsWith('rrM:') && k.length > 4).forEach(k => s.push(k.slice(4)));
-    if (used.has('noEffBase')) s.push('In line with reporting guidelines (CONSORT), effect sizes were not reported for the baseline characteristics.');
     if (used.has('clt')) s.push('Variables with at least 30 patients in every group were treated as normally distributed (central limit theorem).');
     if (used.has('mwExact') || used.has('mwPerm')) s.push(`For small samples (up to 50 patients), the Mann-Whitney U test used ${used.has('mwExact') && used.has('mwPerm') ? 'its exact distribution or, with ties, a permutation test (20,000 permutations)' : used.has('mwExact') ? 'its exact distribution' : 'a permutation test (20,000 permutations)'}.`);
     if (used.has('boot')) s.push('Confidence intervals of median differences were obtained by the percentile bootstrap (2,000 resamples).');
@@ -4736,6 +4794,7 @@ const Analysis = (() => {
     ['VAS', 'Visual analogue scale'], ['NRS', 'Numeric rating scale'], ['SOFA', 'Sequential Organ Failure Assessment'], ['APACHE', 'Acute Physiology and Chronic Health Evaluation'], ['ICU', 'Intensive care unit'], ['LOS', 'Length of stay'], ['PONV', 'Postoperative nausea and vomiting'], ['PACU', 'Post-anaesthesia care unit'],
     ['IHD', 'Ischaemic heart disease'], ['DM', 'Diabetes mellitus'], ['HTN', 'Hypertension'], ['COPD', 'Chronic obstructive pulmonary disease'], ['CKD', 'Chronic kidney disease'], ['CHF', 'Congestive heart failure'], ['AF', 'Atrial fibrillation'], ['DVT', 'Deep vein thrombosis'], ['PE', 'Pulmonary embolism'], ['UTI', 'Urinary tract infection'], ['SSI', 'Surgical site infection'],
     ['NYHA', 'New York Heart Association'], ['EF', 'Ejection fraction'], ['LVEF', 'Left ventricular ejection fraction'], ['ECOG', 'Eastern Cooperative Oncology Group'], ['PHQ-9', 'Patient Health Questionnaire-9'], ['GAD-7', 'Generalised Anxiety Disorder-7'], ['HADS', 'Hospital Anxiety and Depression Scale'], ['QoR-15', 'Quality of Recovery-15'], ['TAP', 'Transversus abdominis plane'], ['ESP', 'Erector spinae plane']];
+  ABBR_MORE.forEach(([a, full]) => { if (!/\s/.test(a) && !TAB_ABBR.some(x => x[0] === a)) TAB_ABBR.push([a, full]); });
   function abbrFootnotes(r, o) { if (o.abbrFoot === false) return r;
     (r.sections || []).forEach(s0 => { if (!s0.rows || !s0.rows.length) return; const txt = [...(s0.head || []).map(h => typeof h === 'string' ? h : [].concat(h.t || '').join(' ')), ...s0.rows.map(rw => rw[0] ? [].concat(rw[0].t || '').join(' ') : ''), ...s0.rows.map(rw => rw[1] ? [].concat(rw[1].t || '').join(' ') : ''), s0.title || ''].join(' | '), foot = s0.footnote || '';
       const seen = new Set(), add = []; TAB_ABBR.forEach(([a, full]) => { if (seen.has(full)) return; const re = new RegExp(`(^|[^A-Za-z0-9])${a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}(?![A-Za-z0-9])`); if (re.test(txt) && !new RegExp(`(^|[ ,(])${a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}: `).test(foot)) { seen.add(full); add.push(`${a}: ${full}`); } });

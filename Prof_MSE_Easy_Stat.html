@@ -889,6 +889,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="predlist" id="subCols"></div>
       <p class="legend-note">E.g. the comparison of the groups separately in men and women. Each subgroup gets its own tables (titled “… — Sex: Male”), figures and comments in the report. Choosing the group variable gives the tables of each group on its own (a description of the patients of that group).</p>
     </div>
+    <div class="card" id="grpingCard">
+      <h2>Other groupings</h2>
+      <p class="hint">The patients classified more than once: the same tables again with the patients grouped by another variable — e.g. by sex in one set of tables and by hypertension in another. Each set is titled “… according to sex”.</p>
+      <div class="predlist" id="grpingCols"></div>
+    </div>
     <div class="card" id="calcCard">
       <h2>Calculated variables</h2>
       <p class="hint">Create a new column from existing ones, e.g. BMI from weight and height, a change score, a total score or BMI classes. The column is added to the sheet (undo with ↶ in step 1) and to the variables above.</p>
@@ -1643,6 +1648,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Figures in the paper</label><select id="fmtMaxFigs" style="width:auto"><option value="0">None</option><option>1</option><option>2</option><option value="3">3</option><option>4</option><option>5</option><option>6</option><option>8</option><option>10</option><option value="99">All</option></select></div>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtNonSig"><span>Include figures of non-significant results</span></label>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtAbstract"><span>Results paragraph for the abstract</span></label>
+          <div><label class="f">Results text</label><select id="fmtPaperText" style="width:auto"><option value="table">Each comment with its table</option><option value="narrative">One Results text citing the tables</option></select></div>
+          <div><label class="f">Table borders</label><select id="fmtPaperTable" style="width:auto"><option value="grid">All borders</option><option value="apa">Three lines (APA)</option></select></div>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtPaperSig"><span>* after significant P values</span></label>
         </div>
         <div class="row fmt-opts">
           <div><label class="f">First table number</label><input type="number" id="fmtTabStart" min="1" value="1" style="width:90px"></div>
@@ -27022,6 +27030,62 @@ const Analysis = (() => {
     ICU: 'Intensive care unit', LOS: 'Length of stay', PONV: 'Postoperative nausea and vomiting', GCS: 'Glasgow coma scale', APACHE: 'Acute Physiology and Chronic Health Evaluation', SOFA: 'Sequential Organ Failure Assessment',
     WOMAC: 'Western Ontario and McMaster Universities Osteoarthritis Index', KL: 'Kellgren-Lawrence', FEV1: 'Forced expiratory volume in 1 second', FVC: 'Forced vital capacity', EF: 'Ejection fraction', LVEF: 'Left ventricular ejection fraction',
     PRP: 'Platelet-rich plasma', HA: 'Hyaluronic acid', DM: 'Diabetes mellitus', HTN: 'Hypertension', IHD: 'Ischaemic heart disease', CKD: 'Chronic kidney disease', COPD: 'Chronic obstructive pulmonary disease' };
+
+  // more abbreviations: echocardiography, cardiology, anaesthesia, ICU, laboratory and others — added to both lists (labels and table footnotes)
+  const ABBR_MORE = [
+    // echocardiography
+    ['LVEDD', 'Left ventricular end-diastolic diameter'], ['LVESD', 'Left ventricular end-systolic diameter'], ['LVEDV', 'Left ventricular end-diastolic volume'], ['LVESV', 'Left ventricular end-systolic volume'],
+    ['LVIDd', 'Left ventricular internal diameter in diastole'], ['LVIDs', 'Left ventricular internal diameter in systole'], ['IVSd', 'Interventricular septal thickness in diastole'], ['IVS', 'Interventricular septum'],
+    ['PWd', 'Posterior wall thickness in diastole'], ['LVPW', 'Left ventricular posterior wall'], ['LVM', 'Left ventricular mass'], ['LVMI', 'Left ventricular mass index'], ['RWT', 'Relative wall thickness'],
+    ['FS', 'Fractional shortening'], ['GLS', 'Global longitudinal strain'], ['LAVI', 'Left atrial volume index'], ['LAD', 'Left atrial diameter'], ['LA', 'Left atrium'], ['RA', 'Right atrium'], ['RV', 'Right ventricle'], ['LV', 'Left ventricle'],
+    ['TAPSE', 'Tricuspid annular plane systolic excursion'], ['RVSP', 'Right ventricular systolic pressure'], ['PASP', 'Pulmonary artery systolic pressure'], ['mPAP', 'Mean pulmonary artery pressure'], ['PAP', 'Pulmonary artery pressure'],
+    ['TR', 'Tricuspid regurgitation'], ['MR', 'Mitral regurgitation'], ['AR', 'Aortic regurgitation'], ['MS', 'Mitral stenosis'], ['AS', 'Aortic stenosis'], ['AVA', 'Aortic valve area'], ['MVA', 'Mitral valve area'],
+    ['E/A', 'Ratio of early to late mitral inflow velocity'], ["E/e'", 'Ratio of mitral inflow E velocity to early diastolic annular velocity'], ['DT', 'Deceleration time'], ['IVRT', 'Isovolumic relaxation time'],
+    ['TDI', 'Tissue Doppler imaging'], ['TTE', 'Transthoracic echocardiography'], ['TEE', 'Transoesophageal echocardiography'], ['TOE', 'Transoesophageal echocardiography'], ['IVC', 'Inferior vena cava'], ['LVOT', 'Left ventricular outflow tract'],
+    ['VTI', 'Velocity time integral'], ['RWMA', 'Regional wall motion abnormality'], ['WMSI', 'Wall motion score index'], ['SV', 'Stroke volume'], ['CO', 'Cardiac output'], ['CI', 'Cardiac index'],
+    // cardiology
+    ['ECG', 'Electrocardiogram'], ['EKG', 'Electrocardiogram'], ['MI', 'Myocardial infarction'], ['STEMI', 'ST-elevation myocardial infarction'], ['NSTEMI', 'Non-ST-elevation myocardial infarction'], ['ACS', 'Acute coronary syndrome'],
+    ['UA', 'Unstable angina'], ['CAD', 'Coronary artery disease'], ['CABG', 'Coronary artery bypass grafting'], ['PCI', 'Percutaneous coronary intervention'], ['PTCA', 'Percutaneous transluminal coronary angioplasty'],
+    ['LAD artery', 'Left anterior descending artery'], ['LCX', 'Left circumflex artery'], ['RCA', 'Right coronary artery'], ['LM', 'Left main coronary artery'], ['TIMI', 'Thrombolysis in Myocardial Infarction'],
+    ['HFrEF', 'Heart failure with reduced ejection fraction'], ['HFpEF', 'Heart failure with preserved ejection fraction'], ['HFmrEF', 'Heart failure with mildly reduced ejection fraction'], ['HF', 'Heart failure'],
+    ['BNP', 'B-type natriuretic peptide'], ['NT-proBNP', 'N-terminal pro-B-type natriuretic peptide'], ['cTnI', 'Cardiac troponin I'], ['cTnT', 'Cardiac troponin T'], ['hs-cTn', 'High-sensitivity cardiac troponin'], ['CK-MB', 'Creatine kinase-MB'],
+    ['QTc', 'Corrected QT interval'], ['LBBB', 'Left bundle branch block'], ['RBBB', 'Right bundle branch block'], ['AVB', 'Atrioventricular block'], ['SVT', 'Supraventricular tachycardia'], ['VT', 'Ventricular tachycardia'], ['VF', 'Ventricular fibrillation'],
+    ['ICD', 'Implantable cardioverter-defibrillator'], ['CRT', 'Cardiac resynchronisation therapy'], ['PPM', 'Permanent pacemaker'], ['TAVI', 'Transcatheter aortic valve implantation'], ['TAVR', 'Transcatheter aortic valve replacement'],
+    ['ACEI', 'Angiotensin-converting enzyme inhibitor'], ['ARB', 'Angiotensin receptor blocker'], ['ARNI', 'Angiotensin receptor-neprilysin inhibitor'], ['MRA', 'Mineralocorticoid receptor antagonist'], ['SGLT2i', 'Sodium-glucose cotransporter-2 inhibitor'],
+    ['DAPT', 'Dual antiplatelet therapy'], ['MACE', 'Major adverse cardiovascular events'], ['CHA2DS2-VASc', 'Congestive heart failure, Hypertension, Age ≥75 (2), Diabetes, Stroke (2), Vascular disease, Age 65–74, Sex category score'],
+    ['HAS-BLED', 'Hypertension, Abnormal renal/liver function, Stroke, Bleeding, Labile INR, Elderly, Drugs/alcohol score'], ['GRACE', 'Global Registry of Acute Coronary Events'], ['PAD', 'Peripheral arterial disease'], ['CVD', 'Cardiovascular disease'],
+    ['SCD', 'Sudden cardiac death'], ['PE', 'Pulmonary embolism'], ['CTA', 'Computed tomography angiography'], ['CMR', 'Cardiac magnetic resonance'], ['FFR', 'Fractional flow reserve'], ['IVUS', 'Intravascular ultrasound'],
+    // anaesthesia and surgery
+    ['GA', 'General anaesthesia'], ['RA block', 'Regional anaesthesia'], ['SA', 'Spinal anaesthesia'], ['EA', 'Epidural anaesthesia'], ['CSE', 'Combined spinal-epidural'], ['TAP', 'Transversus abdominis plane'], ['ESP', 'Erector spinae plane'],
+    ['PECS', 'Pectoral nerve block'], ['QLB', 'Quadratus lumborum block'], ['TIVA', 'Total intravenous anaesthesia'], ['PCA', 'Patient-controlled analgesia'], ['PCEA', 'Patient-controlled epidural analgesia'], ['MAC', 'Minimum alveolar concentration'],
+    ['BIS', 'Bispectral index'], ['ETCO2', 'End-tidal carbon dioxide'], ['EtCO2', 'End-tidal carbon dioxide'], ['ETT', 'Endotracheal tube'], ['LMA', 'Laryngeal mask airway'], ['RSI', 'Rapid sequence induction'], ['TOF', 'Train-of-four'],
+    ['PONV', 'Postoperative nausea and vomiting'], ['POCD', 'Postoperative cognitive dysfunction'], ['POD', 'Postoperative delirium'], ['PACU', 'Post-anaesthesia care unit'], ['OR time', 'Operating room time'], ['NMB', 'Neuromuscular blockade'],
+    ['MAP', 'Mean arterial pressure'], ['CVP', 'Central venous pressure'], ['IBP', 'Invasive blood pressure'], ['NIBP', 'Non-invasive blood pressure'], ['RASS', 'Richmond Agitation-Sedation Scale'], ['OAA/S', "Observer's Assessment of Alertness/Sedation"],
+    ['Mallampati', 'Mallampati airway classification'], ['ASA-PS', 'American Society of Anesthesiologists physical status'], ['EBL', 'Estimated blood loss'], ['PRBC', 'Packed red blood cells'], ['FFP', 'Fresh frozen plasma'],
+    ['ERAS', 'Enhanced recovery after surgery'], ['SSI', 'Surgical site infection'], ['LOS', 'Length of stay'], ['OSA', 'Obstructive sleep apnoea'],
+    // ICU
+    ['MV', 'Mechanical ventilation'], ['NIV', 'Non-invasive ventilation'], ['HFNC', 'High-flow nasal cannula'], ['CPAP', 'Continuous positive airway pressure'], ['BiPAP', 'Bilevel positive airway pressure'], ['PEEP', 'Positive end-expiratory pressure'],
+    ['FiO2', 'Fraction of inspired oxygen'], ['PaO2', 'Arterial partial pressure of oxygen'], ['PaCO2', 'Arterial partial pressure of carbon dioxide'], ['P/F ratio', 'PaO2/FiO2 ratio'], ['ABG', 'Arterial blood gas'], ['VT', 'Tidal volume'],
+    ['ARDS', 'Acute respiratory distress syndrome'], ['VAP', 'Ventilator-associated pneumonia'], ['AKI', 'Acute kidney injury'], ['CRRT', 'Continuous renal replacement therapy'], ['RRT', 'Renal replacement therapy'],
+    ['DIC', 'Disseminated intravascular coagulation'], ['MODS', 'Multiple organ dysfunction syndrome'], ['SIRS', 'Systemic inflammatory response syndrome'], ['qSOFA', 'Quick Sequential Organ Failure Assessment'],
+    ['SAPS', 'Simplified Acute Physiology Score'], ['NEWS', 'National Early Warning Score'], ['CAM-ICU', 'Confusion Assessment Method for the ICU'], ['CLABSI', 'Central line-associated bloodstream infection'], ['CAUTI', 'Catheter-associated urinary tract infection'],
+    ['ECMO', 'Extracorporeal membrane oxygenation'], ['IABP', 'Intra-aortic balloon pump'], ['ScvO2', 'Central venous oxygen saturation'], ['DO2', 'Oxygen delivery'], ['VO2', 'Oxygen consumption'], ['CPR', 'Cardiopulmonary resuscitation'], ['ROSC', 'Return of spontaneous circulation'],
+    // laboratory and general
+    ['RBC', 'Red blood cells'], ['MCV', 'Mean corpuscular volume'], ['MCH', 'Mean corpuscular haemoglobin'], ['RDW', 'Red cell distribution width'], ['PLT', 'Platelets'], ['MPV', 'Mean platelet volume'], ['PLR', 'Platelet-to-lymphocyte ratio'],
+    ['ALP', 'Alkaline phosphatase'], ['GGT', 'Gamma-glutamyl transferase'], ['LDH', 'Lactate dehydrogenase'], ['CK', 'Creatine kinase'], ['TC', 'Total cholesterol'], ['Na', 'Sodium'], ['K', 'Potassium'], ['Ca', 'Calcium'], ['Mg', 'Magnesium'],
+    ['ACR', 'Albumin-to-creatinine ratio'], ['UACR', 'Urine albumin-to-creatinine ratio'], ['FT4', 'Free thyroxine'], ['FT3', 'Free triiodothyronine'], ['PTH', 'Parathyroid hormone'], ['HOMA-IR', 'Homeostatic Model Assessment of Insulin Resistance'],
+    ['OGTT', 'Oral glucose tolerance test'], ['PPBG', 'Postprandial blood glucose'], ['DKA', 'Diabetic ketoacidosis'], ['T2DM', 'Type 2 diabetes mellitus'], ['T1DM', 'Type 1 diabetes mellitus'], ['NAFLD', 'Non-alcoholic fatty liver disease'],
+    ['MASLD', 'Metabolic dysfunction-associated steatotic liver disease'], ['HCV', 'Hepatitis C virus'], ['HBV', 'Hepatitis B virus'], ['HIV', 'Human immunodeficiency virus'], ['UTI', 'Urinary tract infection'], ['CAP', 'Community-acquired pneumonia'],
+    ['CT', 'Computed tomography'], ['MRI', 'Magnetic resonance imaging'], ['US', 'Ultrasound'], ['CXR', 'Chest X-ray'], ['CNS', 'Central nervous system'], ['TIA', 'Transient ischaemic attack'], ['CVA', 'Cerebrovascular accident'],
+    ['NIHSS', 'National Institutes of Health Stroke Scale'], ['mRS', 'Modified Rankin Scale'], ['QoL', 'Quality of life'], ['SF-36', '36-Item Short Form Health Survey'], ['ADL', 'Activities of daily living'], ['ROM', 'Range of motion'],
+    ['ODI', 'Oswestry Disability Index'], ['KOOS', 'Knee injury and Osteoarthritis Outcome Score'], ['IKDC', 'International Knee Documentation Committee'], ['PRP', 'Platelet-rich plasma'], ['NSAIDs', 'Non-steroidal anti-inflammatory drugs'],
+    ['PPI', 'Proton pump inhibitor'], ['OCP', 'Oral contraceptive pill'], ['PCOS', 'Polycystic ovary syndrome'], ['GA weeks', 'Gestational age'], ['IUGR', 'Intrauterine growth restriction'], ['PROM', 'Premature rupture of membranes'],
+    ['CS', 'Caesarean section'], ['NVD', 'Normal vaginal delivery'], ['NICU', 'Neonatal intensive care unit'], ['APGAR', 'Appearance, Pulse, Grimace, Activity, Respiration score'], ['BW', 'Birth weight'], ['EBM', 'Evidence-based medicine']
+  ];
+  // left out: short ones that mean several things or are ordinary words in tables (CI is also the confidence interval, VT tidal volume or tachycardia…)
+  const ABBR_AMBIG = new Set(['CI', 'K', 'Na', 'Ca', 'Mg', 'CO', 'US', 'MS', 'AS', 'AR', 'TR', 'MR', 'LA', 'RA', 'LV', 'RV', 'VT', 'SV', 'FS', 'DT', 'UA', 'CS', 'GA', 'SA', 'EA', 'LM', 'TC', 'POD', 'CAP', 'LAD', 'MAC', 'PE', 'ESP', 'TAP', 'BIS', 'TOF', 'ACR', 'CK', 'PLT']);
+  for (let i = ABBR_MORE.length - 1; i >= 0; i--) if (ABBR_AMBIG.has(ABBR_MORE[i][0]) || /\s/.test(ABBR_MORE[i][0])) ABBR_MORE.splice(i, 1);
+  ABBR_MORE.forEach(([a, full]) => { if (!/\s/.test(a) && !(a in ABBR)) ABBR[a] = full; });
   // what the analysis sees of a variable: unit after the label, Arabic or both labels, a transformation of its values, explained abbreviations
   function prepareVariables(data, cfg) {
     const o = cfg.options || {}, lang = o.labelLang || 'en';
@@ -27255,7 +27319,8 @@ const Analysis = (() => {
       if (flags.param || flags.both) dp.push(meanSdName(true));
       if (flags.nonparam || flags.both) dp.push(FMT.iqr === 'bracket' ? 'median [IQR]' : 'median (IQR)');
       if (flags.cat) dp.push('frequency (%)');
-      if (dp.length) f.push(`Data are presented as ${listJoin(dp)}`);
+      if (opts.statFoot && (flags.param || flags.both) && (flags.nonparam || flags.both)) f.push(`Data are presented as ${listJoin([meanSdName(true), `${FMT.iqr === 'bracket' ? 'median [IQR]' : 'median (IQR)'} for the variables marked †`, ...(flags.cat ? ['frequency (%)'] : [])])}`);
+      else if (dp.length) f.push(`Data are presented as ${listJoin(dp)}`);
       if (flags.effect) {
         if (flags.param && flags.nonparam) f.push('MD: Mean or median difference');
         else if (flags.param) f.push('MD: Mean difference');
@@ -27778,6 +27843,7 @@ const Analysis = (() => {
           const smdCells = smdOn ? [(() => { const v0 = smdOf(r); return { t: [isFinite(v0) ? fmt(v0, 2) + (v0 > 0.1 ? '†' : '') : '—'], rs: span }; })()] : [], adjCells = adjOn ? (() => { const a = adjFit(r); return [{ t: [a ? a.txt : '—'], rs: span, small: true }, { t: [a ? fmtP(a.p, alpha) : '—'], rs: span }]; })() : [];
           return [...cells, ...extraCells(r, span), ...(pairOn ? prs.map(([i, j]) => { const q = pairP(r).find(x => (x.i === i && x.j === j) || (x.i === j && x.j === i)); return { t: [q && isFinite(q.p) ? fmtP(q.p, alpha) : '—'], rs: span }; }) : []), ...(nntOn ? nntCells(r, span) : []), ...smdCells, ...adjCells];
         };
+        const STAT_MIX = res.some(x => x.num && x.num.param) && res.some(x => x.num && !x.num.param);
         for (const r of resRows) {
           // a sub-heading row above the variable (e.g. "Vital signs", "Laboratory")
           if (r.v.subhead && String(r.v.subhead).trim()) trows.push([{ t: [String(r.v.subhead).trim()], b: true, left: true, sub: false, subhead: true, span: ncolsOf() }]);
@@ -27788,7 +27854,8 @@ const Analysis = (() => {
             const L = cldOf(r), gcell = (dd, j, txt) => ({ t: [txt + supOf(L, j)], ...(j === maxJ ? { b: true } : {}) });
             if (opts.secondRow === 'none' || r.v.noSecond) {
               // one row: "Mean ± SD" or "Median (IQR)" in a single cell
-              trows.push([{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] }, ...pre(r, 1),
+              // journal paper: no statistic column — the name across both label columns; the footnote says mean ± SD or median (IQR), † marking the medians when both are used
+              trows.push([...(opts.statFoot ? [{ t: [r.v.label + (!P && STAT_MIX ? ' †' : '')], b: true, span: 2 }] : [{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] }]), ...pre(r, 1),
                 ...O(n.desc.map((dd, j) => gcell(dd, j, P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)))), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d); }), ...tail(r, 1)]);
             } else if (opts.secondRow === 'both') {
               // both summaries: the one the test used first, the other below it
@@ -28929,7 +28996,6 @@ const Analysis = (() => {
       if (used.has('rocCompare')) s.push('The AUCs were compared with the DeLong test for correlated ROC curves.');
     }
     [...used].filter(k => k.startsWith('rrM:') && k.length > 4).forEach(k => s.push(k.slice(4)));
-    if (used.has('noEffBase')) s.push('In line with reporting guidelines (CONSORT), effect sizes were not reported for the baseline characteristics.');
     if (used.has('clt')) s.push('Variables with at least 30 patients in every group were treated as normally distributed (central limit theorem).');
     if (used.has('mwExact') || used.has('mwPerm')) s.push(`For small samples (up to 50 patients), the Mann-Whitney U test used ${used.has('mwExact') && used.has('mwPerm') ? 'its exact distribution or, with ties, a permutation test (20,000 permutations)' : used.has('mwExact') ? 'its exact distribution' : 'a permutation test (20,000 permutations)'}.`);
     if (used.has('boot')) s.push('Confidence intervals of median differences were obtained by the percentile bootstrap (2,000 resamples).');
@@ -29080,6 +29146,7 @@ const Analysis = (() => {
     ['VAS', 'Visual analogue scale'], ['NRS', 'Numeric rating scale'], ['SOFA', 'Sequential Organ Failure Assessment'], ['APACHE', 'Acute Physiology and Chronic Health Evaluation'], ['ICU', 'Intensive care unit'], ['LOS', 'Length of stay'], ['PONV', 'Postoperative nausea and vomiting'], ['PACU', 'Post-anaesthesia care unit'],
     ['IHD', 'Ischaemic heart disease'], ['DM', 'Diabetes mellitus'], ['HTN', 'Hypertension'], ['COPD', 'Chronic obstructive pulmonary disease'], ['CKD', 'Chronic kidney disease'], ['CHF', 'Congestive heart failure'], ['AF', 'Atrial fibrillation'], ['DVT', 'Deep vein thrombosis'], ['PE', 'Pulmonary embolism'], ['UTI', 'Urinary tract infection'], ['SSI', 'Surgical site infection'],
     ['NYHA', 'New York Heart Association'], ['EF', 'Ejection fraction'], ['LVEF', 'Left ventricular ejection fraction'], ['ECOG', 'Eastern Cooperative Oncology Group'], ['PHQ-9', 'Patient Health Questionnaire-9'], ['GAD-7', 'Generalised Anxiety Disorder-7'], ['HADS', 'Hospital Anxiety and Depression Scale'], ['QoR-15', 'Quality of Recovery-15'], ['TAP', 'Transversus abdominis plane'], ['ESP', 'Erector spinae plane']];
+  ABBR_MORE.forEach(([a, full]) => { if (!/\s/.test(a) && !TAB_ABBR.some(x => x[0] === a)) TAB_ABBR.push([a, full]); });
   function abbrFootnotes(r, o) { if (o.abbrFoot === false) return r;
     (r.sections || []).forEach(s0 => { if (!s0.rows || !s0.rows.length) return; const txt = [...(s0.head || []).map(h => typeof h === 'string' ? h : [].concat(h.t || '').join(' ')), ...s0.rows.map(rw => rw[0] ? [].concat(rw[0].t || '').join(' ') : ''), ...s0.rows.map(rw => rw[1] ? [].concat(rw[1].t || '').join(' ') : ''), s0.title || ''].join(' | '), foot = s0.footnote || '';
       const seen = new Set(), add = []; TAB_ABBR.forEach(([a, full]) => { if (seen.has(full)) return; const re = new RegExp(`(^|[^A-Za-z0-9])${a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}(?![A-Za-z0-9])`); if (re.test(txt) && !new RegExp(`(^|[ ,(])${a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}: `).test(foot)) { seen.add(full); add.push(`${a}: ${full}`); } });
@@ -31636,20 +31703,20 @@ const Report = (() => {
       children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.size })) });
   }
   // headings: Word's Heading 1 / 2; with WORD_STYLES the look comes from the document's styles only (so a university template can restyle them)
-  let WORD_STYLES = false;
+  let WORD_STYLES = false, H1_SZ = 30; // Heading 1: 15 pt, 14 pt in a journal paper; headings have no space before or after
   function heading(text, brand) {
     const { Paragraph, TextRun, HeadingLevel } = D();
     if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(text)] });
     return new Paragraph({
-      heading: HeadingLevel.HEADING_1, spacing: { before: tsSp('h1', 'before', 240), after: tsSp('h1', 'after', 160) }, ...(tsAl('h1') ? { alignment: tsAl('h1') } : {}), ...tsInd('h1'),
-      children: [new TextRun({ text, bold: tsYN('h1', 'bold', true), italics: tsYN('h1', 'italic', undefined), size: tsSz('h1', 30), font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
+      heading: HeadingLevel.HEADING_1, spacing: { before: tsSp('h1', 'before', 0), after: tsSp('h1', 'after', 0) }, ...(tsAl('h1') ? { alignment: tsAl('h1') } : {}), ...tsInd('h1'),
+      children: [new TextRun({ text, bold: tsYN('h1', 'bold', true), italics: tsYN('h1', 'italic', undefined), size: tsSz('h1', H1_SZ), font: BODY_FONT, color: brand ? '1C1648' : '000000' })]
     });
   }
   function subheading(text, brand, pageBreakBefore) {
     const { Paragraph, TextRun, HeadingLevel } = D();
     if (WORD_STYLES) return new Paragraph({ heading: HeadingLevel.HEADING_2, keepNext: true, pageBreakBefore, children: [new TextRun(text)] });
     return new Paragraph({
-      heading: HeadingLevel.HEADING_2, spacing: { before: tsSp('h2', 'before', 240), after: tsSp('h2', 'after', 120) }, keepNext: true, pageBreakBefore, ...(tsAl('h2') ? { alignment: tsAl('h2') } : {}), ...tsInd('h2'),
+      heading: HeadingLevel.HEADING_2, spacing: { before: tsSp('h2', 'before', 0), after: tsSp('h2', 'after', 0) }, keepNext: true, pageBreakBefore, ...(tsAl('h2') ? { alignment: tsAl('h2') } : {}), ...tsInd('h2'),
       children: [new TextRun({ text, bold: tsYN('h2', 'bold', true), italics: tsYN('h2', 'italic', undefined), size: tsSz('h2', 26), font: BODY_FONT, color: brand ? '5E1F96' : '000000' })]
     });
   }
@@ -31836,7 +31903,7 @@ const Report = (() => {
     if (opts.twoCol) PAGE_W = Math.floor((PAGE_W - 708) / 2); // tables and figures fit one column
     LINE = { '1': 240, '1.15': 276, '2': 480 }[pg.spacing] || 360;
     const children = [], footnotes = {};
-    TS = opts.textStyles || {}; TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE; STYLED = !!opts.wordStyles && !TEMPLATE; TT_SZ = 2 * (+(opts.tableLook || {}).size || 10);
+    TS = opts.textStyles || {}; H1_SZ = opts.paper ? 28 : 30; TEMPLATE = !!opts.template; WORD_STYLES = !!opts.wordStyles || TEMPLATE; STYLED = !!opts.wordStyles && !TEMPLATE; TT_SZ = 2 * (+(opts.tableLook || {}).size || 10);
     // bilingual: AR gives the Arabic of a paragraph, heading, caption, footnote or column heading
     const AR = opts.ar || null, arAfter = (text, o) => { if (AR && text) { const t = AR.text(text); if (t) children.push(arPara(t, o)); } };
     const H1 = (t, b) => heading(AR && AR.heading(t) ? `${t} — ${AR.heading(t)}` : t, b);
@@ -32010,8 +32077,8 @@ const Report = (() => {
     parts.push({ land, kids: children.slice(from) });
     const hs = (id, name, size, before, after) => { const k = id === 'Heading1' ? 'h1' : 'h2'; return { id, name, basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { bold: tsYN(k, 'bold', true), ...(tsYN(k, 'italic') !== undefined ? { italics: tsYN(k, 'italic') } : {}), size: tsSz(k, size), font: BODY_FONT, color: brand ? '1C1648' : '000000' }, paragraph: { spacing: { before: tsSp(k, 'before', before), after: tsSp(k, 'after', after) }, keepNext: true, ...(tsAl(k) ? { alignment: tsAl(k) } : {}), ...tsInd(k) } }; };
     // a heading styled in step 11 replaces Word's built-in heading style (otherwise the two styles of the same name are left as before)
-    const hDef = () => { const o = {}; [['h1', 'heading1', 'Heading1', 'Heading 1', 30, 240, 160], ['h2', 'heading2', 'Heading2', 'Heading 2', 26, 240, 120]].forEach(([k, key, id, nm, sz, b, a]) => { if (tsOn(k)) { const x = hs(id, nm, sz, b, a); o[key] = { run: x.run, paragraph: x.paragraph }; } }); return o; };
-    const hsList = () => [['h1', 'Heading1', 'Heading 1', 30, 240, 160], ['h2', 'Heading2', 'Heading 2', 26, 240, 120]].filter(([k]) => !tsOn(k)).map(([, id, nm, sz, b, a]) => hs(id, nm, sz, b, a));
+    const hDef = () => { const o = {}; [['h1', 'heading1', 'Heading1', 'Heading 1', H1_SZ, 0, 0], ['h2', 'heading2', 'Heading2', 'Heading 2', 26, 0, 0]].forEach(([k, key, id, nm, sz, b, a]) => { const x = hs(id, nm, sz, b, a); o[key] = { run: x.run, paragraph: x.paragraph }; }); return o; }; // always replaces Word's own heading style: one definition, not two
+    const hsList = () => [['h1', 'Heading1', 'Heading 1', H1_SZ, 0, 0], ['h2', 'Heading2', 'Heading 2', 26, 0, 0]].filter(() => false).map(([, id, nm, sz, b, a]) => hs(id, nm, sz, b, a));
     const doc = new Document({
       creator: 'Prof MSE Easy Stat',
       title: opts.title || 'Statistical report',
@@ -34329,6 +34396,9 @@ if (typeof module !== 'undefined') module.exports = Sav;
     $('#subCols').innerHTML = cands.length ? cands.map(h => `<label><input type="checkbox" data-subcol="${esc(h)}" ${on.includes(h) ? 'checked' : ''}>${esc(Analysis.columnLabel(cfg, h))}${h === cfg.groupCol ? ' <span class="legend-note">group</span>' : ''} <span class="legend-note">${columnInfo(rows, h).distinct.length}</span></label>`).join('')
       : '<span class="legend-note">No categorical variables.</span>';
     $('#subOverall').checked = sg.overall !== false;
+    // other groupings: every categorical column but the group column
+    const gx = new Set(cfg.groupings || []), gc = cands.filter(h => h !== cfg.groupCol);
+    $('#grpingCols').innerHTML = gc.length ? gc.map(h => `<label><input type="checkbox" data-grping="${esc(h)}" ${gx.has(h) ? 'checked' : ''}>${esc(Analysis.columnLabel(cfg, h))} <span class="legend-note">${columnInfo(rows, h).distinct.length}</span></label>`).join('') : '<span class="legend-note">No other categorical variables.</span>';
     const qv = cfg.variables.filter(v => v.kind === 'single' && v.type === 'numeric');
     $('#qVar').innerHTML = qv.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('');
     renderSelBar();
@@ -34341,6 +34411,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   }
   const readSub = () => { state.cfg.subgroup = { ...(state.cfg.subgroup || {}), cols: [...document.querySelectorAll('[data-subcol]')].filter(x => x.checked).map(x => x.dataset.subcol), overall: $('#subOverall').checked }; state.cfg.consort = null; };
   $('#subCols').onchange = $('#subOverall').onchange = readSub;
+  $('#grpingCols').onchange = () => { state.cfg.groupings = [...document.querySelectorAll('[data-grping]')].filter(x => x.checked).map(x => x.dataset.grping); state.result = null; };
   $('#subAll').onclick = () => { document.querySelectorAll('[data-subcol]').forEach(x => { x.checked = true; }); readSub(); };
   $('#subNone').onclick = () => { document.querySelectorAll('[data-subcol]').forEach(x => { x.checked = false; }); readSub(); };
 
@@ -37829,7 +37900,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
   };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { stamp: false, bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: true, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, forestAll: false, appFull: false, thesisPage: '', citeText: '', autoNum: true, appSheet: '', appSheetCols: '', appSheetRows: '', appSheetAllRows: false, appSheetByGroup: false, appSheetOut: 'in', appSheetFmt: 'docx', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
+  const DEFAULT_REPORT = { stamp: false, bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: true, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, forestAll: false, appFull: false, thesisPage: '', citeText: '', autoNum: true, appSheet: '', appSheetCols: '', appSheetRows: '', appSheetAllRows: false, appSheetByGroup: false, appSheetOut: 'in', appSheetFmt: 'docx', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 0, paperText: 'table', paperSig: false, paperTable: 'grid', abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
   // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
   const JOURNAL_STYLES = {
     none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
@@ -37856,13 +37927,15 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const FORMAT_PRESETS = {
     custom: {},
     thesis: { figPlacement: 'after', paperStyle: false },
-    paper: { paperStyle: true, pWord: 'P', secondRow: 'none', commentPlace: 'none', figPlacement: 'end', figPerRow: 2, figWidth: 'medium', tableStyle: 'apa',
-      summary: false, commentStyle: 'concise', showStat: false, missingNote: false, chartTitle: false }
+    paper: { paperStyle: true, pWord: 'P', secondRow: 'none', commentPlace: 'after', statFoot: true,
+      summary: false, commentStyle: 'concise', showStat: false, missingNote: false }
   };
   const report = () => (state.cfg.report = { ...DEFAULT_REPORT, ...(state.cfg.report || {}) });
   function effOptions() {
     const o = { ...state.cfg.options, ...FORMAT_PRESETS[report().format], ...(JOURNAL_STYLES[report().style] || JOURNAL_STYLES.none).o };
     if (report().format === 'thesis' && o.commentPlace === 'none') o.commentPlace = 'after';
+    // the paper: all borders and no * by default (both can be changed in the paper's own settings); one Results text instead of the comments when chosen
+    if (report().format === 'paper') { const rp = report(); o.tableStyle = rp.paperTable === 'apa' ? 'apa' : 'grid'; o.sigSym = rp.paperSig ? (state.cfg.options.sigSym || '*') : ''; if (rp.paperText === 'narrative') o.commentPlace = 'none'; }
     return o;
   }
   function renderFormatBar() {
@@ -37872,7 +37945,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     $('#fmtThesis').style.display = r.format === 'thesis' ? '' : 'none';
     $('#fmtPaper').style.display = r.format === 'paper' ? '' : 'none';
     $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
-    $('#fmtNewPage').checked = r.newPage; $('#fmtPage').value = r.thesisPage || ''; $('#fmtNonSig').checked = r.nonSig;
+    $('#fmtNewPage').checked = r.newPage; $('#fmtPage').value = r.thesisPage || ''; $('#fmtNonSig').checked = r.nonSig; $('#fmtPaperText').value = r.paperText || 'table'; $('#fmtPaperTable').value = r.paperTable || 'grid'; $('#fmtPaperSig').checked = !!r.paperSig;
     $('#fmtTabStart').value = r.tabStart; $('#fmtFigStart').value = r.figStart;
     renderRepSnaps();
     document.querySelectorAll('[data-rx]').forEach(el => { const v = r[el.dataset.rx]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v ?? ''); });
@@ -38016,12 +38089,12 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (!md) out.push(['\\documentclass{article}', '\\usepackage[utf8]{inputenc}', '\\usepackage{booktabs}', '\\usepackage{graphicx}', `\\title{${tex(state.cfg.study.title || 'Statistical report')}}`, '\\begin{document}', '\\maketitle'].join('\n'));
     else out.push(`# ${state.cfg.study.title || 'Statistical report'}`);
     if (!isOut('methods') && r.methods) out.push(H(2, 'Statistical analysis'), P(r.methods));
-    out.push(H(2, 'Results')); if (r.groupIntro) r.groupIntro.split('\n').forEach(t => out.push(P(t))); if (r.intro) out.push(P(r.intro)); if (r.narrative && plan.paper) out.push(P(r.narrative));
+    out.push(H(2, 'Results')); if (r.groupIntro) r.groupIntro.split('\n').forEach(t => out.push(P(t))); if (r.intro) out.push(P(r.intro)); if (r.narrative && plan.paperNarr) out.push(P(r.narrative));
     r.sections.forEach(s => { if (!plan.tabNum.get(s)) return; const head = headText(s.head), grid = tableRowsText(s.rows), cap = `Table ${plan.tabNum.get(s)}: ${s.title}`;
       if (md) out.push(`**${cap}**`, '', `| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...grid.map(l => `| ${head.map((_, j) => (l[j] ?? '').replace(/\|/g, '\\|')).join(' | ')} |`), '', `*${s.footnote || ''}*`);
       else out.push(['\\begin{table}[ht]\\centering\\small', `\\caption{${tex(s.title)}}`, `\\begin{tabular}{${head.map((_, j) => j ? 'c' : 'l').join('')}}\\toprule`, head.map(tex).join(' & ') + ' \\\\ \\midrule',
         ...grid.map(l => head.map((_, j) => tex(l[j] ?? '')).join(' & ') + ' \\\\'), '\\bottomrule\\end{tabular}', `\\par\\footnotesize ${tex(s.footnote || '')}`, '\\end{table}'].join('\n'));
-      if (s.comment && !plan.paper && o.commentPlace !== 'none') out.push(P(s.comment));
+      if (s.comment && !plan.paperNarr && o.commentPlace !== 'none') out.push(P(s.comment));
       s.figures.forEach(f => { if (plan.figNum.get(f)) out.push(md ? `*Figure ${plan.figNum.get(f)}: ${f.caption}*` : `% Figure ${plan.figNum.get(f)}: ${tex(f.caption)} - export the figures from step 11 and add \\includegraphics here`); }); });
     if (r.summary && !isOut('summary')) out.push(H(2, 'Summary of key findings'), P(r.summary));
     if (!md) out.push('\\end{document}');
@@ -38685,6 +38758,9 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     if (e.target.id === 'fmtChapter') r.chapter = e.target.value.trim();
     else if (e.target.id === 'fmtHeads') r.sectionHeads = e.target.checked;
     else if (e.target.id === 'fmtMaxFigs') r.maxFigs = +e.target.value;
+    else if (e.target.id === 'fmtPaperText') r.paperText = e.target.value;
+    else if (e.target.id === 'fmtPaperTable') r.paperTable = e.target.value;
+    else if (e.target.id === 'fmtPaperSig') r.paperSig = e.target.checked;
     else if (e.target.id === 'fmtAbstract') r.abstract = e.target.checked;
     else if (e.target.id === 'fmtNewPage') { r.newPage = e.target.checked; return; }
     else if (e.target.id === 'fmtPage') { r.thesisPage = e.target.value; return; }
@@ -38755,6 +38831,16 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
           if (done.length) res.methods += ` Subgroup analyses were performed within each category of ${done.length > 1 ? done.slice(0, -1).join(', ') + ' and ' + done[done.length - 1] : done[0]}${cmp ? ', with the subgroups presented side by side' : ''}.`.replace('each category of each combination', 'each combination');
           if (skipped.length) res.methods += ` Subgroups with fewer than ${minN} patients were not analysed (${skipped.join('; ')}).`;
         }
+        // other groupings: the same tables with the patients classified again by another column (e.g. by sex, then by hypertension)
+        const xg = (state.cfg.groupings || []).filter(c => c && c !== state.cfg.groupCol && state.data.headers.includes(c));
+        if (xg.length) { await pauseOr('Other groupings'); const added = [], base0 = Analysis.filterRows(state.cfg, state.data.rows);
+          xg.forEach(col => { try { const lv = Analysis.levelsOf(state.cfg, base0, col); if (lv.length < 2) return; const lab = Analysis.columnLabel(state.cfg, col);
+            const c2 = { ...cfg, groupCol: col, groupOrder: lv, groupLabels: Object.fromEntries(lv.map(l => [l, valueLabel(col, l)])), groupInclude: Object.fromEntries(lv.map(l => [l, true])), groupMerge: {}, groupCtrl: lv[0], groupDesc: null,
+              consort: null, advanced: [], subgroup: null, timeline: null, groupIntro: 'off', variables: cfg.variables.map(v => v.cols && v.cols.length === 1 && v.cols[0].col === col ? { ...v, include: false } : v) };
+            const r2 = Analysis.run(state.data, c2); try { postRepeated(r2, c2); } catch (e) { /* no repeated measures */ }
+            r2.sections.forEach(s => { s.title = `${s.title.replace(/\s+of the studied (groups|patients)$/, '')} according to ${lowerFirstApp(lab)}`; s.key = s.title; s.grouping = col; s.figures.forEach(f => { f.caption = `${f.caption} (by ${lowerFirstApp(lab)})`; }); });
+            res.sections.push(...r2.sections); added.push(lowerFirstApp(lab)); } catch (e) { console.error(e); } });
+          if (added.length) res.methods += ` The patients were also classified by ${added.length > 1 ? added.slice(0, -1).join(', ') + ' and by ' + added[added.length - 1] : added[0]}, and the same comparisons were made for each classification.`; }
         // a journal style's P wording also goes into the table footnotes
         if (report().style !== 'none' && cfg.options.pWord !== 'P value') res.sections.forEach(s => { s.footnote = s.footnote.replace(/\bP value\b/g, cfg.options.pWord); });
         // P values without the leading zero: also the significance level in the footnotes
@@ -38945,7 +39031,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     order.forEach(f => figNum.set(f, pre + n++));
     const tabNum = new Map(); let t = +rep.tabStart || 1;
     r.sections.forEach(s => { if (!s.figOnly && !isOut(exKey.table(s))) tabNum.set(s, pre + t++); });
-    return { o, rep, paper, pre, kept, order, figNum, tabNum, consortNum: pre + f0, consortOn };
+    return { o, rep, paper, paperNarr: paper && rep.paperText === 'narrative', pre, kept, order, figNum, tabNum, consortNum: pre + f0, consortOn };
   }
   // the paper's Results narrative: significant findings per table, each citing its table and figure
   function paperNarrative(r, plan) {
@@ -38976,7 +39062,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
 
   function renderReport() {
     const r = state.result, plan = exportPlan(r), o = plan.o, lab = n => Report.figLabel(n, o.captionStyle);
-    if (plan.paper && !r.narrativeEdited) r.narrative = paperNarrative(r, plan);
+    if (plan.paperNarr && !r.narrativeEdited) r.narrative = paperNarrative(r, plan);
     if (plan.paper && plan.rep.abstract && !r.abstractEdited) r.abstract = Analysis.trimWords(abstractResults(r), +state.cfg.options.absMaxWords || 0);
     let html = '';
     html += `<div class="row exp-bar"><b>In the Word file:</b> <span class="legend-note">untick any section, table or figure to leave it out — numbering follows what is kept.</span><span class="spacer"></span>
@@ -38993,9 +39079,9 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     html += `<div class="report-sec"><h3>Results</h3>`;
     if (r.groupIntro) html += `<div class="legend-note" style="margin-top:6px">Opening paragraph of the results (the groups, step 2)</div><textarea id="edGroupIntro" rows="${Math.min(8, 2 + (r.groupIntro.match(/\n/g) || []).length)}">${esc(r.groupIntro)}</textarea>`;
     if (r.consort) html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${plan.consortOn ? lab(plan.consortNum) : 'Not exported:'} ${esc(r.flowCaption)}</div></div>`;
-    const wl = +report().wordLimit; if (wl) { const n = words(r.narrative || '') + words(r.intro || '') + (plan.paper ? 0 : r.sections.reduce((t, s) => t + words(s.comment || ''), 0));
+    const wl = +report().wordLimit; if (wl) { const n = words(r.narrative || '') + words(r.intro || '') + (plan.paperNarr ? 0 : r.sections.reduce((t, s) => t + words(s.comment || ''), 0));
       html += `<div class="chip ${n > wl ? 'warn' : 'ok'}" style="display:block;margin:6px 0">${n > wl ? '⚠' : '✓'} Results: ${n} words (limit ${wl})${n > wl ? ` — ${n - wl} over` : ''}</div>`; }
-    if (plan.paper) html += `<label class="f" style="margin-top:12px">Results text (written from the significant results, citing tables and figures — edit freely)</label><textarea id="edNarrative" style="min-height:180px">${esc(r.narrative)}</textarea>
+    if (plan.paperNarr) html += `<label class="f" style="margin-top:12px">Results text (written from the significant results, citing tables and figures — edit freely)</label><textarea id="edNarrative" style="min-height:180px">${esc(r.narrative)}</textarea>
       <div class="legend-note">${words(r.narrative) + words(r.intro)} words in Results · ${words(r.narrative) + words(r.intro) + words(r.methods)} words with the statistical analysis</div>`;
     html += `</div>`;
     const atEnd = o.figPlacement === 'end' || o.figPlacement === 'endType';
@@ -39008,7 +39094,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     r.sections.forEach((s, i) => {
       if (s.figOnly) { if (!atEnd) html += `<div class="report-sec"><div class="legend-note">Figure placed here (step 7)</div><div class="figs">${s.figures.map(figHtml).join('')}</div></div>`; return; }
       const tk = exKey.table(s), tOut = isOut(tk), place = s.place && o.commentPlace !== 'none' ? s.place : o.commentPlace || 'after';
-      const comment = plan.paper ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}" spellcheck="true" lang="en">${esc(s.comment)}</textarea>
+      const comment = plan.paperNarr ? '' : `<label class="f">Comment (editable — ${place === 'none' ? 'not exported: comments are switched off in step 6' : `placed ${place} the table`})</label><textarea data-comment="${i}" spellcheck="true" lang="en">${esc(s.comment)}</textarea>
         <div class="row" style="gap:6px"><button class="btn ghost small" data-copycom="${i}" type="button">⧉ Copy comment</button><button class="btn ghost small" data-explain="${i}" type="button" title="What the statistical terms of this comment mean">ℹ Explain</button><button class="btn ghost small" data-sents="${i}" type="button" title="Keep or drop single sentences">✂ Sentences</button><button class="btn ghost small" data-srcs="${i}" type="button" title="Point at a number to see its cell in the table">🔗 Sources</button><button class="btn ghost small" data-rephrase="${i}" type="button" title="Another wording of the same comment (click again for more)">↻ Rephrase</button><button class="btn ghost small" data-revnote="${i}" type="button" title="A reviewer's or supervisor's comment on this section (a Word comment in the review copy)">💬 ${(state.cfg.revNotes || {})[s.key || s.title] ? 'Comment ✓' : 'Comment'}</button><span class="legend-note">${words(s.comment)} words · readability ${flesch(s.comment)}</span></div><div class="explain" data-explainbox="${i}"></div><div data-sentbox="${i}"></div>
         ${o.keyFindings && s.findings && s.findings.length ? `<div class="legend-note"><b>Key findings:</b><ol style="margin:4px 0 0 18px;padding:0">${s.findings.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}`;
       html += `<div class="report-sec"><div class="${off(tk)}"><div class="row"><div class="cap" style="flex:1">${tOut ? 'Not exported:' : `Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : o.tableCaption === 'apa' ? '' : ':'}`} <input type="text" class="fcap" data-ttl="${i}" value="${esc(s.title)}" title="Edit the table title"></div>${exBox(tk, 'Table')}</div>
@@ -39237,7 +39323,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   }
   const PAGE_PRESETS = {
     thesis: { o: { pageSize: 'a4', orientation: 'portrait', pageMargin: 'custom', marTop: '2.5', marBottom: '2.5', marLeft: '3.5', marRight: '2.5', gutter: '', pageMirror: false, lineSpacing: '1.5', bodySize: '12', bodyAlign: 'justify', paraBefore: '', paraAfter: '', firstIndent: '', pageNum: 'center', pageNumFmt: 'decimal' }, r: { lineNumbers: false, twoCol: false } },
-    journal: { o: { pageSize: 'a4', orientation: 'portrait', pageMargin: 'normal', marTop: '', marBottom: '', marLeft: '', marRight: '', gutter: '', pageMirror: false, lineSpacing: '2', bodySize: '12', bodyAlign: 'left', paraBefore: '', paraAfter: '', firstIndent: '', pageNum: 'right', pageNumFmt: 'decimal', pageFirstHide: false }, r: { lineNumbers: true, twoCol: false } },
+    journal: { o: { pageSize: 'a4', orientation: 'portrait', pageMargin: 'normal', marTop: '', marBottom: '', marLeft: '', marRight: '', gutter: '', pageMirror: false, lineSpacing: '2', bodySize: '12', bodyAlign: 'justify', paraBefore: '', paraAfter: '', firstIndent: '', pageNum: 'right', pageNumFmt: 'decimal', pageFirstHide: false }, r: { lineNumbers: false, twoCol: false } },
     compact: { o: { pageMargin: 'narrow', marTop: '', marBottom: '', marLeft: '', marRight: '', gutter: '', lineSpacing: '1', bodySize: '11', paraBefore: '', paraAfter: '6', firstIndent: '' }, r: { twoCol: false } }
   };
   const PAGE_KEYS = ['indentScope', 'pageSize', 'pageW', 'pageH', 'orientation', 'pageMargin', 'marTop', 'marBottom', 'marLeft', 'marRight', 'gutter', 'pageMirror', 'hdrDist', 'ftrDist', 'font', 'bodySize', 'lineSpacing', 'bodyAlign', 'paraBefore', 'paraAfter', 'firstIndent', 'pageNum', 'pageNumFmt', 'pageStart', 'pageFirstHide', 'headerText', 'footerText', 'branding'];
@@ -39348,14 +39434,14 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (!isOut('methods') && r.methods) { B.push({ html: '<div class="h1">Statistical Analysis</div>', head: true }); P(r.methods); }
     B.push({ html: '<div class="h1">Results</div>', head: true });
     if (plan.consortOn && r.consort) { P(r.intro); img(r.consort.url, 560, 560 * r.consort.h / r.consort.w, `${lab(plan.consortNum)} ${r.flowCaption}`); }
-    if (plan.paper && r.narrative) r.narrative.split(/\n\s*\n/).forEach(t => P(t.trim()));
+    if (plan.paperNarr && r.narrative) r.narrative.split(/\n\s*\n/).forEach(t => P(t.trim()));
     r.sections.forEach(s => {
       if (plan.tabNum.get(s)) {
         const cp = s.place && o.commentPlace !== 'none' ? s.place : o.commentPlace || 'after';
-        if (s.comment && cp === 'before' && !plan.paper) P(s.comment);
+        if (s.comment && cp === 'before' && !plan.paperNarr) P(s.comment);
         B.push({ html: `<div class="cap tcap">Table ${plan.tabNum.get(s)}${o.tableCaption === 'period' ? '.' : ':'} ${esc(s.title)}</div>`, head: true });
         B.push({ table: s }); B.push({ html: `<div class="foot">${esc(s.footnote || '')}</div>` });
-        if (s.comment && cp === 'after' && !plan.paper) P(s.comment);
+        if (s.comment && cp === 'after' && !plan.paperNarr) P(s.comment);
       }
       s.figures.forEach(f => { const n = plan.figNum.get(f); if (n && f.url) img(f.url, 560, 560 * f.h / f.w, `${lab(n)} ${f.caption}${f.note ? ' ' + f.note : ''}`); });
     });
@@ -39591,7 +39677,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     const plan = exportPlan(r);
     return {
       ...r, methods: isOut('methods') ? '' : r.methods, consort: isOut('consort') ? null : r.consort, summary: isOut('summary') ? '' : r.summary,
-      narrative: plan.paper ? r.narrative : '', abstract: plan.paper && plan.rep.abstract ? r.abstract : '',
+      narrative: plan.paperNarr ? r.narrative : '', abstract: plan.paper && plan.rep.abstract ? r.abstract : '',
       sections: organise(r.sections.map(s => ({ ...s, tableOn: !s.figOnly && !isOut(exKey.table(s)), figures: s.figures.filter(f => plan.kept.has(f)) }))
         .filter(s => s.tableOn || s.figures.length))
     };
@@ -40756,9 +40842,14 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   setTimeout(onStepper, 0); // after every part of this module is set up
   /* ---------- X4: accessibility: a skip link, names for icon-only buttons and unlabelled fields, visible focus (CSS) ---------- */
   { const a = el('a', 'ux-skip', 'Skip to the main content'); a.href = '#'; a.onclick = e => { e.preventDefault(); const m = document.querySelector('main'); if (m) { m.setAttribute('tabindex', '-1'); m.focus(); } }; document.body.prepend(a);
-    const name = root => { root.querySelectorAll('button:not([aria-label]), label.btn:not([aria-label])').forEach(b => { const t = (b.textContent || '').replace(/\s+/g, ' ').trim(); if ((!t || !/[A-Za-z]{3}/.test(t)) && b.title) b.setAttribute('aria-label', b.title); });
-      root.querySelectorAll('input:not([aria-label]):not([type=hidden]), select:not([aria-label]), textarea:not([aria-label])').forEach(x => { if (x.labels && x.labels.length) return; const t = x.title || x.placeholder || (x.closest('[title]') || {}).title; if (t) x.setAttribute('aria-label', t); }); };
-    let pend = false; new MutationObserver(() => { if (pend) return; pend = true; requestAnimationFrame(() => { pend = false; name(document); }); }).observe(document.body, { childList: true, subtree: true }); name(document); }
+    // each element is looked at once, and only the parts of the page just added (not the whole page after every change)
+    const seen = new WeakSet(), one = b => { if (seen.has(b)) return; seen.add(b); if (b.hasAttribute('aria-label')) return;
+      if (b.matches('button, label.btn')) { const t = (b.textContent || '').replace(/\s+/g, ' ').trim(); if ((!t || !/[A-Za-z]{3}/.test(t)) && b.title) b.setAttribute('aria-label', b.title); return; }
+      if (b.type === 'hidden' || (b.labels && b.labels.length)) return; const t = b.title || b.placeholder || (b.closest('[title]') || {}).title; if (t) b.setAttribute('aria-label', t); };
+    const Q = 'button, label.btn, input, select, textarea', name = root => { if (root.matches && root.matches(Q)) one(root); if (root.querySelectorAll) root.querySelectorAll(Q).forEach(one); };
+    let pend = null, sched = false; const flushNames = () => { sched = false; const list = pend; pend = null; if (list) list.forEach(n => { if (n.isConnected) name(n); }); };
+    new MutationObserver(ms => { pend = pend || new Set(); ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) pend.add(n); }));
+      if (!pend.size || sched) return; sched = true; if (window.requestIdleCallback) requestIdleCallback(flushNames, { timeout: 800 }); else setTimeout(flushNames, 200); }).observe(document.body, { childList: true, subtree: true }); name(document); }
   // X8: print the screen as it is (the menus and buttons left out, the folded parts opened)
   { const menu = document.querySelector('.ux-menu'); if (menu) { const b = el('button', 'btn light small', '🖨 Print this screen'); b.type = 'button'; b.title = 'The current screen (design, generator, tables or report) printed without the buttons'; b.onclick = () => window.print(); menu.appendChild(b); } }
   /* ---------- step entry hooks ---------- */
@@ -46358,7 +46449,8 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
   function kbdTables() { $$('#report table.rt, #p10 table.t').forEach(t => { if (!t.hasAttribute('tabindex')) { t.tabIndex = 0; t.setAttribute('aria-label', 'Table: use the arrow keys to move between cells'); } }); }
 
   /* ================= A2: a name for every icon-only button ================= */
-  function names() { $$('button, a.btn, label.btn').forEach(b => { if (b.hasAttribute('aria-label')) return; const vis = (b.innerText || '').replace(/[^\p{L}\p{N}]/gu, ''), tl = b.querySelector('.tl');
+  const named = new WeakSet();
+  function names() { $$('.top-actions .btn, button:not([aria-label]), a.btn:not([aria-label]), label.btn:not([aria-label])').forEach(b => { if (b.hasAttribute('aria-label') || (named.has(b) && !b.closest('.top-actions'))) return; named.add(b); const vis = (b.textContent || '').replace(/[^\p{L}\p{N}]/gu, ''), tl = b.querySelector('.tl');
     if (vis.length >= 2 && !(tl && getComputedStyle(tl).display === 'none')) return; const name = (tl && tl.textContent.trim()) || b.title || (b.textContent || '').trim(); if (name) b.setAttribute('aria-label', name.replace(/\s+/g, ' ').slice(0, 80)); }); }
 
   /* ================= A3: the tab bar on phones ================= */
@@ -46471,10 +46563,10 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
   setTimeout(() => { menuAdd('🕘 Recent actions', 'What you changed in this session — click one to go back there', recent); menuAdd('🧪 Try without risk (sandbox)', 'Try options on a copy: leave the sandbox and everything is as before', sandbox);
     menuAdd('🎨 Interface colour', 'The colour of the app (not of the report)', accentPanel); menuAdd('🧩 Arrange the header', 'Choose the buttons of the header and their order', headerPanel);
     menuAdd('📄 Live report beside the options', 'The report on the right, updated as you change options', () => liveToggle(true)); menuAdd('💡 Show the tips again', 'The first-time tips', () => { LS.set('hintsSeen', []); LS.set('hintsOff', false); lastHint = 0; U.toast('Tips back on'); }); }, 600);
-  let lastStep = 0;
+  let lastStep = 0, tick = 0, starStep = 0;
   setInterval(() => { const s = step();
     if (s !== lastStep) { const prev = lastStep; lastStep = s; if (S().data && prev) { const m = LS.get('scroll.' + proj(), {}); if (m[s] > 0) setTimeout(() => scrollTo(0, m[s]), 120); } myOptions(true); }
-    rings(); cards(); bulk(); banner(); stars(); myOptions(false); liveBtn(); tabsOn(); kbdTables(); names(); hints();
+    rings(); cards(); bulk(); banner(); if (tick++ % 5 === 0 || s !== starStep) { starStep = s; stars(); } myOptions(false); liveBtn(); tabsOn(); kbdTables(); if (tick % 3 === 0) names(); hints();
     if (s === 12 && !glossPaint.done && $('#report .report-sec')) { glossPaint(); glossPaint.done = true; } }, 900);
   new MutationObserver(() => { glossPaint.done = false; }).observe(document.getElementById('report') || document.body, { childList: true });
   window.EasyUX15 = { liveToggle, sandbox, recent, accent, headerPanel, glossPaint };

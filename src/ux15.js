@@ -209,7 +209,8 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
   function kbdTables() { $$('#report table.rt, #p10 table.t').forEach(t => { if (!t.hasAttribute('tabindex')) { t.tabIndex = 0; t.setAttribute('aria-label', 'Table: use the arrow keys to move between cells'); } }); }
 
   /* ================= A2: a name for every icon-only button ================= */
-  function names() { $$('button, a.btn, label.btn').forEach(b => { if (b.hasAttribute('aria-label')) return; const vis = (b.innerText || '').replace(/[^\p{L}\p{N}]/gu, ''), tl = b.querySelector('.tl');
+  const named = new WeakSet();
+  function names() { $$('.top-actions .btn, button:not([aria-label]), a.btn:not([aria-label]), label.btn:not([aria-label])').forEach(b => { if (b.hasAttribute('aria-label') || (named.has(b) && !b.closest('.top-actions'))) return; named.add(b); const vis = (b.textContent || '').replace(/[^\p{L}\p{N}]/gu, ''), tl = b.querySelector('.tl');
     if (vis.length >= 2 && !(tl && getComputedStyle(tl).display === 'none')) return; const name = (tl && tl.textContent.trim()) || b.title || (b.textContent || '').trim(); if (name) b.setAttribute('aria-label', name.replace(/\s+/g, ' ').slice(0, 80)); }); }
 
   /* ================= A3: the tab bar on phones ================= */
@@ -322,10 +323,10 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
   setTimeout(() => { menuAdd('🕘 Recent actions', 'What you changed in this session — click one to go back there', recent); menuAdd('🧪 Try without risk (sandbox)', 'Try options on a copy: leave the sandbox and everything is as before', sandbox);
     menuAdd('🎨 Interface colour', 'The colour of the app (not of the report)', accentPanel); menuAdd('🧩 Arrange the header', 'Choose the buttons of the header and their order', headerPanel);
     menuAdd('📄 Live report beside the options', 'The report on the right, updated as you change options', () => liveToggle(true)); menuAdd('💡 Show the tips again', 'The first-time tips', () => { LS.set('hintsSeen', []); LS.set('hintsOff', false); lastHint = 0; U.toast('Tips back on'); }); }, 600);
-  let lastStep = 0;
+  let lastStep = 0, tick = 0, starStep = 0;
   setInterval(() => { const s = step();
     if (s !== lastStep) { const prev = lastStep; lastStep = s; if (S().data && prev) { const m = LS.get('scroll.' + proj(), {}); if (m[s] > 0) setTimeout(() => scrollTo(0, m[s]), 120); } myOptions(true); }
-    rings(); cards(); bulk(); banner(); stars(); myOptions(false); liveBtn(); tabsOn(); kbdTables(); names(); hints();
+    rings(); cards(); bulk(); banner(); if (tick++ % 5 === 0 || s !== starStep) { starStep = s; stars(); } myOptions(false); liveBtn(); tabsOn(); kbdTables(); if (tick % 3 === 0) names(); hints();
     if (s === 12 && !glossPaint.done && $('#report .report-sec')) { glossPaint(); glossPaint.done = true; } }, 900);
   new MutationObserver(() => { glossPaint.done = false; }).observe(document.getElementById('report') || document.body, { childList: true });
   window.EasyUX15 = { liveToggle, sandbox, recent, accent, headerPanel, glossPaint };

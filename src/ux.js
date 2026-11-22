@@ -532,9 +532,14 @@
   setTimeout(onStepper, 0); // after every part of this module is set up
   /* ---------- X4: accessibility: a skip link, names for icon-only buttons and unlabelled fields, visible focus (CSS) ---------- */
   { const a = el('a', 'ux-skip', 'Skip to the main content'); a.href = '#'; a.onclick = e => { e.preventDefault(); const m = document.querySelector('main'); if (m) { m.setAttribute('tabindex', '-1'); m.focus(); } }; document.body.prepend(a);
-    const name = root => { root.querySelectorAll('button:not([aria-label]), label.btn:not([aria-label])').forEach(b => { const t = (b.textContent || '').replace(/\s+/g, ' ').trim(); if ((!t || !/[A-Za-z]{3}/.test(t)) && b.title) b.setAttribute('aria-label', b.title); });
-      root.querySelectorAll('input:not([aria-label]):not([type=hidden]), select:not([aria-label]), textarea:not([aria-label])').forEach(x => { if (x.labels && x.labels.length) return; const t = x.title || x.placeholder || (x.closest('[title]') || {}).title; if (t) x.setAttribute('aria-label', t); }); };
-    let pend = false; new MutationObserver(() => { if (pend) return; pend = true; requestAnimationFrame(() => { pend = false; name(document); }); }).observe(document.body, { childList: true, subtree: true }); name(document); }
+    // each element is looked at once, and only the parts of the page just added (not the whole page after every change)
+    const seen = new WeakSet(), one = b => { if (seen.has(b)) return; seen.add(b); if (b.hasAttribute('aria-label')) return;
+      if (b.matches('button, label.btn')) { const t = (b.textContent || '').replace(/\s+/g, ' ').trim(); if ((!t || !/[A-Za-z]{3}/.test(t)) && b.title) b.setAttribute('aria-label', b.title); return; }
+      if (b.type === 'hidden' || (b.labels && b.labels.length)) return; const t = b.title || b.placeholder || (b.closest('[title]') || {}).title; if (t) b.setAttribute('aria-label', t); };
+    const Q = 'button, label.btn, input, select, textarea', name = root => { if (root.matches && root.matches(Q)) one(root); if (root.querySelectorAll) root.querySelectorAll(Q).forEach(one); };
+    let pend = null, sched = false; const flushNames = () => { sched = false; const list = pend; pend = null; if (list) list.forEach(n => { if (n.isConnected) name(n); }); };
+    new MutationObserver(ms => { pend = pend || new Set(); ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) pend.add(n); }));
+      if (!pend.size || sched) return; sched = true; if (window.requestIdleCallback) requestIdleCallback(flushNames, { timeout: 800 }); else setTimeout(flushNames, 200); }).observe(document.body, { childList: true, subtree: true }); name(document); }
   // X8: print the screen as it is (the menus and buttons left out, the folded parts opened)
   { const menu = document.querySelector('.ux-menu'); if (menu) { const b = el('button', 'btn light small', '🖨 Print this screen'); b.type = 'button'; b.title = 'The current screen (design, generator, tables or report) printed without the buttons'; b.onclick = () => window.print(); menu.appendChild(b); } }
   /* ---------- step entry hooks ---------- */

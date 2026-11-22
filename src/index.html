@@ -889,6 +889,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <div class="predlist" id="subCols"></div>
       <p class="legend-note">E.g. the comparison of the groups separately in men and women. Each subgroup gets its own tables (titled “… — Sex: Male”), figures and comments in the report. Choosing the group variable gives the tables of each group on its own (a description of the patients of that group).</p>
     </div>
+    <div class="card" id="grpingCard">
+      <h2>Other groupings</h2>
+      <p class="hint">The patients classified more than once: the same tables again with the patients grouped by another variable — e.g. by sex in one set of tables and by hypertension in another. Each set is titled “… according to sex”.</p>
+      <div class="predlist" id="grpingCols"></div>
+    </div>
     <div class="card" id="calcCard">
       <h2>Calculated variables</h2>
       <p class="hint">Create a new column from existing ones, e.g. BMI from weight and height, a change score, a total score or BMI classes. The column is added to the sheet (undo with ↶ in step 1) and to the variables above.</p>
@@ -1643,6 +1648,9 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
           <div><label class="f">Figures in the paper</label><select id="fmtMaxFigs" style="width:auto"><option value="0">None</option><option>1</option><option>2</option><option value="3">3</option><option>4</option><option>5</option><option>6</option><option>8</option><option>10</option><option value="99">All</option></select></div>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtNonSig"><span>Include figures of non-significant results</span></label>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtAbstract"><span>Results paragraph for the abstract</span></label>
+          <div><label class="f">Results text</label><select id="fmtPaperText" style="width:auto"><option value="table">Each comment with its table</option><option value="narrative">One Results text citing the tables</option></select></div>
+          <div><label class="f">Table borders</label><select id="fmtPaperTable" style="width:auto"><option value="grid">All borders</option><option value="apa">Three lines (APA)</option></select></div>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="fmtPaperSig"><span>* after significant P values</span></label>
         </div>
         <div class="row fmt-opts">
           <div><label class="f">First table number</label><input type="number" id="fmtTabStart" min="1" value="1" style="width:90px"></div>
