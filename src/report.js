@@ -77,7 +77,7 @@ const Report = (() => {
     const explicit = o.after !== undefined || o.before !== undefined || o.line !== undefined;
     // the first-line indent: body paragraphs only (not headings, captions, tables, notes or bullet lines)
     const ind = o.tsIndent ? o.tsIndent : !st && !o.align && !o.cap && o.size === undefined && text && !/^\s*•/.test(text) ? tsInd('body', INDENT) : {};
-    return new Paragraph({ ...(st ? { style: st } : {}), ...ind, ...(o.align && o.align !== al ? { alignment: o.align } : {}),
+    return new Paragraph({ ...(st ? { style: st } : {}), ...ind, ...(o.align && o.align !== al ? { alignment: o.align } : !st || st === 'TableNote' ? { alignment: o.align || BODY_ALIGN } : {}), // body text justified on the paragraph itself too (some viewers ignore the document defaults)
       ...(!st && explicit ? { spacing: { after: o.after ?? 160, line: o.line ?? LINE, lineRule: D().LineRuleType.AUTO, before: o.before ?? 0 } } : {}),
       keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: [...runs(text, { ...o, styled: true, bold: o.styleBold ? undefined : o.bold, size: o.forceSize }),
@@ -102,7 +102,7 @@ const Report = (() => {
     const o = tsOn('comment') ? { ...o0, tsIndent: tsCm('comment', 'first') !== undefined || tsCm('comment', 'left') !== undefined ? tsInd('comment', INDENT) : undefined, italic: tsYN('comment', 'italic', o0.italic), bold: tsYN('comment', 'bold', o0.bold), forceSize: tsSz('comment', undefined), size: STYLED ? undefined : tsSz('comment', o0.size), align: tsAl('comment', o0.align), after: tsSp('comment', 'after', o0.after), before: tsSp('comment', 'before', o0.before) } : o0;
     if (!o.boldSig) return para(text, o);
     const { Paragraph, AlignmentType } = D(), ss = String(text).match(SENT) || [text];
-    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, ...(o.tsIndent || (o.align ? {} : tsInd('body', INDENT))), ...(o.align ? { alignment: o.align } : {}), children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.forceSize })) });
+    if (STYLED) return new Paragraph({ keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore, ...(o.tsIndent || (o.align ? {} : tsInd('body', INDENT))), alignment: o.align || BODY_ALIGN, children: ss.flatMap(x => runs(x, { styled: true, bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.forceSize })) });
     return new Paragraph({ alignment: BODY_ALIGN, spacing: { after: PARA_AFTER, line: LINE, ...(PARA_BEFORE ? { before: PARA_BEFORE } : {}) }, ...(INDENT ? { indent: { firstLine: INDENT } } : {}), keepNext: o.keepNext, pageBreakBefore: o.pageBreakBefore,
       children: ss.flatMap(x => runs(x, { bold: isSigSentence(x) || o.bold, italic: o.italic, size: o.size })) });
   }

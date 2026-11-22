@@ -1320,7 +1320,7 @@ const Analysis = (() => {
     ];
     const pairLine = q => `${gl[q.i]} vs ${gl[q.j]}: ${fmt(q.diff, d)} (${fmt(q.lo, d)} to ${fmt(q.hi, d)})${k > 2 ? `, P=${fmtP(q.p, alpha)}` : ''}`;
     if (k === 2) trows.push([{ t: ['Adjusted difference (95% CI)'], b: true }, { t: [pairLine(res.pairs[0])], span: k }, { t: [''] }]);
-    else if (res.p <= alpha) trows.push([{ t: ['Adjusted difference (95% CI)'], b: true }, { t: res.pairs.map(pairLine), span: k + 1, small: true }]);
+    else if (res.p <= alpha) trows.push([{ t: ['Adjusted difference (95% CI)'], b: true }, { t: res.pairs.map(pairLine), span: k + 1 }]);
     const covLabels = covs.map(e => lowerFirst(plain(e.label)));
     const covEff = covs.flatMap(e => e.terms).map((t, i) => `${t.label}: B = ${fmt(res.covTerms[i].B, d)}, P ${res.covTerms[i].p < 0.001 ? '<' : '='} ${fmtP(res.covTerms[i].p, alpha).replace(/^</, '')}`);
     const f = [];
@@ -2728,10 +2728,61 @@ const Analysis = (() => {
     ['NIHSS', 'National Institutes of Health Stroke Scale'], ['mRS', 'Modified Rankin Scale'], ['QoL', 'Quality of life'], ['SF-36', '36-Item Short Form Health Survey'], ['ADL', 'Activities of daily living'], ['ROM', 'Range of motion'],
     ['ODI', 'Oswestry Disability Index'], ['KOOS', 'Knee injury and Osteoarthritis Outcome Score'], ['IKDC', 'International Knee Documentation Committee'], ['PRP', 'Platelet-rich plasma'], ['NSAIDs', 'Non-steroidal anti-inflammatory drugs'],
     ['PPI', 'Proton pump inhibitor'], ['OCP', 'Oral contraceptive pill'], ['PCOS', 'Polycystic ovary syndrome'], ['GA weeks', 'Gestational age'], ['IUGR', 'Intrauterine growth restriction'], ['PROM', 'Premature rupture of membranes'],
-    ['CS', 'Caesarean section'], ['NVD', 'Normal vaginal delivery'], ['NICU', 'Neonatal intensive care unit'], ['APGAR', 'Appearance, Pulse, Grimace, Activity, Respiration score'], ['BW', 'Birth weight'], ['EBM', 'Evidence-based medicine']
-  ];
+    ['CS', 'Caesarean section'], ['NVD', 'Normal vaginal delivery'], ['NICU', 'Neonatal intensive care unit'], ['APGAR', 'Appearance, Pulse, Grimace, Activity, Respiration score'], ['BW', 'Birth weight'], ['EBM', 'Evidence-based medicine'],
+    // obstetrics and gynaecology
+    ['GDM', 'Gestational diabetes mellitus'], ['PIH', 'Pregnancy-induced hypertension'], ['HELLP', 'Haemolysis, elevated liver enzymes and low platelets'], ['PPH', 'Postpartum haemorrhage'], ['PTB', 'Preterm birth'], ['PPROM', 'Preterm premature rupture of membranes'],
+    ['FGR', 'Fetal growth restriction'], ['SGA', 'Small for gestational age'], ['LGA', 'Large for gestational age'], ['AFI', 'Amniotic fluid index'], ['EFW', 'Estimated fetal weight'], ['CTG', 'Cardiotocography'], ['FHR', 'Fetal heart rate'],
+    ['BPD', 'Biparietal diameter'], ['HC', 'Head circumference'], ['AC', 'Abdominal circumference'], ['FL', 'Femur length'], ['CRL', 'Crown-rump length'], ['NT', 'Nuchal translucency'], ['IVF', 'In vitro fertilisation'], ['ICSI', 'Intracytoplasmic sperm injection'],
+    ['AMH', 'Anti-Müllerian hormone'], ['FSH', 'Follicle-stimulating hormone'], ['LH', 'Luteinising hormone'], ['E2', 'Oestradiol'], ['hCG', 'Human chorionic gonadotropin'], ['AFC', 'Antral follicle count'], ['OHSS', 'Ovarian hyperstimulation syndrome'],
+    ['IUI', 'Intrauterine insemination'], ['HRT', 'Hormone replacement therapy'], ['IUD', 'Intrauterine device'], ['AUB', 'Abnormal uterine bleeding'], ['CIN', 'Cervical intraepithelial neoplasia'], ['HPV', 'Human papillomavirus'], ['VBAC', 'Vaginal birth after caesarean'],
+    // nephrology and urology
+    ['ESRD', 'End-stage renal disease'], ['ESKD', 'End-stage kidney disease'], ['HD', 'Haemodialysis'], ['CAPD', 'Continuous ambulatory peritoneal dialysis'], ['GFR', 'Glomerular filtration rate'], ['CrCl', 'Creatinine clearance'], ['sCr', 'Serum creatinine'],
+    ['KDIGO', 'Kidney Disease: Improving Global Outcomes'], ['BPH', 'Benign prostatic hyperplasia'], ['PSA', 'Prostate-specific antigen'], ['IPSS', 'International Prostate Symptom Score'], ['PCNL', 'Percutaneous nephrolithotomy'], ['URS', 'Ureteroscopy'],
+    ['ESWL', 'Extracorporeal shock wave lithotripsy'], ['TURP', 'Transurethral resection of the prostate'], ['TURBT', 'Transurethral resection of bladder tumour'], ['LUTS', 'Lower urinary tract symptoms'], ['PVR', 'Post-void residual volume'], ['Qmax', 'Maximum urinary flow rate'],
+    // gastroenterology and hepatology
+    ['GERD', 'Gastro-oesophageal reflux disease'], ['GORD', 'Gastro-oesophageal reflux disease'], ['IBD', 'Inflammatory bowel disease'], ['IBS', 'Irritable bowel syndrome'], ['UC', 'Ulcerative colitis'], ['CD', "Crohn's disease"], ['GIT', 'Gastrointestinal tract'], ['GI', 'Gastrointestinal'],
+    ['UGIB', 'Upper gastrointestinal bleeding'], ['LGIB', 'Lower gastrointestinal bleeding'], ['ERCP', 'Endoscopic retrograde cholangiopancreatography'], ['EUS', 'Endoscopic ultrasound'], ['OGD', 'Oesophagogastroduodenoscopy'], ['EGD', 'Oesophagogastroduodenoscopy'],
+    ['HCC', 'Hepatocellular carcinoma'], ['NASH', 'Non-alcoholic steatohepatitis'], ['MELD', 'Model for End-Stage Liver Disease'], ['CTP', 'Child-Turcotte-Pugh'], ['SBP-peritonitis', 'Spontaneous bacterial peritonitis'], ['HE', 'Hepatic encephalopathy'], ['TIPS', 'Transjugular intrahepatic portosystemic shunt'],
+    ['FIB-4', 'Fibrosis-4 index'], ['APRI', 'AST to platelet ratio index'], ['AFP', 'Alpha-fetoprotein'], ['CEA', 'Carcinoembryonic antigen'], ['H. pylori', 'Helicobacter pylori'], ['PEG', 'Percutaneous endoscopic gastrostomy'], ['TPN', 'Total parenteral nutrition'],
+    ['LSG', 'Laparoscopic sleeve gastrectomy'], ['RYGB', 'Roux-en-Y gastric bypass'], ['OAGB', 'One anastomosis gastric bypass'], ['EWL', 'Excess weight loss'], ['TWL', 'Total weight loss'],
+    // endocrinology
+    ['TFT', 'Thyroid function tests'], ['T3', 'Triiodothyronine'], ['T4', 'Thyroxine'], ['TPO', 'Thyroid peroxidase'], ['IGF-1', 'Insulin-like growth factor 1'], ['GH', 'Growth hormone'], ['ACTH', 'Adrenocorticotropic hormone'], ['DHEA-S', 'Dehydroepiandrosterone sulphate'],
+    ['25(OH)D', '25-hydroxyvitamin D'], ['FPG', 'Fasting plasma glucose'], ['HOMA-B', 'Homeostatic Model Assessment of beta-cell function'], ['MetS', 'Metabolic syndrome'], ['WC', 'Waist circumference'], ['WHR', 'Waist-to-hip ratio'], ['DPP-4i', 'Dipeptidyl peptidase-4 inhibitor'], ['GLP-1 RA', 'Glucagon-like peptide-1 receptor agonist'],
+    // pulmonology
+    ['PEF', 'Peak expiratory flow'], ['FEV1/FVC', 'Ratio of forced expiratory volume in 1 second to forced vital capacity'], ['DLCO', 'Diffusing capacity of the lung for carbon monoxide'], ['TLC-lung', 'Total lung capacity'], ['6MWT', 'Six-minute walk test'], ['6MWD', 'Six-minute walk distance'],
+    ['ILD', 'Interstitial lung disease'], ['IPF', 'Idiopathic pulmonary fibrosis'], ['PH', 'Pulmonary hypertension'], ['TB', 'Tuberculosis'], ['HRCT', 'High-resolution computed tomography'], ['CAT', 'COPD Assessment Test'], ['mMRC', 'Modified Medical Research Council dyspnoea scale'], ['AHI', 'Apnoea-hypopnoea index'],
+    // neurology and psychiatry
+    ['MS-disease', 'Multiple sclerosis'], ['PD', "Parkinson's disease"], ['AD', "Alzheimer's disease"], ['MMSE', 'Mini-Mental State Examination'], ['MoCA', 'Montreal Cognitive Assessment'], ['EEG', 'Electroencephalography'], ['EMG', 'Electromyography'], ['NCS', 'Nerve conduction study'],
+    ['ICH', 'Intracerebral haemorrhage'], ['SAH', 'Subarachnoid haemorrhage'], ['TBI', 'Traumatic brain injury'], ['ICP', 'Intracranial pressure'], ['CSF', 'Cerebrospinal fluid'], ['EDSS', 'Expanded Disability Status Scale'], ['UPDRS', 'Unified Parkinson\'s Disease Rating Scale'],
+    ['HAM-D', 'Hamilton Depression Rating Scale'], ['HAM-A', 'Hamilton Anxiety Rating Scale'], ['BDI', 'Beck Depression Inventory'], ['PSQI', 'Pittsburgh Sleep Quality Index'], ['MDD', 'Major depressive disorder'], ['GAD', 'Generalised anxiety disorder'], ['PTSD', 'Post-traumatic stress disorder'],
+    ['ADHD', 'Attention-deficit/hyperactivity disorder'], ['ASD', 'Autism spectrum disorder'], ['SSRI', 'Selective serotonin reuptake inhibitor'], ['HADS', 'Hospital Anxiety and Depression Scale'],
+    // orthopaedics and rheumatology
+    ['OA', 'Osteoarthritis'], ['RA-disease', 'Rheumatoid arthritis'], ['SLE', 'Systemic lupus erythematosus'], ['AS-disease', 'Ankylosing spondylitis'], ['DAS28', 'Disease Activity Score in 28 joints'], ['RF', 'Rheumatoid factor'], ['ACPA', 'Anti-citrullinated protein antibodies'],
+    ['ANA', 'Antinuclear antibodies'], ['BMD', 'Bone mineral density'], ['DEXA', 'Dual-energy X-ray absorptiometry'], ['DXA', 'Dual-energy X-ray absorptiometry'], ['TKA', 'Total knee arthroplasty'], ['THA', 'Total hip arthroplasty'], ['ACL', 'Anterior cruciate ligament'],
+    ['ORIF', 'Open reduction and internal fixation'], ['HHS', 'Harris Hip Score'], ['KSS', 'Knee Society Score'], ['DASH', 'Disabilities of the Arm, Shoulder and Hand'], ['SPADI', 'Shoulder Pain and Disability Index'], ['NDI', 'Neck Disability Index'], ['JOA', 'Japanese Orthopaedic Association score'],
+    // oncology and haematology
+    ['OS', 'Overall survival'], ['PFS', 'Progression-free survival'], ['DFS', 'Disease-free survival'], ['EFS', 'Event-free survival'], ['ORR', 'Objective response rate'], ['CR', 'Complete response'], ['PR-response', 'Partial response'], ['RECIST', 'Response Evaluation Criteria in Solid Tumours'],
+    ['TNM', 'Tumour, Node, Metastasis classification'], ['KPS', 'Karnofsky Performance Status'], ['ER', 'Oestrogen receptor'], ['HER2', 'Human epidermal growth factor receptor 2'], ['Ki-67', 'Ki-67 proliferation index'], ['NACT', 'Neoadjuvant chemotherapy'], ['RT', 'Radiotherapy'],
+    ['ALL', 'Acute lymphoblastic leukaemia'], ['AML', 'Acute myeloid leukaemia'], ['CLL', 'Chronic lymphocytic leukaemia'], ['CML', 'Chronic myeloid leukaemia'], ['MM', 'Multiple myeloma'], ['NHL', 'Non-Hodgkin lymphoma'], ['HSCT', 'Haematopoietic stem cell transplantation'],
+    ['ANC', 'Absolute neutrophil count'], ['ALC', 'Absolute lymphocyte count'], ['ITP', 'Immune thrombocytopenia'], ['IDA', 'Iron deficiency anaemia'], ['TIBC', 'Total iron-binding capacity'], ['TSAT', 'Transferrin saturation'], ['SCD-anaemia', 'Sickle cell disease'],
+    // infection and immunology
+    ['MRSA', 'Methicillin-resistant Staphylococcus aureus'], ['ESBL', 'Extended-spectrum beta-lactamase'], ['MDR', 'Multidrug-resistant'], ['MIC', 'Minimum inhibitory concentration'], ['PCR', 'Polymerase chain reaction'], ['RT-PCR', 'Reverse transcription polymerase chain reaction'],
+    ['ELISA', 'Enzyme-linked immunosorbent assay'], ['IgG', 'Immunoglobulin G'], ['IgM', 'Immunoglobulin M'], ['IgE', 'Immunoglobulin E'], ['TNF-α', 'Tumour necrosis factor alpha'], ['IL-1β', 'Interleukin-1 beta'], ['IFN-γ', 'Interferon gamma'], ['COVID-19', 'Coronavirus disease 2019'],
+    // ophthalmology, ENT, dermatology, dentistry
+    ['IOP', 'Intraocular pressure'], ['BCVA', 'Best-corrected visual acuity'], ['VA', 'Visual acuity'], ['OCT', 'Optical coherence tomography'], ['CMT', 'Central macular thickness'], ['DR', 'Diabetic retinopathy'], ['AMD', 'Age-related macular degeneration'], ['RNFL', 'Retinal nerve fibre layer'],
+    ['OME', 'Otitis media with effusion'], ['CRS', 'Chronic rhinosinusitis'], ['SNHL', 'Sensorineural hearing loss'], ['PTA', 'Pure-tone audiometry'], ['PASI', 'Psoriasis Area and Severity Index'], ['SCORAD', 'Scoring Atopic Dermatitis'], ['DLQI', 'Dermatology Life Quality Index'],
+    ['GI-index', 'Gingival index'], ['PI', 'Plaque index'], ['PPD', 'Probing pocket depth'], ['CAL', 'Clinical attachment level'], ['BOP', 'Bleeding on probing'], ['DMFT', 'Decayed, missing and filled teeth'],
+    // paediatrics and nutrition
+    ['GA-age', 'Gestational age'], ['LBW', 'Low birth weight'], ['VLBW', 'Very low birth weight'], ['RDS', 'Respiratory distress syndrome'], ['NEC', 'Necrotising enterocolitis'], ['BPD-lung', 'Bronchopulmonary dysplasia'], ['ROP', 'Retinopathy of prematurity'], ['PDA', 'Patent ductus arteriosus'],
+    ['WAZ', 'Weight-for-age z-score'], ['HAZ', 'Height-for-age z-score'], ['WHZ', 'Weight-for-height z-score'], ['MUAC', 'Mid-upper arm circumference'], ['SAM', 'Severe acute malnutrition'], ['ORS', 'Oral rehydration solution'], ['MNA', 'Mini Nutritional Assessment'], ['NRS-2002', 'Nutritional Risk Screening 2002'],
+    // physiotherapy, pain and surgery
+    ['TENS', 'Transcutaneous electrical nerve stimulation'], ['ESWT', 'Extracorporeal shock wave therapy'], ['LLLT', 'Low-level laser therapy'], ['ROM-joint', 'Range of motion'], ['MMT', 'Manual muscle testing'], ['TUG', 'Timed Up and Go test'], ['BBS', 'Berg Balance Scale'],
+    ['NPRS', 'Numeric Pain Rating Scale'], ['PPT', 'Pressure pain threshold'], ['LOS-hospital', 'Length of hospital stay'], ['VTE', 'Venous thromboembolism'], ['LMWH', 'Low-molecular-weight heparin'], ['UFH', 'Unfractionated heparin'], ['DOAC', 'Direct oral anticoagulant'],
+    ['ASA-drug', 'Acetylsalicylic acid (aspirin)'], ['NPWT', 'Negative pressure wound therapy'], ['VATS', 'Video-assisted thoracoscopic surgery'], ['MIS', 'Minimally invasive surgery'], ['CDC', 'Clavien-Dindo classification']
+  ].map(([a, f]) => [a.replace(/-(disease|response|anaemia|age|lung|joint|hospital|drug|peritonitis|index)$/, ''), f]);
   // left out: short ones that mean several things or are ordinary words in tables (CI is also the confidence interval, VT tidal volume or tachycardia…)
-  const ABBR_AMBIG = new Set(['CI', 'K', 'Na', 'Ca', 'Mg', 'CO', 'US', 'MS', 'AS', 'AR', 'TR', 'MR', 'LA', 'RA', 'LV', 'RV', 'VT', 'SV', 'FS', 'DT', 'UA', 'CS', 'GA', 'SA', 'EA', 'LM', 'TC', 'POD', 'CAP', 'LAD', 'MAC', 'PE', 'ESP', 'TAP', 'BIS', 'TOF', 'ACR', 'CK', 'PLT']);
+  const ABBR_AMBIG = new Set(['CI', 'K', 'Na', 'Ca', 'Mg', 'CO', 'US', 'MS', 'AS', 'AR', 'TR', 'MR', 'LA', 'RA', 'LV', 'RV', 'VT', 'SV', 'FS', 'DT', 'UA', 'CS', 'GA', 'SA', 'EA', 'LM', 'TC', 'POD', 'CAP', 'LAD', 'MAC', 'PE', 'ESP', 'TAP', 'BIS', 'TOF', 'ACR', 'CK', 'PLT',
+    'HC', 'AC', 'FL', 'NT', 'E2', 'HD', 'CD', 'GI', 'HE', 'T3', 'T4', 'WC', 'PH', 'TB', 'CAT', 'PD', 'AD', 'OA', 'RF', 'OS', 'CR', 'PR', 'ER', 'RT', 'ALL', 'MM', 'VA', 'DR', 'PI', 'ROM', 'ASA', 'SCD', 'LOS', 'GA', 'SBP', 'TLC', 'AS', 'RA', 'MS', 'BPD', 'CDC', 'TPO', 'MIC', 'MIS', 'PTA', 'PPT', 'SAM', 'DASH', 'CAL']);
   for (let i = ABBR_MORE.length - 1; i >= 0; i--) if (ABBR_AMBIG.has(ABBR_MORE[i][0]) || /\s/.test(ABBR_MORE[i][0])) ABBR_MORE.splice(i, 1);
   ABBR_MORE.forEach(([a, full]) => { if (!/\s/.test(a) && !(a in ABBR)) ABBR[a] = full; });
   // what the analysis sees of a variable: unit after the label, Arabic or both labels, a transformation of its values, explained abbreviations
@@ -3096,7 +3147,7 @@ const Analysis = (() => {
       if (opts.effect) head.push(`Change from ${tps[0]} ${param ? '(95% CI)' : '(IQR)'}`);
       const pCol = T === 2 || firstPost; // other post hoc designs list their pairs below the table instead
       if (pCol) head.push(T === 2 ? 'P value' : `P value (vs ${tps[0]})`);
-      const trows = tps.map((tp, t) => [{ t: [tp], b: true }, { t: [val(t)] }, ...(opts.effect ? [{ t: [change(t)], small: true }] : []), ...(pCol ? [{ t: [t === 0 ? '—' : isFinite(pAt(t)) ? fmtP(pAt(t), alpha) : '—'] }] : [])]);
+      const trows = tps.map((tp, t) => [{ t: [tp], b: true }, { t: [val(t)] }, ...(opts.effect ? [{ t: [change(t)] }] : []), ...(pCol ? [{ t: [t === 0 ? '—' : isFinite(pAt(t)) ? fmtP(pAt(t), alpha) : '—'] }] : [])]);
       if (T > 2) trows.push([{ t: [`Overall (${tn})`], b: true }, { t: [isFinite(w.p) ? fmtP(w.p, alpha) : '—'], span: head.length - 1 }]);
       if (T > 2 && !firstPost && w.post) w.post.forEach(q => trows.push([{ t: [`P (${tps[q.b]} vs ${tps[q.a]})`], b: true }, { t: [fmtP(q.p, alpha)], span: head.length - 1 }]));
       const first = desc[0], last = desc[T - 1], c0 = param ? first.mean : first.median, c1 = param ? last.mean : last.median;
@@ -3175,7 +3226,7 @@ const Analysis = (() => {
           cells.push({ t: [fmtP(r.p, alpha) + (isFinite(r.p) ? tm.mark(r.test) : '')] });
           if (opts.showStat) cells.push({ t: [r.stat], small: true });
           if (showPost) cells.push({ t: r.p <= alpha ? postHocLines(r) : ['---'], small: true });
-          if (opts.effect) cells.push({ t: effectLines(r), small: true });
+          if (opts.effect) cells.push({ t: effectLines(r) });
           return cells;
         });
         // optional rows comparing the groups on the change from the first timepoint and on the area under the curve
@@ -3184,7 +3235,7 @@ const Analysis = (() => {
           const cells = [{ t: [label], b: true }, ...r.desc.map(dd => ({ t: [!dd.n ? '—' : r.param ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)] })), { t: [fmtP(r.p, alpha) + (isFinite(r.p) ? tm.mark(r.test) : '')] }];
           if (opts.showStat) cells.push({ t: [r.stat], small: true });
           if (showPost) cells.push({ t: r.p <= alpha ? postHocLines(r) : ['---'], small: true });
-          if (opts.effect) cells.push({ t: effectLines(r), small: true });
+          if (opts.effect) cells.push({ t: effectLines(r) });
           return cells;
         };
         // the reference of the change: the outcome's own reference timepoint (step 3), else the first
@@ -3457,7 +3508,7 @@ const Analysis = (() => {
         const nntCells = (r, span) => { if (!(r.cat && r.cat.binary)) return [{ t: ['—'], rs: span }, { t: ['—'], rs: span }]; const c = r.cat, i0 = ord[0], i1 = ord[1];
           if (!c.ns[i0] || !c.ns[i1]) return [{ t: ['—'], rs: span }, { t: ['—'], rs: span }]; const nc = S.newcombeDiff(c.table[0][i0], c.ns[i0], c.table[0][i1], c.ns[i1], CONF_OF(opts)), inv = x => Math.abs(x) < 1e-9 ? '∞' : fmt(1 / Math.abs(x), 1);
           const harm = (r.v.better === 'lower' || /complication|death|mortality|died|adverse|infection|readmi|failure|recurren|bleed|leak|dehiscence|nausea|vomit|ponv|toxicit/i.test(r.v.label)) && nc.d > 0, nnt = (harm ? 'NNH ' : '') + (Math.abs(nc.d) < 1e-9 ? '∞' : fmt(1 / Math.abs(nc.d), 1)), ci = nc.lo > 0 || nc.hi < 0 ? `${inv(nc.lo > 0 ? nc.hi : nc.lo)} to ${inv(nc.lo > 0 ? nc.lo : nc.hi)}` : `${inv(nc.d >= 0 ? nc.hi : nc.lo)} to ∞ to −${inv(nc.d >= 0 ? nc.lo : nc.hi)}`;
-          return [{ t: [`${fmt(100 * nc.d, 1)} (${fmt(100 * nc.lo, 1)} to ${fmt(100 * nc.hi, 1)})`], rs: span, small: true }, { t: [`${nnt} (${ci})`], rs: span, small: true }]; };
+          return [{ t: [`${fmt(100 * nc.d, 1)} (${fmt(100 * nc.lo, 1)} to ${fmt(100 * nc.hi, 1)})`], rs: span }, { t: [`${nnt} (${ci})`], rs: span }]; };
         // standardised mean differences (two groups): numbers by the pooled SD, yes/no and categories by the proportions (the largest of the categories)
         const smdOn = !!opts.smdCol && k === 2, smdOf = r => { if (r.num) { const [a, c] = r.num.desc; if (!a.n || !c.n) return NaN; const sp = Math.sqrt((a.sd ** 2 + c.sd ** 2) / 2); return sp > 0 ? Math.abs(a.mean - c.mean) / sp : NaN; }
           const t = r.cat, d1 = li => { const p1 = t.ns[0] ? t.table[li][0] / t.ns[0] : NaN, p2 = t.ns[1] ? t.table[li][1] / t.ns[1] : NaN, sd = Math.sqrt((p1 * (1 - p1) + p2 * (1 - p2)) / 2); return sd > 0 ? Math.abs(p1 - p2) / sd : 0; };
@@ -3483,7 +3534,7 @@ const Analysis = (() => {
           if (trendOn) cells.push({ t: [fmtP(r.trend, alpha)], rs: span });
           if (opts.showStat) cells.push({ t: [(r.num || r.cat).stat], rs: span, small: true });
           if (showPost) cells.push({ t: r.num && r.num.p <= alpha ? postHocLines(r.num) : r.cat && r.cat.pairs ? postHocLines(r.cat) : ['---'], rs: span, small: true });
-          if (effOn) cells.push({ t: !isFinite(x.p) ? ['—'] : r.num ? (effNum ? effectLines(r.num) : ['---']) : (r.cat.binary && effCat ? rrLines(r.cat) : ['---']), rs: span, small: true });
+          if (effOn) cells.push({ t: !isFinite(x.p) ? ['—'] : r.num ? (effNum ? effectLines(r.num) : ['---']) : (r.cat.binary && effCat ? rrLines(r.cat) : ['---']), rs: span });
           const ex = r.extra || {};
           if (cluCol) cells.push({ t: [isFinite(ex.clu) ? fmtP(ex.clu, alpha) : '—'], rs: span });
           if (strCol) cells.push({ t: [isFinite(ex.str) ? fmtP(ex.str, alpha) : '—'], rs: span });

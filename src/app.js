@@ -5086,7 +5086,7 @@
   };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { stamp: false, bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: true, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, forestAll: false, appFull: false, thesisPage: '', citeText: '', autoNum: true, appSheet: '', appSheetCols: '', appSheetRows: '', appSheetAllRows: false, appSheetByGroup: false, appSheetOut: 'in', appSheetFmt: 'docx', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 0, paperText: 'table', paperSig: false, paperTable: 'grid', abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
+  const DEFAULT_REPORT = { stamp: false, bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: true, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, forestAll: false, appFull: false, thesisPage: '', citeText: '', autoNum: true, appSheet: '', appSheetCols: '', appSheetRows: '', appSheetAllRows: false, appSheetByGroup: false, appSheetOut: 'in', appSheetFmt: 'docx', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 0, paperText: 'table', paperSig: false, paperTable: 'grid', paperSpacing: '2', abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
   // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
   const JOURNAL_STYLES = {
     none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
@@ -5131,7 +5131,7 @@
     $('#fmtThesis').style.display = r.format === 'thesis' ? '' : 'none';
     $('#fmtPaper').style.display = r.format === 'paper' ? '' : 'none';
     $('#fmtChapter').value = r.chapter; $('#fmtHeads').checked = r.sectionHeads; $('#fmtMaxFigs').value = String(r.maxFigs); $('#fmtAbstract').checked = r.abstract;
-    $('#fmtNewPage').checked = r.newPage; $('#fmtPage').value = r.thesisPage || ''; $('#fmtNonSig').checked = r.nonSig; $('#fmtPaperText').value = r.paperText || 'table'; $('#fmtPaperTable').value = r.paperTable || 'grid'; $('#fmtPaperSig').checked = !!r.paperSig;
+    $('#fmtNewPage').checked = r.newPage; $('#fmtPage').value = r.thesisPage || ''; $('#fmtNonSig').checked = r.nonSig; $('#fmtPaperText').value = r.paperText || 'table'; $('#fmtPaperTable').value = r.paperTable || 'grid'; $('#fmtPaperSig').checked = !!r.paperSig; $('#fmtPaperSpacing').value = r.paperSpacing || '2';
     $('#fmtTabStart').value = r.tabStart; $('#fmtFigStart').value = r.figStart;
     renderRepSnaps();
     document.querySelectorAll('[data-rx]').forEach(el => { const v = r[el.dataset.rx]; el.type === 'checkbox' ? (el.checked = !!v) : (el.value = v ?? ''); });
@@ -5947,6 +5947,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     else if (e.target.id === 'fmtPaperText') r.paperText = e.target.value;
     else if (e.target.id === 'fmtPaperTable') r.paperTable = e.target.value;
     else if (e.target.id === 'fmtPaperSig') r.paperSig = e.target.checked;
+    else if (e.target.id === 'fmtPaperSpacing') r.paperSpacing = e.target.value;
     else if (e.target.id === 'fmtAbstract') r.abstract = e.target.checked;
     else if (e.target.id === 'fmtNewPage') { r.newPage = e.target.checked; return; }
     else if (e.target.id === 'fmtPage') { r.thesisPage = e.target.value; return; }
@@ -6026,7 +6027,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
             const r2 = Analysis.run(state.data, c2); try { postRepeated(r2, c2); } catch (e) { /* no repeated measures */ }
             r2.sections.forEach(s => { s.title = `${s.title.replace(/\s+of the studied (groups|patients)$/, '')} according to ${lowerFirstApp(lab)}`; s.key = s.title; s.grouping = col; s.figures.forEach(f => { f.caption = `${f.caption} (by ${lowerFirstApp(lab)})`; }); });
             res.sections.push(...r2.sections); added.push(lowerFirstApp(lab)); } catch (e) { console.error(e); } });
-          if (added.length) res.methods += ` The patients were also classified by ${added.length > 1 ? added.slice(0, -1).join(', ') + ' and by ' + added[added.length - 1] : added[0]}, and the same comparisons were made for each classification.`; }
+          }
         // a journal style's P wording also goes into the table footnotes
         if (report().style !== 'none' && cfg.options.pWord !== 'P value') res.sections.forEach(s => { s.footnote = s.footnote.replace(/\bP value\b/g, cfg.options.pWord); });
         // P values without the leading zero: also the significance level in the footnotes
@@ -6171,9 +6172,15 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   const figTitle = (f, o) => f.fmtTitle !== undefined ? (f.fmtTitle || null) : o.chartTitle ? f.caption : null;
   function figPal(f, o) { const base = f.pal && f.pal !== 'report' ? f.pal : chartPalette(o); if (!f.colors) return base; const arr = Array.isArray(base) ? base : (Charts.PALETTES[base] || Charts.PALETTES.brand); return [...Array(Math.max(arr.length, f.colors.length))].map((_, i) => f.colors[i] || arr[i % arr.length]); }
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
+  // a figure drawn once for the same content and look: a re-run that does not change it reuses the picture
+  const FIG_CACHE = new Map();
   function renderFigure(f, o) {
-    const c = Charts.draw({ ...f.spec, title: figTitle(f, o) }, figPal(f, o), { ...chartStyle(o), ...(f.fmtStyle || {}) });
+    const spec = { ...f.spec, title: figTitle(f, o) }, pal = figPal(f, o), st = { ...chartStyle(o), ...(f.fmtStyle || {}) };
+    let key = null; try { key = JSON.stringify([spec, pal, st]); } catch (e) { key = null; }
+    const hit = key && FIG_CACHE.get(key); if (hit) { f.url = hit.url; f.w = hit.w; f.h = hit.h; FIG_CACHE.delete(key); FIG_CACHE.set(key, hit); return; }
+    const c = Charts.draw(spec, pal, st);
     f.url = c.toDataURL('image/png'); f.w = c.width; f.h = c.height;
+    if (key) { FIG_CACHE.set(key, { url: f.url, w: f.w, h: f.h }); if (FIG_CACHE.size > 120) FIG_CACHE.delete(FIG_CACHE.keys().next().value); }
   }
 
   // export selection: keys of items left out of the Word file (kept across re-runs and in saved setups);
@@ -6482,7 +6489,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const TW = cm => Math.round(cm * 567);
   // the page of the Word file from the options: everything left at its default gives the same file as before
   function pageOptions(o, rp = report()) {
-    const pg = { size: rp.format === 'thesis' && rp.thesisPage ? rp.thesisPage : o.pageSize, margin: o.pageMargin, spacing: o.lineSpacing, pageNum: o.pageNum };
+    const pg = { size: rp.format === 'thesis' && rp.thesisPage ? rp.thesisPage : o.pageSize, margin: o.pageMargin, spacing: rp.format === 'paper' && rp.paperSpacing !== 'page' ? (rp.paperSpacing || '2') : o.lineSpacing, pageNum: o.pageNum }; // a journal paper: double spacing unless chosen otherwise
     if (pg.size === 'custom') { const w = cmNum(o.pageW, 5, 60), h = cmNum(o.pageH, 5, 90); if (w && h) pg.wh = [TW(w), TW(h)]; else pg.size = 'a4'; }
     if (o.pageMargin === 'custom') { const m = [o.marTop, o.marRight, o.marBottom, o.marLeft].map(v => cmNum(v, 0, 10)); if (m.every(x => x !== null)) pg.mar = m.map(TW); }
     const g = cmNum(o.gutter, 0.01, 5), hd = cmNum(o.hdrDist, 0, 5), fd = cmNum(o.ftrDist, 0, 5);
@@ -7491,5 +7498,5 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   window.EasyUI = { advDefaults, loadFile, simResults, REPORT_STEP: 12, state, go, toast, busy, renderGrid, editSheet, activeGroups, readUiIntoCfg, defaultOptions, OPTION_FIELDS, renderReport, syncEdits, renderStepper, undoRedo, isActive,
     renderAdvanced, renderVariables, renderOptions, schedulePreview: () => schedulePreview(), chartStyle: o => chartStyle(o), chartPalette: o => chartPalette(o), renameColumn: (a, b) => renameColumn(a, b), projectObj, openAny, healthItems, abstractTable, reportBlob: () => reportBlob(), exportedFigures: () => exportedFigures(), resultsDeck: () => resultsDeck(), buildPptx: (f, t) => buildPptx(f, t), sharePack, glossary: () => GLOSSARY, exportModel: r => exportModel(r), wordOptions: () => wordOptions(), aRows: () => aRows(), aOuts: () => aOuts(), aEffect: (v, r, g) => aEffect(v, r, g), aVal: (v, r) => aVal(v, r), aLev: v => aLev(v), isBin: v => isBin(v), vLab: v => vLab(v), combos: () => (state.combos = state.combos || []), applySavedCfg: c => applySavedCfg(c), effOptions, report, flowWarnings, openProject, STEPS, esc, chartPalette, chartStyle, saveUrl, baseName, wordDiff, typing, accessCheck, logChange,
     addColumn, parseDate, isMissing, renderPrep, longSheet, runAnalysis, runKey, pdfFromJpegs, ADV_TYPES, DEFAULT_REPORT, FLOW_STYLE, renderFigureTable, renderConsortForm, explain: () => ADV_TYPES, showRows: (rows, label) => { state.grid.rowsOnly = { rows, label }; state.grid.page = 0; renderGrid(); } };
-  Object.assign(window.EasyUI, { renderSimBanner, CHART_TYPES, chartKind, GLOSSARY, renderFilters, renderSubgroup, refreshGroups, subCands, subCols, columnInfo, valueLabel, afterFilter });
+  Object.assign(window.EasyUI, { renderTablesBoard, renderSimBanner, CHART_TYPES, chartKind, GLOSSARY, renderFilters, renderSubgroup, refreshGroups, subCands, subCols, columnInfo, valueLabel, afterFilter });
 })();

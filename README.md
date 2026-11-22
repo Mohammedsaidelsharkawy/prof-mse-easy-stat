@@ -250,6 +250,15 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Step 1**: once data are open, **Report details** comes first, with **What do you want to do?** (compare groups, before / after, survival, diagnostic test, agreement, prediction model — the matching analyses are added in step 2) and **⚡ Make my report (2 choices)**.
+**☑ Tick view of the tables** (step 2, Tables of the report): one row per variable, a column per table — tick its table, **➕ New** (asks the name) or **Left out**; or tick several variables and “Put the ticked into…”.
+**Tables**: the MD / RR (95% CI) column in the same font size as the other columns.
+**Journal paper**: double line spacing by default (Line spacing in the paper’s settings: 2, 1.5, 1.15, single or as in step 11).
+**Paragraphs** justified on every paragraph (also in viewers that ignore Word’s defaults) and in the preview.
+**Other groupings** no longer add a sentence to the statistical analysis.
+**More abbreviations** (about 400 in all): obstetrics and gynaecology, nephrology and urology, gastroenterology and hepatology, endocrinology, pulmonology, neurology and psychiatry, orthopaedics and rheumatology, oncology and haematology, infection, ophthalmology, ENT, dermatology, dentistry, paediatrics, physiotherapy.
+**Faster again**: figures that did not change are not drawn again (a re-run 0.25 s → 0.13 s on the knee example).
+
 **Report formats** — in every format: headings with no space before or after; paragraphs justified; the sentence “In line with reporting guidelines (CONSORT), effect sizes were not reported for the baseline characteristics” removed from the statistical analysis.
 **📄 Journal paper**: Heading 1 at 14 pt; each comment with its table (or one Results text, in the paper's settings); tables with all borders (or three lines); no * after significant P values (a tick brings it back); figures not included by default (“Figures in the paper”); figures otherwise as configured; no line numbering by default; numbers' rows without the “Mean ± SD / Median (IQR)” column — the footnote says it, with † marking the medians when both are used.
 **Other groupings** (step 2): the patients classified more than once — the same tables again by sex, by hypertension… (“… according to sex”), with a sentence in the statistical analysis.

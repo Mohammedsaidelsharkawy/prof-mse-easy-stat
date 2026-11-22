@@ -16,6 +16,7 @@
   const flash = n => { if (!n) return; n.scrollIntoView({ behavior: 'smooth', block: 'center' }); n.classList.remove('u15-flash'); void n.offsetWidth; n.classList.add('u15-flash'); setTimeout(() => n.classList.remove('u15-flash'), 2200); };
 
   const css = el('style'); css.textContent = `
+#report textarea,#u15PaneB .u15-ta,.paper-prev p,.paper-prev .pc,#comPreview p{text-align:justify}
 .u15-flash{animation:u15f 2s ease}@keyframes u15f{0%,40%{box-shadow:0 0 0 4px #F5C04A}100%{box-shadow:0 0 0 0 transparent}}
 #busy .u15-prog{background:var(--card);color:var(--ink);border-radius:14px;padding:16px 18px;min-width:min(380px,90vw);box-shadow:0 12px 40px rgba(0,0,0,.3)}
 #busy .u15-st{font-weight:700;margin-bottom:8px}#busy .u15-done{font-size:12px;color:var(--muted);margin:0 0 8px;max-height:84px;overflow:hidden}
