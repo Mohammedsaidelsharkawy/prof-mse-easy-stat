@@ -146,7 +146,14 @@
       <div class="row" style="gap:6px;justify-content:flex-end"><button class="btn ghost small" type="button" data-gvact="cancel">Cancel</button><button class="btn primary small" type="button" data-gvact="ok">${mod ? 'Change the column' : 'Add the column'}</button></div></div>`);
     p.style.width = 'min(760px, calc(100vw - 24px))'; preview(); }
   const setPath = (path, val) => { const ks = path.split('.'); let o = D; for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]] = o[ks[i]] || {}; o[ks[ks.length - 1]] = val; };
-  document.addEventListener('input', e => { const t = e.target; if (!t.closest || !t.closest('#gvPanel') || !D || !t.dataset.gv || t.type === 'radio' || t.tagName === 'SELECT' || t.type === 'checkbox') return; setPath(t.dataset.gv, t.value); if (t.dataset.gv === 'cats' || t.dataset.gv === 'yes') return; preview(); });
+  document.addEventListener('input', e => { const t = e.target; if (!t.closest || !t.closest('#gvPanel') || !D || !t.dataset.gv || t.type === 'radio' || t.tagName === 'SELECT' || t.type === 'checkbox') return; setPath(t.dataset.gv, t.value); if (t.dataset.gv === 'cats' || t.dataset.gv === 'yes') return;
+    // a new variable named like a known measurement (Hb, ALT, LVEF…): realistic mean, SD, range and decimals from the library
+    if (t.dataset.gv === 'name' && D.mode === 'new' && window.EasyGen4) { const L = EasyGen4.lookup(t.value); clearTimeout(window.__gvN); window.__gvN = setTimeout(() => { if (!L || !D) return;
+      if (L.mean !== undefined) { D.type = 'num'; D.dist = L.skew ? 'skew' : 'normal'; D.dec = L.dec; D.min = L.min; D.max = L.max; D.P = {}; keys().forEach(k => { D.P[k] = { mean: L.mean, sd: L.sd, lo: L.min, hi: L.max }; }); }
+      else if (L.pct !== undefined) { D.type = 'yn'; D.P = {}; keys().forEach(k => { D.P[k] = { pct: L.pct }; }); }
+      const f = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.gv === 'name'; draw(); if (f) { const x = document.querySelector('#gvPanel [data-gv="name"]'); if (x) { x.focus(); x.setSelectionRange(x.value.length, x.value.length); } }
+      U.toast(L.mean !== undefined ? `${t.value}: ${L.mean} ± ${L.sd} ${L.unit || ''} from the library` : `${t.value}: ${L.pct}% yes from the library`); }, 700); return; }
+    preview(); });
   document.addEventListener('change', e => { const t = e.target; if (!t.closest || !t.closest('#gvPanel') || !D) return;
     if (t.name === 'gvMode') { D.mode = t.value; if (D.mode === 'new') { const s = D.seed; D = blank(); D.seed = s; } else if (D.col) fromColumn(D.col); draw(); return; }
     const k = t.dataset.gv; if (!k) return; const v = t.type === 'checkbox' ? t.checked : t.value; setPath(k, v);

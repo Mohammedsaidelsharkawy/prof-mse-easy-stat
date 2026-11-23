@@ -343,6 +343,8 @@
     if (opt.stage1) return P;
     adjust(D, P, opt);
     if (G.exact && !opt.plain) exactMatch(D, P, opt);
+    // round 18: rules on the generated values (sex and age differences, clinical profiles, real columns kept)
+    if (window.EasyGenHooks && !opt.plain) window.EasyGenHooks.forEach(h => { try { h(D, P, opt); } catch (e) { console.error(e); } });
     // calculated columns (also written as Excel formulas)
     const num = x => (typeof x === 'number' && isFinite(x) ? x : NaN), days = (a, b) => (Date.parse(b) - Date.parse(a)) / 864e5;
     P.forEach(p => vars.filter(v => v.type === 'calc' && v.formula).forEach(v => { const f = v.formula, o = p.vals[v.id] = {}, at = (id, key) => { const x = p.vals[id] || {}; return x[key] ?? x.once ?? x[D.visits[0].id]; };
@@ -529,6 +531,7 @@
       <span class="gen-ctl" title="Several datasets from consecutive seeds, in one zip, with an answer key — e.g. one per student">⬇ <input type="number" min="2" max="50" data-gpack="n" value="${esc(G.pack.n)}" style="width:52px"> datasets<button class="btn ghost small" type="button" id="genPack">+ answer key (.zip)</button></span><button class="btn ghost small" type="button" id="genMarPair" title="The same patients twice (same seed): complete (the truth) and with values missing at random given another variable (MAR), with a key of the bias of the complete-case means">⬇ Missing-data teaching pair (.zip)</button><button class="btn ghost" type="button" id="genSend2" ${last ? '' : 'disabled'}>📊 Analyse these data ›</button><span class="legend-note" id="genStatus">${last ? `${last.length} rows generated (seed ${esc(G.seed)}) · dataset code ${dataCode(last)}` : 'Not generated yet'}</span></div>
       <div id="genOut">${outHtml(D)}</div>
       ${window.EasyGen3 ? window.EasyGen3.html(D) : ''}
+      ${window.EasyGen4 ? window.EasyGen4.html(D) : ''}
       <h3>Power of the planned study</h3><p class="legend-note">The study is simulated many times with these settings, and the main outcome tested each time: the share of significant results is the power.</p>
       <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end"><div><label class="f">Main outcome</label><select data-gp="v" style="width:auto">${opt([['', '—'], ...vs.map(v => [v.id, v.label])], G.power.v)}</select></div>
         ${(() => { const v = D.vars.find(x => x.id === G.power.v); return v && visitKeys(D, v).length > 1 ? `<div><label class="f">At</label><select data-gp="visit" style="width:auto">${opt(visitKeys(D, v).map(k2 => [k2, visitName(D, k2)]), G.power.visit || visitKeys(D, v).slice(-1)[0])}</select></div>` : ''; })()}

@@ -250,6 +250,16 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🎲 Generate — realism, specialty scenarios and recipes** (Generate phase, “🩺 Realism, specialty packs and recipes”, and the 🧪 Scenario library)
+- **12 new scenarios with a known truth**: postoperative pain and rescue analgesia (VAS 0–24 h, time to first rescue, morphine, PONV); intraoperative vital signs every 5 minutes (MAP/HR curves, hypotension, bradycardia, rescue boluses); an echocardiography panel that fits together (ESV from EDV and EF, Devereux LV mass, LVMI, E/A, E/e′, TAPSE, PASP, GLS); pharmacokinetics (concentration–time curves, Cmax, Tmax, AUC, half-life); children's growth (HAZ, WAZ, WHZ, stunting, wasting); a genetic association (SNP in Hardy–Weinberg equilibrium, OR per allele); cost-effectiveness (skewed costs with zeros, QALYs, ICER); a 2×2 factorial trial with interaction; seasonality (vitamin D and infections by month); arm switching (ITT vs per-protocol); rare adverse events (rule of three, zero-inflated counts); a registry with fake identifiers for de-identification practice.
+- **🩺 Realistic values from the names**: about 110 measurements (mean, SD, unit, range, decimals) and 23 conditions (% yes) — also in “Generate / change a variable” as you type a name.
+- **Sex and age**: women − men and per-10-years differences for each variable, with library suggestions (Hb, creatinine, height, SBP…).
+- **Clinical profiles** for all patients or one group: diabetic, septic, elderly, pregnant, CKD, obese — related values move together.
+- **One effect for a whole section** (none / small / medium / large): the group targets of every variable in it (yes/no via the matching odds ratio).
+- **Keep real columns** (e.g. the real age and sex) and generate the rest; the real rows stay in memory only.
+- **Recipe as R and Python code**: a dataset from the same model (groups, means, SDs, ranges, category %, missing values).
+- **Fake identifiers** for the patients; **data arriving in waves** (later visits empty for recent patients); **specialty packs** (zip of datasets with answer keys).
+
 **Thesis**: Heading 1 at 16 pt on A4 and 14 pt on B5; significant P values in bold in the tables.
 **Direction of the comparisons** (step 6, Wording; also per variable): as found, the first group named first (“HDL-C was significantly lower in Group I than Group II”), the last group first, or every comparison reversed — the values in the brackets swap with the groups (“44.0 ± 7.9 vs 52.1 ± 8.3”).
 
