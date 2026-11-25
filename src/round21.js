@@ -7,7 +7,7 @@
   const css = document.createElement('style');
   css.textContent = `#phaseBar{position:relative;max-width:none}
 #r21Right{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px}
-#r21Right #u15GBar.u15-inphase{margin:0}
+#r21Right #u15GBar.u15-inphase{margin:0}#r21Undo{display:inline-flex;gap:4px;margin-right:6px}
 #r21Right .r21-sw{font-size:12px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;color:var(--muted);cursor:pointer}
 @media (max-width:1180px){#r21Right{position:static;transform:none;margin-left:auto}}
 html.r21-all .ux2-tabs{display:none}html.r21-all .ux2-pane{display:flex!important;padding-top:4px}
@@ -24,9 +24,16 @@ html.r21-all .ux2-pane::before{content:attr(data-r21lab);flex-basis:100%;font-we
     if (!v) document.querySelectorAll('details[data-r21="auto"]').forEach(d => { d.open = false; delete d.dataset.r21; });
     openAll(); if (window.EasyGen && H.classList.contains('ph-generate')) { const y = scrollY; window.EasyGen.render(); scrollTo(0, y); } }
   function place() { const pb = $('#phaseBar'); if (!pb) return; let r = $('#r21Right');
-    if (!r) { r = document.createElement('div'); r.id = 'r21Right'; r.innerHTML = `<label class="r21-sw" title="Show every option of every step, with no folded sections (untick for a shorter page)"><input type="checkbox" id="r21All" ${on() ? 'checked' : ''}> Show all options</label>`; pb.append(r); r.querySelector('#r21All').onchange = e => set(e.target.checked); }
+    if (!r) { r = document.createElement('div'); r.id = 'r21Right'; r.innerHTML = `<span id="r21Undo" class="r21-ur"><button class="btn ghost small" type="button" data-r21ur="undo" title="Undo the last change of this stage (Ctrl+Z)">↶ Undo</button><button class="btn ghost small" type="button" data-r21ur="redo" title="Redo (Ctrl+Y)">↷ Redo</button></span><label class="r21-sw" title="Show every option of every step, with no folded sections (untick for a shorter page)"><input type="checkbox" id="r21All" ${on() ? 'checked' : ''}> Show all options</label>`; pb.append(r); r.querySelector('#r21All').onchange = e => set(e.target.checked);
+      r.addEventListener('click', e => { const b = e.target.closest('[data-r21ur]'); if (!b) return; const back = b.dataset.r21ur === 'undo';
+        if (H.classList.contains('ph-build') && window.EasyBuilder) window.EasyBuilder.undo(back); else if (H.classList.contains('ph-generate') && window.EasyGen) window.EasyGen.undo(back); undoState(); }); }
+    undoState();
     const g = $('#u15GBar'); if (g && g.parentElement !== r) r.append(g); }
   H.classList.toggle('r21-all', LS.get('all', true));
   setInterval(() => { place(); openAll(); }, 700); place(); openAll();
-  window.EasyR21 = { set, openAll, get on() { return on(); } };
+  // the Undo / Redo buttons: shown in Build and Generate, enabled when there is something to undo or redo
+  function undoState() { const u = $('#r21Undo'); if (!u) return; const B = window.EasyBuilder, G = window.EasyGen, build = H.classList.contains('ph-build'), gen = H.classList.contains('ph-generate');
+    u.style.display = build || gen ? '' : 'none'; const src = build ? B : gen ? G : null; const [bu, br] = u.querySelectorAll('button'); bu.disabled = !(src && src.canUndo); br.disabled = !(src && src.canRedo); }
+  new MutationObserver(undoState).observe(H, { attributes: true, attributeFilter: ['class'] });
+  window.EasyR21 = { set, openAll, undoState, get on() { return on(); } };
 })();

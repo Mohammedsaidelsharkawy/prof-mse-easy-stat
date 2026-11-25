@@ -19,7 +19,14 @@
   // settings kept from an earlier version: the old defaults of missing values (2%) and dropouts (5%) become 0
   if (!G.v2) { if (+G.missAll === 2) G.missAll = 0; if (+G.dropout === 5) G.dropout = 0; G.v2 = true; }
   let SIG = {}, sigInfo = {}, dInfo = {}, niInfo = null;
-  const save = () => ls.set('settings', G);
+  // undo / redo of the settings of Generate (each change kept; changes within 0.8 s count as one)
+  let gUndo = [], gRedo = [], gPrev = JSON.stringify(G), gLastT = 0;
+  const save = () => { const j = JSON.stringify(G), now = Date.now(); if (gPrev === null) gPrev = j; else if (j !== gPrev) { if (now - gLastT > 800) { gUndo.push(gPrev); if (gUndo.length > 80) gUndo.shift(); gRedo = []; } gLastT = now; gPrev = j; } ls.set('settings', G); if (window.EasyR21 && window.EasyR21.undoState) window.EasyR21.undoState(); };
+  function gUndoDo(back) { const from = back ? gUndo : gRedo, to = back ? gRedo : gUndo; if (!from.length) { U.toast(back ? 'Nothing to undo in Generate' : 'Nothing to redo in Generate'); return false; }
+    to.push(JSON.stringify(G)); G = { ...defaults(), ...JSON.parse(from.pop()) }; gPrev = JSON.stringify(G); gLastT = 0; ls.set('settings', G);
+    if (last) { try { last = generate(D0()); resStamp++; } catch (err) { console.error(err); } } render(); if (window.EasyR21 && window.EasyR21.undoState) window.EasyR21.undoState(); U.toast(back ? '↶ Undone' : '↷ Redone'); return true; }
+  document.addEventListener('keydown', e => { if (!document.documentElement.classList.contains('ph-generate') || !(e.ctrlKey || e.metaKey) || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return; const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); gUndoDo(true); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); gUndoDo(false); } });
 
   /* ---------- the engine ---------- */
   // patients in each group (Generate, else the builder's plan); the total is their sum
@@ -531,7 +538,15 @@
   /* ---------- the workspace ---------- */
   const opt = (list, cur) => list.map(([k, l]) => `<option value="${esc(k)}" ${String(cur) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('');
   // the page stays where it is when the panel is drawn again (a change, a copy, a new option)
-  function render() { const y = window.scrollY; render0(); if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); requestAnimationFrame(() => { if (Date.now() - (window.__phaseAt || 0) > 400 && Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); }); }
+  // what the reader sees is kept over a redraw: the page, every box scrolled inside (the list of variables, the editor), and the open sections
+  function keepView(fn) { const R0 = document.querySelector('#genWrap'), key = e => [...e.classList].sort().join('.') || e.tagName, boxes = [], opened = new Map();
+    if (R0) { const seen = {}; R0.querySelectorAll('*').forEach(e => { const k = key(e), i = seen[k] = (seen[k] || 0) + 1; if (e.scrollTop > 0) boxes.push([k, i, e.scrollTop]); });
+      R0.querySelectorAll('details').forEach(d => { const s = d.querySelector('summary'), k = (s ? s.textContent : '').replace(/\s+/g, ' ').trim().slice(0, 60).replace(/\(changed\)|\(\d+\)/g, ''); opened.set(k, d.open); }); }
+    fn(); const R1 = document.querySelector('#genWrap'); if (!R1) return;
+    R1.querySelectorAll('details').forEach(d => { const s = d.querySelector('summary'), k = (s ? s.textContent : '').replace(/\s+/g, ' ').trim().slice(0, 60).replace(/\(changed\)|\(\d+\)/g, ''); if (opened.has(k)) { if (d.open !== opened.get(k)) d.open = opened.get(k); if (!opened.get(k)) d.dataset.r21 = 'shut'; } });
+    const put = () => { const seen = {}, at = {}; R1.querySelectorAll('*').forEach(e => { const k = key(e), i = seen[k] = (seen[k] || 0) + 1; at[k + '#' + i] = e; }); boxes.forEach(([k, i, top]) => { const e = at[k + '#' + i]; if (e && Math.abs(e.scrollTop - top) > 1) e.scrollTop = top; }); };
+    put(); requestAnimationFrame(put); }
+  function render() { const y = window.scrollY; keepView(render0); if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); requestAnimationFrame(() => { if (Date.now() - (window.__phaseAt || 0) > 400 && Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); }); }
   function render0() {
     const w = $('#genWrap'); if (!w) return; const D = D0(), A = arms(D), k = K(D), gl = A.length >= 2 ? A : ['All patients'];
     if (!w.dataset.wired) { w.dataset.wired = 1; w.addEventListener('input', onInput); w.addEventListener('click', onClick);
@@ -1048,6 +1063,6 @@
       c[k] = ['r', 'f', 'lo', 'hi', 'm', 's'].includes(k) ? (val === '' ? '' : +val) : val; save(); if (['how', 'diffAs', 'a', 'b'].includes(k)) return render(); return live(D0()); }
     if (d.gp) { G.power[d.gp] = val; save(); if (t.tagName === 'SELECT') render(); return; }
   }
-  window.EasyGen = { render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; }, get results() { return resOut; }, get errors() { return lastErrors; }, get consort() { return lastConsort; }, dataCode: P => dataCode(P || last), pTestX: (v, key, P, test) => pTestX(D0(), v, key, P, test), multiPower: r => multiPower(D0(), r), interimSim: r => interimSim(D0(), r), variability: r => variability(D0(), r), get sigInfo() { return sigInfo; }, numParams: v => numParams(v, 0, 'once') };
+  window.EasyGen = { undo: back => gUndoDo(back !== false), get canUndo() { return gUndo.length > 0; }, get canRedo() { return gRedo.length > 0; }, render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; }, get results() { return resOut; }, get errors() { return lastErrors; }, get consort() { return lastConsort; }, dataCode: P => dataCode(P || last), pTestX: (v, key, P, test) => pTestX(D0(), v, key, P, test), multiPower: r => multiPower(D0(), r), interimSim: r => interimSim(D0(), r), variability: r => variability(D0(), r), get sigInfo() { return sigInfo; }, numParams: v => numParams(v, 0, 'once') };
   if (document.documentElement.classList.contains('ph-generate')) render();
 })();

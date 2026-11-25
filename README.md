@@ -250,6 +250,8 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**The view stays where it is** in 🧱 Build and 🎲 Generate after any change (expected values in each group, Generate's options, a duplicated variable…): the page, the boxes that scroll on their own (the list of variables, the editor) and the sections you opened or closed. Choosing another variable opens its editor at the top.
+**↶ Undo / ↷ Redo** for 🧱 Build the master sheet and 🎲 Generate the data, in the top bar (for the stage on screen) and with Ctrl+Z / Ctrl+Y; Generate now keeps the history of its settings (up to 80 changes).
 **More figure options — Kaplan-Meier and every figure**:
 - Step 8 card → 🖼 Figure: for Kaplan-Meier, time axis up to and its step, survival axis from (%), survival as percent or proportion, censored patients as ticks, plus signs or not shown, dashed median survival lines, P value on the plot hidden; for every card, legend position, font, axis number and title sizes, line weight, gridlines.
 - Step 12 → ✎ Edit figure: texts and axes; Kaplan-Meier curves (as above, plus 95% CI bands and the number at risk); legend (shown, position, size), value labels and their size, colours, width; the look (font, sizes, line weight, gridlines and their style, border, background) — with a live preview.

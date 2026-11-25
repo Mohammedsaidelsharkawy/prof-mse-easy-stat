@@ -42572,8 +42572,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   let D = ls.get('current', null) || fromTemplate('rct2'), tab = 'study', sel = null, libQ = '', pasteOpen = false, pasteTxt = '', varQ = '', varF = '', bulk = new Set();
   // undo / redo: a snapshot before each change (typing in one field is one step)
   let undoS = [], redoS = [], lastT = 0, prevJ = JSON.stringify(D);
-  const save = () => { const j = JSON.stringify(D), now = Date.now(); if (j !== prevJ) { if (now - lastT > 800) { undoS.push(prevJ); if (undoS.length > 80) undoS.shift(); redoS = []; } lastT = now; prevJ = j; } ls.set('current', D); };
-  function undo(back) { const from = back ? undoS : redoS, to = back ? redoS : undoS; if (!from.length) { toast(back ? 'Nothing to undo' : 'Nothing to redo'); return; } to.push(JSON.stringify(D)); D = JSON.parse(from.pop()); prevJ = JSON.stringify(D); lastT = 0; ls.set('current', D); if (sel && !D.vars.some(v => v.id === sel)) sel = null; render(); }
+  const save = () => { const j = JSON.stringify(D), now = Date.now(); if (j !== prevJ) { if (now - lastT > 800) { undoS.push(prevJ); if (undoS.length > 80) undoS.shift(); redoS = []; } lastT = now; prevJ = j; } ls.set('current', D); if (window.EasyR21 && window.EasyR21.undoState) window.EasyR21.undoState(); };
+  function undo(back) { const from = back ? undoS : redoS, to = back ? redoS : undoS; if (!from.length) { toast(back ? 'Nothing to undo' : 'Nothing to redo'); return; } to.push(JSON.stringify(D)); D = JSON.parse(from.pop()); prevJ = JSON.stringify(D); lastT = 0; ls.set('current', D); if (sel && !D.vars.some(v => v.id === sel)) sel = null; render(); if (window.EasyR21 && window.EasyR21.undoState) window.EasyR21.undoState(); toast(back ? '↶ Undone' : '↷ Redone'); }
   const TABS = [['study', '1 · Study'], ['visits', '2 · Groups & visits'], ['vars', '3 · Variables'], ['rules', '4 · Rules'], ['preview', '5 · Preview'], ['export', '6 · Export']];
   const TYPES = [['num', 'Number'], ['yn', 'Yes / no'], ['cat', 'Categories'], ['multi', 'Tick all that apply (several answers)'], ['date', 'Date'], ['time', 'Time'], ['text', 'Text'], ['calc', 'Calculated (Excel formula)']];
   /* ---------- the three phases: 🧱 Build · 🎲 Generate · 📊 Analyse ---------- */
@@ -42595,7 +42595,15 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const open = () => setPhase('build'), close = () => setPhase('analyse');
   const opt = (list, cur) => list.map(([k, l]) => `<option value="${esc(k)}" ${String(cur) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('');
   // the page stays where it is when the panel is drawn again (a change, a copy, a new option)
-  function render() { const y = window.scrollY; render0(); if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); requestAnimationFrame(() => { if (Date.now() - (window.__phaseAt || 0) > 400 && Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); }); }
+  // what the reader sees is kept over a redraw: the page, every box scrolled inside (the list of variables, the editor), and the open sections
+  function keepView(fn) { const R0 = document.querySelector('#mbWrap'), key = e => [...e.classList].sort().join('.') || e.tagName, boxes = [], opened = new Map();
+    if (R0) { const seen = {}; R0.querySelectorAll('*').forEach(e => { const k = key(e), i = seen[k] = (seen[k] || 0) + 1; if (e.scrollTop > 0) boxes.push([k, i, e.scrollTop]); });
+      R0.querySelectorAll('details').forEach(d => { const s = d.querySelector('summary'), k = (s ? s.textContent : '').replace(/\s+/g, ' ').trim().slice(0, 60).replace(/\(changed\)|\(\d+\)/g, ''); opened.set(k, d.open); }); }
+    fn(); const R1 = document.querySelector('#mbWrap'); if (!R1) return;
+    R1.querySelectorAll('details').forEach(d => { const s = d.querySelector('summary'), k = (s ? s.textContent : '').replace(/\s+/g, ' ').trim().slice(0, 60).replace(/\(changed\)|\(\d+\)/g, ''); if (opened.has(k)) { if (d.open !== opened.get(k)) d.open = opened.get(k); if (!opened.get(k)) d.dataset.r21 = 'shut'; } });
+    const put = () => { const seen = {}, at = {}; R1.querySelectorAll('*').forEach(e => { const k = key(e), i = seen[k] = (seen[k] || 0) + 1; at[k + '#' + i] = e; }); boxes.forEach(([k, i, top]) => { const e = at[k + '#' + i]; if (e && Math.abs(e.scrollTop - top) > 1) e.scrollTop = top; }); };
+    put(); requestAnimationFrame(put); }
+  function render() { const y = window.scrollY; keepView(render0); if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); requestAnimationFrame(() => { if (Date.now() - (window.__phaseAt || 0) > 400 && Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); }); }
   function render0() {
     const w = $('#mbWrap'); if (!w) return; const pr = problems(D);
     w.innerHTML = `<div class="mb-head"><b>🧱 Master sheet builder</b><span class="legend-note">${esc(D.title || 'Untitled study')} · ${D.vars.length} variables · ${columns(D).length} columns</span><span class="spacer"></span>
@@ -42821,7 +42829,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
       else { const cats = (refSexAge(D).sex || {}).cats || ['Male', 'Female'], M0 = cats.find(c => /^m/i.test(c)) || cats[0], F0 = cats.find(c => /^f/i.test(c)) || cats[1], U0 = SEXREF.find(([re]) => re.test(x.label)); if (U0) x.refBy = [{ sex: M0, ageMin: 18, ageMax: '', lo: U0[1][0], hi: U0[1][1] }, { sex: F0, ageMin: 18, ageMax: '', lo: U0[2][0], hi: U0[2][1] }]; }
       save(); return render(); }
     if (b.id === 'mbClose') return setPhase('generate');
-    if (d.mbsel) { sel = d.mbsel; return render(); }
+    if (d.mbsel) { const ch = sel !== d.mbsel; sel = d.mbsel; render(); if (ch) { const top0 = () => { const c = document.querySelectorAll('#mbWrap .mb-col')[1]; if (c) c.scrollTop = 0; }; top0(); requestAnimationFrame(top0); } return; } // another variable: its editor from the top; the list stays where it is
     if (d.mblib) { const [sec, lab] = d.mblib.split('|'), e2 = LIB.find(x => x[0] === sec)[1].find(x => x[0] === lab); const v = libVar(sec, e2); D.vars.push(v); if (!D.sections.includes(sec)) D.sections.push(sec); sel = v.id; save(); return render(); }
     if (b.id === 'mbNewVar') { const sec = (D.vars.find(x => x.id === sel) || {}).section || D.sections[0] || 'Other'; const v = { id: uid(), section: sec, label: 'New variable', type: 'num', unit: '', min: '', max: '', cats: [], dec: '', required: false, visits: [], group: '', role: '', definition: '' }; D.vars.push(v); if (!D.sections.includes(sec)) D.sections.push(sec); sel = v.id; save(); return render(); }
     if (b.id === 'mbSiteAdd') { const S = D.sites = D.sites || []; S.push({ name: `Site ${S.length + 1}`, prefix: `S${S.length + 1}-` }); save(); return render(); }
@@ -42969,7 +42977,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
   // the entry on step 1
   const anchor = $('#btnTemplate'); if (anchor) { const b = document.createElement('button'); b.className = 'btn ghost small'; b.type = 'button'; b.id = 'btnBuilder'; b.title = 'Design the master sheet of a new study: variables, visits, groups, ranges, randomisation — then an Excel sheet, a case report form and a REDCap dictionary'; b.textContent = '🧱 Master sheet builder'; anchor.parentNode.insertBefore(b, anchor); b.onclick = open; }
   setPhase('analyse');
-  window.EasyBuilder = { buildCrf: (d, raw) => buildCrf(d || D, raw), open, close, setPhase, get phase() { return phase; }, buildWorkbook: (d, fill) => buildWorkbook(d || D, fill), setupFor, columns, visitsOf: v => visitsOf(D, v), baseName: v => baseName(D, v), tagOf, expectOf, prng, randomisation, redcap, fromTemplate, fileBase, save, render: () => render(), designFromDict, isRepeating: v => isRepeating(D, v), X, colL, sheetXml, xlsxBlob, secOrder, whenTxt, whenParent, xlOpts, SS_METHODS, LIB, TEMPLATES, findLib, uid, calcValue, calcCats, addSpec, addEligibility, SCALES, FK, nAnova, convert, ssCalc: d => ssCalc(d || D), designFromSheet, fromLine: (l, sec) => fromLine(D, l, sec || 'Other'), addScale: (n, it, lo, hi, def) => addScale(D, n, it, lo, hi, def), problems: d => problems(d || D), undo, get design() { return D; }, set design(x) { D = x; save(); } };
+  window.EasyBuilder = { get canUndo() { return undoS.length > 0; }, get canRedo() { return redoS.length > 0; }, buildCrf: (d, raw) => buildCrf(d || D, raw), open, close, setPhase, get phase() { return phase; }, buildWorkbook: (d, fill) => buildWorkbook(d || D, fill), setupFor, columns, visitsOf: v => visitsOf(D, v), baseName: v => baseName(D, v), tagOf, expectOf, prng, randomisation, redcap, fromTemplate, fileBase, save, render: () => render(), designFromDict, isRepeating: v => isRepeating(D, v), X, colL, sheetXml, xlsxBlob, secOrder, whenTxt, whenParent, xlOpts, SS_METHODS, LIB, TEMPLATES, findLib, uid, calcValue, calcCats, addSpec, addEligibility, SCALES, FK, nAnova, convert, ssCalc: d => ssCalc(d || D), designFromSheet, fromLine: (l, sec) => fromLine(D, l, sec || 'Other'), addScale: (n, it, lo, hi, def) => addScale(D, n, it, lo, hi, def), problems: d => problems(d || D), undo, get design() { return D; }, set design(x) { D = x; save(); } };
 })();
 
 /* Prof Easy Stat — phase 1, more from the design: a protocol and statistical analysis plan, the schedule of assessments,
@@ -43868,7 +43876,14 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
   // settings kept from an earlier version: the old defaults of missing values (2%) and dropouts (5%) become 0
   if (!G.v2) { if (+G.missAll === 2) G.missAll = 0; if (+G.dropout === 5) G.dropout = 0; G.v2 = true; }
   let SIG = {}, sigInfo = {}, dInfo = {}, niInfo = null;
-  const save = () => ls.set('settings', G);
+  // undo / redo of the settings of Generate (each change kept; changes within 0.8 s count as one)
+  let gUndo = [], gRedo = [], gPrev = JSON.stringify(G), gLastT = 0;
+  const save = () => { const j = JSON.stringify(G), now = Date.now(); if (gPrev === null) gPrev = j; else if (j !== gPrev) { if (now - gLastT > 800) { gUndo.push(gPrev); if (gUndo.length > 80) gUndo.shift(); gRedo = []; } gLastT = now; gPrev = j; } ls.set('settings', G); if (window.EasyR21 && window.EasyR21.undoState) window.EasyR21.undoState(); };
+  function gUndoDo(back) { const from = back ? gUndo : gRedo, to = back ? gRedo : gUndo; if (!from.length) { U.toast(back ? 'Nothing to undo in Generate' : 'Nothing to redo in Generate'); return false; }
+    to.push(JSON.stringify(G)); G = { ...defaults(), ...JSON.parse(from.pop()) }; gPrev = JSON.stringify(G); gLastT = 0; ls.set('settings', G);
+    if (last) { try { last = generate(D0()); resStamp++; } catch (err) { console.error(err); } } render(); if (window.EasyR21 && window.EasyR21.undoState) window.EasyR21.undoState(); U.toast(back ? '↶ Undone' : '↷ Redone'); return true; }
+  document.addEventListener('keydown', e => { if (!document.documentElement.classList.contains('ph-generate') || !(e.ctrlKey || e.metaKey) || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return; const k = e.key.toLowerCase();
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); gUndoDo(true); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); gUndoDo(false); } });
 
   /* ---------- the engine ---------- */
   // patients in each group (Generate, else the builder's plan); the total is their sum
@@ -44380,7 +44395,15 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
   /* ---------- the workspace ---------- */
   const opt = (list, cur) => list.map(([k, l]) => `<option value="${esc(k)}" ${String(cur) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('');
   // the page stays where it is when the panel is drawn again (a change, a copy, a new option)
-  function render() { const y = window.scrollY; render0(); if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); requestAnimationFrame(() => { if (Date.now() - (window.__phaseAt || 0) > 400 && Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); }); }
+  // what the reader sees is kept over a redraw: the page, every box scrolled inside (the list of variables, the editor), and the open sections
+  function keepView(fn) { const R0 = document.querySelector('#genWrap'), key = e => [...e.classList].sort().join('.') || e.tagName, boxes = [], opened = new Map();
+    if (R0) { const seen = {}; R0.querySelectorAll('*').forEach(e => { const k = key(e), i = seen[k] = (seen[k] || 0) + 1; if (e.scrollTop > 0) boxes.push([k, i, e.scrollTop]); });
+      R0.querySelectorAll('details').forEach(d => { const s = d.querySelector('summary'), k = (s ? s.textContent : '').replace(/\s+/g, ' ').trim().slice(0, 60).replace(/\(changed\)|\(\d+\)/g, ''); opened.set(k, d.open); }); }
+    fn(); const R1 = document.querySelector('#genWrap'); if (!R1) return;
+    R1.querySelectorAll('details').forEach(d => { const s = d.querySelector('summary'), k = (s ? s.textContent : '').replace(/\s+/g, ' ').trim().slice(0, 60).replace(/\(changed\)|\(\d+\)/g, ''); if (opened.has(k)) { if (d.open !== opened.get(k)) d.open = opened.get(k); if (!opened.get(k)) d.dataset.r21 = 'shut'; } });
+    const put = () => { const seen = {}, at = {}; R1.querySelectorAll('*').forEach(e => { const k = key(e), i = seen[k] = (seen[k] || 0) + 1; at[k + '#' + i] = e; }); boxes.forEach(([k, i, top]) => { const e = at[k + '#' + i]; if (e && Math.abs(e.scrollTop - top) > 1) e.scrollTop = top; }); };
+    put(); requestAnimationFrame(put); }
+  function render() { const y = window.scrollY; keepView(render0); if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); requestAnimationFrame(() => { if (Date.now() - (window.__phaseAt || 0) > 400 && Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); }); }
   function render0() {
     const w = $('#genWrap'); if (!w) return; const D = D0(), A = arms(D), k = K(D), gl = A.length >= 2 ? A : ['All patients'];
     if (!w.dataset.wired) { w.dataset.wired = 1; w.addEventListener('input', onInput); w.addEventListener('click', onClick);
@@ -44897,7 +44920,7 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
       c[k] = ['r', 'f', 'lo', 'hi', 'm', 's'].includes(k) ? (val === '' ? '' : +val) : val; save(); if (['how', 'diffAs', 'a', 'b'].includes(k)) return render(); return live(D0()); }
     if (d.gp) { G.power[d.gp] = val; save(); if (t.tagName === 'SELECT') render(); return; }
   }
-  window.EasyGen = { render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; }, get results() { return resOut; }, get errors() { return lastErrors; }, get consort() { return lastConsort; }, dataCode: P => dataCode(P || last), pTestX: (v, key, P, test) => pTestX(D0(), v, key, P, test), multiPower: r => multiPower(D0(), r), interimSim: r => interimSim(D0(), r), variability: r => variability(D0(), r), get sigInfo() { return sigInfo; }, numParams: v => numParams(v, 0, 'once') };
+  window.EasyGen = { undo: back => gUndoDo(back !== false), get canUndo() { return gUndo.length > 0; }, get canRedo() { return gRedo.length > 0; }, render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; }, get results() { return resOut; }, get errors() { return lastErrors; }, get consort() { return lastConsort; }, dataCode: P => dataCode(P || last), pTestX: (v, key, P, test) => pTestX(D0(), v, key, P, test), multiPower: r => multiPower(D0(), r), interimSim: r => interimSim(D0(), r), variability: r => variability(D0(), r), get sigInfo() { return sigInfo; }, numParams: v => numParams(v, 0, 'once') };
   if (document.documentElement.classList.contains('ph-generate')) render();
 })();
 
@@ -48100,7 +48123,7 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
   const css = document.createElement('style');
   css.textContent = `#phaseBar{position:relative;max-width:none}
 #r21Right{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px}
-#r21Right #u15GBar.u15-inphase{margin:0}
+#r21Right #u15GBar.u15-inphase{margin:0}#r21Undo{display:inline-flex;gap:4px;margin-right:6px}
 #r21Right .r21-sw{font-size:12px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;color:var(--muted);cursor:pointer}
 @media (max-width:1180px){#r21Right{position:static;transform:none;margin-left:auto}}
 html.r21-all .ux2-tabs{display:none}html.r21-all .ux2-pane{display:flex!important;padding-top:4px}
@@ -48117,11 +48140,18 @@ html.r21-all .ux2-pane::before{content:attr(data-r21lab);flex-basis:100%;font-we
     if (!v) document.querySelectorAll('details[data-r21="auto"]').forEach(d => { d.open = false; delete d.dataset.r21; });
     openAll(); if (window.EasyGen && H.classList.contains('ph-generate')) { const y = scrollY; window.EasyGen.render(); scrollTo(0, y); } }
   function place() { const pb = $('#phaseBar'); if (!pb) return; let r = $('#r21Right');
-    if (!r) { r = document.createElement('div'); r.id = 'r21Right'; r.innerHTML = `<label class="r21-sw" title="Show every option of every step, with no folded sections (untick for a shorter page)"><input type="checkbox" id="r21All" ${on() ? 'checked' : ''}> Show all options</label>`; pb.append(r); r.querySelector('#r21All').onchange = e => set(e.target.checked); }
+    if (!r) { r = document.createElement('div'); r.id = 'r21Right'; r.innerHTML = `<span id="r21Undo" class="r21-ur"><button class="btn ghost small" type="button" data-r21ur="undo" title="Undo the last change of this stage (Ctrl+Z)">↶ Undo</button><button class="btn ghost small" type="button" data-r21ur="redo" title="Redo (Ctrl+Y)">↷ Redo</button></span><label class="r21-sw" title="Show every option of every step, with no folded sections (untick for a shorter page)"><input type="checkbox" id="r21All" ${on() ? 'checked' : ''}> Show all options</label>`; pb.append(r); r.querySelector('#r21All').onchange = e => set(e.target.checked);
+      r.addEventListener('click', e => { const b = e.target.closest('[data-r21ur]'); if (!b) return; const back = b.dataset.r21ur === 'undo';
+        if (H.classList.contains('ph-build') && window.EasyBuilder) window.EasyBuilder.undo(back); else if (H.classList.contains('ph-generate') && window.EasyGen) window.EasyGen.undo(back); undoState(); }); }
+    undoState();
     const g = $('#u15GBar'); if (g && g.parentElement !== r) r.append(g); }
   H.classList.toggle('r21-all', LS.get('all', true));
   setInterval(() => { place(); openAll(); }, 700); place(); openAll();
-  window.EasyR21 = { set, openAll, get on() { return on(); } };
+  // the Undo / Redo buttons: shown in Build and Generate, enabled when there is something to undo or redo
+  function undoState() { const u = $('#r21Undo'); if (!u) return; const B = window.EasyBuilder, G = window.EasyGen, build = H.classList.contains('ph-build'), gen = H.classList.contains('ph-generate');
+    u.style.display = build || gen ? '' : 'none'; const src = build ? B : gen ? G : null; const [bu, br] = u.querySelectorAll('button'); bu.disabled = !(src && src.canUndo); br.disabled = !(src && src.canRedo); }
+  new MutationObserver(undoState).observe(H, { attributes: true, attributeFilter: ['class'] });
+  window.EasyR21 = { set, openAll, undoState, get on() { return on(); } };
 })();
 
 /* Prof Easy Stat — round 22: dialog boxes and side panels close when you click outside them. */
