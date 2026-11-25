@@ -1989,7 +1989,11 @@
     const { headers, rows } = data;
     const info = Object.fromEntries(headers.map(h => [h, columnInfo(rows, h)]));
     let groupCol = headers.find(h => GROUP_RE.test(h)) || headers.find(h => /group|arm/i.test(h));
-    if (!groupCol) groupCol = headers.find(h => !info[h].numeric && info[h].distinct.length >= 2 && info[h].distinct.length <= 6 && !ID_RE.test(h)) || headers[0];
+    // a column of a repeated measure (Nausea_Baseline with Nausea_W1 …) is never taken for the group
+    const baseOf = h => { const t = tokens(h), i = t.findIndex(x => TP_RE.test(x)); return i < 0 ? null : [...t.slice(0, i), ...t.slice(i + 1)].join('_').toLowerCase(); };
+    const inFamily = h => { const b = baseOf(h); return b !== null && headers.some(x => x !== h && baseOf(x) === b); };
+    if (!groupCol) groupCol = headers.find(h => !info[h].numeric && info[h].distinct.length >= 2 && info[h].distinct.length <= 6 && !ID_RE.test(h) && !inFamily(h)) || headers[0];
+    const autoOne = !headers.some(h => GROUP_RE.test(h) || /group|arm/i.test(h)) && (ID_RE.test(groupCol) || (info[groupCol] && info[groupCol].distinct.length === info[groupCol].n && info[groupCol].n > 6)); // only an ID left: one group
     const idCols = headers.filter(h => h !== groupCol && (ID_RE.test(h) || (!info[h].numeric && info[h].distinct.length === info[h].n && info[h].n > 6)));
 
     // find repeated-measure families
@@ -2011,6 +2015,11 @@
       if (f.cols.length >= 2 && tps.size === f.cols.length && f.cols.every(c => info[c.col].numeric && !inRepeated.has(c.col))) {
         f.cols.forEach(c => inRepeated.add(c.col));
         repeated.push({ key, ...f });
+      } else if (f.cols.length >= 2 && tps.size === f.cols.length && f.cols.every(c => !info[c.col].numeric && !inRepeated.has(c.col))) {
+        // a categorical variable measured at several times (e.g. Nausea_Baseline, Nausea_W1): one repeated categorical variable
+        const lv = [...new Set(f.cols.flatMap(c => info[c.col].distinct))]; if (lv.length < 2 || lv.length > 12) continue;
+        f.cols.forEach(c => inRepeated.add(c.col));
+        repeated.push({ key, ...f, cat: true, levels: defaultLevels(lv) });
       }
     }
     const firstRepPos = Math.min(...repeated.map(r => r.cols[0].pos), Infinity);
@@ -2021,7 +2030,7 @@
     });
     repeated.forEach(r => variables.push({
       id: 'r' + r.cols[0].pos, kind: 'repeated', pos: r.cols[0].pos, cols: r.cols.map(c => ({ col: c.col, tp: c.tp })),
-      label: labelFrom(r.base), type: 'numeric', dist: 'auto', table: '', levels: [], note: '', include: true
+      label: labelFrom(r.base), type: r.cat ? 'categorical' : 'numeric', dist: 'auto', table: '', levels: r.cat ? r.levels : [], note: '', include: true
     }));
     variables.sort((a, b) => a.pos - b.pos);
     const tpOrder = [];
@@ -2033,6 +2042,7 @@
       consort: null, tpInclude: {}, advanced: [], exportExclude: {}, report: { ...DEFAULT_REPORT }
     };
     setGroups(cfg);
+    if (autoOne) { cfg.noGroups = true; setGroups(cfg); } // the ID stays an ID, not a variable
     return cfg;
   }
   // detect the variables again after cleaning (columns that became numbers can now form repeated measures),
