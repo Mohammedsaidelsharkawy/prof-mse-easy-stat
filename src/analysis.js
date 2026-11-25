@@ -4043,8 +4043,12 @@ const Analysis = (() => {
       const subsets = compares || !a.subset || a.subset === 'all' ? [{ g: null, rows }]
         : a.subset === 'each' ? groups.map(g => ({ g, rows: rows.filter(r => groupOf(cfg, r) === g) }))
         : groups.includes(a.subset) ? [{ g: a.subset, rows: rows.filter(r => groupOf(cfg, r) === a.subset) }] : [{ g: null, rows }];
+      // Kaplan-Meier: the curves by another column, or all patients as one curve
+      let cfgA = cfg, GA = G;
+      if (a.type === 'survival' && a.kmBy === '__all') { cfgA = { ...cfg, noGroups: true }; GA = { gl: ['All patients'], groups: [ALL_GROUP] }; }
+      else if (a.type === 'survival' && a.kmBy && data.headers.includes(a.kmBy)) { const lv = levelsOf(cfg, rows, a.kmBy); if (lv.length >= 2) { cfgA = { ...cfg, noGroups: false, groupCol: a.kmBy }; GA = { gl: [...lv], groups: lv }; } }
       for (const sub of subsets) {
-        let made = make(a, cfg, sub.rows, alpha, d, used, G);
+        let made = make(a, cfgA, sub.rows, alpha, d, used, GA);
         if (!made) continue;
         if (window.RocReg && ['roc', 'linear', 'logistic', 'cox'].includes(a.type)) { try { made = window.RocReg.extend(a, cfg, sub.rows, alpha, d, used, [].concat(made), HX); } catch (e) { console.error(e); } }
         // an analysis may add a second table (e.g. the comparison of ROC curves)

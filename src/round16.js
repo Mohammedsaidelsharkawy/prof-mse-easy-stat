@@ -50,7 +50,8 @@
     ['#r19Imp .btn', '#r19Imp label.btn', '#ezSample', '#ezQuickB'].forEach(q => document.querySelectorAll(q).forEach(x => { if (x.parentElement !== row) row.insertBefore(x, pb); }));
     // round 20: 📋 Paste from Excel first; no ⚡ Make my report, 🧱 Master sheet builder or 👀 example-report buttons here (the builder is in the bar above, the examples below)
     ['#ezSample', '#btnBuilder'].forEach(q => { const x = $(q); if (x) x.style.display = 'none'; }); if (row.firstElementChild !== pb) row.prepend(pb);
-    const qb = $('#ezQuickB'); if (qb) { qb.style.display = ''; if (pb.nextElementSibling !== qb) pb.after(qb); }
+    // ⚡ Make my report: on the line of “Enter your mastersheet”, at its right end
+    const qb = $('#ezQuickB'), h2 = pb.closest('.card') && pb.closest('.card').querySelector('h2'); if (qb && h2) { qb.style.display = ''; qb.style.marginLeft = 'auto'; h2.style.display = 'flex'; h2.style.alignItems = 'center'; h2.style.gap = '6px'; if (qb.parentElement !== h2) h2.append(qb); }
     document.querySelectorAll('#p1 .card > .row').forEach(r => { if (r !== row && ![...r.children].some(c => c.style.display !== 'none')) r.style.display = 'none'; }); }
   setInterval(() => { if (S().step === 1 || !S().data) { details(); startRow(); } }, 800); details(); setTimeout(startRow, 900);
   window.EasyR16 = { drawTick, details };

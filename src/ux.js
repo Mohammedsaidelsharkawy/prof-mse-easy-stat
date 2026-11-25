@@ -240,6 +240,14 @@
   const p1card = $('#p1 .card');
   if (p1card) { const g = el('div', 'ux-goals'); g.innerHTML = `<span class="legend-note">What do you want to do?</span> ${GOALS.map(([k, l]) => `<button class="chip ux-goal ${ls.get('goal') === k ? 'on' : ''}" data-goal="${k}" type="button">${l}</button>`).join('')}<span class="legend-note" id="uxGoalNote"></span>`;
     p1card.insertBefore(g, p1card.children[1] || null);
+    // the type of the study puts its usual goals first (marked ★); the others stay after them
+    const SUGG = { rct: ['groups', 'adjusted', 'paired', 'survival'], nrct: ['groups', 'adjusted', 'paired'], pcohort: ['groups', 'survival', 'risk', 'prediction'], rcohort: ['groups', 'survival', 'risk', 'prediction'],
+      casecontrol: ['groups', 'risk'], cross: ['groups', 'correlation', 'risk', 'linreg'], diagnostic: ['diagnostic', 'agreement', 'methods'], prepost: ['paired'], series: ['paired', 'correlation'] };
+    const order = () => { const t = ($('#studyType') || {}).value || '', sg = SUGG[t] || [], btns = [...g.querySelectorAll('[data-goal]')], note = g.querySelector('.legend-note');
+      btns.sort((a, b) => { const ia = sg.indexOf(a.dataset.goal), ib = sg.indexOf(b.dataset.goal); return (ia < 0 ? 99 + GOALS.findIndex(x => x[0] === a.dataset.goal) : ia) - (ib < 0 ? 99 + GOALS.findIndex(x => x[0] === b.dataset.goal) : ib); });
+      let after = note; btns.forEach(b => { after.after(b); after = b; const on = sg.includes(b.dataset.goal); b.classList.toggle('ux-sugg', on); b.textContent = (on ? '★ ' : '') + GOALS.find(x => x[0] === b.dataset.goal)[1]; b.style.opacity = sg.length && !on ? '.6' : ''; b.title = on ? 'Usual for this type of study' : ''; });
+      let s = g.querySelector('.ux-gsep'); if (s) s.remove(); const firstOther = btns.find(b => !sg.includes(b.dataset.goal)); if (sg.length && firstOther) { s = el('span', 'legend-note ux-gsep', '· other:'); firstOther.before(s); } };
+    document.addEventListener('change', e => { if (e.target.id === 'studyType') order(); }); setTimeout(order, 500); setInterval(() => { const t = ($('#studyType') || {}).value || ''; if (g.dataset.st !== t) { g.dataset.st = t; order(); } }, 1000);
     g.onclick = e => { const b = e.target.closest('[data-goal]'); if (!b) return; const k = ls.get('goal') === b.dataset.goal ? null : b.dataset.goal; ls.set('goal', k); $$('.ux-goal').forEach(x => x.classList.toggle('on', x.dataset.goal === k)); S().uxGoalDone = null;
       $('#uxGoalNote').textContent = k ? 'The matching analyses are added when you reach step 2.' : ''; if (k && S().cfg) applyGoal(); }; }
   function applyGoal() {
