@@ -10,7 +10,7 @@
   function same() { const st = S(); if (!st.cfg) return false; if (owner !== st.cfg && !(owner && owner.__r23 && owner.__r23 === st.cfg.__r23)) { owner = st.cfg; Object.defineProperty(st.cfg, '__r23', { value: Math.random(), enumerable: false, configurable: true }); hist = []; fut = []; prev = JSON.stringify(st.cfg); dataLen = (st.undo || []).length; state(); return false; } return true; }
   function snap(readUi = true) { if (restoring || !analyse()) return; const st = S(); if (!same()) return;
     // an edit of the data (its own undo list grew): one step of the history
-    const dl = (st.undo || []).length; if (dl > dataLen) { for (let i = dataLen; i < dl; i++) hist.push({ data: true }); fut = []; } dataLen = dl;
+    const dl = (st.undo || []).length; if (dl > dataLen) { for (let i = dataLen; i < dl; i++) hist.push({ data: true }); fut = []; dataLen = dl; prev = JSON.stringify(st.cfg); if (hist.length > 80) hist.splice(0, hist.length - 80); state(); return; } dataLen = dl; // an edit of the data also holds its settings
     if (readUi) try { U.readUiIntoCfg(); } catch (e) { /* the screen is being drawn */ }
     const j = JSON.stringify(st.cfg); if (j !== prev) { if (Date.now() < quietUntil) prev = j; else { hist.push({ cfg: prev }); fut = []; prev = j; } } // just after an undo, the screen settling is not a change
     if (hist.length > 80) hist.splice(0, hist.length - 80); state(); }

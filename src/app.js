@@ -226,6 +226,7 @@
     selectSheet(wb.SheetNames[0]);
   }
   // paste cells copied from Excel (tab-separated) or comma-separated text
+  $('#recWiz') && ($('#recWiz').onclick = recodeWizard);
   $('#btnPaste').onclick = () => { $('#pasteText').value = ''; $('#pasteInfo').textContent = ''; $('#pasteDlg').showModal(); $('#pasteText').focus(); };
   $('#pasteCancel').onclick = () => $('#pasteDlg').close();
   $('#pasteText').oninput = () => { const t = $('#pasteText').value.trim(); const lines = t ? t.split(/\r?\n/).filter(l => l.trim()) : [];
@@ -708,6 +709,44 @@
     return true;
   }
   // every change to the sheet goes through here: snapshot for undo, apply, keep the setup in step, redraw
+  // 🔁 recode several variables at once: merge categories, cut numbers into groups (new columns), or the reference / order of the categories
+  function recodeWizard() { if (!state.data || !state.cfg) return; readUiIntoCfg(); const cfg = state.cfg, rows = state.data.rows, singles = cfg.variables.filter(v => v.kind === 'single' && v.cols[0].col !== cfg.groupCol);
+    const cats = singles.filter(v => v.type === 'categorical'), nums = singles.filter(v => v.type === 'numeric'), lvOf = v => Analysis.levelsOf(cfg, rows, v.cols[0].col);
+    let d = $('#recWizDlg'); if (!d) { d = document.createElement('dialog'); d.id = 'recWizDlg'; d.className = 'app-dlg'; document.body.append(d); }
+    let mode = 'merge';
+    const draw = () => { const list = mode === 'cut' ? nums : cats, chk = [...d.querySelectorAll('[data-rwv]:checked')].map(x => x.dataset.rwv);
+      d.innerHTML = `<form method="dialog" onsubmit="return false" style="width:min(760px,94vw)"><h3>🔁 Recode several variables</h3>
+        <div class="row" style="gap:6px;flex-wrap:wrap">${[['merge', 'Merge or rename categories'], ['cut', 'Cut numbers into groups'], ['ref', 'Reference (first) category']].map(([k, l]) => `<button class="btn ${mode === k ? 'primary' : 'ghost'} small" type="button" data-rwm="${k}">${l}</button>`).join('')}</div>
+        <div class="row" style="gap:10px;flex-wrap:wrap;margin:8px 0;max-height:120px;overflow:auto">${list.map(v => `<label class="check" style="margin:0"><input type="checkbox" data-rwv="${esc(v.id)}" ${chk.includes(v.id) ? 'checked' : ''}><span>${esc(v.label)}</span></label>`).join('') || '<span class="legend-note">No such variable.</span>'}</div>
+        <div id="rwBody" style="max-height:46vh;overflow:auto"></div>
+        <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn ghost" type="button" data-rwgo="x">Close</button><button class="btn primary" type="button" data-rwgo="ok">Apply</button></div></form>`; body(); };
+    const body = () => { const sel = [...d.querySelectorAll('[data-rwv]:checked')].map(x => cfg.variables.find(v => v.id === x.dataset.rwv)).filter(Boolean), B = d.querySelector('#rwBody'); if (!B) return;
+      if (!sel.length) { B.innerHTML = '<p class="legend-note">Tick the variables above.</p>'; return; }
+      if (mode === 'merge') B.innerHTML = sel.map(v => `<div class="gcard" style="margin:4px 0"><b>${esc(v.label)}</b><table class="t" style="margin-top:4px"><thead><tr><th>Now</th><th>n</th><th>Becomes (same name = merged)</th></tr></thead><tbody>${lvOf(v).map(l => `<tr><td>${esc(l)}</td><td>${rows.filter(r => Analysis.toCat(r[v.cols[0].col]) === l).length}</td><td><input type="text" data-rwmap="${esc(v.id)}" data-rwfrom="${esc(l)}" value="${esc(l)}" list="rwl_${esc(v.id)}"><datalist id="rwl_${esc(v.id)}">${lvOf(v).map(x => `<option value="${esc(x)}">`).join('')}</datalist></td></tr>`).join('')}</tbody></table></div>`).join('');
+      else if (mode === 'cut') B.innerHTML = `<div class="grid g2" style="gap:8px"><div><label class="f">Cut-offs (a value starts the next group), e.g. 18.5, 25, 30</label><input type="text" id="rwCuts" placeholder="e.g. 18.5, 25, 30"></div><div><label class="f">Group names (one more than the cut-offs), e.g. Under, Normal, Over, Obese</label><input type="text" id="rwLabs" placeholder="automatic (e.g. < 18.5, 18.5–25, …)"></div></div>
+        <p class="legend-note">Each ticked variable gets a new column (its name + “_group”) with these groups; the number columns stay as they are. ${sel.map(v => { const xs = rows.map(r => Analysis.toNum(r[v.cols[0].col])).filter(isFinite); return `${esc(v.label)}: ${xs.length ? `${Math.min(...xs)} to ${Math.max(...xs)}` : 'no numbers'}`; }).join(' · ')}</p>`;
+      else B.innerHTML = sel.map(v => { const lv = lvOf(v); return `<div class="row" style="gap:8px;align-items:center;margin:4px 0"><b style="min-width:180px">${esc(v.label)}</b><span class="legend-note">first (reference):</span><select data-rwref="${esc(v.id)}" style="width:auto">${lv.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('')}</select><label class="check" style="margin:0"><input type="checkbox" data-rwrev="${esc(v.id)}"><span>reverse the order</span></label></div>`; }).join(''); };
+    d.onchange = e => { if (e.target.dataset.rwv) body(); };
+    d.onclick = e => { const m = e.target.closest('[data-rwm]'); if (m) { mode = m.dataset.rwm; draw(); return; } const g = e.target.closest('[data-rwgo]'); if (!g) return; if (g.dataset.rwgo === 'x') { d.close(); return; }
+      const sel = [...d.querySelectorAll('[data-rwv]:checked')].map(x => cfg.variables.find(v => v.id === x.dataset.rwv)).filter(Boolean); if (!sel.length) { toast('Tick the variables first'); return; }
+      if (mode === 'merge') { const maps = {}; d.querySelectorAll('[data-rwmap]').forEach(x => { const to = x.value.trim(); if (to && to !== x.dataset.rwfrom) (maps[x.dataset.rwmap] = maps[x.dataset.rwmap] || {})[x.dataset.rwfrom] = to; });
+        if (!Object.keys(maps).length) { toast('Nothing to change: type the new name of a category'); return; } let n = 0;
+        editSheet(() => { sel.forEach(v => { const M = maps[v.id]; if (!M) return; const col = v.cols[0].col; state.data.rows.forEach(r => { const c = Analysis.toCat(r[col]); if (c !== null && M[c] !== undefined) { r[col] = M[c]; n++; } });
+          if (v.levels && v.levels.length) v.levels = [...new Set(v.levels.map(l => M[l] ?? l))]; }); }, 'Categories merged or renamed');
+        toast(`${n} cell${n === 1 ? '' : 's'} recoded (Undo restores them)`); }
+      else if (mode === 'cut') { const cuts = String(d.querySelector('#rwCuts').value).split(/[,;\s]+/).map(x => parseFloat(x.replace(',', '.'))).filter(isFinite).sort((x, y) => x - y); if (!cuts.length) { toast('Type at least one cut-off'); return; }
+        const labs0 = String(d.querySelector('#rwLabs').value).split(',').map(x => x.trim()).filter(Boolean), labs = labs0.length === cuts.length + 1 ? labs0 : [`< ${cuts[0]}`, ...cuts.slice(1).map((c, i) => `${cuts[i]}–${c}`), `≥ ${cuts[cuts.length - 1]}`];
+        const made = [];
+        editSheet(() => { sel.forEach(v => { const col = v.cols[0].col; let nc = `${col}_group`, k = 2; while (state.data.headers.includes(nc)) nc = `${col}_group${k++}`;
+          const at = state.data.headers.indexOf(col) + 1; state.data.headers.splice(at, 0, nc);
+          state.data.rows.forEach(r => { const x = Analysis.toNum(r[col]); r[nc] = isFinite(x) ? labs[cuts.filter(c => x >= c).length] : null; });
+          const nv = singleVariable(state.data.rows, nc, v.pos + 0.5, v.table); nv.type = 'categorical'; nv.levels = labs.slice(); nv.label = `${v.label} (groups)`; cfg.variables.push(nv); made.push(nc); });
+          cfg.variables.sort((x, y) => x.pos - y.pos); }, 'Numbers cut into groups');
+        toast(`New column${made.length > 1 ? 's' : ''}: ${made.join(', ')} (Undo removes ${made.length > 1 ? 'them' : 'it'})`); }
+      else { sel.forEach(v => { const lv = lvOf(v), ref = (d.querySelector(`[data-rwref="${CSS.escape(v.id)}"]`) || {}).value, rev = (d.querySelector(`[data-rwrev="${CSS.escape(v.id)}"]`) || {}).checked; let o = rev ? lv.slice().reverse() : lv.slice(); if (ref) o = [ref, ...o.filter(x => x !== ref)]; v.levels = o; });
+        toast('Order of the categories set — the first is the reference'); }
+      d.close(); renderVariables(); renderStepper(); };
+    draw(); d.showModal(); }
   function editSheet(fn, what) {
     pushUndo();
     const before = JSON.parse(state.undo[state.undo.length - 1]).data;
@@ -3838,8 +3877,10 @@
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
           <label class="check" style="margin:0"><input type="checkbox" data-af="include" ${a.include !== false ? 'checked' : ''}><span>Include</span></label>
  <button class="btn ghost small" data-advmove="${ai},-1" type="button" title="Move up" ${ai === 0 ? 'disabled' : ''}>↑</button><button class="btn ghost small" data-advmove="${ai},1" type="button" title="Move down" ${ai === state.cfg.advanced.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="btn ghost small" data-advpreset="${ai}" type="button" title="Save this analysis (type, columns, options) as a preset to use again, also in other projects">☆ Preset</button>
           <button class="btn ghost small" data-advdup="${ai}" type="button" title="A copy of this analysis, to change one setting">⧉ Duplicate</button>
           <button class="btn ghost small" data-advdel="${ai}" type="button">✕ Remove</button></div>
+        <div class="adv-live" data-advlive="${ai}" style="margin-top:6px;padding:4px 8px;border-left:3px solid var(--purple,#7B2FBE);background:var(--lav,#F3EEFB);border-radius:6px;font-size:13px"><span class="legend-note">Result: …</span></div>
         <div class="grid g3" style="margin-top:8px">${fields}${uni}</div>
         <div class="grid g4 adv-opts">${advOptions(a)}</div>
         ${t === 'survival' ? '<p class="legend-note" style="margin:6px 0 0">Curves are drawn for each study group; patients without the event are censored at their follow-up time.</p>' : t === 'mcnemar' ? '<p class="legend-note" style="margin:6px 0 0">Tested in each study group and in all patients together.</p>' : !withPreds || (t === 'noninf' && !preds.length) ? '' : `
@@ -3880,6 +3921,57 @@
   const advRefresh = e => { const card = e.target.closest('[data-adv]'); if (!card || e.target.closest('.adv-out')) return; const ai = +card.dataset.adv, a = state.cfg.advanced[ai];
     if (a && advOpen.has(a)) { readAdvanced(); advOutput(ai, e.type === 'input' ? 700 : 150); } };
   $('#advList').addEventListener('change', advRefresh); $('#advList').addEventListener('input', advRefresh);
+  // the headline of each card (round 24): the first sentence of its comment, as soon as its columns are chosen
+  const liveT = {};
+  function advLive(ai, delay = 600) { clearTimeout(liveT[ai]); liveT[ai] = setTimeout(() => { const box = document.querySelector(`[data-advlive="${ai}"]`), a = state.cfg && state.cfg.advanced[ai]; if (!box || !a) return;
+      let txt = '', err = ''; try { const o = effOptions(); const res = Analysis.run(state.data, { ...state.cfg, options: { ...o, correlation: false, summary: false, fdr: false, figures: 'none' }, variables: state.cfg.variables.map(v => ({ ...v, include: false })), advanced: [{ ...a, include: true, figOff: true }], timeline: null, consort: { ...(state.cfg.consort || {}), enabled: false } });
+        const sec = (res.sections || []).find(sc => sc.comment); txt = sec ? (sentences(sec.comment)[0] || sec.comment).trim() : ''; } catch (e) { err = e.message; }
+      box.innerHTML = txt ? `<b>Result:</b> ${esc(txt)}` : `<span class="legend-note">${err ? 'Not computed yet — check the columns' : 'Choose the columns: the main result shows here'}</span>`; }, delay); }
+  $('#advList').addEventListener('change', e => { const card = e.target.closest('[data-adv]'); if (card && !e.target.closest('.adv-out')) { readAdvanced(); advLive(+card.dataset.adv, 300); } });
+  $('#advList').addEventListener('input', e => { const card = e.target.closest('[data-adv]'); if (card && !e.target.closest('.adv-out') && e.target.type !== 'text' && e.target.tagName !== 'TEXTAREA') { readAdvanced(); advLive(+card.dataset.adv, 800); } });
+  // ☆ presets: an analysis kept with its columns and options (columns missing in other data are left out when it is used)
+  const PRESET_KEY = 'easystat.advPresets', presets = () => { try { return JSON.parse(localStorage.getItem(PRESET_KEY) || '{}'); } catch (e) { return {}; } };
+  function drawPresets() { const s = $('#advPreset'); if (!s) return; const P = presets(), ks = Object.keys(P); s.innerHTML = `<option value="">☆ My presets${ks.length ? ` (${ks.length})` : ''}…</option>${ks.map(k => `<option value="${esc(k)}">${esc(k)} — ${esc(ADV_TYPES[P[k].type] || P[k].type)}</option>`).join('')}${ks.length ? '<option value="__del">✕ Delete a preset…</option>' : ''}`; }
+  $('#advPreset') && ($('#advPreset').onchange = e => { const k = e.target.value; e.target.value = ''; if (!k) return; const P = presets();
+    if (k === '__del') { const nm = prompt(`Delete which preset?\n${Object.keys(P).join('\n')}`, ''); if (nm && P[nm]) { delete P[nm]; localStorage.setItem(PRESET_KEY, JSON.stringify(P)); drawPresets(); toast(`Preset “${nm}” deleted`); } return; }
+    const a = JSON.parse(JSON.stringify(P[k])), H = state.data ? state.data.headers : [], has = c => !c || H.includes(c), lost = [];
+    ['outcome', 'event', 'second', 'kmBy', 'coxBy', 'xvar', 'rvar'].forEach(f => { if (a[f] && !a[f].startsWith('__') && !has(a[f])) { lost.push(a[f]); a[f] = ''; } });
+    ['predictors'].forEach(f => { if (Array.isArray(a[f])) { const keep = a[f].filter(has); lost.push(...a[f].filter(c => !has(c))); a[f] = keep; } });
+    readUiIntoCfg(); state.cfg.advanced.push({ ...a, include: true }); renderAdvanced(); toast(`Preset “${k}” added${lost.length ? ` — not in these data: ${lost.slice(0, 4).join(', ')}${lost.length > 4 ? '…' : ''}` : ''}`); });
+  drawPresets();
+  { const ra = renderAdvanced; renderAdvanced = function () { const r = ra.apply(this, arguments); setTimeout(() => (state.cfg ? state.cfg.advanced : []).forEach((_, i) => advLive(i, 150 + i * 120)), 0); return r; }; } // every card's headline after drawing
+  // 🧭 which analysis: what you want to know + the outcome → the card added and filled
+  $('#advWiz') && ($('#advWiz').onclick = () => { if (!state.data) return; readUiIntoCfg(); const cfg = state.cfg, rows = analysedRows(), H = state.data.headers.filter(h => !cfg.idCols.includes(h)), kind = c => Analysis.columnKind(cfg, rows, c), lab = c => Analysis.columnLabel(cfg, c);
+    const Q = [['compare', 'Compare the groups on an outcome, adjusted for other variables'], ['corr', 'Is one number related to another?'], ['predbin', 'What predicts a yes/no outcome (risk factors)?'], ['prednum', 'What predicts a number?'], ['time', 'Time to an event (survival, recurrence)'], ['diag', 'How well does a test or marker diagnose?'], ['agree', 'Do two methods or raters agree?'], ['paired', 'Did a value change in the same patients (before / after)?'], ['count', 'A count outcome (number of events, visits)']];
+    let d = $('#advWizDlg'); if (!d) { d = document.createElement('dialog'); d.id = 'advWizDlg'; d.className = 'app-dlg'; document.body.append(d); }
+    const opts = list => list.map(c => `<option value="${esc(c)}">${esc(lab(c))} (${kind(c) === 'numeric' ? 'number' : 'categories'})</option>`).join('');
+    d.innerHTML = `<form method="dialog" onsubmit="return false" style="width:min(620px,92vw)"><h3>🧭 Which analysis?</h3>
+      <label class="f">1. What do you want to know?</label><select id="awQ">${Q.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
+      <div class="grid g2" style="gap:8px;margin-top:8px"><div><label class="f" id="awL1">2. The outcome</label><select id="awA">${opts(H)}</select></div><div id="awBBox"><label class="f" id="awL2">The second column</label><select id="awB"><option value="">—</option>${opts(H)}</select></div></div>
+      <label class="f" style="margin-top:8px">3. Other variables (predictors / covariates / tests) — optional</label><select id="awP" multiple size="6" style="width:100%">${opts(H)}</select>
+      <p class="legend-note" id="awNote" style="margin:6px 0 0"></p>
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn ghost" type="button" data-aw="x">Cancel</button><button class="btn primary" type="button" data-aw="ok">Add the analysis</button></div></form>`;
+    const upd = () => { const q = d.querySelector('#awQ').value, A = d.querySelector('#awA').value, kA = kind(A), L = {
+        compare: ['The outcome', '', 'ANCOVA (numbers) or logistic regression (yes/no) with the study group and these covariates'], corr: ['The first number', 'The second number (optional: else every ticked number)', 'Pearson or Spearman correlation'],
+        predbin: ['The yes/no outcome', '', 'Logistic regression (univariable, then multivariable)'], prednum: ['The number to predict', '', 'Linear regression'], time: ['The follow-up time', 'The event column', 'Kaplan-Meier curves and Cox regression'],
+        diag: ['The true diagnosis (yes/no)', '', 'ROC curves of the tests ticked below, with sensitivity and specificity'], agree: ['Method / rater A', 'Method / rater B', kA === 'numeric' ? 'ICC and Bland-Altman' : "Cohen's kappa"],
+        paired: ['The value before', 'The value after', kA === 'numeric' ? 'Paired t-test or Wilcoxon' : 'McNemar test'], count: ['The count', '', 'Poisson / negative binomial regression'] }[q];
+      d.querySelector('#awL1').textContent = '2. ' + L[0]; d.querySelector('#awBBox').style.display = L[1] ? '' : 'none'; d.querySelector('#awL2').textContent = L[1]; d.querySelector('#awNote').textContent = '→ ' + L[2]; };
+    d.onchange = upd; upd();
+    d.onclick = ev => { const b = ev.target.closest('[data-aw]'); if (!b) return; if (b.dataset.aw === 'x') { d.close(); return; }
+      const q = d.querySelector('#awQ').value, A = d.querySelector('#awA').value, B = d.querySelector('#awB').value, P = [...d.querySelector('#awP').selectedOptions].map(o => o.value).filter(c => c !== A && c !== B), kA = kind(A), base = t => ({ type: t, outcome: '', positive: '', predictors: [], include: true, univariable: ['logistic', 'cox'].includes(t), ...advDefaults(t) }), add = [];
+      if (q === 'compare') add.push(kA === 'numeric' ? { ...base('ancova'), outcome: A, predictors: P } : { ...base('logistic'), outcome: A, positive: defaultPositive(A), predictors: [cfg.groupCol, ...P].filter(Boolean) });
+      else if (q === 'corr') add.push({ ...base('correlation'), outcome: B ? A : '', predictors: B ? [B, ...P] : [A, ...P] });
+      else if (q === 'predbin') add.push({ ...base('logistic'), outcome: A, positive: defaultPositive(A), predictors: P });
+      else if (q === 'prednum') add.push({ ...base('linear'), outcome: A, predictors: P });
+      else if (q === 'time') { if (!B) { toast('Choose the event column'); return; } add.push({ ...base('survival'), outcome: A, event: B, positive: defaultPositive(B) }); add.push({ ...base('cox'), outcome: A, event: B, positive: defaultPositive(B), predictors: [cfg.noGroups ? '' : cfg.groupCol, ...P].filter(Boolean) }); }
+      else if (q === 'diag') add.push({ ...base('roc'), outcome: A, positive: defaultPositive(A), predictors: P });
+      else if (q === 'agree') { if (!B) { toast('Choose the second method or rater'); return; } add.push(kA === 'numeric' ? { ...base('agreement'), outcome: A, second: B } : { ...base('kappa'), outcome: A, second: B }); }
+      else if (q === 'paired') { if (!B) { toast('Choose the value after'); return; } add.push(kA === 'numeric' ? { ...base('paired'), outcome: A, second: B } : { ...base('mcnemar'), outcome: A, second: B, positive: defaultPositive(A) }); }
+      else if (q === 'count') add.push({ ...base('count'), outcome: A, predictors: P });
+      cfg.advanced.push(...add); d.close(); renderAdvanced(); toast(`${add.map(a => ADV_TYPES[a.type] || a.type).join(' and ')} added — check it below`);
+      setTimeout(() => { const c = document.querySelector(`[data-adv="${cfg.advanced.length - 1}"]`); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 200); };
+    d.showModal(); });
   // per-analysis options: title, patients (subset), variable selection and type-specific extras
   // the defaults of a new analysis card: regression enters the variables significant in univariable analysis; ROC compares the AUCs, draws all curves together and each alone, with a detailed comment
   function advDefaults(t) { return ['linear', 'logistic', 'cox'].includes(t) ? { method: 'screen', univariable: true } : t === 'roc' ? { compare: true, figure: 'both', commentDetail: 'detailed' } : {}; }
@@ -3893,7 +3985,7 @@
         <table class="t" style="margin-top:6px"><thead><tr><th>Test</th><th>My cut-off (positive when ≥, or ≤ for lower values)</th><th>Values for the table of several cut-offs</th></tr></thead><tbody>${tests.map(c => `<tr><td><b>${esc(lab(c))}</b></td><td><input type="text" data-af="mcuts.${esc(c)}" value="${esc((a.mcuts || {})[c] || '')}" placeholder="method above" style="width:120px"></td><td><input type="text" data-af="cutLists.${esc(c)}" value="${esc((a.cutLists || {})[c] || '')}" placeholder="e.g. 2; 3.5; 5 (empty = percentiles)" style="width:240px"></td></tr>`).join('')}</tbody></table></details>`);
       out.push(head('More for the ROC curves'), `<div>${box('rocCuts', 'Table of several cut-offs (with rule-in and rule-out)')}</div>`, `<div>${box('cutCI', 'Optimal cut-off with its 95% CI (bootstrap)')}</div>`, `<div>${box('prevTab', 'PPV and NPV at other prevalences (table and curve)')}</div>`,
         `<div>${box('pAuc', 'Partial AUC at high specificity')}</div>`, ...(a.pAuc ? [inp('pAucSpec', 'Partial AUC from specificity (%)', '90', 'number')] : []), `<div>${box('grey', 'Two cut-offs: rule-out, grey zone, rule-in')}</div>`, `<div>${box('prCurve', 'Precision-recall curve')}</div>`,
-        `<div>${box('ssPlot', 'Sensitivity and specificity by cut-off (figure)')}</div>`, `<div>${box('stard2x2', '2×2 table of each test at its cut-off (STARD)')}</div>`, `<div>${box('fagan', 'Fagan nomogram (pre- to post-test probability)')}</div>`,
+        `<div>${box('ssPlot', 'Sensitivity and specificity by cut-off (figure)')}</div>`, `<div>${box('dca', 'Decision curve of each test (net benefit)')}</div>`, `<div>${box('stard2x2', '2×2 table of each test at its cut-off (STARD)')}</div>`, `<div>${box('fagan', 'Fagan nomogram (pre- to post-test probability)')}</div>`,
         `<div><label class="f">AUC in subgroups of</label>${sel('rocBy', [['', '— none —'], ...catCols.map(c => [c, lab(c)])], a.rocBy || '')}</div>`,
         `<div><label class="f">Time-dependent AUC: time column</label>${sel('tdTime', [['', '— none —'], ...numCols.map(c => [c, lab(c)])], a.tdTime || '')}</div>`, ...(a.tdTime ? [inp('tdTimes', 'At the times', 'e.g. 12, 36, 60')] : []));
     }
@@ -3975,6 +4067,7 @@
     if (['linear', 'logistic'].includes(t)) { const nc = (a.predictors || []).filter(c => Analysis.columnKind(state.cfg, analysedRows(), c) === 'numeric').map(c => [c, Analysis.columnLabel(state.cfg, c)]);
       out.push(`<div><label class="f">Non-linear predictor (restricted cubic spline)</label>${sel('rcs', [['', '— none —'], ...nc], a.rcs || '')}</div>`, `<div><label class="f">Spline knots</label>${sel('rcsK', [['4', '4 knots'], ['3', '3 knots'], ['5', '5 knots']], a.rcsK || '4')}</div>`); }
     if (t === 'logistic') out.push(`<div>${box('nomogram', 'Nomogram of the model')}</div>`);
+    if (t === 'cox') out.push(`<div>${box('nomogram', 'Nomogram of the model (survival at given times)')}</div>`, `<div><label class="f">Nomogram: survival at (times, e.g. 12, 24)</label><input type="text" data-af="nomoAt" value="${esc(a.nomoAt || '')}" placeholder="automatic"></div>`);
     if (t === 'noninf') out.push(`<div><label class="f">Sample size check</label>${sel('ssPower', [['', 'None'], ['80', 'n needed for 80% power'], ['90', 'n needed for 90% power']], a.ssPower || '')}</div>`,
       `<div><label class="check" style="margin-top:22px"><input type="checkbox" data-af="marginFig" ${a.marginFig !== false ? 'checked' : ''}><span>CI-and-margin plot</span></label></div>`);
     if (t === 'mi') out.push(`<div><label class="f">Number of imputations</label>${sel('mImp', [['20', '20'], ['5', '5'], ['10', '10'], ['50', '50']], a.mImp || '20')}</div>`);
@@ -4040,6 +4133,8 @@
     renderAdvanced();
   });
   $('#advList').addEventListener('click', e => {
+    { const ps = e.target.closest('[data-advpreset]'); if (ps) { readAdvanced(); const a = state.cfg.advanced[+ps.dataset.advpreset]; if (!a) return; const nm = (prompt('Name of the preset (e.g. My usual Cox model):', ADV_TYPES[a.type] || a.type) || '').trim(); if (!nm) return;
+      const P = presets(); P[nm] = JSON.parse(JSON.stringify(a)); localStorage.setItem(PRESET_KEY, JSON.stringify(P)); drawPresets(); toast(`Preset “${nm}” saved — ☆ My presets… to add it again`); return; } }
     { const up = e.target.closest('[data-agup],[data-agreset]'); if (up) { readAdvanced(); const card = up.closest('[data-adv]'), a = card && state.cfg.advanced[+card.dataset.adv]; if (!a) return;
       if (up.dataset.agreset) delete a.gOrder; else { const cur = advGroupList(a), k = cur.indexOf(up.dataset.agup); if (k > 0) [cur[k - 1], cur[k]] = [cur[k], cur[k - 1]]; a.gOrder = cur; }
       const y = scrollY; renderAdvanced(); scrollTo(0, y); return; } }
@@ -5651,6 +5746,40 @@
       const e = x.num && x.num.pairs && x.num.pairs[0] ? `${(+x.num.pairs[0].diff).toFixed(2)} (${(+x.num.pairs[0].lo).toFixed(2)} to ${(+x.num.pairs[0].hi).toFixed(2)})` : x.cat && x.cat.rr && x.cat.rr[0] && x.cat.rr[0].rr !== null ? `RR ${(+x.cat.rr[0].rr).toFixed(2)} (${(+x.cat.rr[0].lo).toFixed(2)} to ${(+x.cat.rr[0].hi).toFixed(2)})` : '';
       rows.push({ key: x.v.id, label: x.v.label, table: sec.title, p: a.p, e, n: x.num ? x.num.desc.reduce((t, d0) => t + d0.n, 0) : x.cat ? (x.cat.ns || []).reduce((t, n0) => t + n0, 0) : '' }); }); });
     return { time: new Date().toLocaleString(), n: state.data.rows.length, rows }; }
+  // Δ what the last run changed: the n, P values and effects that moved, and the results that changed significance
+  function changesHtml() { const a = state.prevSnap; if (!a || !state.result) return ''; let b; try { b = resultsSnapshot(); } catch (e) { return ''; }
+    const alpha = state.cfg.options.alpha || 0.05, fp = p => isFinite(p) ? (p < 0.001 ? '< 0.001' : p.toFixed(3)) : '—', keys = [...new Set([...a.rows.map(x => x.key), ...b.rows.map(x => x.key)])], out = [];
+    keys.forEach(k => { const x = a.rows.find(y => y.key === k), y = b.rows.find(z => z.key === k); if (x && y && x.n === y.n && fp(x.p) === fp(y.p) && x.e === y.e) return;
+      const flip = x && y && (x.p <= alpha) !== (y.p <= alpha); out.push({ flip, h: `<tr class="${flip ? 'cmp-flip' : ''}"><td>${esc((y || x).label)}</td><td>${x ? x.n : '—'} → ${y ? y.n : '—'}</td><td>${x ? fp(x.p) : 'new'} → ${y ? fp(y.p) : 'removed'}</td><td>${esc(x ? x.e : '')}${x && y && x.e !== y.e ? ` → ${esc(y.e)}` : ''}</td><td>${flip ? (y.p <= alpha ? '⬆ now significant' : '⬇ no longer significant') : ''}</td></tr>` }); });
+    if (!out.length) return `<div class="report-sec" style="padding:6px 10px"><span class="legend-note">Δ Since the last run: no number changed.</span></div>`;
+    const nf = out.filter(o => o.flip).length;
+    return `<details class="report-sec" ${nf ? 'open' : ''}><summary><b>Δ Changes since the last run</b> <span class="legend-note">— ${out.length} result${out.length > 1 ? 's' : ''} changed${nf ? `, <b>${nf}</b> changed significance` : ''}</span></summary><div style="overflow-x:auto;margin-top:6px"><table class="t"><thead><tr><th>Variable</th><th>n</th><th>P value</th><th>Effect</th><th></th></tr></thead><tbody>${out.sort((p, q) => q.flip - p.flip).map(o => o.h).join('')}</tbody></table></div></details>`; }
+  // ✔ what a reviewer or examiner checks in the statistics, each with a fix (an option turned on, or the step to open)
+  const REV_CHECKS = () => { const c = state.cfg, o = c.options, r = state.result || { sections: [] }, A = c.advanced || [], set = (k, v) => () => { o[k] = v; }, step = n => () => { go(n); return true; };
+    return [
+      { k: 'primary', ok: c.variables.some(v => v.role === 'primary'), t: 'The primary outcome is marked', why: 'Reviewers look for one pre-specified primary outcome.', fix: step(2), how: 'Mark it in step 2' },
+      { k: 'effect', ok: o.effect !== false, t: 'Effect sizes with their 95% CI', why: 'A P value alone does not show how large or how precise a difference is.', fix: set('effect', true) },
+      { k: 'missing', ok: !!(o.missTable || o.missingNote), t: 'Missing data are reported', why: 'Readers need the number analysed in each comparison.', fix: set('missingNote', true) },
+      { k: 'multi', ok: (o.mwAdjust || 'none') !== 'none' || c.groupOrder.filter(g => c.groupInclude[g] !== false).length < 3, t: 'Multiple comparisons are corrected (3 groups or more)', why: 'Pairwise tests after an overall test inflate false positives.', fix: set('mwAdjust', 'holm') },
+      { k: 'normal', ok: o.mNormality !== false, t: 'How normality was checked is stated', why: 'It justifies parametric or non-parametric tests.', fix: set('mNormality', true) },
+      { k: 'assum', ok: !!o.assumptions, t: 'Assumptions of the tests are reported', why: 'Equal variances, expected counts, normality of the residuals.', fix: set('assumptions', true) },
+      { k: 'testnote', ok: o.testNote !== 'none', t: 'The test is named under each table', why: 'Each P value should say which test gave it.', fix: set('testNote', 'list') },
+      { k: 'abbr', ok: o.abbrFoot !== false, t: 'Abbreviations are explained under the tables', why: 'Each table should stand alone.', fix: set('abbrFoot', true) },
+      { k: 'sig', ok: o.mSig !== false, t: 'The significance level is stated', why: 'P ≤ 0.05, two-sided, stated in the methods.', fix: set('mSig', true) },
+      { k: 'soft', ok: o.mSoftware !== false && !!(c.study.software || '').trim(), t: 'The software and its version are named', why: 'Needed to reproduce the analysis.', fix: () => { o.mSoftware = true; if (!(c.study.software || '').trim()) { go(1); return true; } } },
+      { k: 'power', ok: !!o.powerCol || A.some(a => a.type === 'ssize' && a.include !== false), t: 'Sample size or power is addressed', why: 'Examiners ask whether the study could detect the difference sought.', fix: set('powerCol', true) },
+      { k: 'flow', ok: !!(c.consort && c.consort.enabled) || c.noGroups, t: 'A flow of the participants (CONSORT / STROBE)', why: 'Shows who was screened, allocated, lost and analysed.', fix: step(9), how: 'Open step 9' },
+      { k: 'figs', ok: (r.sections || []).some(sc => (sc.figures || []).length), t: 'At least one figure', why: 'The main outcome is easier to read in a figure.', fix: set('figures', 'all') }]; };
+  function reviewerHtml() { const L = REV_CHECKS(), bad = L.filter(x => !x.ok);
+    return `<div class="report-sec"><h3 style="margin:0 0 6px">✔ Reviewer checklist <span class="legend-note">— ${L.length - bad.length} of ${L.length} done</span></h3><table class="t"><tbody>${L.map(x => `<tr><td style="width:28px;text-align:center">${x.ok ? '✅' : '⚠'}</td><td><b>${esc(x.t)}</b><div class="legend-note">${esc(x.why)}</div></td><td style="width:170px">${x.ok ? '' : `<button class="btn ${x.how ? 'ghost' : 'primary'} small" type="button" data-revfix="${x.k}">${esc(x.how || 'Fix and run again')}</button>`}</td></tr>`).join('')}</tbody></table></div>`; }
+  // ★ the key points: the primary outcome first, then the other significant results, one sentence each
+  function keyPointsHtml() { const r = state.result; if (!r) return ''; const c = state.cfg, prim = c.variables.filter(v => v.role === 'primary').map(v => v.id), first = t => (sentences(t || '')[0] || '').trim();
+    const secs = (r.sections || []).filter(sc => sc.comment && !sc.figOnly), pts = [];
+    secs.filter(sc => sc.vid && prim.includes(sc.vid)).forEach(sc => pts.push(first(sc.brief || sc.comment)));
+    secs.forEach(sc => { (sentences(sc.comment) || []).filter(t => /\bsignificant(ly)?\b|\bclear(ly)?\b/.test(t) && !/\b(in|not )significant|did not|no significant|not clear/.test(t)).slice(0, 1).forEach(t => { if (!pts.includes(t)) pts.push(t.trim()); }); });
+    const n = (state.data || { rows: [] }).rows.length, list = pts.filter(Boolean).slice(0, 5);
+    return `<div class="report-sec"><h3 style="margin:0 0 6px">★ Key points <span class="legend-note">— ${n} patients${c.noGroups ? '' : `, ${activeGroups().length} groups`}; the primary outcome first, then the other significant results</span></h3>
+      ${list.length ? `<ul id="keyPtsList" style="margin:4px 0 6px 18px">${list.map(t => `<li>${esc(t)}</li>`).join('')}</ul><button class="btn ghost small" type="button" data-keycopy="1">⧉ Copy</button>` : '<p class="legend-note">No significant result to highlight.</p>'}</div>`; }
   function compareHtml(a, name) {
     const b = resultsSnapshot(), alpha = state.cfg.options.alpha || 0.05, fp = p => isFinite(p) ? (p < 0.001 ? '< 0.001' : p.toFixed(3)) : '—', keys = [...new Set([...a.rows.map(x => x.key), ...b.rows.map(x => x.key)])];
     const rows = keys.map(k => { const x = a.rows.find(y => y.key === k), y = b.rows.find(z => z.key === k), s1 = x && x.p <= alpha, s2 = y && y.p <= alpha, flip = !!x && !!y && s1 !== s2;
@@ -6024,6 +6153,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   // what the report was run from: the setup and the data (the ⬇ Word button re-runs it only when these changed)
   const runKey = () => state.cfg && state.data ? JSON.stringify([state.cfg, state.data.headers, state.data.rows]) : '';
   function runAnalysis() {
+    try { state.prevSnap = state.result && state.data ? resultsSnapshot() : null; } catch (e) { state.prevSnap = null; } // kept to show what this run changes
     syncGroupFigs();
     busy(true); stage('Getting the data ready');
     renderFormatBar();
@@ -6391,6 +6521,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     html += `<div class="row exp-bar"><b>In the Word file:</b> <span class="legend-note">untick any section, table or figure to leave it out — numbering follows what is kept.</span><span class="spacer"></span>
       <button class="btn ghost small" data-exall="1" type="button">Include all</button><button class="btn ghost small" data-exall="0" type="button">Exclude all</button>
       ${(state.result.sections || []).some(s => s.kind === 'repeated') ? '<button class="btn ghost small" id="rmFlipAll" type="button" title="Every repeated-measures table: timepoints as columns, or back in rows">⇄ Transpose all repeated measures</button>' : ''}
+      <button class="btn ghost small" id="revCheck" type="button" title="What a reviewer or examiner looks for, with a one-click fix">✔ Reviewer checklist</button><button class="btn ghost small" id="keyPts" type="button" title="Three to five key points of the results, for the abstract, a poster or the viva">★ Key points</button>
       <button class="btn ghost small" id="comCheck" type="button" title="Numbers in the comments that are not in their table, causal wording and comment lengths">✓ Check comments</button></div><div id="comCheckOut"></div>`;
     // find & replace in every text of the report: methods, comments, titles, captions and the results text
     html += `<details class="report-sec fr-rep"><summary><b>🔍 Find &amp; replace in the report text</b> — methods, comments, table titles, captions</summary><div class="row" style="gap:8px;align-items:flex-end;margin-top:8px">
@@ -6400,6 +6531,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     const off = key => isOut(key) ? ' off' : '';
     if (plan.paper && plan.rep.abstract) html += `<div class="report-sec"><h3>Results for the abstract</h3><textarea id="edAbstract">${esc(r.abstract)}</textarea><div class="legend-note">${words(r.abstract)} words</div></div>`;
     html += `<div class="report-sec${off('methods')}"><div class="row"><h3>Statistical analysis</h3><span class="spacer"></span>${exBox('methods', 'Include')}</div><textarea id="edMethods">${esc(r.methods)}</textarea>${plan.paper ? `<div class="legend-note">${words(r.methods)} words</div>` : ''}</div>`;
+    { const ch = changesHtml(); if (ch) html += ch; }
     html += `<div class="report-sec"><h3>Results</h3>`;
     if (r.groupIntro) html += `<div class="legend-note" style="margin-top:6px">Opening paragraph of the results (the groups, step 2)</div><textarea id="edGroupIntro" rows="${Math.min(8, 2 + (r.groupIntro.match(/\n/g) || []).length)}">${esc(r.groupIntro)}</textarea>`;
     if (r.consort) html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${plan.consortOn ? lab(plan.consortNum) : 'Not exported:'} ${esc(r.flowCaption)}</div></div>`;
@@ -6943,6 +7075,10 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (cc) { syncEdits(); const t = state.result.sections[+cc.dataset.copycom].comment || ''; navigator.clipboard.writeText(t).then(() => toast('Comment copied'), () => toast('Copying was blocked by the browser')); }
     if (ex) { syncEdits(); const box = document.querySelector(`[data-explainbox="${ex.dataset.explain}"]`); box.innerHTML = box.innerHTML ? '' : explainHtml(state.result.sections[+ex.dataset.explain].comment); }
     if (e.target.closest('#comCheck')) { syncEdits(); $('#comCheckOut').innerHTML = checkComments(state.result); }
+    if (e.target.closest('#revCheck')) { syncEdits(); $('#comCheckOut').innerHTML = reviewerHtml(); return; }
+    if (e.target.closest('#keyPts')) { syncEdits(); $('#comCheckOut').innerHTML = keyPointsHtml(); return; }
+    { const fx = e.target.closest('[data-revfix]'); if (fx) { const it = REV_CHECKS().find(c => c.k === fx.dataset.revfix); if (it && it.fix) { const go2 = it.fix(); if (go2) return; renderOptions(); runAnalysis(); setTimeout(() => { const o = $('#comCheckOut'); if (o) o.innerHTML = reviewerHtml(); }, 1500); } return; } }
+    { const ka = e.target.closest('[data-keycopy]'); if (ka) { const t = [...document.querySelectorAll('#keyPtsList li')].map(li => '• ' + li.textContent).join('\n'); navigator.clipboard.writeText(t).then(() => toast('Key points copied'), () => toast('Copying was blocked')); return; } }
     { const rf = e.target.closest('[data-rmflip]'); if (rf && state.result) { syncEdits(); const y = scrollY; if (!rmToggle(+rf.dataset.rmflip)) toast('This table cannot be transposed'); renderReport(); scrollTo(0, y); return; } }
     if (e.target.closest('#rmFlipAll') && state.result) { syncEdits(); const y = scrollY, L = state.result.sections, idx = L.map((s, i) => s.kind === 'repeated' ? i : -1).filter(i => i >= 0), to = idx.every(i => L[i].tpCols) ? 'rows' : 'cols';
       idx.forEach(i => rmToggle(i, to)); state.cfg.options.rmLayout = to; state.cfg.rmLayoutBy = {}; renderOptions(); renderReport(); scrollTo(0, y); toast(to === 'cols' ? 'Repeated measures: timepoints as columns' : 'Repeated measures: timepoints in rows'); return; }

@@ -749,8 +749,8 @@ const Analysis = (() => {
           extra.push(`Adding ${lowerFirst(eN.label)} to the model ${q.nriP <= alpha || q.idiP <= alpha ? 'significantly improved' : 'did not significantly improve'} risk classification (NRI = ${fmt(q.nri, 3)}, P value ${pTxt(q.nriP)}; IDI = ${fmt(q.idi, 3)}, P value ${pTxt(q.idiP)}).`); } }
       // decision curve: net benefit of the model against treating everyone or no one
       if (a.dca) { const th = Array.from({ length: 19 }, (_, i) => (i + 1) / 20), nb = S.netBenefit(multi.fitted, multi.y, th); used.add('dca');
-        figures.push({ sig: true, caption: `Decision curve of the logistic regression model for ${what}`, spec: { type: 'line', categories: th.map(t => `${Math.round(t * 100)}%`), xLabel: 'Threshold probability', yLabel: 'Net benefit', yMin: -0.05,
-          series: [{ name: 'Model', values: nb.map(q => q.model) }, { name: 'Treat all', values: nb.map(q => Math.max(-0.05, q.all)) }, { name: 'Treat none', values: nb.map(() => 0) }] } }); }
+        figures.push({ sig: true, caption: `Decision curve of the logistic regression model for ${what}`, spec: { type: 'line', categories: th.map(t => `${Math.round(t * 100)}%`), xLabel: 'Threshold probability', yLabel: 'Net benefit', yMin: -0.1,
+          series: [{ name: 'Model', values: nb.map(q => q.model) }, { name: 'Treat all', values: nb.map(q => Math.max(-0.1, q.all)) }, { name: 'Treat none', values: nb.map(() => 0) }] } }); }
     }
     // spline: overall and non-linearity Wald tests, and the curve of the effect against the median value
     if (rcsE && multi && multi.cov && kept.includes(rcsE.e)) {
@@ -1486,7 +1486,29 @@ const Analysis = (() => {
       sent.push(`The model included ${multi.n} patients with ${multi.events} events (likelihood ratio P value ${pTxt(multi.pModel)}).`);
     }
     const fg = a.forest ? forestFigure(terms, 'cox', what, alpha, d) : null;
-    return { kind: 'cox', title: `Cox regression analysis for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: fg ? [fg] : [], meta: withCtx({ multi, uni }, { kind: 'cox', preds, kept, multi, uni, terms, fitOn, ok, what }) };
+    // nomogram of the Cox model (main effects): points of each predictor, total points, and the probability of survival (free of the event) at each time asked
+    const nomoFigs = [];
+    if (a.nomogram && multi && !kept.some(e => e.col === '__int')) { try {
+      const beta = multi.terms.map(t => t.B); let off = 0;
+      const items = kept.map(e => { const bs = beta.slice(off, off + e.terms.length); off += e.terms.length;
+        if (!e.ref) { const xs = rows.filter(e.ok).map(r => toNum(r[e.col])).filter(isFinite), lo = Math.min(...xs), hi = Math.max(...xs), sc = niceScale(lo, hi, 6), vals = [];
+          for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) if (v >= lo - 1e-9 && v <= hi + 1e-9) vals.push(+v.toFixed(10));
+          if (vals.length < 2) vals.splice(0, vals.length, lo, hi);
+          return { label: plain(e.label), pts: vals.map(v => ({ c: bs[0] * v, text: String(+v.toPrecision(6)) })) }; }
+        return { label: plain(e.label), pts: [{ c: 0, text: e.ref }, ...e.terms.map((t, j) => ({ c: bs[j], text: t.label.slice(e.label.length + 2, t.label.lastIndexOf(' vs ')) }))] }; });
+      const mn = items.map(it => Math.min(...it.pts.map(q => q.c))), rg = items.map((it, i) => Math.max(...it.pts.map(q => q.c)) - mn[i]), Rm = Math.max(...rg);
+      // the baseline cumulative hazard (Breslow) from the patients of the model
+      const rs = rows.filter(r => ok(r) && kept.every(e => e.ok(r))), lp = rs.map(r => kept.flatMap(e => e.terms.map(t => t.get(r))).reduce((s0, x, i) => s0 + x * beta[i], 0)), T = rs.map(r => toNum(r[a.outcome])), E = rs.map(r => toCat(r[a.event]) === a.positive);
+      const H0 = t => { let h = 0; [...new Set(T.filter((u, i) => E[i] && u <= t))].sort((x, y) => x - y).forEach(u => { const dd = T.filter((v, i) => E[i] && v === u).length, risk = lp.reduce((s0, l, i) => s0 + (T[i] >= u ? Math.exp(l) : 0), 0); if (risk > 0) h += dd / risk; }); return h; };
+      const maxT = Math.max(...T), ats = String(a.nomoAt || '').split(/[,;\s]+/).map(Number).filter(x => x > 0 && x <= maxT), times = (ats.length ? ats : [niceScale(0, maxT / 2, 4).step * Math.max(1, Math.round(maxT / 2 / niceScale(0, maxT / 2, 4).step))]).slice(0, 3);
+      if (Rm > 0) { const totalMax = S.sum(rg) / Rm * 100, base = S.sum(mn), sc = niceScale(0, totalMax, 8), total = [];
+        for (let v = 0; v <= totalMax + 1e-9; v += sc.step) total.push({ pos: v, text: String(+v.toFixed(6)) });
+        const u = (/\(([^)]+)\)\s*$/.exec(timeLabel) || [])[1] || (/month/i.test(a.outcome) ? 'months' : /week/i.test(a.outcome) ? 'weeks' : /day/i.test(a.outcome) ? 'days' : /year/i.test(a.outcome) ? 'years' : '');
+        times.forEach(t => { const h = H0(t); if (!(h > 0)) return;
+          const prob = [0.99, 0.95, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05].map(sv => ({ pos: (Math.log(-Math.log(sv) / h) - base) * 100 / Rm, text: String(sv) })).filter(q => isFinite(q.pos) && q.pos >= 0 && q.pos <= totalMax).sort((x, y) => x.pos - y.pos);
+          if (prob.length < 2) return; used.add('nomogram');
+          nomoFigs.push({ sig: true, caption: `Nomogram of the Cox regression model: probability free of ${what} at ${fmt(t, d)}${u ? ' ' + u : ''}`, spec: { type: 'nomogram', rows: items.map((it, i) => ({ label: it.label, ticks: it.pts.map(q => ({ pos: (q.c - mn[i]) / Rm * 100, text: q.text })) })), total, totalMax, prob, probLabel: `Free of ${what} at ${fmt(t, d)}${u ? ' ' + u : ''}` } }); }); } } catch (e) { console.error(e); } }
+    return { kind: 'cox', title: `Cox regression analysis for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [...(fg ? [fg] : []), ...nomoFigs], meta: withCtx({ multi, uni }, { kind: 'cox', preds, kept, multi, uni, terms, fitOn, ok, what }) };
   }
 
   // McNemar / McNemar–Bowker: change of a categorical variable between two measurements, in each group and overall
@@ -4961,6 +4983,11 @@ const Analysis = (() => {
       if (o.varyWording) VARY.forEach(([re, alts], i) => { t = t.replace(re, m => { const n = seen[i]++ % (alts.length + 1); return n === 0 ? m : alts[n - 1]; }); });
       if (o.commentTone === 'plain') t = t.replace(/\b(was|were) (in|not )significantly different\b/g, '$1 not clearly different').replace(/\bdid not differ significantly\b/g, 'did not clearly differ')
         .replace(/\bno significant difference/g, 'no clear difference').replace(/\binsignificant(ly)?\b/g, 'not clear$1').replace(/\bsignificantly\b/g, 'clearly').replace(/\bsignificant\b/g, 'clear');
+      // cautious: hedged wording; confident: direct wording (round 24)
+      if (o.commentTone === 'cautious') t = t.replace(/\b(was|were) significantly (higher|lower|longer|shorter|greater|smaller|more|less)\b/g, '$1 found to be significantly $2').replace(/\bwas significantly associated\b/g, 'appeared to be significantly associated')
+        .replace(/\b(changed|increased|decreased|improved|differed) significantly\b/g, (m, w) => `appeared to ${({ changed: 'change', increased: 'increase', decreased: 'decrease', improved: 'improve', differed: 'differ' })[w]} significantly`)
+        .replace(/\bThere was no significant\b/g, 'There was no evidence of a significant');
+      if (o.commentTone === 'confident') t = t.replace(/\b(was|were) found to be\b/g, '$1').replace(/\bappeared to (be |have )?/g, '').replace(/\bmay (suggest|indicate)\b/g, '$1s').replace(/\binsignificantly different\b/g, 'not different').replace(/\binsignificant\b/g, 'not significant');
       dict.forEach(([a, b]) => { t = t.split(a).join(b); });
       if (o.commentDir && o.commentDir !== 'as') t = flipComparisons(t, r.groups, o.commentDir);
       return t;

@@ -78,6 +78,14 @@
         rowsT.push([bold(nm(x)), ...ts.map(tt => { const z = S.tdAucCI(t, e, m, tt, 200, 3); return cell(z && isFinite(z.auc) ? `${fmt(z.auc, 3)}${isFinite(z.lo) ? ` (${fmt(z.lo, 3)}-${fmt(z.hi, 3)})` : ''}` : '—'); })]); });
       out.push({ kind: 'rocTd', title: `Time-dependent AUC for prediction of ${what}`, head: ['', ...ts.map(t => `At ${fmt(t, 2)} (${H.columnLabel(cfg, a.tdTime)})`)], rows: rowsT, footnote: 'AUC: cumulative/dynamic area under the curve at each time (inverse probability of censoring weights), 95% bootstrap CI.', comment: `The time-dependent AUCs were ${listJoin(rowsT.map(r => `${r.slice(1).map(c => c.t[0].split(' ')[0]).join(', ')} for ${lowerFirst(r[0].t[0])}`))} at ${listJoin(ts.map(t => fmt(t, 2)))} ${lowerFirst(plain(H.columnLabel(cfg, a.tdTime)))}${/day|month|year|week/i.test(H.columnLabel(cfg, a.tdTime)) ? '' : ''}, respectively.`, figures: [], meta: {} }); used.add('rrM:Time-dependent AUCs (cumulative/dynamic) were estimated at the chosen times.'); } }
     if (a.cutoff === 'cost') used.add(`rrM:The cut-off minimised the expected cost of errors, with a missed case counted as ${fmt(parseFloat(a.costRatio) > 0 ? parseFloat(a.costRatio) : 1, 2)} times as costly as a false alarm.`);
+    // decision curve of each test (its probability from a logistic model on the test), against treating everyone or no one
+    if (a.dca) { const th = Array.from({ length: 19 }, (_, k) => (k + 1) / 20), series = [];
+      res.forEach(x => { const ok = x.vals.map((v, k) => isFinite(v) && x.pos[k] !== undefined), vv = x.vals.filter((_, k) => ok[k]), yy = x.pos.filter((_, k) => ok[k]).map(b => b ? 1 : 0); if (vv.length < 10) return;
+        const m = S.logisticRegression(vv.map(v => [v]), yy); if (!m || !m.terms || m.terms.length < 2) return; const b0 = m.terms[0].B, b1 = m.terms[1].B, pr = vv.map(v => 1 / (1 + Math.exp(-(b0 + b1 * v))));
+        const top = Math.max(...pr); series.push({ name: nm(x), values: S.netBenefit(pr, yy, th).map((q, k) => th[k] <= top ? +q.model.toFixed(4) : null), all: S.netBenefit(pr, yy, th).map(q => q.all) }); }); // a test is drawn up to its highest predicted probability
+      if (series.length) { used.add('dca'); const all = series[0].all;
+        main.figures.push({ sig: true, caption: `Decision curve${series.length > 1 ? 's' : ''} of ${listJoin(series.map(x => lowerFirst(x.name)))} for ${what}`, spec: { type: 'line', categories: th.map(t => `${Math.round(t * 100)}%`), xLabel: 'Threshold probability', yLabel: 'Net benefit', yMin: -0.1,
+          series: [...series.map(x => ({ name: x.name, values: x.values })), { name: 'Treat all', values: all.map(v => +Math.max(-0.1, v).toFixed(4)) }, { name: 'Treat none', values: all.map(() => 0) }] } }); } }
     return out;
   }
 

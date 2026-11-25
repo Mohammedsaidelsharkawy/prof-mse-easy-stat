@@ -869,7 +869,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="card">
       <h2>Variables</h2>
       <p class="hint">Detected automatically — check and adjust. Repeated measures (same name, different timepoints) are analysed as one outcome with one table. Single variables sharing the same <b>Table</b> name appear together in one table.</p>
-      <div class="row" id="varBulk" style="gap:8px;margin-bottom:8px"><span class="legend-note">All variables:</span>
+      <div class="row" id="varBulk" style="gap:8px;margin-bottom:8px"><button class="btn primary small" type="button" id="recWiz" title="Merge categories, cut numbers into groups, or set the reference category — for several variables at once (Undo restores)">🔁 Recode several variables</button><span class="legend-note">All variables:</span>
         <button class="btn ghost small" type="button" data-vbulk="inc">✓ Include all</button><button class="btn ghost small" type="button" data-vbulk="exc">Exclude all</button>
         <button class="btn ghost small" type="button" data-vbulk="num">Only numeric</button><button class="btn ghost small" type="button" data-vbulk="cat">Only categorical</button>
         <span class="legend-note" style="margin-left:10px">Distribution of all numeric:</span>
@@ -1266,7 +1266,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <h3>Style</h3>
       <div class="grid g4">
         <div><label class="f">Preset</label><select id="comPreset"><option value="">— apply a preset —</option><option value="thesis">Thesis — detailed, formal</option><option value="journal">Journal — concise, with effect sizes</option><option value="plain">Plain language — for patients and the public</option></select></div>
-        <div><label class="f">Tone</label><select id="optCommentTone"><option value="standard" selected>Statistical (“significantly”)</option><option value="plain">Plain language (“clearly”)</option></select></div>
+        <div><label class="f">Tone</label><select id="optCommentTone"><option value="standard" selected>Statistical (“significantly”)</option><option value="plain">Plain language (“clearly”)</option><option value="cautious">Cautious (“was found to be significantly …”)</option><option value="confident">Confident, direct (“was higher”, “not different”)</option></select></div>
         <div><label class="f">Comments of the tables</label><select id="optCommentMerge"><option value="table" selected>One paragraph with each table</option><option value="combined">One combined results paragraph (Word)</option></select></div>
         <div><label class="f">Effect size labels (Cohen's d)</label><select id="optEffConv"><option value="cohen" selected>Cohen — 0.2 / 0.5 / 0.8</option><option value="sawilowsky">Sawilowsky — very small … huge</option><option value="ferguson">Ferguson — 0.41 / 1.15 / 2.70</option></select></div>
         <div><label class="f">Word limit per comment</label><input type="number" min="0" step="10" id="optComMaxWords" placeholder="none"></div>
@@ -1440,7 +1440,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" id="advComApply" type="button" style="margin-bottom:4px">Apply to all analyses</button>
       </div>
       <div id="advList" class="grid"></div>
-      <div class="row" style="margin-top:14px;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Add an analysis</h3><input type="search" id="advFind" placeholder="Find an analysis (e.g. kappa, survival, GEE)" style="width:280px"><span class="spacer"></span><button class="btn ghost small" id="advSortCat" type="button" title="Order the analyses above (and their tables in the report) by category">⇅ Group the analyses by category</button></div>
+      <div class="row" style="margin-top:14px;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Add an analysis</h3><input type="search" id="advFind" placeholder="Find an analysis (e.g. kappa, survival, GEE)" style="width:280px"><button class="btn primary small" id="advWiz" type="button" title="Answer two questions; the right analysis is added with its columns">🧭 Which analysis?</button><select id="advPreset" style="width:auto" title="An analysis saved as a preset (☆ on a card)"><option value="">☆ My presets…</option></select><span class="spacer"></span><button class="btn ghost small" id="advSortCat" type="button" title="Order the analyses above (and their tables in the report) by category">⇅ Group the analyses by category</button></div>
       <div id="advAdd" class="adv-cats"></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="7">← Back</button><button class="btn primary" data-go="9">Next: Flowchart →</button></div>
@@ -25119,8 +25119,8 @@ const Analysis = (() => {
           extra.push(`Adding ${lowerFirst(eN.label)} to the model ${q.nriP <= alpha || q.idiP <= alpha ? 'significantly improved' : 'did not significantly improve'} risk classification (NRI = ${fmt(q.nri, 3)}, P value ${pTxt(q.nriP)}; IDI = ${fmt(q.idi, 3)}, P value ${pTxt(q.idiP)}).`); } }
       // decision curve: net benefit of the model against treating everyone or no one
       if (a.dca) { const th = Array.from({ length: 19 }, (_, i) => (i + 1) / 20), nb = S.netBenefit(multi.fitted, multi.y, th); used.add('dca');
-        figures.push({ sig: true, caption: `Decision curve of the logistic regression model for ${what}`, spec: { type: 'line', categories: th.map(t => `${Math.round(t * 100)}%`), xLabel: 'Threshold probability', yLabel: 'Net benefit', yMin: -0.05,
-          series: [{ name: 'Model', values: nb.map(q => q.model) }, { name: 'Treat all', values: nb.map(q => Math.max(-0.05, q.all)) }, { name: 'Treat none', values: nb.map(() => 0) }] } }); }
+        figures.push({ sig: true, caption: `Decision curve of the logistic regression model for ${what}`, spec: { type: 'line', categories: th.map(t => `${Math.round(t * 100)}%`), xLabel: 'Threshold probability', yLabel: 'Net benefit', yMin: -0.1,
+          series: [{ name: 'Model', values: nb.map(q => q.model) }, { name: 'Treat all', values: nb.map(q => Math.max(-0.1, q.all)) }, { name: 'Treat none', values: nb.map(() => 0) }] } }); }
     }
     // spline: overall and non-linearity Wald tests, and the curve of the effect against the median value
     if (rcsE && multi && multi.cov && kept.includes(rcsE.e)) {
@@ -25856,7 +25856,29 @@ const Analysis = (() => {
       sent.push(`The model included ${multi.n} patients with ${multi.events} events (likelihood ratio P value ${pTxt(multi.pModel)}).`);
     }
     const fg = a.forest ? forestFigure(terms, 'cox', what, alpha, d) : null;
-    return { kind: 'cox', title: `Cox regression analysis for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: fg ? [fg] : [], meta: withCtx({ multi, uni }, { kind: 'cox', preds, kept, multi, uni, terms, fitOn, ok, what }) };
+    // nomogram of the Cox model (main effects): points of each predictor, total points, and the probability of survival (free of the event) at each time asked
+    const nomoFigs = [];
+    if (a.nomogram && multi && !kept.some(e => e.col === '__int')) { try {
+      const beta = multi.terms.map(t => t.B); let off = 0;
+      const items = kept.map(e => { const bs = beta.slice(off, off + e.terms.length); off += e.terms.length;
+        if (!e.ref) { const xs = rows.filter(e.ok).map(r => toNum(r[e.col])).filter(isFinite), lo = Math.min(...xs), hi = Math.max(...xs), sc = niceScale(lo, hi, 6), vals = [];
+          for (let v = sc.min; v <= sc.max + 1e-9; v += sc.step) if (v >= lo - 1e-9 && v <= hi + 1e-9) vals.push(+v.toFixed(10));
+          if (vals.length < 2) vals.splice(0, vals.length, lo, hi);
+          return { label: plain(e.label), pts: vals.map(v => ({ c: bs[0] * v, text: String(+v.toPrecision(6)) })) }; }
+        return { label: plain(e.label), pts: [{ c: 0, text: e.ref }, ...e.terms.map((t, j) => ({ c: bs[j], text: t.label.slice(e.label.length + 2, t.label.lastIndexOf(' vs ')) }))] }; });
+      const mn = items.map(it => Math.min(...it.pts.map(q => q.c))), rg = items.map((it, i) => Math.max(...it.pts.map(q => q.c)) - mn[i]), Rm = Math.max(...rg);
+      // the baseline cumulative hazard (Breslow) from the patients of the model
+      const rs = rows.filter(r => ok(r) && kept.every(e => e.ok(r))), lp = rs.map(r => kept.flatMap(e => e.terms.map(t => t.get(r))).reduce((s0, x, i) => s0 + x * beta[i], 0)), T = rs.map(r => toNum(r[a.outcome])), E = rs.map(r => toCat(r[a.event]) === a.positive);
+      const H0 = t => { let h = 0; [...new Set(T.filter((u, i) => E[i] && u <= t))].sort((x, y) => x - y).forEach(u => { const dd = T.filter((v, i) => E[i] && v === u).length, risk = lp.reduce((s0, l, i) => s0 + (T[i] >= u ? Math.exp(l) : 0), 0); if (risk > 0) h += dd / risk; }); return h; };
+      const maxT = Math.max(...T), ats = String(a.nomoAt || '').split(/[,;\s]+/).map(Number).filter(x => x > 0 && x <= maxT), times = (ats.length ? ats : [niceScale(0, maxT / 2, 4).step * Math.max(1, Math.round(maxT / 2 / niceScale(0, maxT / 2, 4).step))]).slice(0, 3);
+      if (Rm > 0) { const totalMax = S.sum(rg) / Rm * 100, base = S.sum(mn), sc = niceScale(0, totalMax, 8), total = [];
+        for (let v = 0; v <= totalMax + 1e-9; v += sc.step) total.push({ pos: v, text: String(+v.toFixed(6)) });
+        const u = (/\(([^)]+)\)\s*$/.exec(timeLabel) || [])[1] || (/month/i.test(a.outcome) ? 'months' : /week/i.test(a.outcome) ? 'weeks' : /day/i.test(a.outcome) ? 'days' : /year/i.test(a.outcome) ? 'years' : '');
+        times.forEach(t => { const h = H0(t); if (!(h > 0)) return;
+          const prob = [0.99, 0.95, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05].map(sv => ({ pos: (Math.log(-Math.log(sv) / h) - base) * 100 / Rm, text: String(sv) })).filter(q => isFinite(q.pos) && q.pos >= 0 && q.pos <= totalMax).sort((x, y) => x.pos - y.pos);
+          if (prob.length < 2) return; used.add('nomogram');
+          nomoFigs.push({ sig: true, caption: `Nomogram of the Cox regression model: probability free of ${what} at ${fmt(t, d)}${u ? ' ' + u : ''}`, spec: { type: 'nomogram', rows: items.map((it, i) => ({ label: it.label, ticks: it.pts.map(q => ({ pos: (q.c - mn[i]) / Rm * 100, text: q.text })) })), total, totalMax, prob, probLabel: `Free of ${what} at ${fmt(t, d)}${u ? ' ' + u : ''}` } }); }); } } catch (e) { console.error(e); } }
+    return { kind: 'cox', title: `Cox regression analysis for prediction of ${what}`, head, rows: trows, footnote: f.join(', ') + '.', comment: sent.join(' '), figures: [...(fg ? [fg] : []), ...nomoFigs], meta: withCtx({ multi, uni }, { kind: 'cox', preds, kept, multi, uni, terms, fitOn, ok, what }) };
   }
 
   // McNemar / McNemar–Bowker: change of a categorical variable between two measurements, in each group and overall
@@ -29331,6 +29353,11 @@ const Analysis = (() => {
       if (o.varyWording) VARY.forEach(([re, alts], i) => { t = t.replace(re, m => { const n = seen[i]++ % (alts.length + 1); return n === 0 ? m : alts[n - 1]; }); });
       if (o.commentTone === 'plain') t = t.replace(/\b(was|were) (in|not )significantly different\b/g, '$1 not clearly different').replace(/\bdid not differ significantly\b/g, 'did not clearly differ')
         .replace(/\bno significant difference/g, 'no clear difference').replace(/\binsignificant(ly)?\b/g, 'not clear$1').replace(/\bsignificantly\b/g, 'clearly').replace(/\bsignificant\b/g, 'clear');
+      // cautious: hedged wording; confident: direct wording (round 24)
+      if (o.commentTone === 'cautious') t = t.replace(/\b(was|were) significantly (higher|lower|longer|shorter|greater|smaller|more|less)\b/g, '$1 found to be significantly $2').replace(/\bwas significantly associated\b/g, 'appeared to be significantly associated')
+        .replace(/\b(changed|increased|decreased|improved|differed) significantly\b/g, (m, w) => `appeared to ${({ changed: 'change', increased: 'increase', decreased: 'decrease', improved: 'improve', differed: 'differ' })[w]} significantly`)
+        .replace(/\bThere was no significant\b/g, 'There was no evidence of a significant');
+      if (o.commentTone === 'confident') t = t.replace(/\b(was|were) found to be\b/g, '$1').replace(/\bappeared to (be |have )?/g, '').replace(/\bmay (suggest|indicate)\b/g, '$1s').replace(/\binsignificantly different\b/g, 'not different').replace(/\binsignificant\b/g, 'not significant');
       dict.forEach(([a, b]) => { t = t.split(a).join(b); });
       if (o.commentDir && o.commentDir !== 'as') t = flipComparisons(t, r.groups, o.commentDir);
       return t;
@@ -29495,6 +29522,14 @@ const Analysis = (() => {
         rowsT.push([bold(nm(x)), ...ts.map(tt => { const z = S.tdAucCI(t, e, m, tt, 200, 3); return cell(z && isFinite(z.auc) ? `${fmt(z.auc, 3)}${isFinite(z.lo) ? ` (${fmt(z.lo, 3)}-${fmt(z.hi, 3)})` : ''}` : '—'); })]); });
       out.push({ kind: 'rocTd', title: `Time-dependent AUC for prediction of ${what}`, head: ['', ...ts.map(t => `At ${fmt(t, 2)} (${H.columnLabel(cfg, a.tdTime)})`)], rows: rowsT, footnote: 'AUC: cumulative/dynamic area under the curve at each time (inverse probability of censoring weights), 95% bootstrap CI.', comment: `The time-dependent AUCs were ${listJoin(rowsT.map(r => `${r.slice(1).map(c => c.t[0].split(' ')[0]).join(', ')} for ${lowerFirst(r[0].t[0])}`))} at ${listJoin(ts.map(t => fmt(t, 2)))} ${lowerFirst(plain(H.columnLabel(cfg, a.tdTime)))}${/day|month|year|week/i.test(H.columnLabel(cfg, a.tdTime)) ? '' : ''}, respectively.`, figures: [], meta: {} }); used.add('rrM:Time-dependent AUCs (cumulative/dynamic) were estimated at the chosen times.'); } }
     if (a.cutoff === 'cost') used.add(`rrM:The cut-off minimised the expected cost of errors, with a missed case counted as ${fmt(parseFloat(a.costRatio) > 0 ? parseFloat(a.costRatio) : 1, 2)} times as costly as a false alarm.`);
+    // decision curve of each test (its probability from a logistic model on the test), against treating everyone or no one
+    if (a.dca) { const th = Array.from({ length: 19 }, (_, k) => (k + 1) / 20), series = [];
+      res.forEach(x => { const ok = x.vals.map((v, k) => isFinite(v) && x.pos[k] !== undefined), vv = x.vals.filter((_, k) => ok[k]), yy = x.pos.filter((_, k) => ok[k]).map(b => b ? 1 : 0); if (vv.length < 10) return;
+        const m = S.logisticRegression(vv.map(v => [v]), yy); if (!m || !m.terms || m.terms.length < 2) return; const b0 = m.terms[0].B, b1 = m.terms[1].B, pr = vv.map(v => 1 / (1 + Math.exp(-(b0 + b1 * v))));
+        const top = Math.max(...pr); series.push({ name: nm(x), values: S.netBenefit(pr, yy, th).map((q, k) => th[k] <= top ? +q.model.toFixed(4) : null), all: S.netBenefit(pr, yy, th).map(q => q.all) }); }); // a test is drawn up to its highest predicted probability
+      if (series.length) { used.add('dca'); const all = series[0].all;
+        main.figures.push({ sig: true, caption: `Decision curve${series.length > 1 ? 's' : ''} of ${listJoin(series.map(x => lowerFirst(x.name)))} for ${what}`, spec: { type: 'line', categories: th.map(t => `${Math.round(t * 100)}%`), xLabel: 'Threshold probability', yLabel: 'Net benefit', yMin: -0.1,
+          series: [...series.map(x => ({ name: x.name, values: x.values })), { name: 'Treat all', values: all.map(v => +Math.max(-0.1, v).toFixed(4)) }, { name: 'Treat none', values: all.map(() => 0) }] } }); } }
     return out;
   }
 
@@ -33386,6 +33421,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     selectSheet(wb.SheetNames[0]);
   }
   // paste cells copied from Excel (tab-separated) or comma-separated text
+  $('#recWiz') && ($('#recWiz').onclick = recodeWizard);
   $('#btnPaste').onclick = () => { $('#pasteText').value = ''; $('#pasteInfo').textContent = ''; $('#pasteDlg').showModal(); $('#pasteText').focus(); };
   $('#pasteCancel').onclick = () => $('#pasteDlg').close();
   $('#pasteText').oninput = () => { const t = $('#pasteText').value.trim(); const lines = t ? t.split(/\r?\n/).filter(l => l.trim()) : [];
@@ -33868,6 +33904,44 @@ if (typeof module !== 'undefined') module.exports = Sav;
     return true;
   }
   // every change to the sheet goes through here: snapshot for undo, apply, keep the setup in step, redraw
+  // 🔁 recode several variables at once: merge categories, cut numbers into groups (new columns), or the reference / order of the categories
+  function recodeWizard() { if (!state.data || !state.cfg) return; readUiIntoCfg(); const cfg = state.cfg, rows = state.data.rows, singles = cfg.variables.filter(v => v.kind === 'single' && v.cols[0].col !== cfg.groupCol);
+    const cats = singles.filter(v => v.type === 'categorical'), nums = singles.filter(v => v.type === 'numeric'), lvOf = v => Analysis.levelsOf(cfg, rows, v.cols[0].col);
+    let d = $('#recWizDlg'); if (!d) { d = document.createElement('dialog'); d.id = 'recWizDlg'; d.className = 'app-dlg'; document.body.append(d); }
+    let mode = 'merge';
+    const draw = () => { const list = mode === 'cut' ? nums : cats, chk = [...d.querySelectorAll('[data-rwv]:checked')].map(x => x.dataset.rwv);
+      d.innerHTML = `<form method="dialog" onsubmit="return false" style="width:min(760px,94vw)"><h3>🔁 Recode several variables</h3>
+        <div class="row" style="gap:6px;flex-wrap:wrap">${[['merge', 'Merge or rename categories'], ['cut', 'Cut numbers into groups'], ['ref', 'Reference (first) category']].map(([k, l]) => `<button class="btn ${mode === k ? 'primary' : 'ghost'} small" type="button" data-rwm="${k}">${l}</button>`).join('')}</div>
+        <div class="row" style="gap:10px;flex-wrap:wrap;margin:8px 0;max-height:120px;overflow:auto">${list.map(v => `<label class="check" style="margin:0"><input type="checkbox" data-rwv="${esc(v.id)}" ${chk.includes(v.id) ? 'checked' : ''}><span>${esc(v.label)}</span></label>`).join('') || '<span class="legend-note">No such variable.</span>'}</div>
+        <div id="rwBody" style="max-height:46vh;overflow:auto"></div>
+        <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn ghost" type="button" data-rwgo="x">Close</button><button class="btn primary" type="button" data-rwgo="ok">Apply</button></div></form>`; body(); };
+    const body = () => { const sel = [...d.querySelectorAll('[data-rwv]:checked')].map(x => cfg.variables.find(v => v.id === x.dataset.rwv)).filter(Boolean), B = d.querySelector('#rwBody'); if (!B) return;
+      if (!sel.length) { B.innerHTML = '<p class="legend-note">Tick the variables above.</p>'; return; }
+      if (mode === 'merge') B.innerHTML = sel.map(v => `<div class="gcard" style="margin:4px 0"><b>${esc(v.label)}</b><table class="t" style="margin-top:4px"><thead><tr><th>Now</th><th>n</th><th>Becomes (same name = merged)</th></tr></thead><tbody>${lvOf(v).map(l => `<tr><td>${esc(l)}</td><td>${rows.filter(r => Analysis.toCat(r[v.cols[0].col]) === l).length}</td><td><input type="text" data-rwmap="${esc(v.id)}" data-rwfrom="${esc(l)}" value="${esc(l)}" list="rwl_${esc(v.id)}"><datalist id="rwl_${esc(v.id)}">${lvOf(v).map(x => `<option value="${esc(x)}">`).join('')}</datalist></td></tr>`).join('')}</tbody></table></div>`).join('');
+      else if (mode === 'cut') B.innerHTML = `<div class="grid g2" style="gap:8px"><div><label class="f">Cut-offs (a value starts the next group), e.g. 18.5, 25, 30</label><input type="text" id="rwCuts" placeholder="e.g. 18.5, 25, 30"></div><div><label class="f">Group names (one more than the cut-offs), e.g. Under, Normal, Over, Obese</label><input type="text" id="rwLabs" placeholder="automatic (e.g. < 18.5, 18.5–25, …)"></div></div>
+        <p class="legend-note">Each ticked variable gets a new column (its name + “_group”) with these groups; the number columns stay as they are. ${sel.map(v => { const xs = rows.map(r => Analysis.toNum(r[v.cols[0].col])).filter(isFinite); return `${esc(v.label)}: ${xs.length ? `${Math.min(...xs)} to ${Math.max(...xs)}` : 'no numbers'}`; }).join(' · ')}</p>`;
+      else B.innerHTML = sel.map(v => { const lv = lvOf(v); return `<div class="row" style="gap:8px;align-items:center;margin:4px 0"><b style="min-width:180px">${esc(v.label)}</b><span class="legend-note">first (reference):</span><select data-rwref="${esc(v.id)}" style="width:auto">${lv.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('')}</select><label class="check" style="margin:0"><input type="checkbox" data-rwrev="${esc(v.id)}"><span>reverse the order</span></label></div>`; }).join(''); };
+    d.onchange = e => { if (e.target.dataset.rwv) body(); };
+    d.onclick = e => { const m = e.target.closest('[data-rwm]'); if (m) { mode = m.dataset.rwm; draw(); return; } const g = e.target.closest('[data-rwgo]'); if (!g) return; if (g.dataset.rwgo === 'x') { d.close(); return; }
+      const sel = [...d.querySelectorAll('[data-rwv]:checked')].map(x => cfg.variables.find(v => v.id === x.dataset.rwv)).filter(Boolean); if (!sel.length) { toast('Tick the variables first'); return; }
+      if (mode === 'merge') { const maps = {}; d.querySelectorAll('[data-rwmap]').forEach(x => { const to = x.value.trim(); if (to && to !== x.dataset.rwfrom) (maps[x.dataset.rwmap] = maps[x.dataset.rwmap] || {})[x.dataset.rwfrom] = to; });
+        if (!Object.keys(maps).length) { toast('Nothing to change: type the new name of a category'); return; } let n = 0;
+        editSheet(() => { sel.forEach(v => { const M = maps[v.id]; if (!M) return; const col = v.cols[0].col; state.data.rows.forEach(r => { const c = Analysis.toCat(r[col]); if (c !== null && M[c] !== undefined) { r[col] = M[c]; n++; } });
+          if (v.levels && v.levels.length) v.levels = [...new Set(v.levels.map(l => M[l] ?? l))]; }); }, 'Categories merged or renamed');
+        toast(`${n} cell${n === 1 ? '' : 's'} recoded (Undo restores them)`); }
+      else if (mode === 'cut') { const cuts = String(d.querySelector('#rwCuts').value).split(/[,;\s]+/).map(x => parseFloat(x.replace(',', '.'))).filter(isFinite).sort((x, y) => x - y); if (!cuts.length) { toast('Type at least one cut-off'); return; }
+        const labs0 = String(d.querySelector('#rwLabs').value).split(',').map(x => x.trim()).filter(Boolean), labs = labs0.length === cuts.length + 1 ? labs0 : [`< ${cuts[0]}`, ...cuts.slice(1).map((c, i) => `${cuts[i]}–${c}`), `≥ ${cuts[cuts.length - 1]}`];
+        const made = [];
+        editSheet(() => { sel.forEach(v => { const col = v.cols[0].col; let nc = `${col}_group`, k = 2; while (state.data.headers.includes(nc)) nc = `${col}_group${k++}`;
+          const at = state.data.headers.indexOf(col) + 1; state.data.headers.splice(at, 0, nc);
+          state.data.rows.forEach(r => { const x = Analysis.toNum(r[col]); r[nc] = isFinite(x) ? labs[cuts.filter(c => x >= c).length] : null; });
+          const nv = singleVariable(state.data.rows, nc, v.pos + 0.5, v.table); nv.type = 'categorical'; nv.levels = labs.slice(); nv.label = `${v.label} (groups)`; cfg.variables.push(nv); made.push(nc); });
+          cfg.variables.sort((x, y) => x.pos - y.pos); }, 'Numbers cut into groups');
+        toast(`New column${made.length > 1 ? 's' : ''}: ${made.join(', ')} (Undo removes ${made.length > 1 ? 'them' : 'it'})`); }
+      else { sel.forEach(v => { const lv = lvOf(v), ref = (d.querySelector(`[data-rwref="${CSS.escape(v.id)}"]`) || {}).value, rev = (d.querySelector(`[data-rwrev="${CSS.escape(v.id)}"]`) || {}).checked; let o = rev ? lv.slice().reverse() : lv.slice(); if (ref) o = [ref, ...o.filter(x => x !== ref)]; v.levels = o; });
+        toast('Order of the categories set — the first is the reference'); }
+      d.close(); renderVariables(); renderStepper(); };
+    draw(); d.showModal(); }
   function editSheet(fn, what) {
     pushUndo();
     const before = JSON.parse(state.undo[state.undo.length - 1]).data;
@@ -36998,8 +37072,10 @@ if (typeof module !== 'undefined') module.exports = Sav;
         <div class="row"><h4 style="margin:0">${ai + 1}. ${ADV_TYPES[t]}</h4><span class="spacer"></span>
           <label class="check" style="margin:0"><input type="checkbox" data-af="include" ${a.include !== false ? 'checked' : ''}><span>Include</span></label>
  <button class="btn ghost small" data-advmove="${ai},-1" type="button" title="Move up" ${ai === 0 ? 'disabled' : ''}>↑</button><button class="btn ghost small" data-advmove="${ai},1" type="button" title="Move down" ${ai === state.cfg.advanced.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="btn ghost small" data-advpreset="${ai}" type="button" title="Save this analysis (type, columns, options) as a preset to use again, also in other projects">☆ Preset</button>
           <button class="btn ghost small" data-advdup="${ai}" type="button" title="A copy of this analysis, to change one setting">⧉ Duplicate</button>
           <button class="btn ghost small" data-advdel="${ai}" type="button">✕ Remove</button></div>
+        <div class="adv-live" data-advlive="${ai}" style="margin-top:6px;padding:4px 8px;border-left:3px solid var(--purple,#7B2FBE);background:var(--lav,#F3EEFB);border-radius:6px;font-size:13px"><span class="legend-note">Result: …</span></div>
         <div class="grid g3" style="margin-top:8px">${fields}${uni}</div>
         <div class="grid g4 adv-opts">${advOptions(a)}</div>
         ${t === 'survival' ? '<p class="legend-note" style="margin:6px 0 0">Curves are drawn for each study group; patients without the event are censored at their follow-up time.</p>' : t === 'mcnemar' ? '<p class="legend-note" style="margin:6px 0 0">Tested in each study group and in all patients together.</p>' : !withPreds || (t === 'noninf' && !preds.length) ? '' : `
@@ -37040,6 +37116,57 @@ if (typeof module !== 'undefined') module.exports = Sav;
   const advRefresh = e => { const card = e.target.closest('[data-adv]'); if (!card || e.target.closest('.adv-out')) return; const ai = +card.dataset.adv, a = state.cfg.advanced[ai];
     if (a && advOpen.has(a)) { readAdvanced(); advOutput(ai, e.type === 'input' ? 700 : 150); } };
   $('#advList').addEventListener('change', advRefresh); $('#advList').addEventListener('input', advRefresh);
+  // the headline of each card (round 24): the first sentence of its comment, as soon as its columns are chosen
+  const liveT = {};
+  function advLive(ai, delay = 600) { clearTimeout(liveT[ai]); liveT[ai] = setTimeout(() => { const box = document.querySelector(`[data-advlive="${ai}"]`), a = state.cfg && state.cfg.advanced[ai]; if (!box || !a) return;
+      let txt = '', err = ''; try { const o = effOptions(); const res = Analysis.run(state.data, { ...state.cfg, options: { ...o, correlation: false, summary: false, fdr: false, figures: 'none' }, variables: state.cfg.variables.map(v => ({ ...v, include: false })), advanced: [{ ...a, include: true, figOff: true }], timeline: null, consort: { ...(state.cfg.consort || {}), enabled: false } });
+        const sec = (res.sections || []).find(sc => sc.comment); txt = sec ? (sentences(sec.comment)[0] || sec.comment).trim() : ''; } catch (e) { err = e.message; }
+      box.innerHTML = txt ? `<b>Result:</b> ${esc(txt)}` : `<span class="legend-note">${err ? 'Not computed yet — check the columns' : 'Choose the columns: the main result shows here'}</span>`; }, delay); }
+  $('#advList').addEventListener('change', e => { const card = e.target.closest('[data-adv]'); if (card && !e.target.closest('.adv-out')) { readAdvanced(); advLive(+card.dataset.adv, 300); } });
+  $('#advList').addEventListener('input', e => { const card = e.target.closest('[data-adv]'); if (card && !e.target.closest('.adv-out') && e.target.type !== 'text' && e.target.tagName !== 'TEXTAREA') { readAdvanced(); advLive(+card.dataset.adv, 800); } });
+  // ☆ presets: an analysis kept with its columns and options (columns missing in other data are left out when it is used)
+  const PRESET_KEY = 'easystat.advPresets', presets = () => { try { return JSON.parse(localStorage.getItem(PRESET_KEY) || '{}'); } catch (e) { return {}; } };
+  function drawPresets() { const s = $('#advPreset'); if (!s) return; const P = presets(), ks = Object.keys(P); s.innerHTML = `<option value="">☆ My presets${ks.length ? ` (${ks.length})` : ''}…</option>${ks.map(k => `<option value="${esc(k)}">${esc(k)} — ${esc(ADV_TYPES[P[k].type] || P[k].type)}</option>`).join('')}${ks.length ? '<option value="__del">✕ Delete a preset…</option>' : ''}`; }
+  $('#advPreset') && ($('#advPreset').onchange = e => { const k = e.target.value; e.target.value = ''; if (!k) return; const P = presets();
+    if (k === '__del') { const nm = prompt(`Delete which preset?\n${Object.keys(P).join('\n')}`, ''); if (nm && P[nm]) { delete P[nm]; localStorage.setItem(PRESET_KEY, JSON.stringify(P)); drawPresets(); toast(`Preset “${nm}” deleted`); } return; }
+    const a = JSON.parse(JSON.stringify(P[k])), H = state.data ? state.data.headers : [], has = c => !c || H.includes(c), lost = [];
+    ['outcome', 'event', 'second', 'kmBy', 'coxBy', 'xvar', 'rvar'].forEach(f => { if (a[f] && !a[f].startsWith('__') && !has(a[f])) { lost.push(a[f]); a[f] = ''; } });
+    ['predictors'].forEach(f => { if (Array.isArray(a[f])) { const keep = a[f].filter(has); lost.push(...a[f].filter(c => !has(c))); a[f] = keep; } });
+    readUiIntoCfg(); state.cfg.advanced.push({ ...a, include: true }); renderAdvanced(); toast(`Preset “${k}” added${lost.length ? ` — not in these data: ${lost.slice(0, 4).join(', ')}${lost.length > 4 ? '…' : ''}` : ''}`); });
+  drawPresets();
+  { const ra = renderAdvanced; renderAdvanced = function () { const r = ra.apply(this, arguments); setTimeout(() => (state.cfg ? state.cfg.advanced : []).forEach((_, i) => advLive(i, 150 + i * 120)), 0); return r; }; } // every card's headline after drawing
+  // 🧭 which analysis: what you want to know + the outcome → the card added and filled
+  $('#advWiz') && ($('#advWiz').onclick = () => { if (!state.data) return; readUiIntoCfg(); const cfg = state.cfg, rows = analysedRows(), H = state.data.headers.filter(h => !cfg.idCols.includes(h)), kind = c => Analysis.columnKind(cfg, rows, c), lab = c => Analysis.columnLabel(cfg, c);
+    const Q = [['compare', 'Compare the groups on an outcome, adjusted for other variables'], ['corr', 'Is one number related to another?'], ['predbin', 'What predicts a yes/no outcome (risk factors)?'], ['prednum', 'What predicts a number?'], ['time', 'Time to an event (survival, recurrence)'], ['diag', 'How well does a test or marker diagnose?'], ['agree', 'Do two methods or raters agree?'], ['paired', 'Did a value change in the same patients (before / after)?'], ['count', 'A count outcome (number of events, visits)']];
+    let d = $('#advWizDlg'); if (!d) { d = document.createElement('dialog'); d.id = 'advWizDlg'; d.className = 'app-dlg'; document.body.append(d); }
+    const opts = list => list.map(c => `<option value="${esc(c)}">${esc(lab(c))} (${kind(c) === 'numeric' ? 'number' : 'categories'})</option>`).join('');
+    d.innerHTML = `<form method="dialog" onsubmit="return false" style="width:min(620px,92vw)"><h3>🧭 Which analysis?</h3>
+      <label class="f">1. What do you want to know?</label><select id="awQ">${Q.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>
+      <div class="grid g2" style="gap:8px;margin-top:8px"><div><label class="f" id="awL1">2. The outcome</label><select id="awA">${opts(H)}</select></div><div id="awBBox"><label class="f" id="awL2">The second column</label><select id="awB"><option value="">—</option>${opts(H)}</select></div></div>
+      <label class="f" style="margin-top:8px">3. Other variables (predictors / covariates / tests) — optional</label><select id="awP" multiple size="6" style="width:100%">${opts(H)}</select>
+      <p class="legend-note" id="awNote" style="margin:6px 0 0"></p>
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn ghost" type="button" data-aw="x">Cancel</button><button class="btn primary" type="button" data-aw="ok">Add the analysis</button></div></form>`;
+    const upd = () => { const q = d.querySelector('#awQ').value, A = d.querySelector('#awA').value, kA = kind(A), L = {
+        compare: ['The outcome', '', 'ANCOVA (numbers) or logistic regression (yes/no) with the study group and these covariates'], corr: ['The first number', 'The second number (optional: else every ticked number)', 'Pearson or Spearman correlation'],
+        predbin: ['The yes/no outcome', '', 'Logistic regression (univariable, then multivariable)'], prednum: ['The number to predict', '', 'Linear regression'], time: ['The follow-up time', 'The event column', 'Kaplan-Meier curves and Cox regression'],
+        diag: ['The true diagnosis (yes/no)', '', 'ROC curves of the tests ticked below, with sensitivity and specificity'], agree: ['Method / rater A', 'Method / rater B', kA === 'numeric' ? 'ICC and Bland-Altman' : "Cohen's kappa"],
+        paired: ['The value before', 'The value after', kA === 'numeric' ? 'Paired t-test or Wilcoxon' : 'McNemar test'], count: ['The count', '', 'Poisson / negative binomial regression'] }[q];
+      d.querySelector('#awL1').textContent = '2. ' + L[0]; d.querySelector('#awBBox').style.display = L[1] ? '' : 'none'; d.querySelector('#awL2').textContent = L[1]; d.querySelector('#awNote').textContent = '→ ' + L[2]; };
+    d.onchange = upd; upd();
+    d.onclick = ev => { const b = ev.target.closest('[data-aw]'); if (!b) return; if (b.dataset.aw === 'x') { d.close(); return; }
+      const q = d.querySelector('#awQ').value, A = d.querySelector('#awA').value, B = d.querySelector('#awB').value, P = [...d.querySelector('#awP').selectedOptions].map(o => o.value).filter(c => c !== A && c !== B), kA = kind(A), base = t => ({ type: t, outcome: '', positive: '', predictors: [], include: true, univariable: ['logistic', 'cox'].includes(t), ...advDefaults(t) }), add = [];
+      if (q === 'compare') add.push(kA === 'numeric' ? { ...base('ancova'), outcome: A, predictors: P } : { ...base('logistic'), outcome: A, positive: defaultPositive(A), predictors: [cfg.groupCol, ...P].filter(Boolean) });
+      else if (q === 'corr') add.push({ ...base('correlation'), outcome: B ? A : '', predictors: B ? [B, ...P] : [A, ...P] });
+      else if (q === 'predbin') add.push({ ...base('logistic'), outcome: A, positive: defaultPositive(A), predictors: P });
+      else if (q === 'prednum') add.push({ ...base('linear'), outcome: A, predictors: P });
+      else if (q === 'time') { if (!B) { toast('Choose the event column'); return; } add.push({ ...base('survival'), outcome: A, event: B, positive: defaultPositive(B) }); add.push({ ...base('cox'), outcome: A, event: B, positive: defaultPositive(B), predictors: [cfg.noGroups ? '' : cfg.groupCol, ...P].filter(Boolean) }); }
+      else if (q === 'diag') add.push({ ...base('roc'), outcome: A, positive: defaultPositive(A), predictors: P });
+      else if (q === 'agree') { if (!B) { toast('Choose the second method or rater'); return; } add.push(kA === 'numeric' ? { ...base('agreement'), outcome: A, second: B } : { ...base('kappa'), outcome: A, second: B }); }
+      else if (q === 'paired') { if (!B) { toast('Choose the value after'); return; } add.push(kA === 'numeric' ? { ...base('paired'), outcome: A, second: B } : { ...base('mcnemar'), outcome: A, second: B, positive: defaultPositive(A) }); }
+      else if (q === 'count') add.push({ ...base('count'), outcome: A, predictors: P });
+      cfg.advanced.push(...add); d.close(); renderAdvanced(); toast(`${add.map(a => ADV_TYPES[a.type] || a.type).join(' and ')} added — check it below`);
+      setTimeout(() => { const c = document.querySelector(`[data-adv="${cfg.advanced.length - 1}"]`); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 200); };
+    d.showModal(); });
   // per-analysis options: title, patients (subset), variable selection and type-specific extras
   // the defaults of a new analysis card: regression enters the variables significant in univariable analysis; ROC compares the AUCs, draws all curves together and each alone, with a detailed comment
   function advDefaults(t) { return ['linear', 'logistic', 'cox'].includes(t) ? { method: 'screen', univariable: true } : t === 'roc' ? { compare: true, figure: 'both', commentDetail: 'detailed' } : {}; }
@@ -37053,7 +37180,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
         <table class="t" style="margin-top:6px"><thead><tr><th>Test</th><th>My cut-off (positive when ≥, or ≤ for lower values)</th><th>Values for the table of several cut-offs</th></tr></thead><tbody>${tests.map(c => `<tr><td><b>${esc(lab(c))}</b></td><td><input type="text" data-af="mcuts.${esc(c)}" value="${esc((a.mcuts || {})[c] || '')}" placeholder="method above" style="width:120px"></td><td><input type="text" data-af="cutLists.${esc(c)}" value="${esc((a.cutLists || {})[c] || '')}" placeholder="e.g. 2; 3.5; 5 (empty = percentiles)" style="width:240px"></td></tr>`).join('')}</tbody></table></details>`);
       out.push(head('More for the ROC curves'), `<div>${box('rocCuts', 'Table of several cut-offs (with rule-in and rule-out)')}</div>`, `<div>${box('cutCI', 'Optimal cut-off with its 95% CI (bootstrap)')}</div>`, `<div>${box('prevTab', 'PPV and NPV at other prevalences (table and curve)')}</div>`,
         `<div>${box('pAuc', 'Partial AUC at high specificity')}</div>`, ...(a.pAuc ? [inp('pAucSpec', 'Partial AUC from specificity (%)', '90', 'number')] : []), `<div>${box('grey', 'Two cut-offs: rule-out, grey zone, rule-in')}</div>`, `<div>${box('prCurve', 'Precision-recall curve')}</div>`,
-        `<div>${box('ssPlot', 'Sensitivity and specificity by cut-off (figure)')}</div>`, `<div>${box('stard2x2', '2×2 table of each test at its cut-off (STARD)')}</div>`, `<div>${box('fagan', 'Fagan nomogram (pre- to post-test probability)')}</div>`,
+        `<div>${box('ssPlot', 'Sensitivity and specificity by cut-off (figure)')}</div>`, `<div>${box('dca', 'Decision curve of each test (net benefit)')}</div>`, `<div>${box('stard2x2', '2×2 table of each test at its cut-off (STARD)')}</div>`, `<div>${box('fagan', 'Fagan nomogram (pre- to post-test probability)')}</div>`,
         `<div><label class="f">AUC in subgroups of</label>${sel('rocBy', [['', '— none —'], ...catCols.map(c => [c, lab(c)])], a.rocBy || '')}</div>`,
         `<div><label class="f">Time-dependent AUC: time column</label>${sel('tdTime', [['', '— none —'], ...numCols.map(c => [c, lab(c)])], a.tdTime || '')}</div>`, ...(a.tdTime ? [inp('tdTimes', 'At the times', 'e.g. 12, 36, 60')] : []));
     }
@@ -37135,6 +37262,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     if (['linear', 'logistic'].includes(t)) { const nc = (a.predictors || []).filter(c => Analysis.columnKind(state.cfg, analysedRows(), c) === 'numeric').map(c => [c, Analysis.columnLabel(state.cfg, c)]);
       out.push(`<div><label class="f">Non-linear predictor (restricted cubic spline)</label>${sel('rcs', [['', '— none —'], ...nc], a.rcs || '')}</div>`, `<div><label class="f">Spline knots</label>${sel('rcsK', [['4', '4 knots'], ['3', '3 knots'], ['5', '5 knots']], a.rcsK || '4')}</div>`); }
     if (t === 'logistic') out.push(`<div>${box('nomogram', 'Nomogram of the model')}</div>`);
+    if (t === 'cox') out.push(`<div>${box('nomogram', 'Nomogram of the model (survival at given times)')}</div>`, `<div><label class="f">Nomogram: survival at (times, e.g. 12, 24)</label><input type="text" data-af="nomoAt" value="${esc(a.nomoAt || '')}" placeholder="automatic"></div>`);
     if (t === 'noninf') out.push(`<div><label class="f">Sample size check</label>${sel('ssPower', [['', 'None'], ['80', 'n needed for 80% power'], ['90', 'n needed for 90% power']], a.ssPower || '')}</div>`,
       `<div><label class="check" style="margin-top:22px"><input type="checkbox" data-af="marginFig" ${a.marginFig !== false ? 'checked' : ''}><span>CI-and-margin plot</span></label></div>`);
     if (t === 'mi') out.push(`<div><label class="f">Number of imputations</label>${sel('mImp', [['20', '20'], ['5', '5'], ['10', '10'], ['50', '50']], a.mImp || '20')}</div>`);
@@ -37200,6 +37328,8 @@ if (typeof module !== 'undefined') module.exports = Sav;
     renderAdvanced();
   });
   $('#advList').addEventListener('click', e => {
+    { const ps = e.target.closest('[data-advpreset]'); if (ps) { readAdvanced(); const a = state.cfg.advanced[+ps.dataset.advpreset]; if (!a) return; const nm = (prompt('Name of the preset (e.g. My usual Cox model):', ADV_TYPES[a.type] || a.type) || '').trim(); if (!nm) return;
+      const P = presets(); P[nm] = JSON.parse(JSON.stringify(a)); localStorage.setItem(PRESET_KEY, JSON.stringify(P)); drawPresets(); toast(`Preset “${nm}” saved — ☆ My presets… to add it again`); return; } }
     { const up = e.target.closest('[data-agup],[data-agreset]'); if (up) { readAdvanced(); const card = up.closest('[data-adv]'), a = card && state.cfg.advanced[+card.dataset.adv]; if (!a) return;
       if (up.dataset.agreset) delete a.gOrder; else { const cur = advGroupList(a), k = cur.indexOf(up.dataset.agup); if (k > 0) [cur[k - 1], cur[k]] = [cur[k], cur[k - 1]]; a.gOrder = cur; }
       const y = scrollY; renderAdvanced(); scrollTo(0, y); return; } }
@@ -38811,6 +38941,40 @@ if (typeof module !== 'undefined') module.exports = Sav;
       const e = x.num && x.num.pairs && x.num.pairs[0] ? `${(+x.num.pairs[0].diff).toFixed(2)} (${(+x.num.pairs[0].lo).toFixed(2)} to ${(+x.num.pairs[0].hi).toFixed(2)})` : x.cat && x.cat.rr && x.cat.rr[0] && x.cat.rr[0].rr !== null ? `RR ${(+x.cat.rr[0].rr).toFixed(2)} (${(+x.cat.rr[0].lo).toFixed(2)} to ${(+x.cat.rr[0].hi).toFixed(2)})` : '';
       rows.push({ key: x.v.id, label: x.v.label, table: sec.title, p: a.p, e, n: x.num ? x.num.desc.reduce((t, d0) => t + d0.n, 0) : x.cat ? (x.cat.ns || []).reduce((t, n0) => t + n0, 0) : '' }); }); });
     return { time: new Date().toLocaleString(), n: state.data.rows.length, rows }; }
+  // Δ what the last run changed: the n, P values and effects that moved, and the results that changed significance
+  function changesHtml() { const a = state.prevSnap; if (!a || !state.result) return ''; let b; try { b = resultsSnapshot(); } catch (e) { return ''; }
+    const alpha = state.cfg.options.alpha || 0.05, fp = p => isFinite(p) ? (p < 0.001 ? '< 0.001' : p.toFixed(3)) : '—', keys = [...new Set([...a.rows.map(x => x.key), ...b.rows.map(x => x.key)])], out = [];
+    keys.forEach(k => { const x = a.rows.find(y => y.key === k), y = b.rows.find(z => z.key === k); if (x && y && x.n === y.n && fp(x.p) === fp(y.p) && x.e === y.e) return;
+      const flip = x && y && (x.p <= alpha) !== (y.p <= alpha); out.push({ flip, h: `<tr class="${flip ? 'cmp-flip' : ''}"><td>${esc((y || x).label)}</td><td>${x ? x.n : '—'} → ${y ? y.n : '—'}</td><td>${x ? fp(x.p) : 'new'} → ${y ? fp(y.p) : 'removed'}</td><td>${esc(x ? x.e : '')}${x && y && x.e !== y.e ? ` → ${esc(y.e)}` : ''}</td><td>${flip ? (y.p <= alpha ? '⬆ now significant' : '⬇ no longer significant') : ''}</td></tr>` }); });
+    if (!out.length) return `<div class="report-sec" style="padding:6px 10px"><span class="legend-note">Δ Since the last run: no number changed.</span></div>`;
+    const nf = out.filter(o => o.flip).length;
+    return `<details class="report-sec" ${nf ? 'open' : ''}><summary><b>Δ Changes since the last run</b> <span class="legend-note">— ${out.length} result${out.length > 1 ? 's' : ''} changed${nf ? `, <b>${nf}</b> changed significance` : ''}</span></summary><div style="overflow-x:auto;margin-top:6px"><table class="t"><thead><tr><th>Variable</th><th>n</th><th>P value</th><th>Effect</th><th></th></tr></thead><tbody>${out.sort((p, q) => q.flip - p.flip).map(o => o.h).join('')}</tbody></table></div></details>`; }
+  // ✔ what a reviewer or examiner checks in the statistics, each with a fix (an option turned on, or the step to open)
+  const REV_CHECKS = () => { const c = state.cfg, o = c.options, r = state.result || { sections: [] }, A = c.advanced || [], set = (k, v) => () => { o[k] = v; }, step = n => () => { go(n); return true; };
+    return [
+      { k: 'primary', ok: c.variables.some(v => v.role === 'primary'), t: 'The primary outcome is marked', why: 'Reviewers look for one pre-specified primary outcome.', fix: step(2), how: 'Mark it in step 2' },
+      { k: 'effect', ok: o.effect !== false, t: 'Effect sizes with their 95% CI', why: 'A P value alone does not show how large or how precise a difference is.', fix: set('effect', true) },
+      { k: 'missing', ok: !!(o.missTable || o.missingNote), t: 'Missing data are reported', why: 'Readers need the number analysed in each comparison.', fix: set('missingNote', true) },
+      { k: 'multi', ok: (o.mwAdjust || 'none') !== 'none' || c.groupOrder.filter(g => c.groupInclude[g] !== false).length < 3, t: 'Multiple comparisons are corrected (3 groups or more)', why: 'Pairwise tests after an overall test inflate false positives.', fix: set('mwAdjust', 'holm') },
+      { k: 'normal', ok: o.mNormality !== false, t: 'How normality was checked is stated', why: 'It justifies parametric or non-parametric tests.', fix: set('mNormality', true) },
+      { k: 'assum', ok: !!o.assumptions, t: 'Assumptions of the tests are reported', why: 'Equal variances, expected counts, normality of the residuals.', fix: set('assumptions', true) },
+      { k: 'testnote', ok: o.testNote !== 'none', t: 'The test is named under each table', why: 'Each P value should say which test gave it.', fix: set('testNote', 'list') },
+      { k: 'abbr', ok: o.abbrFoot !== false, t: 'Abbreviations are explained under the tables', why: 'Each table should stand alone.', fix: set('abbrFoot', true) },
+      { k: 'sig', ok: o.mSig !== false, t: 'The significance level is stated', why: 'P ≤ 0.05, two-sided, stated in the methods.', fix: set('mSig', true) },
+      { k: 'soft', ok: o.mSoftware !== false && !!(c.study.software || '').trim(), t: 'The software and its version are named', why: 'Needed to reproduce the analysis.', fix: () => { o.mSoftware = true; if (!(c.study.software || '').trim()) { go(1); return true; } } },
+      { k: 'power', ok: !!o.powerCol || A.some(a => a.type === 'ssize' && a.include !== false), t: 'Sample size or power is addressed', why: 'Examiners ask whether the study could detect the difference sought.', fix: set('powerCol', true) },
+      { k: 'flow', ok: !!(c.consort && c.consort.enabled) || c.noGroups, t: 'A flow of the participants (CONSORT / STROBE)', why: 'Shows who was screened, allocated, lost and analysed.', fix: step(9), how: 'Open step 9' },
+      { k: 'figs', ok: (r.sections || []).some(sc => (sc.figures || []).length), t: 'At least one figure', why: 'The main outcome is easier to read in a figure.', fix: set('figures', 'all') }]; };
+  function reviewerHtml() { const L = REV_CHECKS(), bad = L.filter(x => !x.ok);
+    return `<div class="report-sec"><h3 style="margin:0 0 6px">✔ Reviewer checklist <span class="legend-note">— ${L.length - bad.length} of ${L.length} done</span></h3><table class="t"><tbody>${L.map(x => `<tr><td style="width:28px;text-align:center">${x.ok ? '✅' : '⚠'}</td><td><b>${esc(x.t)}</b><div class="legend-note">${esc(x.why)}</div></td><td style="width:170px">${x.ok ? '' : `<button class="btn ${x.how ? 'ghost' : 'primary'} small" type="button" data-revfix="${x.k}">${esc(x.how || 'Fix and run again')}</button>`}</td></tr>`).join('')}</tbody></table></div>`; }
+  // ★ the key points: the primary outcome first, then the other significant results, one sentence each
+  function keyPointsHtml() { const r = state.result; if (!r) return ''; const c = state.cfg, prim = c.variables.filter(v => v.role === 'primary').map(v => v.id), first = t => (sentences(t || '')[0] || '').trim();
+    const secs = (r.sections || []).filter(sc => sc.comment && !sc.figOnly), pts = [];
+    secs.filter(sc => sc.vid && prim.includes(sc.vid)).forEach(sc => pts.push(first(sc.brief || sc.comment)));
+    secs.forEach(sc => { (sentences(sc.comment) || []).filter(t => /\bsignificant(ly)?\b|\bclear(ly)?\b/.test(t) && !/\b(in|not )significant|did not|no significant|not clear/.test(t)).slice(0, 1).forEach(t => { if (!pts.includes(t)) pts.push(t.trim()); }); });
+    const n = (state.data || { rows: [] }).rows.length, list = pts.filter(Boolean).slice(0, 5);
+    return `<div class="report-sec"><h3 style="margin:0 0 6px">★ Key points <span class="legend-note">— ${n} patients${c.noGroups ? '' : `, ${activeGroups().length} groups`}; the primary outcome first, then the other significant results</span></h3>
+      ${list.length ? `<ul id="keyPtsList" style="margin:4px 0 6px 18px">${list.map(t => `<li>${esc(t)}</li>`).join('')}</ul><button class="btn ghost small" type="button" data-keycopy="1">⧉ Copy</button>` : '<p class="legend-note">No significant result to highlight.</p>'}</div>`; }
   function compareHtml(a, name) {
     const b = resultsSnapshot(), alpha = state.cfg.options.alpha || 0.05, fp = p => isFinite(p) ? (p < 0.001 ? '< 0.001' : p.toFixed(3)) : '—', keys = [...new Set([...a.rows.map(x => x.key), ...b.rows.map(x => x.key)])];
     const rows = keys.map(k => { const x = a.rows.find(y => y.key === k), y = b.rows.find(z => z.key === k), s1 = x && x.p <= alpha, s2 = y && y.p <= alpha, flip = !!x && !!y && s1 !== s2;
@@ -39184,6 +39348,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   // what the report was run from: the setup and the data (the ⬇ Word button re-runs it only when these changed)
   const runKey = () => state.cfg && state.data ? JSON.stringify([state.cfg, state.data.headers, state.data.rows]) : '';
   function runAnalysis() {
+    try { state.prevSnap = state.result && state.data ? resultsSnapshot() : null; } catch (e) { state.prevSnap = null; } // kept to show what this run changes
     syncGroupFigs();
     busy(true); stage('Getting the data ready');
     renderFormatBar();
@@ -39551,6 +39716,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     html += `<div class="row exp-bar"><b>In the Word file:</b> <span class="legend-note">untick any section, table or figure to leave it out — numbering follows what is kept.</span><span class="spacer"></span>
       <button class="btn ghost small" data-exall="1" type="button">Include all</button><button class="btn ghost small" data-exall="0" type="button">Exclude all</button>
       ${(state.result.sections || []).some(s => s.kind === 'repeated') ? '<button class="btn ghost small" id="rmFlipAll" type="button" title="Every repeated-measures table: timepoints as columns, or back in rows">⇄ Transpose all repeated measures</button>' : ''}
+      <button class="btn ghost small" id="revCheck" type="button" title="What a reviewer or examiner looks for, with a one-click fix">✔ Reviewer checklist</button><button class="btn ghost small" id="keyPts" type="button" title="Three to five key points of the results, for the abstract, a poster or the viva">★ Key points</button>
       <button class="btn ghost small" id="comCheck" type="button" title="Numbers in the comments that are not in their table, causal wording and comment lengths">✓ Check comments</button></div><div id="comCheckOut"></div>`;
     // find & replace in every text of the report: methods, comments, titles, captions and the results text
     html += `<details class="report-sec fr-rep"><summary><b>🔍 Find &amp; replace in the report text</b> — methods, comments, table titles, captions</summary><div class="row" style="gap:8px;align-items:flex-end;margin-top:8px">
@@ -39560,6 +39726,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     const off = key => isOut(key) ? ' off' : '';
     if (plan.paper && plan.rep.abstract) html += `<div class="report-sec"><h3>Results for the abstract</h3><textarea id="edAbstract">${esc(r.abstract)}</textarea><div class="legend-note">${words(r.abstract)} words</div></div>`;
     html += `<div class="report-sec${off('methods')}"><div class="row"><h3>Statistical analysis</h3><span class="spacer"></span>${exBox('methods', 'Include')}</div><textarea id="edMethods">${esc(r.methods)}</textarea>${plan.paper ? `<div class="legend-note">${words(r.methods)} words</div>` : ''}</div>`;
+    { const ch = changesHtml(); if (ch) html += ch; }
     html += `<div class="report-sec"><h3>Results</h3>`;
     if (r.groupIntro) html += `<div class="legend-note" style="margin-top:6px">Opening paragraph of the results (the groups, step 2)</div><textarea id="edGroupIntro" rows="${Math.min(8, 2 + (r.groupIntro.match(/\n/g) || []).length)}">${esc(r.groupIntro)}</textarea>`;
     if (r.consort) html += `<div class="${off('consort')}"><div class="row"><span class="spacer"></span>${exBox('consort', 'Include flowchart and its text')}</div><textarea id="edIntro">${esc(r.intro)}</textarea><img src="${r.consort.url}" class="consort-prev" style="margin-top:12px"><div class="cap">${plan.consortOn ? lab(plan.consortNum) : 'Not exported:'} ${esc(r.flowCaption)}</div></div>`;
@@ -40103,6 +40270,10 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (cc) { syncEdits(); const t = state.result.sections[+cc.dataset.copycom].comment || ''; navigator.clipboard.writeText(t).then(() => toast('Comment copied'), () => toast('Copying was blocked by the browser')); }
     if (ex) { syncEdits(); const box = document.querySelector(`[data-explainbox="${ex.dataset.explain}"]`); box.innerHTML = box.innerHTML ? '' : explainHtml(state.result.sections[+ex.dataset.explain].comment); }
     if (e.target.closest('#comCheck')) { syncEdits(); $('#comCheckOut').innerHTML = checkComments(state.result); }
+    if (e.target.closest('#revCheck')) { syncEdits(); $('#comCheckOut').innerHTML = reviewerHtml(); return; }
+    if (e.target.closest('#keyPts')) { syncEdits(); $('#comCheckOut').innerHTML = keyPointsHtml(); return; }
+    { const fx = e.target.closest('[data-revfix]'); if (fx) { const it = REV_CHECKS().find(c => c.k === fx.dataset.revfix); if (it && it.fix) { const go2 = it.fix(); if (go2) return; renderOptions(); runAnalysis(); setTimeout(() => { const o = $('#comCheckOut'); if (o) o.innerHTML = reviewerHtml(); }, 1500); } return; } }
+    { const ka = e.target.closest('[data-keycopy]'); if (ka) { const t = [...document.querySelectorAll('#keyPtsList li')].map(li => '• ' + li.textContent).join('\n'); navigator.clipboard.writeText(t).then(() => toast('Key points copied'), () => toast('Copying was blocked')); return; } }
     { const rf = e.target.closest('[data-rmflip]'); if (rf && state.result) { syncEdits(); const y = scrollY; if (!rmToggle(+rf.dataset.rmflip)) toast('This table cannot be transposed'); renderReport(); scrollTo(0, y); return; } }
     if (e.target.closest('#rmFlipAll') && state.result) { syncEdits(); const y = scrollY, L = state.result.sections, idx = L.map((s, i) => s.kind === 'repeated' ? i : -1).filter(i => i >= 0), to = idx.every(i => L[i].tpCols) ? 'rows' : 'cols';
       idx.forEach(i => rmToggle(i, to)); state.cfg.options.rmLayout = to; state.cfg.rmLayoutBy = {}; renderOptions(); renderReport(); scrollTo(0, y); toast(to === 'cols' ? 'Repeated measures: timepoints as columns' : 'Repeated measures: timepoints in rows'); return; }
@@ -42172,6 +42343,19 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     Dn.vars.forEach(v => { delete v.__codes; }); Dn.sections = [...new Set(Dn.vars.map(v => v.section))]; return { D: Dn, kind: 'REDCap data dictionary', skipped };
   }
 
+  // the variables of a Word file: from its tables (a column of names, and units / categories / type when there are such columns), else one per line
+  function wordVariables(bytes) {
+    const z = XLSX.CFB.read(bytes, { type: 'array' }), k = z.FullPaths.findIndex(q => /word\/document\.xml$/.test(q)), f = k >= 0 ? z.FileIndex[k] : null; if (!f || !f.content) throw new Error('not a Word (.docx) file');
+    const xml = new TextDecoder().decode(f.content), txt = x => (x.match(/<w:t[^>]*>[^<]*<\/w:t>/g) || []).map(t => t.replace(/<[^>]+>/g, '')).join('').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
+    const out = [];
+    (xml.match(/<w:tbl>[\s\S]*?<\/w:tbl>/g) || []).forEach(tb => { const rows = (tb.match(/<w:tr[ >][\s\S]*?<\/w:tr>/g) || []).map(r => (r.match(/<w:tc>[\s\S]*?<\/w:tc>/g) || []).map(txt)); if (rows.length < 2) return;
+      const H = rows[0].map(h => h.toLowerCase()), at = re => H.findIndex(h => re.test(h)), cN = at(/variable|name|item|field|parameter|label|measure/), cU = at(/unit/), cC = at(/categor|values?|options?|codes?|levels?|answers?|response/), cT = at(/type|format/);
+      if (cN < 0) return;
+      rows.slice(1).forEach(r => { const nm = (r[cN] || '').trim(); if (!nm || nm.length > 80) return; const u = cU >= 0 ? (r[cU] || '').trim() : '', ty = cT >= 0 ? (r[cT] || '').toLowerCase() : '', cs = cC >= 0 ? (r[cC] || '').split(/\s*[\/|,;]\s*|\s+or\s+/).map(x => x.replace(/^\s*\d+\s*[=:.)-]\s*/, '').trim()).filter(Boolean) : [];
+        const yn = /yes\s*\/\s*no|binary|dichot/.test(ty) && cs.length < 2;
+        out.push(`${nm}${u && !nm.includes('(') ? ` (${u})` : ''}${cs.length >= 2 && cs.length <= 12 ? `: ${cs.join(' / ')}` : yn ? ': Yes / No' : ''}`); }); });
+    if (!out.length) (xml.match(/<w:p[ >][\s\S]*?<\/w:p>/g) || []).map(txt).filter(t => t && t.length <= 80 && !/[.!?]$/.test(t) && /^[\-•*\d.)\s]*[A-Za-z]/.test(t)).forEach(t => out.push(t));
+    return [...new Set(out)].slice(0, 400); }
   /* ---------- quick entry: a pasted list of variables ---------- */
   function fromLine(D, line, sec) {
     let s = String(line).replace(/^\s*[-•*\d.)]+\s+/, '').trim(); if (!s) return null; let vis = '', cats = null, unit = '';
@@ -42611,6 +42795,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       <select id="mbMine" style="width:auto"><option value="">My designs…</option>${opt(Object.keys(ls.get('designs', {})).map(k => [k, k]), '')}</select>
       <button class="btn ghost small" id="mbUndo" type="button" title="Undo (Ctrl+Z)" ${undoS.length ? '' : 'disabled'}>↶</button><button class="btn ghost small" id="mbRedo" type="button" title="Redo (Ctrl+Y)" ${redoS.length ? '' : 'disabled'}>↷</button>
       <label class="btn ghost small" style="margin:0" title="Make the design from a REDCap data dictionary (.csv) or an XLSForm of KoBoToolbox / ODK (.xlsx)">⬆ From REDCap / XLSForm<input type="file" id="mbFromDict" accept=".csv,.xlsx,.xls" hidden></label>
+      <label class="btn ghost small" style="margin:0" title="The variables listed in a Word protocol or CRF (a table with the variable names, units, categories — or one variable per line): they open in ＋ List to check before they are added">⬆ From a Word protocol<input type="file" id="mbFromWord" accept=".docx" hidden></label>
       <label class="btn ghost small" style="margin:0" title="Make the design from a sheet you already have: its columns, types, categories, ranges, visits (from suffixes such as _Baseline, _M3), groups — and its values as the expected values">⬆ From an existing sheet<input type="file" id="mbFromSheet" accept=".xlsx,.xls,.xlsm,.csv,.txt" hidden></label>
       <button class="btn ghost small" id="mbSaveAs" type="button">💾 Save design</button><button class="btn ghost small" id="mbExportJson" type="button" title="The design as a file, to share or keep">⬇ Design file</button><label class="btn ghost small" style="margin:0">⬆ Open design<input type="file" id="mbImportJson" accept=".json" hidden></label>
       <button class="btn primary small" id="mbClose" type="button" title="Phase 2: fill the sheet with simulated patients">🎲 Generate the data ›</button></div>
@@ -42793,7 +42978,26 @@ Date of surgery">${esc(pasteTxt)}</textarea>
       ${(D.checks || []).map((c, i) => `<div class="row" style="gap:6px;margin:4px 0"><select data-mbck="${i}:a" style="width:auto">${opt(o2, c.a)}</select><select data-mbck="${i}:op" style="width:auto">${opt([['>', 'greater than'], ['>=', 'greater than or equal to'], ['<', 'less than'], ['<=', 'less than or equal to'], ['=', 'equal to']], c.op)}</select><select data-mbck="${i}:b" style="width:auto">${opt(o2, c.b)}</select><button class="btn ghost small" type="button" data-mbckdel="${i}">✕</button></div>`).join('')}
       <button class="btn ghost small" type="button" id="mbCkAdd">+ Rule</button>
       <h3>Every number has an allowed range</h3><p class="legend-note">${D.vars.filter(v => v.type === 'num' && (v.min === '' || v.max === '')).map(v => esc(v.label)).join(', ') || 'Yes — all set.'}</p>`; };
-  function tPreview() {
+  // 🧪 try the form: one mock patient, the fields of a visit, and the skip logic live (a field asked only when … appears or is skipped)
+  let tryVals = {}, tryVisit = '';
+  function tryHtml() { const vis = D.visits, vk = tryVisit && vis.some(x => x.id === tryVisit) ? tryVisit : (vis[0] || {}).id, order = secOrder(D);
+    const at = v => { const ids = (v.visits || []).length ? v.visits : [vis[0] && vis[0].id]; return ids.includes(vk); }, key = v => v.id + '|' + vk, val = v => tryVals[key(v)] ?? '';
+    const shown = v => { if (!v.when || !v.when.v) return true; const pv = D.vars.find(x => x.id === v.when.v); if (!pv) return true; const x = tryVals[pv.id + '|' + vk] ?? tryVals[pv.id + '|' + (vis[0] || {}).id] ?? ''; return x === v.when.cat; };
+    const vs = D.vars.filter(v => at(v) && !isRepeating(D, v) && v.type !== 'calc').sort((a, b) => order.indexOf(a.section) - order.indexOf(b.section)); let sec = '', asked = 0, skipped = 0, bad = 0;
+    const rows = vs.map(v => { const on = shown(v), x = val(v), num = v.type === 'num', out = num && x !== '' && ((v.min !== '' && +x < +v.min) || (v.max !== '' && +x > +v.max)); if (on) asked++; else skipped++; if (out) bad++;
+      const head = v.section !== sec ? (sec = v.section, `<tr><td colspan="2" style="background:var(--lav,#F3EEFB)"><b>${esc(v.section)}</b></td></tr>`) : '';
+      const inp = !on ? `<span class="legend-note">skipped — asked only when ${esc(whenTxt(D, v))}</span>`
+        : v.type === 'yn' || v.type === 'cat' ? `<select data-mbtry="${v.id}"><option value="">—</option>${v.cats.map(c => `<option ${x === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`
+        : v.type === 'multi' ? v.cats.map(c => `<label class="check" style="margin:0 8px 0 0"><input type="checkbox" data-mbtry="${v.id}" data-mbtryc="${esc(c)}" ${String(x).split('|').includes(c) ? 'checked' : ''}><span>${esc(c)}</span></label>`).join('')
+        : `<input type="${num ? 'number' : v.type === 'date' ? 'date' : 'text'}" step="any" data-mbtry="${v.id}" value="${esc(x)}" style="max-width:200px">${v.unit ? ` <span class="legend-note">${esc(v.unit)}</span>` : ''}${out ? ` <span style="color:var(--bad,#c0392b)">⚠ outside ${esc(v.min)}–${esc(v.max)}</span>` : num && (v.min !== '' || v.max !== '') ? ` <span class="legend-note">${esc(v.min)}–${esc(v.max)}</span>` : ''}`;
+      return `${head}<tr style="${on ? '' : 'opacity:.55'}"><td style="width:38%">${esc(v.label)}${v.required ? ' <b style="color:var(--bad,#c0392b)">*</b>' : ''}${v.when && v.when.v ? ' <span class="legend-note" title="Skip logic">↳</span>' : ''}</td><td>${inp}</td></tr>`; }).join('');
+    return `<div class="mb-exp" style="margin-top:12px"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>🧪 Try the form</b><span class="legend-note">— fill a mock patient: fields asked only when … appear or are skipped as you answer</span><span class="spacer"></span>
+      ${vis.length > 1 ? `<select data-mbtryvisit="1" style="width:auto">${vis.map(x => `<option value="${x.id}" ${x.id === vk ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}<button class="btn ghost small" type="button" data-mbtryclear="1">↺ Empty</button></div>
+      <p class="legend-note" style="margin:4px 0">${asked} field${asked === 1 ? '' : 's'} asked${skipped ? `, ${skipped} skipped` : ''}${bad ? `, <b style="color:var(--bad,#c0392b)">${bad} out of range</b>` : ''}.</p>
+      <div class="tbl-wrap" style="max-height:460px"><table class="t">${rows || '<tr><td class="legend-note">No field at this visit.</td></tr>'}</table></div></div>`; }
+  function drawTry() { const b = $('#mbTry'); if (b) { const y = b.querySelector('.tbl-wrap'), top = y ? y.scrollTop : 0; b.innerHTML = tryHtml(); const y2 = b.querySelector('.tbl-wrap'); if (y2) y2.scrollTop = top; } }
+  function tPreview() { return tPreview0() + `<div id="mbTry">${tryHtml()}</div>`; }
+  function tPreview0() {
     const cols = columns(D), pr = problems(D), hasGroup = D.arms.filter(Boolean).length >= 2, order = secOrder(D);
     const lead = ['ID', ...(hasGroup ? ['Group'] : []), ...(D.layout === 'long' ? ['Visit'] : [])], rand = hasGroup && D.rand.on ? randomisation(D)[0].list : null;
     const ex = v => v.type === 'yn' || v.type === 'cat' ? (D.conv.catAs === 'codes' ? '1' : v.cats[0]) : v.type === 'num' ? (v.min !== '' && v.max !== '' ? String(+((+v.min + +v.max) / 2).toFixed(+v.dec || 0)) : '…') : v.type === 'date' ? '15/03/2026' : v.type === 'calc' ? '=…' : '…';
@@ -42814,6 +43018,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
   const ext = (k, ...a) => { const E = window.EasyBuilderExt; try { return E && E[k] ? E[k](D, ...a) || '' : ''; } catch (err) { console.error(err); return ''; } };
   const fileBase = () => (D.title || 'Master sheet').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 60).trim() || 'Master sheet';
   async function onClick(e) {
+    if (e.target.closest('[data-mbtryclear]')) { tryVals = {}; drawTry(); return; }
     { const rn = e.target.closest('[data-mbren]'); if (rn && rn.dataset.mbren === sel && !rn.isContentEditable) { onRename(e); return; } if (rn && rn.isContentEditable) return; } // a click on the name of the chosen variable renames it
     { const fb = e.target.closest('[data-mbgeffgo]'); if (fb) { const v = D.vars.find(x => x.id === sel); if (!v) return; const inp = fb.previousElementSibling, x = parseFloat(String(inp && inp.value || '').replace(',', '.')); if (!isFinite(x)) { toast(fb.dataset.mbgeffgo === 'd' ? "Type Cohen's d first (e.g. 0.5)" : 'Type the relative risk first (e.g. 0.5)'); return; }
       const E = v.expect = v.expect || {}, bg = E.byGroup = E.byGroup || [], A = (D.arms || []).filter(Boolean), b0 = bg[0] = bg[0] || {};
@@ -42892,6 +43097,10 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     const t = e.target, d = t.dataset, val = t.type === 'checkbox' ? t.checked : t.value;
     if (window.EasyBuilderExt && window.EasyBuilderExt.onInput && window.EasyBuilderExt.onInput(e, D)) return;
     if (t.id === 'mbPasteTxt') { pasteTxt = t.value; return; }
+    if (d.mbtry) { const vk = tryVisit && D.visits.some(x => x.id === tryVisit) ? tryVisit : (D.visits[0] || {}).id, k = d.mbtry + '|' + vk;
+      if (d.mbtryc !== undefined) { const cur = new Set(String(tryVals[k] || '').split('|').filter(Boolean)); if (t.checked) cur.add(d.mbtryc); else cur.delete(d.mbtryc); tryVals[k] = [...cur].join('|'); } else tryVals[k] = t.value;
+      if (t.tagName === 'SELECT' || t.type === 'checkbox') drawTry(); return; }
+    if (d.mbtryvisit) { tryVisit = t.value; drawTry(); return; }
     if (d.mbvday !== undefined) { D.visits[+d.mbvday].day = val === '' ? '' : +val; save(); return; }
     if (d.mbvtol !== undefined) { D.visits[+d.mbvtol].tol = val === '' ? '' : +val; save(); return; }
     if (d.mbanchor) { D.anchor = val; save(); return render(); }
@@ -42955,6 +43164,8 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     const t = e.target; if (window.EasyBuilderExt && window.EasyBuilderExt.onChange && window.EasyBuilderExt.onChange(e, D)) return;
     if (t.id === 'mbTpl' && t.value) { if (D.vars.length && !confirm('Replace the current design?')) { t.value = ''; return; } D = t.value === '__blank' ? blank() : fromTemplate(t.value); sel = null; tab = 'study'; save(); return render(); }
     if (t.id === 'mbMine' && t.value) { const all = ls.get('designs', {}); if (all[t.value] && (!D.vars.length || confirm(`Open “${t.value}” (the current design is replaced)?`))) { D = JSON.parse(JSON.stringify(all[t.value])); sel = null; save(); render(); } else t.value = ''; return; }
+    if (t.id === 'mbFromWord' && t.files[0]) { const f = t.files[0]; t.value = ''; f.arrayBuffer().then(buf => { try { const lines = wordVariables(new Uint8Array(buf)); if (!lines.length) throw new Error('no variables found');
+        pasteOpen = true; pasteTxt = lines.join('\n'); tab = 'vars'; render(); toast(`${lines.length} lines read from “${f.name}” — check them in ＋ List, then Add`); } catch (err) { console.error(err); toast('Could not read variables from this Word file: ' + err.message); } }); return; }
     if (t.id === 'mbFromDict' && t.files[0]) { const f = t.files[0]; t.value = ''; if (D.vars.length && !confirm(`Make a new design from “${f.name}”? The current design is replaced (Undo brings it back).`)) return;
       f.arrayBuffer().then(buf => { try { const wb = XLSX.read(buf, { type: 'array' }), r = designFromDict(wb, f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim()); if (!r.D.vars.length) throw new Error('no fields found');
         D = r.D; sel = null; tab = 'vars'; save(); render(); toast(`${r.kind}: ${r.D.vars.length} variables${r.skipped ? ` (${r.skipped} fields skipped: notes, calculations, descriptive)` : ''}`); } catch (err) { console.error(err); toast('Could not read it: ' + err.message); } }); return; }
@@ -42968,6 +43179,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     if (t.id === 'mbPasteTxt') return;
     if (t.dataset && t.dataset.mbbulk) return onInput({ target: t, type: 'change' });
     // a typed value: the expected values need no redraw; other fields redraw once the focus has moved on, and the field moved to keeps the focus
+    if (t.dataset && t.dataset.mbtry) { if (t.tagName === 'INPUT' && t.type !== 'checkbox') drawTry(); return; } // the try form: only itself drawn again
     if (t.dataset && (t.dataset.mbg || t.dataset.mbe || t.dataset.mbep !== undefined || t.dataset.mbgen || t.dataset.mbgeff)) return;
     if (t.type === 'text' || t.type === 'number' || t.tagName === 'TEXTAREA') setTimeout(() => { const a = document.activeElement, w = $('#mbWrap'), key = a && w && w.contains(a) && a !== document.body ? a.tagName.toLowerCase() + [...a.attributes].filter(x => x.name.startsWith('data-')).map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('') : '';
       render(); if (key && key.includes('[')) { const n = w.querySelector(key); if (n) { n.focus(); try { if (n.select) n.select(); } catch (e2) { /* not selectable */ } } } }, 0);
@@ -48182,7 +48394,7 @@ html.r21-all .ux2-pane::before{content:attr(data-r21lab);flex-basis:100%;font-we
   function same() { const st = S(); if (!st.cfg) return false; if (owner !== st.cfg && !(owner && owner.__r23 && owner.__r23 === st.cfg.__r23)) { owner = st.cfg; Object.defineProperty(st.cfg, '__r23', { value: Math.random(), enumerable: false, configurable: true }); hist = []; fut = []; prev = JSON.stringify(st.cfg); dataLen = (st.undo || []).length; state(); return false; } return true; }
   function snap(readUi = true) { if (restoring || !analyse()) return; const st = S(); if (!same()) return;
     // an edit of the data (its own undo list grew): one step of the history
-    const dl = (st.undo || []).length; if (dl > dataLen) { for (let i = dataLen; i < dl; i++) hist.push({ data: true }); fut = []; } dataLen = dl;
+    const dl = (st.undo || []).length; if (dl > dataLen) { for (let i = dataLen; i < dl; i++) hist.push({ data: true }); fut = []; dataLen = dl; prev = JSON.stringify(st.cfg); if (hist.length > 80) hist.splice(0, hist.length - 80); state(); return; } dataLen = dl; // an edit of the data also holds its settings
     if (readUi) try { U.readUiIntoCfg(); } catch (e) { /* the screen is being drawn */ }
     const j = JSON.stringify(st.cfg); if (j !== prev) { if (Date.now() < quietUntil) prev = j; else { hist.push({ cfg: prev }); fut = []; prev = j; } } // just after an undo, the screen settling is not a change
     if (hist.length > 80) hist.splice(0, hist.length - 80); state(); }

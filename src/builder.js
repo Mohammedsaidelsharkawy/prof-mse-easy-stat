@@ -506,6 +506,19 @@
     Dn.vars.forEach(v => { delete v.__codes; }); Dn.sections = [...new Set(Dn.vars.map(v => v.section))]; return { D: Dn, kind: 'REDCap data dictionary', skipped };
   }
 
+  // the variables of a Word file: from its tables (a column of names, and units / categories / type when there are such columns), else one per line
+  function wordVariables(bytes) {
+    const z = XLSX.CFB.read(bytes, { type: 'array' }), k = z.FullPaths.findIndex(q => /word\/document\.xml$/.test(q)), f = k >= 0 ? z.FileIndex[k] : null; if (!f || !f.content) throw new Error('not a Word (.docx) file');
+    const xml = new TextDecoder().decode(f.content), txt = x => (x.match(/<w:t[^>]*>[^<]*<\/w:t>/g) || []).map(t => t.replace(/<[^>]+>/g, '')).join('').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
+    const out = [];
+    (xml.match(/<w:tbl>[\s\S]*?<\/w:tbl>/g) || []).forEach(tb => { const rows = (tb.match(/<w:tr[ >][\s\S]*?<\/w:tr>/g) || []).map(r => (r.match(/<w:tc>[\s\S]*?<\/w:tc>/g) || []).map(txt)); if (rows.length < 2) return;
+      const H = rows[0].map(h => h.toLowerCase()), at = re => H.findIndex(h => re.test(h)), cN = at(/variable|name|item|field|parameter|label|measure/), cU = at(/unit/), cC = at(/categor|values?|options?|codes?|levels?|answers?|response/), cT = at(/type|format/);
+      if (cN < 0) return;
+      rows.slice(1).forEach(r => { const nm = (r[cN] || '').trim(); if (!nm || nm.length > 80) return; const u = cU >= 0 ? (r[cU] || '').trim() : '', ty = cT >= 0 ? (r[cT] || '').toLowerCase() : '', cs = cC >= 0 ? (r[cC] || '').split(/\s*[\/|,;]\s*|\s+or\s+/).map(x => x.replace(/^\s*\d+\s*[=:.)-]\s*/, '').trim()).filter(Boolean) : [];
+        const yn = /yes\s*\/\s*no|binary|dichot/.test(ty) && cs.length < 2;
+        out.push(`${nm}${u && !nm.includes('(') ? ` (${u})` : ''}${cs.length >= 2 && cs.length <= 12 ? `: ${cs.join(' / ')}` : yn ? ': Yes / No' : ''}`); }); });
+    if (!out.length) (xml.match(/<w:p[ >][\s\S]*?<\/w:p>/g) || []).map(txt).filter(t => t && t.length <= 80 && !/[.!?]$/.test(t) && /^[\-•*\d.)\s]*[A-Za-z]/.test(t)).forEach(t => out.push(t));
+    return [...new Set(out)].slice(0, 400); }
   /* ---------- quick entry: a pasted list of variables ---------- */
   function fromLine(D, line, sec) {
     let s = String(line).replace(/^\s*[-•*\d.)]+\s+/, '').trim(); if (!s) return null; let vis = '', cats = null, unit = '';
@@ -945,6 +958,7 @@
       <select id="mbMine" style="width:auto"><option value="">My designs…</option>${opt(Object.keys(ls.get('designs', {})).map(k => [k, k]), '')}</select>
       <button class="btn ghost small" id="mbUndo" type="button" title="Undo (Ctrl+Z)" ${undoS.length ? '' : 'disabled'}>↶</button><button class="btn ghost small" id="mbRedo" type="button" title="Redo (Ctrl+Y)" ${redoS.length ? '' : 'disabled'}>↷</button>
       <label class="btn ghost small" style="margin:0" title="Make the design from a REDCap data dictionary (.csv) or an XLSForm of KoBoToolbox / ODK (.xlsx)">⬆ From REDCap / XLSForm<input type="file" id="mbFromDict" accept=".csv,.xlsx,.xls" hidden></label>
+      <label class="btn ghost small" style="margin:0" title="The variables listed in a Word protocol or CRF (a table with the variable names, units, categories — or one variable per line): they open in ＋ List to check before they are added">⬆ From a Word protocol<input type="file" id="mbFromWord" accept=".docx" hidden></label>
       <label class="btn ghost small" style="margin:0" title="Make the design from a sheet you already have: its columns, types, categories, ranges, visits (from suffixes such as _Baseline, _M3), groups — and its values as the expected values">⬆ From an existing sheet<input type="file" id="mbFromSheet" accept=".xlsx,.xls,.xlsm,.csv,.txt" hidden></label>
       <button class="btn ghost small" id="mbSaveAs" type="button">💾 Save design</button><button class="btn ghost small" id="mbExportJson" type="button" title="The design as a file, to share or keep">⬇ Design file</button><label class="btn ghost small" style="margin:0">⬆ Open design<input type="file" id="mbImportJson" accept=".json" hidden></label>
       <button class="btn primary small" id="mbClose" type="button" title="Phase 2: fill the sheet with simulated patients">🎲 Generate the data ›</button></div>
@@ -1127,7 +1141,26 @@ Date of surgery">${esc(pasteTxt)}</textarea>
       ${(D.checks || []).map((c, i) => `<div class="row" style="gap:6px;margin:4px 0"><select data-mbck="${i}:a" style="width:auto">${opt(o2, c.a)}</select><select data-mbck="${i}:op" style="width:auto">${opt([['>', 'greater than'], ['>=', 'greater than or equal to'], ['<', 'less than'], ['<=', 'less than or equal to'], ['=', 'equal to']], c.op)}</select><select data-mbck="${i}:b" style="width:auto">${opt(o2, c.b)}</select><button class="btn ghost small" type="button" data-mbckdel="${i}">✕</button></div>`).join('')}
       <button class="btn ghost small" type="button" id="mbCkAdd">+ Rule</button>
       <h3>Every number has an allowed range</h3><p class="legend-note">${D.vars.filter(v => v.type === 'num' && (v.min === '' || v.max === '')).map(v => esc(v.label)).join(', ') || 'Yes — all set.'}</p>`; };
-  function tPreview() {
+  // 🧪 try the form: one mock patient, the fields of a visit, and the skip logic live (a field asked only when … appears or is skipped)
+  let tryVals = {}, tryVisit = '';
+  function tryHtml() { const vis = D.visits, vk = tryVisit && vis.some(x => x.id === tryVisit) ? tryVisit : (vis[0] || {}).id, order = secOrder(D);
+    const at = v => { const ids = (v.visits || []).length ? v.visits : [vis[0] && vis[0].id]; return ids.includes(vk); }, key = v => v.id + '|' + vk, val = v => tryVals[key(v)] ?? '';
+    const shown = v => { if (!v.when || !v.when.v) return true; const pv = D.vars.find(x => x.id === v.when.v); if (!pv) return true; const x = tryVals[pv.id + '|' + vk] ?? tryVals[pv.id + '|' + (vis[0] || {}).id] ?? ''; return x === v.when.cat; };
+    const vs = D.vars.filter(v => at(v) && !isRepeating(D, v) && v.type !== 'calc').sort((a, b) => order.indexOf(a.section) - order.indexOf(b.section)); let sec = '', asked = 0, skipped = 0, bad = 0;
+    const rows = vs.map(v => { const on = shown(v), x = val(v), num = v.type === 'num', out = num && x !== '' && ((v.min !== '' && +x < +v.min) || (v.max !== '' && +x > +v.max)); if (on) asked++; else skipped++; if (out) bad++;
+      const head = v.section !== sec ? (sec = v.section, `<tr><td colspan="2" style="background:var(--lav,#F3EEFB)"><b>${esc(v.section)}</b></td></tr>`) : '';
+      const inp = !on ? `<span class="legend-note">skipped — asked only when ${esc(whenTxt(D, v))}</span>`
+        : v.type === 'yn' || v.type === 'cat' ? `<select data-mbtry="${v.id}"><option value="">—</option>${v.cats.map(c => `<option ${x === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`
+        : v.type === 'multi' ? v.cats.map(c => `<label class="check" style="margin:0 8px 0 0"><input type="checkbox" data-mbtry="${v.id}" data-mbtryc="${esc(c)}" ${String(x).split('|').includes(c) ? 'checked' : ''}><span>${esc(c)}</span></label>`).join('')
+        : `<input type="${num ? 'number' : v.type === 'date' ? 'date' : 'text'}" step="any" data-mbtry="${v.id}" value="${esc(x)}" style="max-width:200px">${v.unit ? ` <span class="legend-note">${esc(v.unit)}</span>` : ''}${out ? ` <span style="color:var(--bad,#c0392b)">⚠ outside ${esc(v.min)}–${esc(v.max)}</span>` : num && (v.min !== '' || v.max !== '') ? ` <span class="legend-note">${esc(v.min)}–${esc(v.max)}</span>` : ''}`;
+      return `${head}<tr style="${on ? '' : 'opacity:.55'}"><td style="width:38%">${esc(v.label)}${v.required ? ' <b style="color:var(--bad,#c0392b)">*</b>' : ''}${v.when && v.when.v ? ' <span class="legend-note" title="Skip logic">↳</span>' : ''}</td><td>${inp}</td></tr>`; }).join('');
+    return `<div class="mb-exp" style="margin-top:12px"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>🧪 Try the form</b><span class="legend-note">— fill a mock patient: fields asked only when … appear or are skipped as you answer</span><span class="spacer"></span>
+      ${vis.length > 1 ? `<select data-mbtryvisit="1" style="width:auto">${vis.map(x => `<option value="${x.id}" ${x.id === vk ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}<button class="btn ghost small" type="button" data-mbtryclear="1">↺ Empty</button></div>
+      <p class="legend-note" style="margin:4px 0">${asked} field${asked === 1 ? '' : 's'} asked${skipped ? `, ${skipped} skipped` : ''}${bad ? `, <b style="color:var(--bad,#c0392b)">${bad} out of range</b>` : ''}.</p>
+      <div class="tbl-wrap" style="max-height:460px"><table class="t">${rows || '<tr><td class="legend-note">No field at this visit.</td></tr>'}</table></div></div>`; }
+  function drawTry() { const b = $('#mbTry'); if (b) { const y = b.querySelector('.tbl-wrap'), top = y ? y.scrollTop : 0; b.innerHTML = tryHtml(); const y2 = b.querySelector('.tbl-wrap'); if (y2) y2.scrollTop = top; } }
+  function tPreview() { return tPreview0() + `<div id="mbTry">${tryHtml()}</div>`; }
+  function tPreview0() {
     const cols = columns(D), pr = problems(D), hasGroup = D.arms.filter(Boolean).length >= 2, order = secOrder(D);
     const lead = ['ID', ...(hasGroup ? ['Group'] : []), ...(D.layout === 'long' ? ['Visit'] : [])], rand = hasGroup && D.rand.on ? randomisation(D)[0].list : null;
     const ex = v => v.type === 'yn' || v.type === 'cat' ? (D.conv.catAs === 'codes' ? '1' : v.cats[0]) : v.type === 'num' ? (v.min !== '' && v.max !== '' ? String(+((+v.min + +v.max) / 2).toFixed(+v.dec || 0)) : '…') : v.type === 'date' ? '15/03/2026' : v.type === 'calc' ? '=…' : '…';
@@ -1148,6 +1181,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
   const ext = (k, ...a) => { const E = window.EasyBuilderExt; try { return E && E[k] ? E[k](D, ...a) || '' : ''; } catch (err) { console.error(err); return ''; } };
   const fileBase = () => (D.title || 'Master sheet').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 60).trim() || 'Master sheet';
   async function onClick(e) {
+    if (e.target.closest('[data-mbtryclear]')) { tryVals = {}; drawTry(); return; }
     { const rn = e.target.closest('[data-mbren]'); if (rn && rn.dataset.mbren === sel && !rn.isContentEditable) { onRename(e); return; } if (rn && rn.isContentEditable) return; } // a click on the name of the chosen variable renames it
     { const fb = e.target.closest('[data-mbgeffgo]'); if (fb) { const v = D.vars.find(x => x.id === sel); if (!v) return; const inp = fb.previousElementSibling, x = parseFloat(String(inp && inp.value || '').replace(',', '.')); if (!isFinite(x)) { toast(fb.dataset.mbgeffgo === 'd' ? "Type Cohen's d first (e.g. 0.5)" : 'Type the relative risk first (e.g. 0.5)'); return; }
       const E = v.expect = v.expect || {}, bg = E.byGroup = E.byGroup || [], A = (D.arms || []).filter(Boolean), b0 = bg[0] = bg[0] || {};
@@ -1226,6 +1260,10 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     const t = e.target, d = t.dataset, val = t.type === 'checkbox' ? t.checked : t.value;
     if (window.EasyBuilderExt && window.EasyBuilderExt.onInput && window.EasyBuilderExt.onInput(e, D)) return;
     if (t.id === 'mbPasteTxt') { pasteTxt = t.value; return; }
+    if (d.mbtry) { const vk = tryVisit && D.visits.some(x => x.id === tryVisit) ? tryVisit : (D.visits[0] || {}).id, k = d.mbtry + '|' + vk;
+      if (d.mbtryc !== undefined) { const cur = new Set(String(tryVals[k] || '').split('|').filter(Boolean)); if (t.checked) cur.add(d.mbtryc); else cur.delete(d.mbtryc); tryVals[k] = [...cur].join('|'); } else tryVals[k] = t.value;
+      if (t.tagName === 'SELECT' || t.type === 'checkbox') drawTry(); return; }
+    if (d.mbtryvisit) { tryVisit = t.value; drawTry(); return; }
     if (d.mbvday !== undefined) { D.visits[+d.mbvday].day = val === '' ? '' : +val; save(); return; }
     if (d.mbvtol !== undefined) { D.visits[+d.mbvtol].tol = val === '' ? '' : +val; save(); return; }
     if (d.mbanchor) { D.anchor = val; save(); return render(); }
@@ -1289,6 +1327,8 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     const t = e.target; if (window.EasyBuilderExt && window.EasyBuilderExt.onChange && window.EasyBuilderExt.onChange(e, D)) return;
     if (t.id === 'mbTpl' && t.value) { if (D.vars.length && !confirm('Replace the current design?')) { t.value = ''; return; } D = t.value === '__blank' ? blank() : fromTemplate(t.value); sel = null; tab = 'study'; save(); return render(); }
     if (t.id === 'mbMine' && t.value) { const all = ls.get('designs', {}); if (all[t.value] && (!D.vars.length || confirm(`Open “${t.value}” (the current design is replaced)?`))) { D = JSON.parse(JSON.stringify(all[t.value])); sel = null; save(); render(); } else t.value = ''; return; }
+    if (t.id === 'mbFromWord' && t.files[0]) { const f = t.files[0]; t.value = ''; f.arrayBuffer().then(buf => { try { const lines = wordVariables(new Uint8Array(buf)); if (!lines.length) throw new Error('no variables found');
+        pasteOpen = true; pasteTxt = lines.join('\n'); tab = 'vars'; render(); toast(`${lines.length} lines read from “${f.name}” — check them in ＋ List, then Add`); } catch (err) { console.error(err); toast('Could not read variables from this Word file: ' + err.message); } }); return; }
     if (t.id === 'mbFromDict' && t.files[0]) { const f = t.files[0]; t.value = ''; if (D.vars.length && !confirm(`Make a new design from “${f.name}”? The current design is replaced (Undo brings it back).`)) return;
       f.arrayBuffer().then(buf => { try { const wb = XLSX.read(buf, { type: 'array' }), r = designFromDict(wb, f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim()); if (!r.D.vars.length) throw new Error('no fields found');
         D = r.D; sel = null; tab = 'vars'; save(); render(); toast(`${r.kind}: ${r.D.vars.length} variables${r.skipped ? ` (${r.skipped} fields skipped: notes, calculations, descriptive)` : ''}`); } catch (err) { console.error(err); toast('Could not read it: ' + err.message); } }); return; }
@@ -1302,6 +1342,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     if (t.id === 'mbPasteTxt') return;
     if (t.dataset && t.dataset.mbbulk) return onInput({ target: t, type: 'change' });
     // a typed value: the expected values need no redraw; other fields redraw once the focus has moved on, and the field moved to keeps the focus
+    if (t.dataset && t.dataset.mbtry) { if (t.tagName === 'INPUT' && t.type !== 'checkbox') drawTry(); return; } // the try form: only itself drawn again
     if (t.dataset && (t.dataset.mbg || t.dataset.mbe || t.dataset.mbep !== undefined || t.dataset.mbgen || t.dataset.mbgeff)) return;
     if (t.type === 'text' || t.type === 'number' || t.tagName === 'TEXTAREA') setTimeout(() => { const a = document.activeElement, w = $('#mbWrap'), key = a && w && w.contains(a) && a !== document.body ? a.tagName.toLowerCase() + [...a.attributes].filter(x => x.name.startsWith('data-')).map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('') : '';
       render(); if (key && key.includes('[')) { const n = w.querySelector(key); if (n) { n.focus(); try { if (n.select) n.select(); } catch (e2) { /* not selectable */ } } } }, 0);

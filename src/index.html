@@ -869,7 +869,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
     <div class="card">
       <h2>Variables</h2>
       <p class="hint">Detected automatically — check and adjust. Repeated measures (same name, different timepoints) are analysed as one outcome with one table. Single variables sharing the same <b>Table</b> name appear together in one table.</p>
-      <div class="row" id="varBulk" style="gap:8px;margin-bottom:8px"><span class="legend-note">All variables:</span>
+      <div class="row" id="varBulk" style="gap:8px;margin-bottom:8px"><button class="btn primary small" type="button" id="recWiz" title="Merge categories, cut numbers into groups, or set the reference category — for several variables at once (Undo restores)">🔁 Recode several variables</button><span class="legend-note">All variables:</span>
         <button class="btn ghost small" type="button" data-vbulk="inc">✓ Include all</button><button class="btn ghost small" type="button" data-vbulk="exc">Exclude all</button>
         <button class="btn ghost small" type="button" data-vbulk="num">Only numeric</button><button class="btn ghost small" type="button" data-vbulk="cat">Only categorical</button>
         <span class="legend-note" style="margin-left:10px">Distribution of all numeric:</span>
@@ -1266,7 +1266,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
       <h3>Style</h3>
       <div class="grid g4">
         <div><label class="f">Preset</label><select id="comPreset"><option value="">— apply a preset —</option><option value="thesis">Thesis — detailed, formal</option><option value="journal">Journal — concise, with effect sizes</option><option value="plain">Plain language — for patients and the public</option></select></div>
-        <div><label class="f">Tone</label><select id="optCommentTone"><option value="standard" selected>Statistical (“significantly”)</option><option value="plain">Plain language (“clearly”)</option></select></div>
+        <div><label class="f">Tone</label><select id="optCommentTone"><option value="standard" selected>Statistical (“significantly”)</option><option value="plain">Plain language (“clearly”)</option><option value="cautious">Cautious (“was found to be significantly …”)</option><option value="confident">Confident, direct (“was higher”, “not different”)</option></select></div>
         <div><label class="f">Comments of the tables</label><select id="optCommentMerge"><option value="table" selected>One paragraph with each table</option><option value="combined">One combined results paragraph (Word)</option></select></div>
         <div><label class="f">Effect size labels (Cohen's d)</label><select id="optEffConv"><option value="cohen" selected>Cohen — 0.2 / 0.5 / 0.8</option><option value="sawilowsky">Sawilowsky — very small … huge</option><option value="ferguson">Ferguson — 0.41 / 1.15 / 2.70</option></select></div>
         <div><label class="f">Word limit per comment</label><input type="number" min="0" step="10" id="optComMaxWords" placeholder="none"></div>
@@ -1440,7 +1440,7 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <button class="btn ghost small" id="advComApply" type="button" style="margin-bottom:4px">Apply to all analyses</button>
       </div>
       <div id="advList" class="grid"></div>
-      <div class="row" style="margin-top:14px;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Add an analysis</h3><input type="search" id="advFind" placeholder="Find an analysis (e.g. kappa, survival, GEE)" style="width:280px"><span class="spacer"></span><button class="btn ghost small" id="advSortCat" type="button" title="Order the analyses above (and their tables in the report) by category">⇅ Group the analyses by category</button></div>
+      <div class="row" style="margin-top:14px;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Add an analysis</h3><input type="search" id="advFind" placeholder="Find an analysis (e.g. kappa, survival, GEE)" style="width:280px"><button class="btn primary small" id="advWiz" type="button" title="Answer two questions; the right analysis is added with its columns">🧭 Which analysis?</button><select id="advPreset" style="width:auto" title="An analysis saved as a preset (☆ on a card)"><option value="">☆ My presets…</option></select><span class="spacer"></span><button class="btn ghost small" id="advSortCat" type="button" title="Order the analyses above (and their tables in the report) by category">⇅ Group the analyses by category</button></div>
       <div id="advAdd" class="adv-cats"></div>
     </div>
     <div class="nav"><button class="btn ghost" data-go="7">← Back</button><button class="btn primary" data-go="9">Next: Flowchart →</button></div>

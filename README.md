@@ -250,6 +250,23 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Step 8 · Advanced**
+- **🧭 Which analysis?** — what you want to know (compare groups adjusted, correlation, risk factors, predict a number, time to an event, a diagnostic test, agreement, before/after, a count) and the outcome → the matching analysis card(s) added and filled.
+- **Result line on every card** — the main finding (first sentence of its comment) updates as you choose the columns.
+- **☆ Presets** — save a card (type, columns, options) and add it again from ☆ My presets…, also in other projects (columns missing in the new data are left out and named).
+- **Cox regression → Nomogram** with the probability free of the event at the times you ask (e.g. 12, 24).
+- **ROC → Decision curve of each test** (net benefit against treating everyone or no one); decision-curve axes now start at −0.1.
+
+**Steps 2, 6 and 12**
+- **🔁 Recode several variables** (step 2): merge or rename categories, cut numbers into groups (new columns, e.g. Age → Young / Middle / Older), or set the reference category and order — for several variables at once; Undo restores.
+- **Comment tone** (step 6): also *Cautious* (“was found to be significantly higher”) and *Confident* (“was higher”, “not different”).
+- **Δ Changes since the last run** (step 12): the n, P values and effects that changed, and the results that became or stopped being significant.
+- **✔ Reviewer checklist** (step 12): primary outcome, effect sizes with CI, missing data, multiplicity, normality, assumptions, test named, abbreviations, significance level, software, power, flowchart, figures — each with a one-click fix.
+- **★ Key points** (step 12): the primary outcome first, then the other significant results, ready to copy.
+
+**🧱 Build**
+- **⬆ From a Word protocol** — the variables of a Word table (names, units, categories, type) or list open in ＋ List to check, then add.
+- **🧪 Try the form** (5 · Preview) — fill a mock patient visit by visit; fields asked only when … appear or are skipped as you answer, and values out of range are flagged.
 **↶ Undo / ↷ Redo in the Analyse steps (1–12)**: every change of the settings (groups, variables, timepoints, tests, tables, comments, figures, advanced analyses, report) and every edit of the data, in one history of up to 80 steps — the top-bar buttons or Ctrl+Z / Ctrl+Y; the step on screen is drawn again as it was. In Build and Generate, Ctrl+Z acts on that stage only.
 **The view stays where it is** in 🧱 Build and 🎲 Generate after any change (expected values in each group, Generate's options, a duplicated variable…): the page, the boxes that scroll on their own (the list of variables, the editor) and the sections you opened or closed. Choosing another variable opens its editor at the top.
 **↶ Undo / ↷ Redo** for 🧱 Build the master sheet and 🎲 Generate the data, in the top bar (for the stage on screen) and with Ctrl+Z / Ctrl+Y; Generate now keeps the history of its settings (up to 80 changes).
