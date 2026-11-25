@@ -225,6 +225,35 @@
       ${warn}<span class="spacer"></span><button class="btn ghost small" type="button" data-gcdel="${i}">✕</button></div>
       ${byG ? `<div class="row" style="gap:10px;flex-wrap:wrap;margin-top:4px">${A.map((a, g) => `<span class="row" style="gap:4px;align-items:center"><b>${esc(a)}</b>${pars(`G.${g}.`, (c.G || {})[g] || {})}</span>`).join('')}</div>` : ''}
       ${der && va && vb ? `<div class="legend-note" style="margin-top:2px">${esc(vb.label)} = ${esc(va.label)} ${how === 'mul' ? '×' : how === 'div' ? '÷' : how === 'inc' ? '+' : '−'} ${how === 'mul' || how === 'div' ? 'the number' : c.diffAs === 'mean' ? 'a change drawn from the mean ± SD' : 'a change drawn evenly between the two values'}${byG ? ' of each group' : ''}, at each visit; its own expected values are replaced, a missing ${esc(va.label)} gives a missing ${esc(vb.label)}.</div>` : ''}</div>`; }
+  // If … then …: one rule (its condition and its result), edited in the section or in the card of its variable
+  function ifRow(D, r, i) { const vs = D.vars.filter(x => ['num', 'calc', 'yn', 'cat', 'date'].includes(x.type)), arm = arms(D), cv = r.if.v === '__group' ? { type: 'cat', cats: arm } : D.vars.find(x => x.id === r.if.v), tv = D.vars.find(x => x.id === r.then.v), num = cv && ['num', 'calc'].includes(cv.type), tnum = tv && ['num', 'calc'].includes(tv.type);
+    const ni = (k, val, ph, w = 64) => `<input type="number" step="any" data-gif="${i}|${k}" value="${esc(val ?? '')}" placeholder="${esc(ph)}" style="width:${w}px">`;
+    const kinds = tnum ? [['msd', 'drawn from mean ± SD'], ['set', 'set to'], ['add', 'changed by +'], ['mul', 'multiplied by'], ['missing', 'left empty']] : [['cat', 'is'], ['missing', 'left empty']], k = r.then.kind || kinds[0][0];
+    return `<div class="gen-if row" style="gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0;padding:4px 8px;border:1px solid var(--line);border-radius:8px"><b>If</b>
+      <select data-gif="${i}|if.v" style="width:auto">${opt([['', '—'], ...(arm.length >= 2 ? [['__group', 'Group']] : []), ...vs.map(x => [x.id, x.label])], r.if.v)}</select>
+      ${cv ? (num ? `<select data-gif="${i}|if.op" style="width:auto">${opt([['>=', '≥'], ['>', '>'], ['<=', '≤'], ['<', '<'], ['=', '='], ['!=', '≠']], r.if.op || '>=')}</select>${ni('if.val', r.if.val, 'value', 80)}`
+        : `<span>=</span><select data-gif="${i}|if.val" style="width:auto">${opt([['', '—'], ...cv.cats.map(c => [c, c])], r.if.val)}</select>`) : ''}
+      <b>then</b><select data-gif="${i}|then.v" style="width:auto">${opt([['', '—'], ...vs.filter(x => x.type !== 'date').map(x => [x.id, x.label])], r.then.v)}</select>
+      ${tv ? `<select data-gif="${i}|then.kind" style="width:auto">${opt(kinds, k)}</select>
+        ${k === 'msd' ? `${ni('then.m', r.then.m, 'mean')} ± ${ni('then.s', r.then.s, 'SD')}` : k === 'set' || k === 'add' || k === 'mul' ? ni('then.val', r.then.val, k === 'mul' ? '1.2' : 'value') : k === 'cat' ? `<select data-gif="${i}|then.cat" style="width:auto">${opt([['', '—'], ...tv.cats.map(c => [c, c])], r.then.cat)}</select> in ${ni('then.pct', r.then.pct, '100', 56)}% of them` : ''}` : ''}
+      <span class="spacer"></span><button class="btn ghost small" type="button" data-gifdel="${i}">✕</button></div>`; }
+  // the rules applied to the drawn patients (after the links, before the calculated columns)
+  function applyIfs(D, P, opt, which = () => true) { const R = (G.ifs || []).filter(r => r.if && r.if.v && r.then && r.then.v && r.then.v !== r.if.v && which(r)); if (!R.length) return;
+    const rs = B.prng(((+opt.seed || +G.seed || 1) + 91003) >>> 0), nz = () => { let u = 0; while (!u) u = rs(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rs()); }, A = arms(D), codes = D.conv.catAs === 'codes';
+    const catVal = (v, c) => codes ? v.cats.indexOf(c) + 1 : c;
+    R.forEach(r => { const tv = D.vars.find(x => x.id === r.then.v), cv = r.if.v === '__group' ? null : D.vars.find(x => x.id === r.if.v); if (!tv || (r.if.v !== '__group' && !cv)) return;
+      const cnum = cv && ['num', 'calc'].includes(cv.type), tnum = ['num', 'calc'].includes(tv.type), kind = r.then.kind || (tnum ? 'msd' : 'cat'), sd0 = +(expect(tv).sd) || 1, dec = tnum ? decOf(tv, sd0) : 0;
+      const lo = tv.min !== '' && tv.min !== undefined && isFinite(+tv.min) ? +tv.min : -Infinity, hi = tv.max !== '' && tv.max !== undefined && isFinite(+tv.max) ? +tv.max : Infinity, cl = x => +Math.min(hi, Math.max(lo, x)).toFixed(dec);
+      const meets = (p, key) => { if (r.if.v === '__group') return A[p.g] === r.if.val; const V = p.vals[cv.id] || {}, x = V[key] ?? V.once ?? V[D.visits[0] && D.visits[0].id]; if (x === null || x === undefined || x === '') return false;
+        if (!cnum) return String(x) === String(catVal(cv, r.if.val)); const a = +x, b = +r.if.val; if (!isFinite(a) || !isFinite(b)) return false; return ({ '>=': a >= b, '>': a > b, '<=': a <= b, '<': a < b, '=': a === b, '!=': a !== b })[r.if.op || '>='];
+      };
+      P.forEach(p => { const T = p.vals[tv.id] = p.vals[tv.id] || {}, keys = Object.keys(T).length ? Object.keys(T) : visitKeys(D, tv);
+        keys.forEach(key => { if (!meets(p, key)) return; const x = T[key];
+          if (kind === 'missing') { T[key] = null; return; }
+          if (tnum) { if (kind === 'msd' && isFinite(+r.then.m)) T[key] = cl(+r.then.m + (+r.then.s || 0) * nz()); else if (kind === 'set' && isFinite(+r.then.val) && r.then.val !== '') T[key] = cl(+r.then.val);
+            else if (kind === 'add' && isFinite(+x) && x !== null) T[key] = cl(+x + (+r.then.val || 0)); else if (kind === 'mul' && isFinite(+x) && x !== null) T[key] = cl(+x * (r.then.val === '' || r.then.val === undefined ? 1 : +r.then.val)); return; }
+          if (!r.then.cat) return; const pc = r.then.pct === '' || r.then.pct === undefined ? 100 : +r.then.pct;
+          if (rs() * 100 < pc) T[key] = catVal(tv, r.then.cat); else if (tv.cats.length === 2) T[key] = catVal(tv, tv.cats.find(c => c !== r.then.cat)); }); }); }); }
   function exactMatch(D, P, opt) { const rx = B.prng(((+opt.seed || +G.seed || 1) + 61001) >>> 0), k = K(D), skip = specialIds();
     D.vars.forEach(v => { if (!['num', 'yn', 'cat'].includes(v.type) || skip.has(v.id) || GX('dist', v) === 'poisson' || GX('dist', v) === 'negbin') return;
       visitKeys(D, v).forEach(key => { for (let g = 0; g < k; g++) { const ps = P.filter(p => p.g === g && p.vals[v.id] && p.vals[v.id][key] != null && p.vals[v.id][key] !== ''); if (ps.length < 2) continue;
@@ -392,7 +421,7 @@
     if (opt.stage1) return P;
     adjust(D, P, opt);
     if (G.exact && !opt.plain) exactMatch(D, P, opt);
-    deriveLinks(D, P, opt);
+    { const made = new Set((G.corr || []).filter(c => c.how && c.how !== 'corr' && c.a && c.b).map(c => c.b)); applyIfs(D, P, opt, r => !made.has(r.then.v)); deriveLinks(D, P, opt); applyIfs(D, P, opt, r => made.has(r.then.v)); } // rules on the sources first, then the variables made from them, then the rules on those
     // round 18: rules on the generated values (sex and age differences, clinical profiles, real columns kept)
     if (window.EasyGenHooks && !opt.plain) window.EasyGenHooks.forEach(h => { try { h(D, P, opt); } catch (e) { console.error(e); } });
     // calculated columns (also written as Excel formulas)
@@ -574,6 +603,9 @@
       <h3>Links between variables</h3><p class="legend-note">A correlation between two variables (e.g. age and systolic BP 0.4; diabetes with HbA1c 0.6: a higher value goes with more “Yes”).</p>
       ${(G.corr || []).map((c, i) => linkRow(D, vs, c, i)).join('')}
       <button class="btn ghost small" type="button" id="genCorrAdd">+ Link</button>
+      <h3>If … then …</h3><p class="legend-note">Rules on the drawn values, in order: if a variable has a value (Diabetes = Yes, Age ≥ 60, Group = Control), then another is set, drawn from a mean ± SD, changed (+ or ×), given a category in a % of these patients, or left empty — at each visit.</p>
+      ${(G.ifs || []).map((r, i) => ifRow(D, r, i)).join('')}
+      <button class="btn ghost small" type="button" data-gifadd="">+ Rule</button>
       <label class="check" style="margin:6px 0 0"><input type="checkbox" data-g="labs" ${G.labs ? 'checked' : ''}><span><b>Measurements that go together</b> — laboratory panels and vital signs linked as in real patients (urea with creatinine, ALT with AST, haemoglobin with haematocrit, systolic with diastolic …)</span></label>
       ${G.labs ? `<p class="legend-note">${labPairs(D).map(c => `${esc(D.vars.find(v => v.id === c.a).label)} ↔ ${esc(D.vars.find(v => v.id === c.b).label)} (r ${c.r})`).join(' · ') || 'No such pairs in this design.'}</p>` : ''}
       <h3>Realism <span class="gen-ctl" style="font-weight:400;font-size:13px;margin-left:10px">difficulty ${[['easy', 'Easy', 'Clean data: no missing values, outliers or errors, normal numbers'], ['medium', 'Medium', '5% missing at random, 5% drop out, 1% outliers, skewed times and counts'], ['hard', 'Hard', '12% missing (MAR), 15% drop out, 2% outliers, skewed numbers and messy entries to clean']].map(([k, l, t]) => `<button class="btn ghost small" type="button" data-gdiff="${k}" title="${t}">${l}</button>`).join('')}</span></h3><div class="grid g4">
@@ -692,10 +724,16 @@
       ${mode !== 'msd' ? `<label class="gen-ctl">${mode === 'range' ? 'Default min' : 'Min'} <input type="number" step="any" data-grng="${v.id}|lo" value="${esc(R0.lo ?? '')}" placeholder="${esc(Lb.lo ?? '')}" style="width:64px"></label><label class="gen-ctl">${mode === 'range' ? 'max' : 'Max'} <input type="number" step="any" data-grng="${v.id}|hi" value="${esc(R0.hi ?? '')}" placeholder="${esc(Lb.hi ?? '')}" style="width:64px"></label>` : ''}
       ${mode !== 'range' ? `<span class="legend-note">${e.dist === 'skewed' ? 'skewed' : 'normal'}</span>` : ''}` : `<span class="legend-note">${v.type === 'yn' || v.cats.length === 2 ? `% ${esc(v.cats[0])}` : `% of ${esc(v.cats.join(' / '))}`}</span>`;
     const sig = canSig ? `<label class="gen-ctl">${K(D) >= 2 ? 'Difference between groups' : 'Change over the visits'} <select data-gsig="${v.id}">${opt([['', 'As typed'], ['sig', 'Significant'], ['ns', 'Not significant']], GX('sig', v) || '')}</select></label><span class="gen-sigout" data-gsigout="${v.id}">${sigBadge(D, v, si)}</span>` : '';
-    return `<div class="gen-vhead"><b>${esc(v.label)}</b>${v.unit ? ` <span class="legend-note">(${esc(v.unit)})</span>` : ''}${card ? '' : '<br>'}<span class="gen-ctls">${how} ${sig}
+    const linkI = (G.corr || []).findIndex(c => c.b === v.id && c.how && c.how !== 'corr'), srcs = D.vars.filter(x => x.id !== v.id && ['num', 'calc'].includes(x.type));
+    const from = v.type === 'num' && srcs.length ? `<label class="gen-ctl" title="Drawn by the generator, or made from another variable (× ÷ + − a change)">Values <select data-gfrom="${v.id}" style="width:auto">${opt([['', 'drawn by the generator'], ...srcs.map(x => [x.id, `made from ${x.label}`])], linkI >= 0 ? G.corr[linkI].a : '')}</select></label>` : '';
+    const myIfs = (G.ifs || []).map((r, i) => [r, i]).filter(([r]) => r.then && r.then.v === v.id);
+    const tail = (linkI >= 0 ? `<div class="gen-vlink">${linkRow(D, D.vars.filter(x => ['num', 'calc', 'yn', 'cat'].includes(x.type)), G.corr[linkI], linkI)}<div class="legend-note">The settings above are replaced by this link (Values: drawn by the generator to undo).</div></div>` : '')
+      + (myIfs.length ? `<div class="gen-vifs">${myIfs.map(([r, i]) => ifRow(D, r, i)).join('')}</div>` : '');
+    return `<div class="gen-vhead"><b>${esc(v.label)}</b>${v.unit ? ` <span class="legend-note">(${esc(v.unit)})</span>` : ''}${card ? '' : '<br>'}<span class="gen-ctls">${from} ${how} ${sig}
+      <button class="btn ghost small" type="button" data-gifadd="${v.id}" title="If another variable has a value (e.g. Diabetes = Yes, Age ≥ 60), then this variable is set, drawn from a mean ± SD, changed, given a category in a % of patients, or left empty">＋ If…</button>
       <label class="gen-ctl">missing % <input type="number" min="0" max="100" step="any" data-gmiss="${v.id}" value="${esc(GX('miss', v) ?? '')}" placeholder="${esc(G.missAll)}" style="width:54px"></label>
       <button class="btn ghost small ${moreOpen(v) ? 'on' : ''}" type="button" data-gmore="${v.id}" title="Shape, rounding, effect size, pattern over the visits, subgroup">⋯ More${moreCount(v) ? ` (${moreCount(v)})` : ''}</button>
-      <button class="btn ghost small" type="button" data-gre="${v.id}" title="Draw this variable again (the others stay as they are)">🎲 Redraw${+G.vseed[v.id] ? ` (${G.vseed[v.id]})` : ''}</button>${+G.vseed[v.id] ? `<button class="btn ghost small" type="button" data-greset="${v.id}" title="Back to the first draw">↺</button>` : ''}</span></div>${moreOpen(v) ? morePanel(D, v) : ''}`;
+      <button class="btn ghost small" type="button" data-gre="${v.id}" title="Draw this variable again (the others stay as they are)">🎲 Redraw${+G.vseed[v.id] ? ` (${G.vseed[v.id]})` : ''}</button>${+G.vseed[v.id] ? `<button class="btn ghost small" type="button" data-greset="${v.id}" title="Back to the first draw">↺</button>` : ''}</span></div>${tail}${moreOpen(v) ? morePanel(D, v) : ''}`;
   }
   // open when asked, or by default while every option is shown (html.r21-all); a closed one stays closed
   const moreOpen = v => G.more[v.id] === undefined ? document.documentElement.classList.contains('r21-all') : !!G.more[v.id];
@@ -1017,6 +1055,8 @@
     if (b.id === 'genGo') { try { resStamp++; last = generate(D); toast(`${last.length} simulated patients`); } catch (err) { console.error(err); toast('Could not generate: ' + err.message); } return render(); }
     if (b.id === 'genXlsx' && last) { U.saveUrl(URL.createObjectURL(B.buildWorkbook(D, fill(D))), fileName(D)); toast('Simulated master sheet saved'); return; }
     if (b.id === 'genSend' || b.id === 'genSend2') { send(D); return; }
+    if (b.dataset.gifadd !== undefined) { (G.ifs = G.ifs || []).push({ if: { v: '', op: '>=', val: '' }, then: { v: b.dataset.gifadd || '', kind: '' } }); save(); return render(); }
+    if (b.dataset.gifdel !== undefined) { G.ifs.splice(+b.dataset.gifdel, 1); save(); return live(D0()); }
     if (b.id === 'genCorrAdd') { (G.corr = G.corr || []).push({ a: '', b: '', r: 0.4 }); save(); return render(); }
     if (b.dataset.gcdel !== undefined) { G.corr.splice(+b.dataset.gcdel, 1); save(); return render(); }
     if (b.id === 'genPower') { const out = $('#genPowerOut'); out.textContent = 'Simulating…'; setTimeout(() => { try { powerOut = power(D); } catch (err) { console.error(err); powerOut = 'Failed: ' + esc(err.message); } out.innerHTML = powerOut; }, 30); return; }
@@ -1056,6 +1096,9 @@
     if (d.gsd) { G.sds[d.gsd] = val; save(); return live(D0()); }
     if (d.gsdt) { const [id, g, key] = d.gsdt.split('|'); ((G.sdt[id] = G.sdt[id] || {})[g] = G.sdt[id][g] || {})[key] = val === '' ? '' : +val; save(); return live(D0()); }
     if (d.gmiss) { G.miss[d.gmiss] = val; save(); return live(D0()); }
+    if (d.gfrom) { const vid = d.gfrom; G.corr = (G.corr || []).filter(c => !(c.b === vid && c.how && c.how !== 'corr')); if (val) G.corr.push({ a: val, b: vid, how: 'inc', diffAs: 'range', lo: 0, hi: 0 }); save(); return render(); }
+    if (d.gif) { const [i, path] = d.gif.split('|'), r = G.ifs[+i], [o, k] = path.split('.'); r[o] = r[o] || {}; r[o][k] = t.type === 'number' ? (val === '' ? '' : +val) : val;
+      if (path === 'if.v') { r.if.val = ''; r.if.op = '>='; } if (path === 'then.v') r.then = { v: val, kind: '' }; save(); if (t.tagName === 'SELECT') return render(); return live(D0()); }
     if (d.gnby !== undefined) { const A = arms(D0()); G.nBy = A.map((_, i) => (G.nBy || [])[i] ?? ''); G.nBy[+d.gnby] = val === '' ? '' : +val; if (!G.nBy.some(x => +x > 0)) delete G.nBy; save(); const ni = document.querySelector('#genWrap [data-g="n"]'); if (ni) { ni.value = groupNs(D0()) ? nTot(D0()) : (G.n ?? ''); ni.disabled = !!groupNs(D0()); } return live(D0()); }
     if (d.gc) { const [i, k] = d.gc.split('|'), c = G.corr[+i];
       if (k.startsWith('G.')) { const [, g, kk] = k.split('.'); c.G = c.G || {}; (c.G[g] = c.G[g] || {})[kk] = val === '' ? '' : +val; save(); return live(D0()); }

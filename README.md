@@ -250,6 +250,10 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🎲 Generate → Values: drawn or made from another variable** (each number variable): choose “made from …” and its values come from that variable (× ÷ + − a change, overall or by group) instead of being drawn; the link opens in the variable's card.
+**🎲 Generate → If … then …** (a section, and ＋ If… on every variable): if a variable has a value (Diabetes = Yes, Age ≥ 60, Group = Control), then another is drawn from a mean ± SD, set, changed by + or ×, given a category in a % of these patients, or left empty — at each visit; rules on a source variable come before the variables made from it.
+**✎ Edit figure**: a wider dialog (up to 1120 px) with a larger preview, no sideways scrolling.
+**↶ Undo / ↷ Redo** at the left end of the top bar.
 **Step 8 · Advanced**
 - **🧭 Which analysis?** — what you want to know (compare groups adjusted, correlation, risk factors, predict a number, time to an event, a diagnostic test, agreement, before/after, a count) and the outcome → the matching analysis card(s) added and filled.
 - **Result line on every card** — the main finding (first sentence of its comment) updates as you choose the columns.

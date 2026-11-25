@@ -6371,14 +6371,14 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   // ✎ Edit figure (step 12): the figure's own caption, title, axes, range, legend, labels, colours and width — drawn again at once, kept for the next runs
   function editFigure(f) {
     const key = f.key || f.caption, cfg = state.cfg, own = (cfg.figEdits || {})[key] || {}, all = cfg.figEditsAll || {}, km = f.spec && f.spec.type === 'km'; let d = document.getElementById('figEditDlg');
-    if (!d) { d = document.createElement('dialog'); d.id = 'figEditDlg'; d.className = 'app-dlg'; document.body.append(d); }
+    if (!d) { d = document.createElement('dialog'); d.id = 'figEditDlg'; d.className = 'app-dlg'; document.body.append(d); } d.style.width = 'min(1120px, calc(100vw - 32px))'; d.style.maxWidth = 'none'; d.style.overflowX = 'hidden';
     const E0 = { ...all, ...own }, AS = [['', 'As the report'], ['small', 'Small'], ['normal', 'Normal'], ['large', 'Large'], ['xlarge', 'Extra large']];
     const sel = (k, l, list) => `<div><label class="f">${l}</label><select data-fe="${k}">${list.map(([v, t]) => `<option value="${esc(v)}" ${String(E0[k] ?? '') === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
     const inp = (k, l, ph, ty = 'text') => `<div><label class="f">${l}</label><input type="${ty}" step="any" data-fe="${k}" value="${esc(E0[k] ?? '')}" placeholder="${esc(ph ?? '')}"></div>`;
     const sec = (t, body, open) => `<details ${open ? 'open' : ''} style="grid-column:1/-1;border-top:1px solid var(--line);padding-top:4px"><summary style="cursor:pointer"><b>${t}</b></summary><div class="grid g3" style="gap:6px;margin-top:6px">${body}</div></details>`;
-    d.innerHTML = `<form method="dialog" onsubmit="return false" style="width:min(900px,92vw)"><h3>✎ Edit figure</h3><div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap">
-      <div style="flex:0 0 300px;position:sticky;top:0"><img id="feImg" src="${f.url}" alt="" style="width:300px;border:1px solid var(--line);border-radius:8px"><div class="legend-note" style="margin-top:4px">Live preview</div></div>
-      <div class="grid g3" style="gap:6px;flex:1;min-width:300px;max-height:62vh;overflow:auto;padding-right:4px">
+    d.innerHTML = `<form method="dialog" onsubmit="return false" style="width:100%;box-sizing:border-box"><h3>✎ Edit figure</h3><div class="row" style="gap:16px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1 1 340px;max-width:440px;position:sticky;top:0"><img id="feImg" src="${f.url}" alt="" style="width:100%;border:1px solid var(--line);border-radius:8px"><div class="legend-note" style="margin-top:4px">Live preview</div></div>
+      <div class="grid g3" style="gap:6px;flex:2 1 420px;min-width:0;max-height:64vh;overflow:auto;padding-right:4px">
         ${sec('Texts and axes', `<div style="grid-column:1/-1">${inp('caption', 'Caption', f.caption)}</div>${inp('title', 'Title in the chart (“-” for none)', f.fmtTitle ?? '')}${inp('x', 'X-axis title', f.spec.xLabel || '')}${inp('y', 'Y-axis title', f.spec.yLabel || '')}
           ${km ? '' : inp('ymin', 'Y-axis from', f.spec.yMin ?? 'automatic', 'number') + inp('ymax', 'Y-axis to', f.spec.yMax ?? 'automatic', 'number')}`, true)}
         ${km ? sec('Kaplan-Meier curves', `${inp('xMax', 'Time axis up to', 'all the follow-up', 'number')}${inp('xStep', 'Time axis step', 'automatic', 'number')}${inp('yFrom', 'Survival axis from (%)', '0', 'number')}
