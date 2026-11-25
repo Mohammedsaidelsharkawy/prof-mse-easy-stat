@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 6: outlier review queue, data lock, fragility index, bootstrap differences, site effect,
+/* Prof Easy Stat — round 6: outlier review queue, data lock, fragility index, bootstrap differences, site effect,
    blinded sample-size re-estimation, prior studies, the supervisor's Word edits back, abstract checklist, legend check,
    main-finding sentence, slopegraph, figure themes, guess-the-test game, role views, reproducibility, report stamp, sanity tests. */
 (() => {
@@ -186,7 +186,7 @@
 
   /* ---------- Q2: the report stamp (an appendix line in the Word file) ---------- */
   async function stampText() { const cfg = S().cfg, c = JSON.parse(JSON.stringify(cfg)); delete c.org; const hs = await sha(JSON.stringify(c)), hd = await sha(JSON.stringify(S().data)), o = cfg.org || {};
-    return `Prof MSE Easy Stat v1.0 · ${new Date().toISOString().slice(0, 16).replace('T', ' ')} · settings ${hs.slice(0, 12)} · data ${hd.slice(0, 12)} (${S().data.rows.length} rows${o.dataVersion ? `, version “${o.dataVersion.name}”` : ''}${o.lock && lockState() === 'ok' ? ', locked' : ''})`; }
+    return `Prof Easy Stat v1.0 · ${new Date().toISOString().slice(0, 16).replace('T', ' ')} · settings ${hs.slice(0, 12)} · data ${hd.slice(0, 12)} (${S().data.rows.length} rows${o.dataVersion ? `, version “${o.dataVersion.name}”` : ''}${o.lock && lockState() === 'ok' ? ', locked' : ''})`; }
   X.stampText = stampText;
 
   // the buttons and menus

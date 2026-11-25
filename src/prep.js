@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — more data preparation: visit windows, reshape previews, age from the date of birth,
+/* Prof Easy Stat — more data preparation: visit windows, reshape previews, age from the date of birth,
    reference-range checks and the coding assistant for free-text answers. Works through window.EasyUI. */
 (() => {
   const U = window.EasyUI; if (!U) return;

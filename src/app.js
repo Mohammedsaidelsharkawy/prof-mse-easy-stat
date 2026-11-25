@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — user interface */
+/* Prof Easy Stat — user interface */
 (() => {
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -261,7 +261,7 @@
   /* ---------- software statement presets (first sentence of Statistical Analysis) ---------- */
   const SOFTWARE = [
     ['IBM SPSS Statistics', 'Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA).'],
-    ['Prof MSE Easy Stat', 'Statistical analysis was done by Prof MSE Easy Stat v1.0.'],
+    ['Prof Easy Stat', 'Statistical analysis was done by Prof Easy Stat v1.0.'],
     ['R', 'Statistical analysis was performed using R software, version 4.4 (R Foundation for Statistical Computing, Vienna, Austria).'],
     ['Stata', 'Statistical analysis was performed using Stata, version 18 (StataCorp LLC, College Station, TX, USA).'],
     ['GraphPad Prism', 'Statistical analysis was performed using GraphPad Prism, version 10 (GraphPad Software, Boston, MA, USA).'],
@@ -3016,7 +3016,7 @@
       const m = b.rep ? {} : (cfg.tableMeta || {})[b.name] || {}, title = m.title && m.title.trim() ? m.title.trim() : `${b.rep ? b.v.label : b.name} of the studied ${one ? 'patients' : 'groups'}`;
       kids.push(P(`Table ${k}: ${title}`, { bold: true, before: 240, after: 80, size: 22 }), new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [head, ...rows] }),
         P(`Data are presented as mean ± SD or median (IQR) and frequency (%).${m.note ? ' ' + m.note : ''}`, { it: true, size: 18, before: 60 })); });
-    const doc = new Document({ creator: 'Prof MSE Easy Stat', title: 'Shell tables', sections: [{ children: [P(`${(cfg.study && cfg.study.title) || 'Study'} — shell tables`, { bold: true, size: 28, after: 120 }), P('The tables planned for the results, before the data: replace xx with the values.', { it: true, color: '555555', after: 120 }), ...kids] }] });
+    const doc = new Document({ creator: 'Prof Easy Stat', title: 'Shell tables', sections: [{ children: [P(`${(cfg.study && cfg.study.title) || 'Study'} — shell tables`, { bold: true, size: 28, after: 120 }), P('The tables planned for the results, before the data: replace xx with the values.', { it: true, color: '555555', after: 120 }), ...kids] }] });
     saveUrl(URL.createObjectURL(await window.docx.Packer.toBlob(doc)), `${baseName()} - shell tables.docx`); toast(`${k} shell table${k === 1 ? '' : 's'} saved`);
   }
   let tbDrag = null;
@@ -4372,7 +4372,7 @@
   renderFlowStyles();
   $('#cType').addEventListener('change', e => { readConsort(); const c = state.cfg.consort; c.type = e.target.value; if (c.type === 'factorial' && !c.randInfo) c.randInfo = '2 × 2 factorial design'; renderConsortForm(); });
   // the whole flowchart (numbers, texts, style and box positions) saved to a file and loaded again
-  $('#flowSave').onclick = () => { readConsort(); saveUrl(URL.createObjectURL(new Blob([JSON.stringify({ app: 'Prof MSE Easy Stat', kind: 'flowchart', consort: state.cfg.consort }, null, 1)], { type: 'application/json' })), `${baseName()} - Flowchart layout.json`); toast('Flowchart layout saved'); };
+  $('#flowSave').onclick = () => { readConsort(); saveUrl(URL.createObjectURL(new Blob([JSON.stringify({ app: 'Prof Easy Stat', kind: 'flowchart', consort: state.cfg.consort }, null, 1)], { type: 'application/json' })), `${baseName()} - Flowchart layout.json`); toast('Flowchart layout saved'); };
   $('#flowLoad').onclick = () => $('#flowLoadFile').click();
   $('#flowLoadFile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     try { const j = JSON.parse(await f.text()), c = j.consort || j; if (!c || !c.groups) throw new Error('not a flowchart file');
@@ -5113,7 +5113,7 @@
   const FORMAT_PRESETS = {
     custom: {},
     thesis: { figPlacement: 'after', paperStyle: false, boldSig: true }, // a thesis: significant P values in bold
-    paper: { paperStyle: true, pWord: 'P', secondRow: 'none', commentPlace: 'after', statFoot: true,
+    paper: { paperStyle: true, pWord: 'P', secondRow: 'none', commentPlace: 'before', statFoot: true,
       summary: false, commentStyle: 'concise', showStat: false, missingNote: false }
   };
   const report = () => (state.cfg.report = { ...DEFAULT_REPORT, ...(state.cfg.report || {}) });
@@ -5478,7 +5478,7 @@
     box(wide ? 60 : 100 + bw, wide ? 590 : 220, bw, wide ? 700 : 520, 'Key finding', keySents(ks ? ks.comment : r.summary).slice(0, 2).join(' ') || '—');
     const fx = wide ? 860 : 60, fy = wide ? 220 : 790, fwMax = wide ? W - 920 : W - 120, fhMax = wide ? H - 300 : H - fy - 110;
     if (f && f.url) { const im = new Image(); im.onload = () => { let w = fwMax, h = w * f.h / f.w; if (h > fhMax) { h = fhMax; w = h * f.w / f.h; } x.drawImage(im, fx + (fwMax - w) / 2, fy + (fhMax - h) / 2, w, h); x.fillStyle = '#555'; x.font = `italic 400 28px ${font}`; x.fillText(f.caption.slice(0, 120), fx, H - 60); done(); }; im.src = f.url; } else done();
-    function done() { x.fillStyle = '#888'; x.font = `400 24px ${font}`; x.fillText('Made with Prof MSE Easy Stat', W - 420, H - 40); saveUrl(c.toDataURL('image/png'), `${baseName()} - Graphical abstract (${lay}).png`); toast('Graphical abstract saved'); }
+    function done() { x.fillStyle = '#888'; x.font = `400 24px ${font}`; x.fillText('Made with Prof Easy Stat', W - 420, H - 40); saveUrl(c.toDataURL('image/png'), `${baseName()} - Graphical abstract (${lay}).png`); toast('Graphical abstract saved'); }
   }
   const cap1 = t => t ? t[0].toUpperCase() + t.slice(1) : t;
   // cover letter to a journal editor
@@ -5558,7 +5558,7 @@
   /* ---------- A7: an R script that repeats the main tests ---------- */
   function rScript() {
     const r = state.result, cfg = state.cfg; if (!r) return ''; const q = n => '`' + String(n).replace(/`/g, '') + '`', gc = cfg.groupCol, L = [];
-    L.push(`# ${cfg.study.title || 'Study'} — the main tests of the report, written by Prof MSE Easy Stat (${new Date().toISOString().slice(0, 10)})`, '# Run in R or RStudio; change the file name to that of your data.', 'library(readxl)', `d <- read_excel("${(state.file || 'data.xlsx').replace(/"/g, '')}", sheet = "${(state.sheet || 'Data').replace(/"/g, '')}")`);
+    L.push(`# ${cfg.study.title || 'Study'} — the main tests of the report, written by Prof Easy Stat (${new Date().toISOString().slice(0, 10)})`, '# Run in R or RStudio; change the file name to that of your data.', 'library(readxl)', `d <- read_excel("${(state.file || 'data.xlsx').replace(/"/g, '')}", sheet = "${(state.sheet || 'Data').replace(/"/g, '')}")`);
     if (gc) L.push(`d$group <- factor(d[[${JSON.stringify(gc)}]], levels = c(${(cfg.groupOrder || []).map(g => JSON.stringify(g)).join(', ')}))`, '');
     (r.sections || []).forEach(sec => { if (sec.kind !== 'single' || !sec.meta || !sec.meta.res) return; L.push(`## ${sec.title}`);
       sec.meta.res.forEach(x => { if (!x || !x.v) return; const col = q(x.v.cols[0].col), t = (x.num || x.cat || {}).test || '', k = (cfg.groupOrder || []).length, lab = `# ${x.v.label}: ${t}`;
@@ -5706,7 +5706,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
       PX(`Tests are chosen from the normality of each group (Shapiro-Wilk) and the expected counts, as listed. Two-sided P ≤ ${plan.alpha} is significant.`, { before: 120 }),
       PX('4. Further analyses', { bold: true, size: 26 }), PX(plan.adv.length ? plan.adv.join('; ') + '.' : 'None planned.'),
       PX('5. Missing data, multiplicity and subgroups', { bold: true, size: 26 }), PX(`Missing values: ${plan.options.impute ? 'imputed as set for each variable' : 'complete-case analysis'}. Multiple comparisons: ${plan.options.chiAdjust ? `${plan.options.chiAdjust} adjustment` : 'no adjustment; secondary results are exploratory'}. Subgroups: ${sub.length ? sub.join(', ') : 'none planned'}.`),
-      PX('6. Software', { bold: true, size: 26 }), PX(`Prof MSE Easy Stat (${cfg.study.software || 'statistical software'}).`)];
+      PX('6. Software', { bold: true, size: 26 }), PX(`Prof Easy Stat (${cfg.study.software || 'statistical software'}).`)];
     state.cfg.sap = plan; await docSave(new Document({ sections: [{ children: kids }] }), `${baseName()} - Statistical analysis plan.docx`); toast('SAP saved — it is also kept in the project to compare with the analysis later');
   }
   function sapCompare() { const old = state.cfg.sap; if (!old) { toast('No SAP yet — download the SAP first (it is kept in the project)'); return; } const now = sapPlan(), rows = [];
@@ -5810,7 +5810,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
       return `<details class="sec" data-sig="${sig ? 1 : 0}" ${i < 3 ? 'open' : ''}><summary><b>${esc(s0.title || 'Figure')}</b>${sig ? ' <span class="chip">significant</span>' : ''}</summary>${s0.rows && s0.rows.length ? htmlTable(s0.head, s0.rows, s0) + `<p class="foot">${esc(s0.footnote || '')}</p>` : ''}${s0.comment ? `<p>${esc(s0.comment)}</p>` : ''}${(s0.figures || []).filter(f => f.url).map(f => `<figure><img src="${f.url}" alt="${esc(f.caption || '')}" title="${esc(f.caption || '')}" loading="lazy"><figcaption>${esc(f.caption || '')}</figcaption></figure>`).join('')}</details>`; }).join('\n');
     const css = 'body{font:15px/1.5 Arial,sans-serif;max-width:1100px;margin:0 auto;padding:16px;color:#222;background:#fff}h1{font-size:22px;color:#1C1648}.bar{position:sticky;top:0;background:#fff;padding:8px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-bottom:1px solid #ddd;z-index:2}input[type=search]{padding:6px 10px;border:1px solid #bbb;border-radius:6px;min-width:240px}details.sec{border:1px solid #e3e3e3;border-radius:8px;margin:10px 0;padding:6px 12px}summary{cursor:pointer;padding:4px 0}.chip{background:#EBDDF6;color:#5B1F99;border-radius:10px;padding:1px 8px;font-size:12px}table.rt{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0}table.rt th,table.rt td{border:1px solid #ccc;padding:3px 6px;text-align:center}table.rt td.left,table.rt td:first-child{text-align:left}td.b{font-weight:bold}td.s{font-size:12px}td.hl{background:#FFF2CC}td.grey{background:#EDEDED}.foot{font-size:12px;color:#555}figure{margin:8px 0}figure img{max-width:100%;border:1px solid #eee}figcaption{font-size:13px;color:#444}.hide{display:none}.m{white-space:pre-wrap}@media(max-width:600px){body{padding:16px}table.rt{font-size:11px}}';
     const js = "const q=document.getElementById('q'),s=document.getElementById('s');function f(){const t=q.value.toLowerCase();document.querySelectorAll('details.sec').forEach(d=>{const ok=(!t||d.textContent.toLowerCase().includes(t))&&(!s.checked||d.dataset.sig==='1');d.classList.toggle('hide',!ok);if(t&&ok)d.open=true;});}q.oninput=f;s.onchange=f;document.getElementById('o').onclick=()=>document.querySelectorAll('details.sec').forEach(d=>d.open=true);document.getElementById('c').onclick=()=>document.querySelectorAll('details.sec').forEach(d=>d.open=false);";
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} — results</title><style>${css}</style></head><body><h1>${esc(title)} — results</h1><p style="color:#555">${r.sections.length} tables and figures · made with Prof MSE Easy Stat on ${new Date().toISOString().slice(0, 10)} · significance level ${al}</p>
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} — results</title><style>${css}</style></head><body><h1>${esc(title)} — results</h1><p style="color:#555">${r.sections.length} tables and figures · made with Prof Easy Stat on ${new Date().toISOString().slice(0, 10)} · significance level ${al}</p>
       <div class="bar"><input type="search" id="q" placeholder="Find a variable or a word…"><label><input type="checkbox" id="s"> Significant only</label><button id="o" type="button">Open all</button><button id="c" type="button">Close all</button></div>
       ${r.methods ? `<details class="sec" data-sig="0"><summary><b>Statistical analysis</b></summary><p class="m">${esc(r.methods)}</p></details>` : ''}${secs}<script>${js}<\/script></body></html>`; }
   // A4: planned against actual: patients, dropout, the primary outcome's SD and effect, and the power for the planned effect with the patients analysed
@@ -5990,7 +5990,8 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
             else c1.variables.forEach(v => { if (v.kind === 'single' && v.cols[0].col === gc) v.include = true; });
             c1.groupOrder = [Analysis.ALL_GROUP]; c1.groupLabels = { [Analysis.ALL_GROUP]: 'All patients' }; c1.groupInclude = { [Analysis.ALL_GROUP]: true }; c1.groupMerge = {};
             const r1 = Analysis.run(state.data, c1); postRepeated(r1, c1);
-            r1.sections.forEach(s => { s.title = `${s.title.replace(/\s+of the studied (groups|patients)$/, '')} — all patients`; s.key = s.title; s.allPart = true; s.figures.forEach(f => { f.caption = `${f.caption} (all patients)`; }); });
+            const allOf = t => /\s+(of|in|among) the studied (groups|patients)/.test(t) ? t.replace(/\s+(of|in|among) the studied (groups|patients)/, ' $1 all patients') : `${t} of all patients`;
+            r1.sections.forEach(s => { s.title = allOf(s.title); s.key = s.title; s.allPart = true; s.figures.forEach(f => { f.caption = allOf(f.caption); }); });
             res.sections = [...r1.sections, ...res.sections]; res.methods += ' The results of all patients were first described as one group, and then compared between the groups.'; } catch (e) { console.error(e); } }
         if (subCols(state.cfg.subgroup).length) await pauseOr('Subgroups (Split File)');
         // Split File (like SPSS): the analysis repeated within each subgroup — tables organised by subgroup, or the subgroups side by side in one table
@@ -6062,8 +6063,8 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         if (cfg.options.rmLayout === 'cols') res.sections = res.sections.map(Analysis.timepointsAsColumns);
         { const defs = state.cfg.variables.filter(v => v.include && v.definition).map(v => { const d0 = v.definition.trim().replace(/\.$/, ''); return /\bdefined\b/i.test(d0) ? d0 + '.' : `${v.label.replace(/\s*\([^)]*\)\s*$/, '')} was defined as ${/^[A-Z][a-z]+\b/.test(d0) ? d0.charAt(0).toLowerCase() + d0.slice(1) : d0}.`; });
           if (defs.length && res.methods) res.methods = `${res.methods.trim()} Definitions: ${defs.join(' ')}`; }
-        if (state.cfg.simulated && state.cfg.simulated.partial && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The values of ${(state.cfg.simulated.cols || []).map(c => Analysis.columnLabel(state.cfg, c)).join(', ')} were simulated (Prof MSE Easy Stat) and do not describe real patients.`;
-        else if (state.cfg.simulated && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The data were simulated (Prof MSE Easy Stat data generator, seed ${state.cfg.simulated.seed}) and do not describe real patients.`;
+        if (state.cfg.simulated && state.cfg.simulated.partial && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The values of ${(state.cfg.simulated.cols || []).map(c => Analysis.columnLabel(state.cfg, c)).join(', ')} were simulated (Prof Easy Stat) and do not describe real patients.`;
+        else if (state.cfg.simulated && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The data were simulated (Prof Easy Stat data generator, seed ${state.cfg.simulated.seed}) and do not describe real patients.`;
         { const lk = (state.cfg.org || {}).lock, ls0 = window.EasyUX2 && window.EasyUX2.lockState ? window.EasyUX2.lockState() : null; if (lk && ls0 === 'ok' && res.methods) res.methods = `${res.methods.trim()} The analysis was done on the locked dataset (locked on ${String(lk.at).slice(0, 10)}; SHA-256 ${String(lk.sha).slice(0, 16)}).`; }
         { const dv = (state.cfg.org || {}).dataVersion; if (dv && dv.name && res.methods) res.methods = `${res.methods.trim()} The analysis used the dataset version “${dv.name}” (${String(dv.at || '').slice(0, 10)}).`; }
         applyTableMeta(res); applyVarNotes(res); applyLocks(res);
@@ -6325,7 +6326,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Risk calculator</title>
 <style>body{font-family:system-ui,Arial,sans-serif;max-width:560px;margin:24px auto;padding:0 16px;color:#1C1648;background:#fff}label{display:flex;justify-content:space-between;gap:12px;margin:8px 0}input[type=number]{width:120px}#out{font-size:22px;font-weight:700;margin-top:16px}small{color:#666}</style></head>
 <body><h2>${esc(c.logistic ? `Predicted probability of ${c.outcome}` : `Predicted ${c.outcome}`)}</h2>${inputs}<div id="out"></div>
-<p><small>From the ${c.logistic ? 'logistic' : 'linear'} regression model of the study (Prof MSE Easy Stat). For research use; not validated for clinical decisions.</small></p>
+<p><small>From the ${c.logistic ? 'logistic' : 'linear'} regression model of the study (Prof Easy Stat). For research use; not validated for clinical decisions.</small></p>
 <script>const B0=${c.b0},B=${JSON.stringify(c.terms.map(t => t.B))},L=${c.logistic};function f(){let z=B0;document.querySelectorAll('[data-i]').forEach(e=>{const v=e.type==='checkbox'?(e.checked?1:0):(+e.value||0);z+=B[+e.dataset.i]*v;});
 document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+' %':z.toFixed(2);}document.addEventListener('input',f);f();<\/script></body></html>`;
   }
@@ -6692,7 +6693,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       obj(pn, () => add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 ${im} 0 R >> >> /Contents ${cn} 0 R >>`));
       obj(cn, () => { add(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`); });
       obj(im, () => { add(`<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.bytes.length} >>\nstream\n`); add(p.bytes); add('\nendstream'); }); });
-    const info = 3 + n * 3; obj(info, () => add(`<< /Title (${safe}) /Producer (Prof MSE Easy Stat) >>`));
+    const info = 3 + n * 3; obj(info, () => add(`<< /Title (${safe}) /Producer (Prof Easy Stat) >>`));
     const xref = len; add(`xref\n0 ${info + 1}\n0000000000 65535 f \n`); for (let k = 1; k <= info; k++) add(`${String(offs[k]).padStart(10, '0')} 00000 n \n`);
     add(`trailer\n<< /Size ${info + 1} /Root 1 0 R /Info ${info} 0 R >>\nstartxref\n${xref}\n%%EOF`);
     return new Blob(parts, { type: 'application/pdf' });
@@ -6907,7 +6908,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const baseName = () => { const pn = state.cfg && state.cfg.study && String(state.cfg.study.project || '').trim(); return pn ? safeName(pn) : (state.file || 'data').replace(/\.[^.]+$/, '').replace(/ \(example\)$/, ''); };
   // the project name: the browser tab and the saved file names
   const TITLE0 = document.title;
-  function projTitle() { const pn = state.cfg && state.cfg.study && String(state.cfg.study.project || '').trim(); document.title = pn ? `${pn} — Prof MSE Easy Stat` : TITLE0; }
+  function projTitle() { const pn = state.cfg && state.cfg.study && String(state.cfg.study.project || '').trim(); document.title = pn ? `${pn} — Prof Easy Stat` : TITLE0; }
   { const pi = document.getElementById('projName'); if (pi) pi.addEventListener('input', () => { if (!state.cfg) return; state.cfg.study.project = pi.value; projTitle(); }); }
   { const ty = document.getElementById('studyType'); if (ty) ty.addEventListener('change', () => { if (!state.cfg) return; state.cfg.study.type = ty.value; const c = state.cfg.consort; if (c && ty.value) { const t = flowTypeOf(state.cfg); if (c.type !== t && !(t === 'consort' && /cluster|crossover|factorial/.test(c.type))) {
       // a flowchart already made: ask before changing it
@@ -7118,15 +7119,15 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       const dict = [['Column(s)', 'Label', 'Type', 'Categories / unit', 'Role', 'Table', 'In the report', 'Definition'], ...cfg.variables.map(v => [v.cols.map(c => c.col).join(', '), v.label, v.kind === 'repeated' ? `repeated (${v.cols.length} timepoints)` : v.type, v.type === 'categorical' ? (v.levels || []).join(' / ') : v.unit || '', v.role || '', v.table || '', v.include ? 'Yes' : 'No', v.definition || ''])];
       const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dict), 'Variables'); add(`${base} - data dictionary.xlsx`, new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' })));
       try { add(`${base} - analysis.R`, enc(rScript())); } catch (e) { console.error(e); }
-      const n = state.data.rows.length, gs = activeGroups(), readme = [`${(cfg.study && cfg.study.title) || base}`, '', `Made with Prof MSE Easy Stat on ${new Date().toISOString().slice(0, 10)}.`, `${n} patients${gs.length >= 2 ? `, ${gs.length} groups (${gs.map(g => cfg.groupLabels[g] || g).join(', ')})` : ''}; ${state.result.sections.length} tables and figures.`, '',
-        'In this folder:', `- ${base} - report.docx: the statistical report (Word).`, `- ${base} - results.html: the same results to browse: open it in any browser (search, significant only).`, `- ${base} - data dictionary.xlsx: every variable, its type, categories, role and table.`, `- ${base} - analysis.R: R code repeating the main tests (put the data file next to it).`, '', cfg.simulated ? 'NOTE: these data are simulated (Prof MSE Easy Stat data generator) and do not describe real patients.' : ''].join('\r\n');
+      const n = state.data.rows.length, gs = activeGroups(), readme = [`${(cfg.study && cfg.study.title) || base}`, '', `Made with Prof Easy Stat on ${new Date().toISOString().slice(0, 10)}.`, `${n} patients${gs.length >= 2 ? `, ${gs.length} groups (${gs.map(g => cfg.groupLabels[g] || g).join(', ')})` : ''}; ${state.result.sections.length} tables and figures.`, '',
+        'In this folder:', `- ${base} - report.docx: the statistical report (Word).`, `- ${base} - results.html: the same results to browse: open it in any browser (search, significant only).`, `- ${base} - data dictionary.xlsx: every variable, its type, categories, role and table.`, `- ${base} - analysis.R: R code repeating the main tests (put the data file next to it).`, '', cfg.simulated ? 'NOTE: these data are simulated (Prof Easy Stat data generator) and do not describe real patients.' : ''].join('\r\n');
       if (archive) { // O4: everything to archive: the data, the project, the logs, and a checksum of every file
         const wd = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wd, XLSX.utils.json_to_sheet(state.data.rows, { header: state.data.headers }), 'Data'); add(`${base} - data.xlsx`, new Uint8Array(XLSX.write(wd, { type: 'array', bookType: 'xlsx' })));
         add(`${base} - project.easystat.json`, enc(JSON.stringify(projectObj())));
         const lg = [...(state.cleanLog || []).map(l => `${l.time}\tData: ${l.what}`), ...((cfg.org || {}).log || []).map(l => `${l.at}\t${l.what}`)]; add(`${base} - analysis and cleaning log.txt`, enc(lg.join('\r\n')));
         const sums = []; for (const [n0, d0] of files) { let h = ''; try { h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', d0))].map(b => b.toString(16).padStart(2, '0')).join(''); } catch (e) { h = '(not available)'; } sums.push(`${h}  ${n0}`); }
         add('checksums-sha256.txt', enc(sums.join('\r\n'))); }
-      add('README.txt', enc(archive ? readme + '\r\n\r\nArchive copy: also the data, the project file (opens in Prof MSE Easy Stat), the analysis and cleaning log, and checksums-sha256.txt (a SHA-256 checksum of every file, to show that none changed).' : readme)); saveUrl(URL.createObjectURL(new Blob([XLSX.CFB.write(z, { fileType: 'zip', type: 'array', compression: true })], { type: 'application/zip' })), `${base} - ${archive ? 'archive' : 'for the supervisor'}.zip`); toast(archive ? 'Archive saved' : 'Supervisor pack saved'); }
+      add('README.txt', enc(archive ? readme + '\r\n\r\nArchive copy: also the data, the project file (opens in Prof Easy Stat), the analysis and cleaning log, and checksums-sha256.txt (a SHA-256 checksum of every file, to show that none changed).' : readme)); saveUrl(URL.createObjectURL(new Blob([XLSX.CFB.write(z, { fileType: 'zip', type: 'array', compression: true })], { type: 'application/zip' })), `${base} - ${archive ? 'archive' : 'for the supervisor'}.zip`); toast(archive ? 'Archive saved' : 'Supervisor pack saved'); }
     catch (err) { console.error(err); toast('Could not make the pack: ' + err.message); } finally { busy(false); } }
   $('#btnSharePack') && ($('#btnSharePack').onclick = () => sharePack());
   // W5: what to check before sending the report

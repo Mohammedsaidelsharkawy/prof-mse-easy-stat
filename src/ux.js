@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — interface layer: tour, command palette, navigation aids, display settings, sheet helpers,
+/* Prof Easy Stat — interface layer: tour, command palette, navigation aids, display settings, sheet helpers,
    report-reading aids, feedback, export centre, sharing and personalisation. Works through window.EasyUI. */
 (() => {
   const U = window.EasyUI; if (!U) return;

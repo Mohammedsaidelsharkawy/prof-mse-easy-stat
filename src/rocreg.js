@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 10: more for ROC curves and regression models. Each option of the ROC, linear, logistic and Cox
+/* Prof Easy Stat — round 10: more for ROC curves and regression models. Each option of the ROC, linear, logistic and Cox
    cards adds a table or a figure after the card's own (or adjusts its wording). Called by Analysis.run through window.RocReg. */
 (() => {
   const r2 = x => Math.round(x * 100) / 100;

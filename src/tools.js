@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — project tools: dashboard, study templates, explain-my-result, batch reports, help centre,
+/* Prof Easy Stat — project tools: dashboard, study templates, explain-my-result, batch reports, help centre,
    reproducibility package (R and Python), audit log and the consistency check. Works through window.EasyUI. */
 (() => {
   const U = window.EasyUI; if (!U) return;
@@ -60,7 +60,7 @@
       if (a) { const [k, n] = [a.dataset.tpl.slice(0, 1), a.dataset.tpl.slice(2)]; applyTemplate(k === 'b' ? BUILTIN[n] : ls.get('templates', {})[n]); }
       if (d) { const m = ls.get('templates', {}); delete m[d.dataset.tpldel]; ls.set('templates', m); templates(); } };
     $('#tplSave').onclick = () => { if (!S().cfg) { U.toast('Load data first'); return; } U.readUiIntoCfg(); const n = (prompt('Template name:', 'My study template') || '').trim(); if (!n) return; const m = ls.get('templates', {}); m[n] = { ...templateOf(), saved: new Date().toISOString().slice(0, 10) }; ls.set('templates', m); templates(); U.toast(`Template “${n}” saved`); };
-    $('#tplExp').onclick = () => U.saveUrl(URL.createObjectURL(new Blob([JSON.stringify({ app: 'Prof MSE Easy Stat', kind: 'templates', templates: ls.get('templates', {}) }, null, 1)], { type: 'application/json' })), 'Easy Stat templates.json');
+    $('#tplExp').onclick = () => U.saveUrl(URL.createObjectURL(new Blob([JSON.stringify({ app: 'Prof Easy Stat', kind: 'templates', templates: ls.get('templates', {}) }, null, 1)], { type: 'application/json' })), 'Easy Stat templates.json');
     $('#tplImp').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); ls.set('templates', { ...ls.get('templates', {}), ...(j.templates || {}) }); templates(); U.toast('Templates imported'); } catch (err) { U.toast('Not a templates file'); } }; }
 
   /* ---------- 35. help centre ---------- */
@@ -119,8 +119,8 @@
     const cfg = st.cfg, gcol = cfg.groupCol, groups = U.activeGroups(), safe = h => h.replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, 'X$1'), headers = st.data.headers, nm = new Map(headers.map(h => [h, safe(h)]));
     const csv = [headers.map(h => nm.get(h)).join(','), ...st.data.rows.map(r => headers.map(h => { const v = r[h]; if (U.isMissing(v)) return ''; const s2 = String(v); return /[",\n]/.test(s2) ? `"${s2.replace(/"/g, '""')}"` : s2; }).join(','))].join('\n');
     const G = nm.get(gcol), keep = groups.map(g => JSON.stringify(String(g))).join(', '), rL = [], pyL = [];
-    rL.push('# Reproduces the tests of each variable of the Prof MSE Easy Stat report', '# Packages: base R only', 'd <- read.csv("data.csv", stringsAsFactors = FALSE)', `d <- d[d$${G} %in% c(${keep}), ]`, `d$${G} <- factor(d$${G}, levels = c(${keep}))`, `alpha <- ${cfg.options.alpha}`, '');
-    pyL.push('# Reproduces the tests of each variable of the Prof MSE Easy Stat report', '# Packages: pandas, scipy', 'import pandas as pd', 'from scipy import stats', 'd = pd.read_csv("data.csv")', `d = d[d["${G}"].astype(str).isin([${keep}])]`, `groups = [${keep}]`, '');
+    rL.push('# Reproduces the tests of each variable of the Prof Easy Stat report', '# Packages: base R only', 'd <- read.csv("data.csv", stringsAsFactors = FALSE)', `d <- d[d$${G} %in% c(${keep}), ]`, `d$${G} <- factor(d$${G}, levels = c(${keep}))`, `alpha <- ${cfg.options.alpha}`, '');
+    pyL.push('# Reproduces the tests of each variable of the Prof Easy Stat report', '# Packages: pandas, scipy', 'import pandas as pd', 'from scipy import stats', 'd = pd.read_csv("data.csv")', `d = d[d["${G}"].astype(str).isin([${keep}])]`, `groups = [${keep}]`, '');
     x.items.filter(it => it.kind !== 'repeated').forEach(it => { const c = nm.get(it.cols[0].col); if (!c) return; const t = String(it.test || '').toLowerCase(); rL.push(`# ${it.label}: ${it.test || 'no test'} (report P ${isFinite(it.p) ? Analysis.fmtP(it.p, cfg.options.alpha) : '—'})`);
       pyL.push(`# ${it.label}: ${it.test || 'no test'} (report P ${isFinite(it.p) ? Analysis.fmtP(it.p, cfg.options.alpha) : '—'})`); const gv = `[d.loc[d["${G}"].astype(str) == g, "${c}"].dropna() for g in groups]`;
       if (/welch.*anova/.test(t)) { rL.push(`print(oneway.test(${c} ~ ${G}, data = d, var.equal = FALSE))`); pyL.push(`# Welch's ANOVA: use pingouin.welch_anova(d, dv="${c}", between="${G}")`); }
@@ -134,7 +134,7 @@
       else { rL.push('# (no matching base test — see the report)'); pyL.push('# (no matching base test — see the report)'); }
       rL.push(''); pyL.push(''); });
     rL.push('# Repeated measures, regression and the other advanced analyses are listed in the report; their settings are in setup.json.'); pyL.push('# Repeated measures and the advanced analyses: see the report and setup.json.');
-    const readme = `Reproducibility package — ${cfg.study.title || 'study'}\nMade ${new Date().toISOString().slice(0, 10)} with Prof MSE Easy Stat.\n\ndata.csv      the data (column names made R-safe)\nanalysis.R    the test of each variable in base R\nanalysis.py   the same with scipy\nsetup.json    every setting of the analysis\n\nSmall differences can arise from ties, continuity corrections or exact versus asymptotic P values; the report states the method used.\n`;
+    const readme = `Reproducibility package — ${cfg.study.title || 'study'}\nMade ${new Date().toISOString().slice(0, 10)} with Prof Easy Stat.\n\ndata.csv      the data (column names made R-safe)\nanalysis.R    the test of each variable in base R\nanalysis.py   the same with scipy\nsetup.json    every setting of the analysis\n\nSmall differences can arise from ties, continuity corrections or exact versus asymptotic P values; the report states the method used.\n`;
     const z = XLSX.CFB.utils.cfb_new(), add = (p2, t) => XLSX.CFB.utils.cfb_add(z, p2, new TextEncoder().encode(t));
     add('README.txt', readme); add('data.csv', csv); add('analysis.R', rL.join('\n')); add('analysis.py', pyL.join('\n')); add('setup.json', JSON.stringify({ app: 'ProfMSE-EasyStat', cfg }, null, 1));
     U.saveUrl(URL.createObjectURL(new Blob([XLSX.CFB.write(z, { fileType: 'zip', type: 'array' })], { type: 'application/zip' })), `${U.baseName()} - reproducibility package.zip`); U.toast('Reproducibility package saved (data, R and Python code, settings)'); }

@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — report tools, round 4: review sheet in two columns, reviewer mode, multiplicity, outliers, ITT vs per-protocol,
+/* Prof Easy Stat — report tools, round 4: review sheet in two columns, reviewer mode, multiplicity, outliers, ITT vs per-protocol,
    the story order of the tables, number consistency, limitations, journal styles, highlights, the balance (Love) plot. */
 (() => {
   const U = window.EasyUI, X = window.EasyUX2; if (!U || !X) return;

@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 5: the data detective, more analyses (detectable difference, equivalence, ANCOVA for all,
+/* Prof Easy Stat — round 5: the data detective, more analyses (detectable difference, equivalence, ANCOVA for all,
    interactions, tipping point), writing aids (three styles, sentence check, glossary, rebuttals, poster), screening log,
    randomisation audit, same y axes, split view, explain a number, discussion threads, shortcuts and a start page. */
 (() => {

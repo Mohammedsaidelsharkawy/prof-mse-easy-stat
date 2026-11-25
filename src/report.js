@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — Word (.docx) export using docx.js */
+/* Prof Easy Stat — Word (.docx) export using docx.js */
 const Report = (() => {
   const D = () => window.docx;
   const DEFAULT_FONT = 'Times New Roman';
@@ -471,7 +471,7 @@ const Report = (() => {
         border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: '7B2FBE', space: 4 } },
         children: [
           new ImageRun({ type: 'png', data: dataUrlToBytes(opts.logo), transformation: { width: 38, height: 38 } }),
-          new TextRun({ text: '  Prof MSE Easy Stat', bold: true, color: '1C1648', size: 18, font: 'Segoe UI' })
+          new TextRun({ text: '  Prof Easy Stat', bold: true, color: '1C1648', size: 18, font: 'Segoe UI' })
         ]
       }));
     }
@@ -484,7 +484,7 @@ const Report = (() => {
     const hDef = () => { const o = {}; [['h1', 'heading1', 'Heading1', 'Heading 1', H1_SZ, 0, 0], ['h2', 'heading2', 'Heading2', 'Heading 2', 26, 0, 0]].forEach(([k, key, id, nm, sz, b, a]) => { const x = hs(id, nm, sz, b, a); o[key] = { run: x.run, paragraph: x.paragraph }; }); return o; }; // always replaces Word's own heading style: one definition, not two
     const hsList = () => [['h1', 'Heading1', 'Heading 1', H1_SZ, 0, 0], ['h2', 'Heading2', 'Heading 2', 26, 0, 0]].filter(() => false).map(([, id, nm, sz, b, a]) => hs(id, nm, sz, b, a));
     const doc = new Document({
-      creator: 'Prof MSE Easy Stat',
+      creator: 'Prof Easy Stat',
       title: opts.title || 'Statistical report',
       ...(opts.toc ? { features: { updateFields: true } } : {}),
       ...(Object.keys(footnotes).length ? { footnotes } : {}),
@@ -573,7 +573,7 @@ const Report = (() => {
       if (it.note) children.push(para(`Note: ${it.note}`, { size: 22, line: 300, after: 120, italic: true }));
     });
     const doc = new Document({
-      creator: 'Prof MSE Easy Stat', title: opts.title || 'Results by variable',
+      creator: 'Prof Easy Stat', title: opts.title || 'Results by variable',
       styles: { default: { document: { run: { font: BODY_FONT, size: 20 } } } },
       sections: [{
         properties: { page: { size: { width: 11906, height: 16838, orientation: PageOrientation.LANDSCAPE }, margin: { top: 1134, bottom: 1134, left: 1440, right: 1440 } } },

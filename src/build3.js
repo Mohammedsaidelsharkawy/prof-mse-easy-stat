@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 8, Build: paste a questionnaire, coded pick-lists, unit columns, conditional forms, CDISC names,
+/* Prof Easy Stat — round 8, Build: paste a questionnaire, coded pick-lists, unit columns, conditional forms, CDISC names,
    a design gallery by specialty, a fillable PDF form, a patient diary, large-print forms, follow-up calls, drug accountability,
    specimens, unblinding log, sign-off columns, payments, calibration, a dry run, a pilot report, training mode, form time,
    change impact, design files, a data sharing package and registry fields. Works through window.EasyBuilder. */

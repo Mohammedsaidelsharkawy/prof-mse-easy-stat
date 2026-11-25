@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — runs the analysis and builds report models (tables, comments, figures) */
+/* Prof Easy Stat — runs the analysis and builds report models (tables, comments, figures) */
 const Analysis = (() => {
   const S = Stats;
   const POSITIVE = /^(yes|y|true|positive|present|1|done|completed|pos)$/i;
@@ -3556,6 +3556,13 @@ const Analysis = (() => {
               // journal paper: no statistic column — the name across both label columns; the footnote says mean ± SD or median (IQR), † marking the medians when both are used
               trows.push([...(opts.statFoot ? [{ t: [r.v.label + (!P && STAT_MIX ? ' †' : '')], b: true, span: 2 }] : [{ t: [r.v.label], b: true }, { t: [P ? meanSdName() : (FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)')] }]), ...pre(r, 1),
                 ...O(n.desc.map((dd, j) => gcell(dd, j, P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d)))), ...tot(true, () => { const dd = totDesc(r); return P ? msd(dd.mean, dd.sd, d) : medIqr(dd, d); }), ...tail(r, 1)]);
+            } else if (opts.secondRow === 'all') {
+              // every descriptive: mean ± SD, 95% CI of the mean, median (IQR) and range, the test's own summary first
+              const ci = dd => { const h = dd.n > 1 ? jStat.studentt.inv(S.QU(), dd.n - 1) * dd.sd / Math.sqrt(dd.n) : NaN; return isFinite(h) ? `${fmt(dd.mean - h, d)} to ${fmt(dd.mean + h, d)}` : '—'; };
+              const L4 = [[meanSdName(), dd => msd(dd.mean, dd.sd, d)], ['95% CI of the mean', ci], [FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)', dd => medIqr(dd, d)], ['Range (min – max)', dd => `${fmt(dd.min, d)} - ${fmt(dd.max, d)}`]];
+              const order = P ? L4 : [L4[2], L4[0], L4[1], L4[3]];
+              order.forEach(([nm, f], q) => trows.push(q === 0 ? [{ t: [r.v.label], b: true, rs: 4 }, { t: [nm] }, ...pre(r, 4), ...O(n.desc.map((dd, j) => gcell(dd, j, f(dd)))), ...tot(true, () => f(totDesc(r))), ...tail(r, 4)]
+                : [{ t: [nm] }, ...O(n.desc.map(dd => ({ t: [f(dd)] }))), ...tot(true, () => f(totDesc(r)))]));
             } else if (opts.secondRow === 'both') {
               // both summaries: the one the test used first, the other below it
               const ms = dd => msd(dd.mean, dd.sd, d), mi = dd => medIqr(dd, d), mName = meanSdName(), iName = FMT.iqr === 'bracket' ? 'Median [IQR]' : 'Median (IQR)';

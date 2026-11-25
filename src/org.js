@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — organisation: projects library and dashboard, tags, archive, dataset versions, analysis log, tasks,
+/* Prof Easy Stat — organisation: projects library and dashboard, tags, archive, dataset versions, analysis log, tasks,
    report profiles, templates, storage, hand-off checklist. The project's own items live in cfg.org, so they are saved with the project. */
 (() => {
   const U = window.EasyUI, X = window.EasyUX2; if (!U || !X) return;

@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — SPSS system file (.sav) reader: data, variable labels, value labels, missing values, dates */
+/* Prof Easy Stat — SPSS system file (.sav) reader: data, variable labels, value labels, missing values, dates */
 const Sav = (() => {
   const SYSMIS = -Number.MAX_VALUE;
   // print-format types that hold dates (seconds since 14 Oct 1582) and date-times

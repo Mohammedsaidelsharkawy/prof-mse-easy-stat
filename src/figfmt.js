@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — the Format pane of a figure, as in Excel: chart area, title, axes, series colours, data labels,
+/* Prof Easy Stat — the Format pane of a figure, as in Excel: chart area, title, axes, series colours, data labels,
    legend and error bars, for the figure shown in the preview of step 7. Saved per variable (v.fmt), used in the report and Word. */
 (() => {
   const U = window.EasyUI; if (!U) return;

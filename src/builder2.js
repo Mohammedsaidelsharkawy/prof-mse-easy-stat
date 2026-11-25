@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — phase 1, more from the design: a protocol and statistical analysis plan, the schedule of assessments,
+/* Prof Easy Stat — phase 1, more from the design: a protocol and statistical analysis plan, the schedule of assessments,
    shell tables, a data dictionary and a one-page summary (Word); randomisation envelopes and the blinding key; an XLSForm for
    KoBoToolbox / ODK and SPSS syntax; versions of a design and the differences between two; and a guided start. */
 (() => {
@@ -40,7 +40,7 @@
   async function saveDoc(children, name, title, landscape) {
     if (CAP) { CAP.push({ children, title, landscape }); return; }
     const { Document, Packer, PageOrientation } = X();
-    const doc = new Document({ creator: 'Prof MSE Easy Stat', title, sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 }, ...(landscape ? { size: { orientation: PageOrientation.LANDSCAPE } } : {}) } }, children }] });
+    const doc = new Document({ creator: 'Prof Easy Stat', title, sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 }, ...(landscape ? { size: { orientation: PageOrientation.LANDSCAPE } } : {}) } }, children }] });
     U.saveUrl(URL.createObjectURL(await Packer.toBlob(doc)), `${B.fileBase()} - ${name}.docx`); toast(`${title} saved`);
   }
 
@@ -93,7 +93,7 @@
     kids.push(H('5. Sample size'), P(ss && !ss.err ? ss.text : 'To be calculated (step 1 of the master sheet builder: main outcome, expected values, power).', { it: !(ss && !ss.err) }));
     const xl = B.xlOpts(D);
     kids.push(H('6. Data collection and management'), P(`Data are recorded on a case report form and typed into an Excel master sheet with drop-down lists for categories, allowed ranges for numbers${D.checks && D.checks.length ? ', rules between columns' : ''}${D.vars.some(v => B.whenParent(D, v)) ? ', skip logic' : ''}${xl.dash ? ', a completeness dashboard' : ''}${xl.ids ? ' and checks of the patient IDs' : ''}.${D.double ? ' Data are entered twice by two people and every difference is checked against the source.' : ''}${xl.protect ? ' The sheet is protected so that only the entry columns can be changed.' : ''}${xl.log ? ' Each row records who entered it and when, and whether it was verified against the source documents.' : ''} Missing values are left ${D.conv.missing === '999' ? 'as 999' : 'empty'}.`));
-    kids.push(H('7. Statistical analysis'), P(`Data will be analysed with Prof MSE Easy Stat. Numeric variables will be checked for normality (Shapiro-Wilk test, histograms and Q-Q plots) and presented as mean ± SD or median (interquartile range); categorical variables as frequency and percentage.${k >= 2 ? ` Baseline characteristics of the ${k} groups will be compared to describe the groups.` : ''} All tests will be two-sided at a significance level of ${alpha}.${D.design === 'rct' ? ' The primary analysis will follow the intention-to-treat principle, with a per-protocol analysis as a sensitivity analysis.' : ''}`));
+    kids.push(H('7. Statistical analysis'), P(`Data will be analysed with Prof Easy Stat. Numeric variables will be checked for normality (Shapiro-Wilk test, histograms and Q-Q plots) and presented as mean ± SD or median (interquartile range); categorical variables as frequency and percentage.${k >= 2 ? ` Baseline characteristics of the ${k} groups will be compared to describe the groups.` : ''} All tests will be two-sided at a significance level of ${alpha}.${D.design === 'rct' ? ' The primary analysis will follow the intention-to-treat principle, with a per-protocol analysis as a sensitivity analysis.' : ''}`));
     const planned = D.vars.filter(v => !['text', 'time'].includes(v.type) && !v.elig && !(v.formula && v.formula.kind === 'eligible') && !(v.scale && v.type !== 'calc'));
     kids.push(P('Planned analysis of each variable:', { bold: true, before: 80 }), T(['Variable', 'Role', 'Visits', 'Planned analysis'], planned.map(v => [vLabel(v), { baseline: 'Baseline', primary: 'Primary outcome', secondary: 'Secondary outcome', outcome: 'Other outcome', safety: 'Safety' }[v.role] || '', visOf(D, v).map(x => x.name).join(', '), plannedTest(D, v)])));
     kids.push(P(`Missing data will be described for each variable; the main analysis will use the available data${D.visits.length > 1 ? ', and patients lost to follow-up will be reported in the flow diagram' : ''}. ${D.visits.length > 1 && D.vars.some(v => visOf(D, v).length > 2) ? 'Comparisons between more than two visits will be adjusted with the Bonferroni method. ' : ''}${D.vars.some(v => v.role === 'primary') ? '' : 'The primary outcome is to be confirmed. '}`, { before: 80 }));
@@ -157,7 +157,7 @@
   }
   function spss(D) {
     const cols = B.columns(D), q = t => `'${String(t).replace(/'/g, "''")}'`, sn = c => xname(c).slice(0, 64), codes = D.conv.catAs === 'codes', L = [];
-    L.push(`* SPSS syntax for "${D.title || 'Master sheet'}" — written by Prof MSE Easy Stat, ${today()}.`, '* 1. Change the path of the file, then run all.', `GET DATA /TYPE=XLSX /FILE='${B.fileBase()} - master sheet.xlsx' /SHEET=name 'Data' /CELLRANGE=RANGE 'A2:${B.colL(cols.length + 16)}100000' /READNAMES=ON.`, 'EXECUTE.', '');
+    L.push(`* SPSS syntax for "${D.title || 'Master sheet'}" — written by Prof Easy Stat, ${today()}.`, '* 1. Change the path of the file, then run all.', `GET DATA /TYPE=XLSX /FILE='${B.fileBase()} - master sheet.xlsx' /SHEET=name 'Data' /CELLRANGE=RANGE 'A2:${B.colL(cols.length + 16)}100000' /READNAMES=ON.`, 'EXECUTE.', '');
     L.push('VARIABLE LABELS', ...cols.map((c, i) => `  ${sn(c.col)} ${q(c.opt !== undefined ? `${c.v.label}: ${c.opt}` : vLabel(c.v) + (c.visit ? ` — ${c.visit.name}` : ''))}${i === cols.length - 1 ? '.' : ''}`), '');
     if (codes) { const vl = cols.filter(c => c.opt !== undefined || c.v.type === 'yn' || c.v.type === 'cat'); if (vl.length) L.push('VALUE LABELS', ...vl.map((c, i) => `  ${i ? '/' : ''}${sn(c.col)} ${(c.opt !== undefined ? ['Yes', 'No'] : c.v.cats).map((x, j) => `${j + 1} ${q(x)}`).join(' ')}`), '  .', ''); }
     const nums = cols.filter(c => c.v.type === 'num' || (c.v.type === 'calc' && !B.calcCats(c.v))).map(c => sn(c.col)), cats = cols.filter(c => c.opt !== undefined || ['yn', 'cat'].includes(c.v.type) || B.calcCats(c.v)).map(c => sn(c.col));
@@ -259,7 +259,7 @@ list();
     sec('Risks and safety monitoring', [`Safety outcomes recorded: ${D.vars.filter(v => v.role === 'safety').map(v => v.label).join(', ') || '[none marked]'}.${D.vars.some(v => v.section === 'Adverse events') ? ' Adverse events are recorded on a log (term, dates, CTCAE grade, seriousness, relation to the treatment, action and outcome); serious adverse events are reported to the committee within the required time.' : ' [Describe how adverse events are recorded and reported.]'}`, '[Describe the foreseeable risks and how they are reduced.]']);
     sec('Consent', 'Written informed consent is taken by a trained investigator before any study procedure (information sheet and consent form attached).');
     sec('Data protection', `Patients are identified by a study number only; the list linking numbers to names is kept separately and securely. Data are entered in a password-protected master sheet${xl.protect ? ' with a protected structure' : ''}${D.double ? ', entered twice and compared' : ''}, and kept for the period required by the institution.`);
-    sec('Statistical analysis', 'Described in the attached protocol and statistical analysis plan (Prof MSE Easy Stat).');
+    sec('Statistical analysis', 'Described in the attached protocol and statistical analysis plan (Prof Easy Stat).');
     const g = ganttPhases(D); sec('Timeline', [T(['Phase', 'From month', 'To month'], g.map(x => [x.name, String(x.from + 1), String(x.to)]), { size: 18 })]);
     await saveDoc(kids, 'ethics summary', 'Ethics application summary'); }
   async function dmpDoc(D) { const xl = B.xlOpts(D), cols = B.columns(D), kids = [P(`${D.title || 'Study'} — data management plan`, { bold: true, size: 28, after: 160 }), P('Draft from the design of the master sheet.', { it: true, color: '555555', after: 160 })];
@@ -284,7 +284,7 @@ list();
     rows.splice(1, rows.length - 1, ...rows.slice(1).sort((p, q) => p[2] < q[2] ? -1 : 1));
     const wb2 = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2, XLSX.utils.aoa_to_sheet(rows), 'Visit calendar'); XLSX.writeFile(wb2, `${B.fileBase()} - visit calendar.xlsx`);
     const dt = d0 => d0.toISOString().slice(0, 10).replace(/-/g, ''), stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
-    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Prof MSE Easy Stat//Visit calendar//EN', 'CALSCALE:GREGORIAN', ...ev.flatMap((e, i) => ['BEGIN:VEVENT', `UID:${dt(e.due)}-${i}@easystat`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${dt(e.due)}`, `DTEND;VALUE=DATE:${dt(new Date(e.due.getTime() + 864e5))}`, `SUMMARY:${String(e.id).replace(/[,;]/g, ' ')} — ${e.visit}`, `DESCRIPTION:${(D.title || '').replace(/[,;\n]/g, ' ')}${e.tl ? ` (window ± ${e.tl} days)` : ''}`, 'END:VEVENT']), 'END:VCALENDAR'].join('\r\n');
+    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Prof Easy Stat//Visit calendar//EN', 'CALSCALE:GREGORIAN', ...ev.flatMap((e, i) => ['BEGIN:VEVENT', `UID:${dt(e.due)}-${i}@easystat`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${dt(e.due)}`, `DTEND;VALUE=DATE:${dt(new Date(e.due.getTime() + 864e5))}`, `SUMMARY:${String(e.id).replace(/[,;]/g, ' ')} — ${e.visit}`, `DESCRIPTION:${(D.title || '').replace(/[,;\n]/g, ' ')}${e.tl ? ` (window ± ${e.tl} days)` : ''}`, 'END:VEVENT']), 'END:VCALENDAR'].join('\r\n');
     setTimeout(() => U.saveUrl(URL.createObjectURL(new Blob([ics], { type: 'text/calendar' })), `${B.fileBase()} - visits.ics`), 400); toast(`${ev.length} visits: a list (Excel) and a calendar file (.ics)`); }
 
   /* ---------- B8: labels with a Code 128 barcode (A4, 3 × 8), printed from the browser ---------- */
@@ -480,7 +480,7 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
         cap.length = 0; labels(Ds, 'patient'); if (pw) await allocationTool(Ds, pw);
         for (const c of cap) XLSX.CFB.utils.cfb_add(z, `${dir}${c.nm.replace(B.fileBase(), `${B.fileBase()} - ${s0.name}`)}`, new Uint8Array(await (await fetch(c.url)).arrayBuffer()));
         const guide = [`${D.title || 'Study'} — site guide: ${s0.name}`, '', `Patient IDs start with “${s0.prefix || ''}”.`, `1. Screen and consent each patient; record them in the master sheet (Data).`, `2. ${pw ? 'Allocate with the allocation tool (password from the coordinator); save its log after each session.' : K(D) >= 2 ? 'Allocate from the randomisation list in order.' : 'No allocation in this study.'}`,
-          `3. Visits: ${D.visits.map(x => `${x.name}${x.day !== undefined && x.day !== '' ? ` (day ${x.day}${+x.tol ? ` ± ${x.tol}` : ''})` : ''}`).join(', ')}.`, '4. Print the labels (A4, 3 × 8) for folders, forms and samples.', '5. Send the master sheet to the coordinator every month; never delete rows.', '', `Made with Prof MSE Easy Stat on ${today()}.`].join('\r\n');
+          `3. Visits: ${D.visits.map(x => `${x.name}${x.day !== undefined && x.day !== '' ? ` (day ${x.day}${+x.tol ? ` ± ${x.tol}` : ''})` : ''}`).join(', ')}.`, '4. Print the labels (A4, 3 × 8) for folders, forms and samples.', '5. Send the master sheet to the coordinator every month; never delete rows.', '', `Made with Prof Easy Stat on ${today()}.`].join('\r\n');
         XLSX.CFB.utils.cfb_add(z, `${dir}Site guide - ${s0.name}.txt`, new TextEncoder().encode(guide)); } }
     finally { U.saveUrl = orig; }
     orig(URL.createObjectURL(new Blob([XLSX.CFB.write(z, { fileType: 'zip', type: 'array', compression: true })], { type: 'application/zip' })), `${B.fileBase()} - site packs.zip`); toast(`${sites.length} site packs in one zip`); }
@@ -535,7 +535,7 @@ $('#ver').onclick=async()=>{const a=st();let prev='start',ok=true;for(const x of
         if (CAP.length > n0) parts.push(CAP[CAP.length - 1].title); } } finally { var got = CAP; CAP = null; }
     if (!got.length) { toast('Nothing to put in the binder'); return; }
     const cover = [P(D.title || 'Study', { bold: true, size: 40, center: true, before: 2400 }), P('Study binder', { size: 30, center: true, after: 400 }), P(`Version ${(D.versionNote || {}).v || '1.0'} · ${today()}`, { center: true, after: 600 }), P('Contents', { bold: true, size: 26 }), ...parts.map((t, i) => P(`${i + 1}. ${t}`, { size: 22 }))];
-    const doc = new Document({ creator: 'Prof MSE Easy Stat', title: `${D.title || 'Study'} — binder`, sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } }, children: cover }, ...got.map(g => ({ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 }, ...(g.landscape ? { size: { orientation: PageOrientation.LANDSCAPE } } : {}) } }, children: g.children }))] });
+    const doc = new Document({ creator: 'Prof Easy Stat', title: `${D.title || 'Study'} — binder`, sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } }, children: cover }, ...got.map(g => ({ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 }, ...(g.landscape ? { size: { orientation: PageOrientation.LANDSCAPE } } : {}) } }, children: g.children }))] });
     void Paragraph; void PageBreak; U.saveUrl(URL.createObjectURL(await Packer.toBlob(doc)), `${B.fileBase()} - study binder.docx`); toast(`Binder saved: ${parts.length} parts`); return parts; }
 
   /* ---------- the cards on the export tab ---------- */

@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 19: getting data in (paste a table, a Google Sheets link, a photo of a data sheet), checking the
+/* Prof Easy Stat — round 19: getting data in (paste a table, a Google Sheets link, a photo of a data sheet), checking the
    data (impossible values, digit preference, suspicious patterns, consistency between columns), one-click group × time and
    questionnaire validation, a results summary table, a supervisor's suggested changes (accept / reject), comparing with another
    saved project, the decision tree of a test, and likely examiner questions with suggested answers. */
@@ -210,7 +210,7 @@
   /* ================= where they open ================= */
   const mk = (txt, title, fn, cls = 'btn ghost small') => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = txt; b.title = title; b.onclick = fn; return b; };
   (function mount() {
-    const up = $('#p1 .card'); if (up) { const r = document.createElement('div'); r.className = 'row'; r.style.cssText = 'gap:6px;flex-wrap:wrap;margin:6px 0'; r.append(mk('📋 Paste a table', 'From Word, a PDF, a web page or Google Sheets', () => pasteDialog()), mk('🔗 Google Sheets link', 'Open a shared Google Sheet or Form responses (needs the internet)', fromGoogle),
+    const up = $('#p1 .card'); if (up) { const r = document.createElement('div'); r.className = 'row'; r.id = 'r19Imp'; r.style.cssText = 'gap:6px;flex-wrap:wrap;margin:6px 0'; r.append(mk('📋 Paste a table', 'From Word, a PDF, a web page or Google Sheets', () => pasteDialog()), mk('🔗 Google Sheets link', 'Open a shared Google Sheet or Form responses (needs the internet)', fromGoogle),
         (() => { const l = document.createElement('label'); l.className = 'btn ghost small'; l.style.margin = '0'; l.title = 'A clear photo of a typed data sheet; every cell must be checked (needs the internet the first time)'; l.innerHTML = '📷 Photo of a data sheet<input type="file" accept="image/*" capture="environment" hidden>'; l.querySelector('input').onchange = e => { if (e.target.files[0]) fromPhoto(e.target.files[0]); }; return l; })()); const h = up.querySelector('h2'); (h || up.firstChild).after(r); }
     const gt = $('#gridAddCol'); if (gt) gt.parentElement.insertBefore(mk('🛡 Data checks', 'Impossible values, digit preference, suspicious patterns, consistency between columns', checks), gt);
     const p3 = $('#p3 .card h2'); if (p3) p3.after(mk('📈 Group × time in one click', 'A mixed model with group × time for every repeated outcome, its curves and a paragraph', groupTime, 'btn primary small'));

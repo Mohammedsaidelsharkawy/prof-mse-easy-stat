@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 5: the data detective: the same patient under two IDs, rules learned from the sheet,
+/* Prof Easy Stat — round 5: the data detective: the same patient under two IDs, rules learned from the sheet,
    columns with mixed units, and date problems (day and month swapped, outside the study period, impossible ages). */
 (() => {
   const U = window.EasyUI, X = window.EasyUX2; if (!U || !X) return;

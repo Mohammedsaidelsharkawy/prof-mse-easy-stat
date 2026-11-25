@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — interface, round 4: report tools in tabs with previews and favourites, report status map, inline editing,
+/* Prof Easy Stat — interface, round 4: report tools in tabs with previews and favourites, report status map, inline editing,
    changes highlighted, page view, step status, next best action, undo toasts, empty states, review mode. Works through window.EasyUI. */
 (() => {
   const U = window.EasyUI; if (!U) return;

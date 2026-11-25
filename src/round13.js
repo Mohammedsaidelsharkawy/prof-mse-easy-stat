@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 13: a right-click menu on the tables and figures of the report (E3),
+/* Prof Easy Stat — round 13: a right-click menu on the tables and figures of the report (E3),
    and auto-save of the project to a folder on the computer (E5). */
 (() => {
   const U = window.EasyUI; if (!U) return;

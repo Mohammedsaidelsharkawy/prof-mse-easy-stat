@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — workflow, round 4: the project checklist, your name for the change log, comparing two datasets,
+/* Prof Easy Stat — workflow, round 4: the project checklist, your name for the change log, comparing two datasets,
    a department's house style, and a guided first analysis. */
 (() => {
   const U = window.EasyUI, X = window.EasyUX2; if (!U || !X) return;

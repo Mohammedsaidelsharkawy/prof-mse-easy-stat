@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 15, UI and UX:
+/* Prof Easy Stat — round 15, UI and UX:
    N1 live report beside the options · N2 what changed · N3 step rings · N4 breadcrumb menu · N5 collapsible cards
    F2 bulk edit (more) · F3 smart-defaults banner · F4 favourite options · F5 recent actions
    P1 progress with stages and Cancel · P2 placeholders · P3 friendly errors · P4 finished summary
@@ -33,7 +33,7 @@
 .ux-crumb{cursor:pointer;top:var(--u15top,62px)!important}.ux-crumb::after{content:' ▾';opacity:.7}.u15-cmenu{position:fixed;z-index:9000;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.2);padding:4px;max-height:60vh;overflow:auto;min-width:220px}
 .u15-cmenu button{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 10px;border-radius:7px;cursor:pointer;color:var(--ink);font:inherit}.u15-cmenu button:hover{background:var(--lav)}
 .card.u15-coll > :not(:first-child){display:none!important}.u15-ct{border:0;background:none;cursor:pointer;font-size:14px;color:var(--muted);padding:0 4px;margin-right:4px;transition:transform .15s}.card.u15-coll .u15-ct{transform:rotate(-90deg)}
-.u15-cbar{display:flex;gap:6px;justify-content:flex-end;margin:0 0 6px}.u15-cbar button{font-size:12px}
+.u15-cbar{display:flex;gap:6px;justify-content:flex-end;margin:6px 0 4px}#u15GBar{max-width:var(--maxw,1600px);margin-left:auto;margin-right:auto;padding:0 6px}.u15-cbar button{font-size:12px}
 .u15-fav{border:0;background:none;cursor:pointer;color:#bbb;font-size:13px;padding:0 3px}.u15-fav.on{color:#E2A400}
 .u15-my{border:1px dashed #E2C060;background:#FFFBEF}.u15-my .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
 .u15-banner{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--lav);border:1px solid var(--lav2);border-radius:12px;padding:10px 12px;margin:0 0 10px}
@@ -149,8 +149,10 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
   function cards() { const pnl = $('#p' + step()); if (!pnl) return; const s = collSet();
     const list = [...pnl.querySelectorAll(':scope .card')].filter(c => !c.closest('#report, .ux2-panel') && c.firstElementChild && c.firstElementChild.querySelector && (c.firstElementChild.matches('h2,h3') || c.firstElementChild.querySelector(':scope > h2, :scope > h3')));
     list.forEach(c => { if (c.dataset.u15c) return; c.dataset.u15c = '1'; const h = c.firstElementChild.matches('h2,h3') ? c.firstElementChild : c.firstElementChild.querySelector('h2, h3'); const b = el('button', 'u15-ct', '▾'); b.type = 'button'; b.title = 'Collapse / expand this card'; b.setAttribute('aria-expanded', 'true'); b.onclick = e => { e.stopPropagation(); toggleCard(c); }; h.prepend(b); if (s.has(cardKey(c))) toggleCard(c, true); });
-    if (list.length > 2 && !pnl.querySelector('.u15-cbar')) { const bar = el('div', 'u15-cbar', '<button class="btn ghost small" type="button" data-u15all="1">▸ Collapse all</button><button class="btn ghost small" type="button" data-u15all="0">▾ Expand all</button>'); const first = pnl.querySelector('.card'); if (first) first.before(bar);
-      bar.onclick = e => { const b = e.target.closest('[data-u15all]'); if (!b) return; pnl.querySelectorAll('.card[data-u15c]').forEach(c => toggleCard(c, b.dataset.u15all === '1')); }; } }
+    // one bar for every step, in the space above the step bar: it folds the cards of the step on screen
+    let bar = $('#u15GBar'); const sp = $('#stepper'); if (!bar && sp) { bar = el('div', 'u15-cbar', '<button class="btn ghost small" type="button" data-u15all="1">▸ Collapse all</button><button class="btn ghost small" type="button" data-u15all="0">▾ Expand all</button>'); bar.id = 'u15GBar'; sp.before(bar);
+      bar.onclick = e => { const b = e.target.closest('[data-u15all]'); if (!b) return; const p0 = $('#p' + step()); if (p0) p0.querySelectorAll('.card[data-u15c]').forEach(c => toggleCard(c, b.dataset.u15all === '1')); }; }
+    if (bar) bar.style.visibility = list.length ? 'visible' : 'hidden'; }
   // A5: the scroll position of each step, per project
   let scT = null; addEventListener('scroll', () => { clearTimeout(scT); scT = setTimeout(() => { if (!S().data) return; const m = LS.get('scroll.' + proj(), {}); m[step()] = Math.round(scrollY); LS.set('scroll.' + proj(), m); }, 400); }, { passive: true });
 
@@ -226,7 +228,7 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
 
   /* ================= A4: installable (when the page is served from a web address) ================= */
   (function install() { try { const logo = ($('.brand img, header img') || {}).src || '';
-      const man = { name: 'Prof MSE Easy Stat', short_name: 'Easy Stat', start_url: '.', display: 'standalone', background_color: '#1C1648', theme_color: '#1C1648', icons: logo ? [{ src: logo, sizes: '192x192 512x512', type: logo.startsWith('data:image/png') ? 'image/png' : 'image/jpeg', purpose: 'any' }] : [] };
+      const man = { name: 'Prof Easy Stat', short_name: 'Easy Stat', start_url: '.', display: 'standalone', background_color: '#1C1648', theme_color: '#1C1648', icons: logo ? [{ src: logo, sizes: '192x192 512x512', type: logo.startsWith('data:image/png') ? 'image/png' : 'image/jpeg', purpose: 'any' }] : [] };
       const l = el('link'); l.rel = 'manifest'; l.href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(man)); document.head.appendChild(l);
       [['theme-color', '#1C1648'], ['apple-mobile-web-app-capable', 'yes'], ['mobile-web-app-capable', 'yes'], ['apple-mobile-web-app-title', 'Easy Stat']].forEach(([n, c]) => { if (!document.querySelector(`meta[name="${n}"]`)) { const m = el('meta'); m.name = n; m.content = c; document.head.appendChild(m); } });
     } catch (e) { /* no manifest */ }

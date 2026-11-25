@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — Arabic text of the report, by rules: the sentences this app writes, its statistical terms, headings and footnotes.
+/* Prof Easy Stat — Arabic text of the report, by rules: the sentences this app writes, its statistical terms, headings and footnotes.
    Labels (variables, groups, categories) are protected while the rules run and take their Arabic name when one is given (step 2 ⚙). */
 const Ar = (() => {
   const NUM = { two: 'المجموعتين', three: 'المجموعات الثلاث', four: 'المجموعات الأربع', five: 'المجموعات الخمس', six: 'المجموعات الست' };

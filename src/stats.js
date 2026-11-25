@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — statistics engine (depends on jStat for distributions) */
+/* Prof Easy Stat — statistics engine (depends on jStat for distributions) */
 const Stats = (() => {
   // confidence level of every interval (95% by default); the quantiles at 95% are the exact constants used before
   let CONF = 0.95;

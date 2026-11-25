@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — master sheet builder: design the data collection sheet of a study (variables, visits, groups, rules),
+/* Prof Easy Stat — master sheet builder: design the data collection sheet of a study (variables, visits, groups, rules),
    then export an Excel master sheet (drop-down lists, allowed ranges, highlighting, formulas, frozen header, codebook, instructions,
    randomisation list, double entry), a case report form (Word) and a REDCap data dictionary. The workbook carries its own setup,
    so when the filled sheet is uploaded the analysis knows every column. Works through window.EasyUI. */
@@ -798,7 +798,7 @@
       ...(XL.protect ? [['12', `The Data sheet is protected: only the entry columns can be typed in${XL.pw ? ' (password kept by the study team)' : ' (Review › Unprotect sheet)'}.`]] : []),
       ...(D.blind ? [['13', 'The groups are blinded (Group A, Group B …): the key is kept apart, by the study statistician.']] : []),
       ...(D.vars.some(v => whenParent(D, v)) ? [['8', `Grey cells are not asked for this patient: ${D.vars.filter(v => whenParent(D, v)).map(v => `${v.label} only when ${whenTxt(D, v)}`).join('; ')}.`]] : []),
-      ['', ''], ['Upload this file to Prof MSE Easy Stat: the setup (labels, units, groups, visits and categories) is read from it.', '']];
+      ['', ''], ['Upload this file to Prof Easy Stat: the setup (labels, units, groups, visits and categories) is read from it.', '']];
     sheets.push({ name: 'Instructions', xml: sheetXml(ins, { widths: [6, 110] }) });
     if (rand) { const rr = [['Stratum', 'No.', 'Allocation', 'Patient ID', 'Date', 'Initials'].map(v => ({ v, s: 1 }))]; rand.forEach((s, si) => s.list.forEach((a, i) => rr.push([s.stratum, i + 1, armOf(a), rand.length === 1 ? ids[i] : hasSite && rand.length === sites.length ? ids[si * per + i] ?? null : null, null, null]))); sheets.push({ name: 'Randomisation', xml: sheetXml(rr, { widths: [30, 6, 16, 12, 12, 10], freeze: { r: 1, c: 0 } }) }); }
     sheets.push({ name: 'Lists', hidden: true, xml: sheetXml(listsRows, {}) });
@@ -847,7 +847,7 @@
       const defs = vs.filter(v => v.definition); if (defs.length) kids.push(P(defs.map(v => `${v.label}: ${v.definition}`).join(' · '), { size: 18, color: '555555', after: 120 })); });
     kids.push(P(''), P('Investigator: ____________________     Signature: ____________     Date: __ / __ / ____', { after: 0 }));
     if (raw) return kids;
-    return Packer.toBlob(new Document({ creator: 'Prof MSE Easy Stat', title: (D.title || 'CRF') + ' — case report form', sections: [{ properties: { page: { margin: { top: 900, bottom: 900, left: 900, right: 900 } } }, children: kids }] }));
+    return Packer.toBlob(new Document({ creator: 'Prof Easy Stat', title: (D.title || 'CRF') + ' — case report form', sections: [{ properties: { page: { margin: { top: 900, bottom: 900, left: 900, right: 900 } } }, children: kids }] }));
   }
 
   /* ---------- REDCap data dictionary ---------- */

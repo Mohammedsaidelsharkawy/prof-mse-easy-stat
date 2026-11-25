@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — Select Cases and Split File, as in SPSS (Data menu).
+/* Prof Easy Stat — Select Cases and Split File, as in SPSS (Data menu).
    Select Cases: all cases, a condition (AND / OR, brackets), a random sample, a range of rows or dates, a filter variable;
    unselected cases filtered out (greyed in the sheet), copied to a new dataset, or deleted.
    Split File: off, compare groups (the subgroups side by side in one table) or organise output by groups (tables for each subgroup). */

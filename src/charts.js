@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — canvas charts (bar ± error, line, box plot, CONSORT) */
+/* Prof Easy Stat — canvas charts (bar ± error, line, box plot, CONSORT) */
 const Charts = (() => {
   const PALETTES = {
     brand: ['#7B2FBE', '#1C1648', '#B57EDC', '#E08A2E', '#2E9E8F', '#C2185B'],
@@ -1881,7 +1881,7 @@ const Charts = (() => {
       if (clip && defs[clip]) out.push('grestore'); }); };
     walk(root, 1);
     const re = f => `/${f} findfont dup length dict begin {1 index /FID ne {def} {pop pop} ifelse} forall /Encoding ISOLatin1Encoding def currentdict end /${f} exch definefont pop`;
-    return ['%!PS-Adobe-3.0 EPSF-3.0', `%%BoundingBox: 0 0 ${Math.ceil(W * k)} ${Math.ceil(H * k)}`, '%%Creator: Prof MSE Easy Stat', '%%EndComments',
+    return ['%!PS-Adobe-3.0 EPSF-3.0', `%%BoundingBox: 0 0 ${Math.ceil(W * k)} ${Math.ceil(H * k)}`, '%%Creator: Prof Easy Stat', '%%EndComments',
       ...['Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique', 'Helvetica-BoldOblique', 'Times-Roman', 'Times-Bold', 'Times-Italic', 'Times-BoldItalic'].map(re),
       'gsave', `${k.toFixed(5)} ${k.toFixed(5)} scale 0 ${H} translate 1 -1 scale`, '1 1 1 setrgbcolor 0 0 moveto ' + W + ' 0 lineto ' + W + ' ' + H + ' lineto 0 ' + H + ' lineto closepath fill', ...out.filter(Boolean), 'grestore', 'showpage', '%%EOF'].join('\n');
   }

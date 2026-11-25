@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 7, easier use: quick start, simple options, step filters, folding, hidden tools, compact preview,
+/* Prof Easy Stat — round 7, easier use: quick start, simple options, step filters, folding, hidden tools, compact preview,
    tips, plain words, glossary tooltips, walkthroughs, what's new, recent tools, shortcuts and commands, one-table Word,
    export everything, touch and colour-blind modes, read aloud, settings history, autosave versions, design detection,
    units, FAQ, explain a table, diagnostics. Works through window.EasyUI. */
@@ -158,7 +158,7 @@ html.e-cb .chip.ok,html.e-cb .ux2-st.auto{color:#1565C0!important}html.e-cb .chi
 
   /* ---------- E50: a diagnostic file for reporting a problem (no patient data) ---------- */
   const ERRS = []; addEventListener('error', e => { ERRS.push(`${new Date().toISOString()} ${e.message} @ ${e.filename}:${e.lineno}`); if (ERRS.length > 30) ERRS.shift(); });
-  function diagnostics() { const c = S().cfg ? JSON.parse(JSON.stringify(S().cfg, (k, v) => k === 'org' ? undefined : v)) : null, d = { app: 'Prof MSE Easy Stat v1.0', version: VERSION, at: new Date().toISOString(), browser: navigator.userAgent, screen: `${innerWidth}×${innerHeight}`, step: step(), rows: S().data ? S().data.rows.length : 0, columns: S().data ? S().data.headers.length : 0, settings: c, errors: ERRS };
+  function diagnostics() { const c = S().cfg ? JSON.parse(JSON.stringify(S().cfg, (k, v) => k === 'org' ? undefined : v)) : null, d = { app: 'Prof Easy Stat v1.0', version: VERSION, at: new Date().toISOString(), browser: navigator.userAgent, screen: `${innerWidth}×${innerHeight}`, step: step(), rows: S().data ? S().data.rows.length : 0, columns: S().data ? S().data.headers.length : 0, settings: c, errors: ERRS };
     U.saveUrl(URL.createObjectURL(new Blob([JSON.stringify(d, null, 1)], { type: 'application/json' })), 'Easy Stat - diagnostic (no patient data).json'); U.toast('Diagnostic file saved: the settings and errors, without any patient data'); }
 
   /* ---------- the View options, the menu, and the hooks ---------- */

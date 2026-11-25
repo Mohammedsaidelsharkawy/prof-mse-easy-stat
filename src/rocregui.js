@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 10 tools in ☰ More: an interactive ROC cut-off explorer (R10) and the sample size of a
+/* Prof Easy Stat — round 10 tools in ☰ More: an interactive ROC cut-off explorer (R10) and the sample size of a
    diagnostic accuracy study (R11). */
 (() => {
   const U = window.EasyUI, X = window.EasyUX2; if (!U || !X || !X.panel) return;

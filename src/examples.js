@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — built-in example datasets (simulated, reproducible) */
+/* Prof Easy Stat — built-in example datasets (simulated, reproducible) */
 const Examples = (() => {
   // seeded generator so every user gets the same example data
   function rng(seed) {

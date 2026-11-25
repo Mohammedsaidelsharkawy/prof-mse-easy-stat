@@ -1,4 +1,4 @@
-/* Prof MSE Easy Stat — round 7, organisation: projects with folders, colours, pins, search, duplicate, status, backup;
+/* Prof Easy Stat — round 7, organisation: projects with folders, colours, pins, search, duplicate, status, backup;
    merge another file's rows; notes and attachments; a timeline; the report organised (chapters, appendix, labels, stars,
    status, per report); cross-references; variable sets; an analysis plan board; milestones and their comparison; table
    history; a task board with templates; weekly summary; time log; people, assignments, mentions; read-only copies;
