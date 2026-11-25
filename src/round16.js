@@ -48,7 +48,9 @@
   // step 1: the ways to start, in one row before “📋 Paste from Excel”
   function startRow() { const pb = $('#btnPaste'); if (!pb) return; const row = pb.parentElement;
     ['#r19Imp .btn', '#r19Imp label.btn', '#ezSample', '#ezQuickB'].forEach(q => document.querySelectorAll(q).forEach(x => { if (x.parentElement !== row) row.insertBefore(x, pb); }));
-    ['#r19Imp', '#ezSample', '#ezQuickB'].forEach(() => {}); document.querySelectorAll('#p1 .card > .row').forEach(r => { if (r !== row && !r.children.length) r.remove(); }); }
+    // round 20: 📋 Paste from Excel first; no ⚡ Make my report, 🧱 Master sheet builder or 👀 example-report buttons here (the builder is in the bar above, the examples below)
+    ['#ezSample', '#ezQuickB', '#btnBuilder'].forEach(q => { const x = $(q); if (x) x.style.display = 'none'; }); if (row.firstElementChild !== pb) row.prepend(pb);
+    document.querySelectorAll('#p1 .card > .row').forEach(r => { if (r !== row && ![...r.children].some(c => c.style.display !== 'none')) r.style.display = 'none'; }); }
   setInterval(() => { if (S().step === 1 || !S().data) { details(); startRow(); } }, 800); details(); setTimeout(startRow, 900);
   window.EasyR16 = { drawTick, details };
 })();

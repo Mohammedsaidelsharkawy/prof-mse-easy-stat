@@ -236,7 +236,7 @@
     o.onclick = e => { const b = e.target.closest('[data-o]'); if (!b) return; o.remove(); if (b.dataset.o === 'y') tour(0); }; setTimeout(() => o.remove(), 20000); }
 
   /* ---------- 2. "What do you want to do?" — sets up the analyses for the goal ---------- */
-  const GOALS = [['groups', 'Compare groups'], ['paired', 'Before / after'], ['survival', 'Survival'], ['diagnostic', 'Diagnostic test'], ['agreement', 'Agreement'], ['prediction', 'Prediction model']];
+  const GOALS = [['groups', 'Compare groups'], ['paired', 'Before / after'], ['survival', 'Survival'], ['diagnostic', 'Diagnostic test'], ['agreement', 'Agreement'], ['prediction', 'Prediction model'], ['risk', 'Risk factors'], ['adjusted', 'Adjusted comparison'], ['correlation', 'Correlation'], ['linreg', 'Predict a number'], ['methods', 'Compare two methods']];
   const p1card = $('#p1 .card');
   if (p1card) { const g = el('div', 'ux-goals'); g.innerHTML = `<span class="legend-note">What do you want to do?</span> ${GOALS.map(([k, l]) => `<button class="chip ux-goal ${ls.get('goal') === k ? 'on' : ''}" data-goal="${k}" type="button">${l}</button>`).join('')}<span class="legend-note" id="uxGoalNote"></span>`;
     p1card.insertBefore(g, p1card.children[1] || null);
@@ -254,6 +254,12 @@
     else if (k === 'diagnostic' && bin[0]) add({ type: 'roc', outcome: bin[0], positive: pos(bin[0]), predictors: num.slice(0, 3) });
     else if (k === 'prediction' && bin[0]) add({ type: 'logistic', outcome: bin[0], positive: pos(bin[0]), predictors: num.slice(0, 5) });
     else if (k === 'agreement') add({ type: 'kappa' });
+    else if (k === 'risk' && bin[0]) { const o = bin.find(h => /complic|death|died|mortal|event|outcome|success|fail|recur|relapse|infect/i.test(h)) || bin[0]; add({ type: 'logistic', outcome: o, positive: pos(o), predictors: [...num, ...bin.filter(h => h !== o)].slice(0, 10), univariable: true }); }
+    else if (k === 'adjusted' && st.cfg.groupCol && num.length) { const o = num.slice().reverse().find(h => /post|after|final|end|follow|m\d+$|w\d+$|d\d+$/i.test(h)) || num[num.length - 1], bse = num.find(h => h !== o && h.replace(/[_\s-]*(pre|post|before|after|baseline|base|final|end|d?\d+|m\d+|w\d+)$/i, '') === o.replace(/[_\s-]*(pre|post|before|after|baseline|base|final|end|d?\d+|m\d+|w\d+)$/i, '')); add({ type: 'ancova', outcome: o, predictors: [bse, num.find(h => /^age/i.test(h))].filter(Boolean) }); }
+    else if (k === 'correlation' && num.length >= 2) add({ type: 'correlation', outcome: '', predictors: num.slice(0, 8) });
+    else if (k === 'linreg' && num.length >= 2) { const o = num[num.length - 1]; add({ type: 'linear', outcome: o, predictors: num.filter(h => h !== o).slice(0, 6) }); }
+    else if (k === 'methods') { const re = /(method|device|rater|reader|observer|manual|auto|machine|lab|poc|point|test)[_\s-]?([ab12])?$|[_\s-]([ab12])$/i, stem = h => h.replace(re, '').replace(/[_\s-]+$/, '').toLowerCase(), c = num.filter(h => re.test(h)), pr = c.map((a, i) => [a, c.slice(i + 1).find(b2 => stem(b2) === stem(a))]).find(x => x[1]);
+      if (pr) add({ type: 'agreement', outcome: pr[0], second: pr[1] }); else { U.toast('Goal: compare two methods — choose the two measurements in step 8 → ICC / Bland-Altman'); return; } }
     else if (k === 'groups') { U.toast('Goal: compare groups — every variable ticked in step 2 is compared between the groups'); return; }
     U.toast(A.length > n0 ? `Goal “${GOALS.find(g => g[0] === k)[1]}”: analysis added in step 8 — check its columns there` : 'Goal set — the matching analyses are already in step 8, or choose the columns there');
   }

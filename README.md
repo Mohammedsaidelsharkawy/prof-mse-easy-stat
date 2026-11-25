@@ -250,6 +250,11 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Step 1**: 📋 Paste from Excel first; a lower drop zone; ⚡ Make my report, 🧱 Master sheet builder and 👀 See a finished example report removed from the start row (the builder stays in the bar at the top); “Example dataset” heading; the software-statement hint removed.
+**⬇ Blank template…** now has options: study design (two or three groups, before/after, case-control, cross-sectional, diagnostic, survival), groups, baseline columns, repeated measures and timepoints, outcome columns, rows with IDs ready (and the Group column filled in turn), Guide and Codes sheets, Excel or CSV.
+**What do you want to do?** five more goals: Risk factors (logistic), Adjusted comparison (ANCOVA), Correlation, Predict a number (linear regression), Compare two methods (ICC / Bland-Altman).
+**▸ Collapse all / ▾ Expand all** on the same line as 🧱 Build · 🎲 Generate · 📊 Analyse.
+**Master sheet builder**: 13 more templates, with a new Medicine group — diabetes drug RCT, antihypertensive RCT, acute coronary syndrome, chronic kidney disease, chronic liver disease, sepsis biomarker diagnostic study, depression RCT, knee osteoarthritis RCT, stroke rehabilitation, older adults cross-sectional, vitamin D cross-sectional, neonatal outcomes, major surgery blood loss.
 **Expected values in each group** (🧱 Master sheet builder → Variables, with two or more groups): a mean and SD per group for numbers, a % per category per group for yes/no and categories; the generator uses them (empty cells use the overall expected values; a % left empty shares what remains).
 **8 more example datasets** (18 in all): spinal hypotension RCT, heart-failure echo cohort, neonatal jaundice RCT, periodontal therapy RCT, glaucoma IOP 3-arm trial, IVF protocol cohort, stroke rehabilitation RCT, liver fibrosis diagnostic accuracy.
 **Footer**: “runs fully offline in your browser” removed.

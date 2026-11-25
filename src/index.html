@@ -163,10 +163,11 @@ main{max-width:1920px;margin:0 auto;padding:16px clamp(12px,2vw,28px) 60px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .nav{display:flex;justify-content:space-between;margin-top:6px}
 
-.drop{border:2.5px dashed var(--lav2);border-radius:16px;padding:40px 20px;text-align:center;background:var(--lav);cursor:pointer;transition:.15s}
+.drop{border:2.5px dashed var(--lav2);border-radius:16px;padding:12px 16px;text-align:center;background:var(--lav);cursor:pointer;transition:.15s}
 .drop:hover,.drop.over{border-color:var(--purple);background:var(--drop-over)}
 .drop .big{font-size:18px;font-weight:700;color:var(--title)}
-.drop svg{width:52px;height:52px;color:var(--purple)}
+.drop svg{width:30px;height:30px;color:var(--purple)}
+.drop{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;column-gap:10px;row-gap:2px}.drop>.legend-note{flex-basis:100%}
 
 label.f{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:4px}
 input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--field);color:var(--ink);width:100%}
@@ -838,12 +839,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end"><div style="flex:2 1 260px"><label class="f">Project name (names the saved files and the entry in My projects)</label><input type="text" id="projName" placeholder="e.g. PRF thesis — results chapter"></div><div style="flex:1 1 200px"><label class="f">Type of the study</label><select id="studyType"><option value="">— choose —</option><option value="rct">Randomised controlled trial</option><option value="nrct">Non-randomised trial</option><option value="pcohort">Prospective cohort</option><option value="rcohort">Retrospective cohort</option><option value="casecontrol">Case-control</option><option value="cross">Cross-sectional</option><option value="diagnostic">Diagnostic accuracy</option><option value="prepost">Before–after (one group)</option><option value="series">Case series</option><option value="review">Systematic review / meta-analysis</option><option value="other">Other</option></select></div></div>
         <div style="display:none"><label class="f">Study title</label><input type="text" id="studyTitle"></div>
         <div><label class="f">Software statement (first sentence of Statistical Analysis)</label>
-          <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA)."></div>
-          <div class="legend-note">Pick a template, then check the version. Name the software actually used for the analysis you report.</div></div>
+          <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA)."></div></div>
       </div>
     </div>
     <div class="card">
-      <h2>Or try an example dataset</h2>
+      <h2>Example dataset</h2>
       <p class="hint">Simulated studies that show the expected sheet layout and the analyses. Open one to explore the app, or download it as Excel to see how to arrange your own data.</p>
       <div id="examples" class="grid g2"></div>
     </div>

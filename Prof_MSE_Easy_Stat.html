@@ -163,10 +163,11 @@ main{max-width:1920px;margin:0 auto;padding:16px clamp(12px,2vw,28px) 60px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .nav{display:flex;justify-content:space-between;margin-top:6px}
 
-.drop{border:2.5px dashed var(--lav2);border-radius:16px;padding:40px 20px;text-align:center;background:var(--lav);cursor:pointer;transition:.15s}
+.drop{border:2.5px dashed var(--lav2);border-radius:16px;padding:12px 16px;text-align:center;background:var(--lav);cursor:pointer;transition:.15s}
 .drop:hover,.drop.over{border-color:var(--purple);background:var(--drop-over)}
 .drop .big{font-size:18px;font-weight:700;color:var(--title)}
-.drop svg{width:52px;height:52px;color:var(--purple)}
+.drop svg{width:30px;height:30px;color:var(--purple)}
+.drop{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;column-gap:10px;row-gap:2px}.drop>.legend-note{flex-basis:100%}
 
 label.f{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:4px}
 input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--field);color:var(--ink);width:100%}
@@ -838,12 +839,11 @@ dialog#figDlg::backdrop{background:rgba(20,17,34,.45)}
         <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end"><div style="flex:2 1 260px"><label class="f">Project name (names the saved files and the entry in My projects)</label><input type="text" id="projName" placeholder="e.g. PRF thesis — results chapter"></div><div style="flex:1 1 200px"><label class="f">Type of the study</label><select id="studyType"><option value="">— choose —</option><option value="rct">Randomised controlled trial</option><option value="nrct">Non-randomised trial</option><option value="pcohort">Prospective cohort</option><option value="rcohort">Retrospective cohort</option><option value="casecontrol">Case-control</option><option value="cross">Cross-sectional</option><option value="diagnostic">Diagnostic accuracy</option><option value="prepost">Before–after (one group)</option><option value="series">Case series</option><option value="review">Systematic review / meta-analysis</option><option value="other">Other</option></select></div></div>
         <div style="display:none"><label class="f">Study title</label><input type="text" id="studyTitle"></div>
         <div><label class="f">Software statement (first sentence of Statistical Analysis)</label>
-          <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA)."></div>
-          <div class="legend-note">Pick a template, then check the version. Name the software actually used for the analysis you report.</div></div>
+          <div class="row" style="flex-wrap:nowrap"><select id="softwarePreset" style="max-width:190px" title="Insert a ready-made statement"></select><input type="text" id="software" value="Statistical analysis was performed using IBM SPSS Statistics, version 28.0 (IBM Corp., Armonk, NY, USA)."></div></div>
       </div>
     </div>
     <div class="card">
-      <h2>Or try an example dataset</h2>
+      <h2>Example dataset</h2>
       <p class="hint">Simulated studies that show the expected sheet layout and the analyses. Open one to explore the app, or download it as Excel to see how to arrange your own data.</p>
       <div id="examples" class="grid g2"></div>
     </div>
@@ -40798,7 +40798,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     o.onclick = e => { const b = e.target.closest('[data-o]'); if (!b) return; o.remove(); if (b.dataset.o === 'y') tour(0); }; setTimeout(() => o.remove(), 20000); }
 
   /* ---------- 2. "What do you want to do?" — sets up the analyses for the goal ---------- */
-  const GOALS = [['groups', 'Compare groups'], ['paired', 'Before / after'], ['survival', 'Survival'], ['diagnostic', 'Diagnostic test'], ['agreement', 'Agreement'], ['prediction', 'Prediction model']];
+  const GOALS = [['groups', 'Compare groups'], ['paired', 'Before / after'], ['survival', 'Survival'], ['diagnostic', 'Diagnostic test'], ['agreement', 'Agreement'], ['prediction', 'Prediction model'], ['risk', 'Risk factors'], ['adjusted', 'Adjusted comparison'], ['correlation', 'Correlation'], ['linreg', 'Predict a number'], ['methods', 'Compare two methods']];
   const p1card = $('#p1 .card');
   if (p1card) { const g = el('div', 'ux-goals'); g.innerHTML = `<span class="legend-note">What do you want to do?</span> ${GOALS.map(([k, l]) => `<button class="chip ux-goal ${ls.get('goal') === k ? 'on' : ''}" data-goal="${k}" type="button">${l}</button>`).join('')}<span class="legend-note" id="uxGoalNote"></span>`;
     p1card.insertBefore(g, p1card.children[1] || null);
@@ -40816,6 +40816,12 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     else if (k === 'diagnostic' && bin[0]) add({ type: 'roc', outcome: bin[0], positive: pos(bin[0]), predictors: num.slice(0, 3) });
     else if (k === 'prediction' && bin[0]) add({ type: 'logistic', outcome: bin[0], positive: pos(bin[0]), predictors: num.slice(0, 5) });
     else if (k === 'agreement') add({ type: 'kappa' });
+    else if (k === 'risk' && bin[0]) { const o = bin.find(h => /complic|death|died|mortal|event|outcome|success|fail|recur|relapse|infect/i.test(h)) || bin[0]; add({ type: 'logistic', outcome: o, positive: pos(o), predictors: [...num, ...bin.filter(h => h !== o)].slice(0, 10), univariable: true }); }
+    else if (k === 'adjusted' && st.cfg.groupCol && num.length) { const o = num.slice().reverse().find(h => /post|after|final|end|follow|m\d+$|w\d+$|d\d+$/i.test(h)) || num[num.length - 1], bse = num.find(h => h !== o && h.replace(/[_\s-]*(pre|post|before|after|baseline|base|final|end|d?\d+|m\d+|w\d+)$/i, '') === o.replace(/[_\s-]*(pre|post|before|after|baseline|base|final|end|d?\d+|m\d+|w\d+)$/i, '')); add({ type: 'ancova', outcome: o, predictors: [bse, num.find(h => /^age/i.test(h))].filter(Boolean) }); }
+    else if (k === 'correlation' && num.length >= 2) add({ type: 'correlation', outcome: '', predictors: num.slice(0, 8) });
+    else if (k === 'linreg' && num.length >= 2) { const o = num[num.length - 1]; add({ type: 'linear', outcome: o, predictors: num.filter(h => h !== o).slice(0, 6) }); }
+    else if (k === 'methods') { const re = /(method|device|rater|reader|observer|manual|auto|machine|lab|poc|point|test)[_\s-]?([ab12])?$|[_\s-]([ab12])$/i, stem = h => h.replace(re, '').replace(/[_\s-]+$/, '').toLowerCase(), c = num.filter(h => re.test(h)), pr = c.map((a, i) => [a, c.slice(i + 1).find(b2 => stem(b2) === stem(a))]).find(x => x[1]);
+      if (pr) add({ type: 'agreement', outcome: pr[0], second: pr[1] }); else { U.toast('Goal: compare two methods — choose the two measurements in step 8 → ICC / Bland-Altman'); return; } }
     else if (k === 'groups') { U.toast('Goal: compare groups — every variable ticked in step 2 is compared between the groups'); return; }
     U.toast(A.length > n0 ? `Goal “${GOALS.find(g => g[0] === k)[1]}”: analysis added in step 8 — check its columns there` : 'Goal set — the matching analyses are already in step 8, or choose the columns there');
   }
@@ -41598,7 +41604,44 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       vars: [['Age'], ['Sex'], ['Weight'], ['Systolic BP', 'all'], ['Diastolic BP', 'all'], ['Heart rate', 'all'], ['Adverse event', 'post'], ['Withdrawn', 'last']],
       primary: 'Systolic BP', secondary: ['Diastolic BP'], ss: { m: 'anova', means: '132, 128, 125, 135', sd: 12 } },
     surgery: { cat: 'Surgery', name: 'Surgical outcomes study', design: 'cohort', arms: ['Technique A', 'Technique B'], visits: ['Pre-operative', 'Day 1', 'Month 1'],
-      vars: [['Age'], ['Sex'], ['ASA class'], ['Hypertension'], ['Diabetes'], ['Date of surgery'], ['Operative time'], ['Blood loss'], ['Pain VAS', 'all'], ['Date of admission'], ['Date of discharge'], ['LOS*'], ['Complications', 'last'], ['Reoperation', 'last']] }
+      vars: [['Age'], ['Sex'], ['ASA class'], ['Hypertension'], ['Diabetes'], ['Date of surgery'], ['Operative time'], ['Blood loss'], ['Pain VAS', 'all'], ['Date of admission'], ['Date of discharge'], ['LOS*'], ['Complications', 'last'], ['Reoperation', 'last']] },
+    // more designs (round 20)
+    dmrct: { cat: 'Medicine', name: 'Diabetes drug RCT (HbA1c)', design: 'rct', arms: ['New drug', 'Standard treatment'], visits: ['Baseline', 'Month 3', 'Month 6'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight', 'all'], ['Height'], ['BMI*'], ['Hypertension'], ['Dyslipidaemia'], ['Fasting glucose', 'all'], ['HbA1c', 'all'], ['LDL cholesterol', 'all'], ['Creatinine', 'all'], ['Adverse event', 'post'], ['Adherence', 'last'], ['Withdrawn', 'last']],
+      primary: 'HbA1c', secondary: ['Fasting glucose', 'Weight', 'LDL cholesterol'], ss: { a: 7.2, b: 7.7, sd: 1 } },
+    htnrct: { cat: 'Medicine', name: 'Antihypertensive RCT (blood pressure)', design: 'rct', arms: ['Drug A', 'Drug B'], visits: ['Baseline', 'Week 4', 'Week 12'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['Diabetes'], ['Smoking'], ['Systolic BP', 'all'], ['Diastolic BP', 'all'], ['Heart rate', 'all'], ['Potassium', 'all'], ['Creatinine', 'all'], ['Adverse event', 'post'], ['Withdrawn', 'last']],
+      primary: 'Systolic BP', secondary: ['Diastolic BP', 'Heart rate'], ss: { a: 132, b: 138, sd: 12 } },
+    acs: { cat: 'Medicine', name: 'Acute coronary syndrome cohort', design: 'cohort', arms: ['STEMI', 'NSTEMI'], visits: ['Admission', 'Discharge'],
+      vars: [['Age'], ['Sex'], ['Smoking'], ['Hypertension'], ['Diabetes'], ['Dyslipidaemia'], ['Chronic kidney disease'], ['Systolic BP'], ['Heart rate'], ['Troponin', 'all'], ['CRP'], ['Creatinine'], ['LDL cholesterol'], ['Heart failure', 'last'], ['ICU admission', 'last'], ['Length of stay', 'last'], ['Mortality', 'last']],
+      primary: 'Mortality', secondary: ['Heart failure', 'Length of stay'], ss: { a: 10, b: 5 } },
+    ckd: { cat: 'Medicine', name: 'Chronic kidney disease follow-up cohort', design: 'cohort', arms: ['Stage 3', 'Stage 4'], visits: ['Baseline', 'Month 6', 'Month 12'],
+      vars: [['Age'], ['Sex'], ['Hypertension'], ['Diabetes'], ['Systolic BP', 'all'], ['Creatinine', 'all'], ['Urea', 'all'], ['Haemoglobin', 'all'], ['Potassium', 'all'], ['Albumin', 'all'], ['Renal replacement therapy', 'last'], ['Readmission', 'last'], ['Mortality', 'last']],
+      primary: 'Renal replacement therapy', secondary: ['Creatinine', 'Haemoglobin'], ss: { a: 25, b: 10 } },
+    liver: { cat: 'Medicine', name: 'Chronic liver disease cohort', design: 'cohort', arms: ['Compensated', 'Decompensated'], visits: ['Baseline', 'Month 6'],
+      vars: [['Age'], ['Sex'], ['Diabetes'], ['ALT', 'all'], ['AST', 'all'], ['Albumin', 'all'], ['Total bilirubin', 'all'], ['INR', 'all'], ['Platelets', 'all'], ['Sodium'], ['Creatinine'], ['ICU admission', 'last'], ['Readmission', 'last'], ['Mortality', 'last']],
+      primary: 'Mortality', secondary: ['Total bilirubin', 'Albumin'], ss: { a: 20, b: 8 } },
+    sepsisdx: { cat: 'Diagnostic', name: 'Biomarker diagnostic study (e.g. sepsis)', design: 'diagnostic', arms: [], visits: ['Admission'],
+      vars: [['Age'], ['Sex'], ['Temperature'], ['Heart rate'], ['Respiratory rate'], ['WBC'], ['CRP'], ['Lactate'], ['Index test value'], ['Index test result'], ['Reference standard'], ['Mortality']] },
+    depress: { cat: 'Medicine', name: 'Depression treatment RCT (PHQ-9)', design: 'rct', arms: ['Intervention', 'Usual care'], visits: ['Baseline', 'Week 6', 'Week 12'], rand: true,
+      vars: [['Age'], ['Sex'], ['Marital status'], ['Education'], ['Occupation'], ['PHQ-9', 'all'], ['GAD-7', 'all'], ['Adverse event', 'post'], ['Adherence', 'last'], ['Satisfaction', 'last'], ['Withdrawn', 'last']],
+      primary: 'PHQ-9', secondary: ['GAD-7'], ss: { a: 8, b: 11, sd: 5 } },
+    knee: { cat: 'Surgery', name: 'Knee osteoarthritis RCT (WOMAC)', design: 'rct', arms: ['Injection', 'Physiotherapy'], visits: ['Baseline', 'Month 1', 'Month 3', 'Month 6'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['Diabetes'], ['Pain VAS', 'all'], ['WOMAC', 'all'], ['Adverse event', 'post'], ['Satisfaction', 'last']],
+      primary: 'WOMAC', secondary: ['Pain VAS'], ss: { a: 35, b: 45, sd: 15 } },
+    stroke: { cat: 'Medicine', name: 'Stroke rehabilitation RCT (Barthel)', design: 'rct', arms: ['Intensive rehabilitation', 'Standard rehabilitation'], visits: ['Baseline', 'Month 1', 'Month 3'], rand: true,
+      vars: [['Age'], ['Sex'], ['Hypertension'], ['Diabetes'], ['Glasgow coma scale'], ['Barthel index', 'all'], ['MMSE', 'all'], ['PHQ-9', 'last'], ['Readmission', 'last'], ['Mortality', 'last']],
+      primary: 'Barthel index', secondary: ['MMSE', 'PHQ-9'], ss: { a: 70, b: 60, sd: 18 } },
+    geri: { cat: 'Observational', name: 'Older adults cross-sectional study (cognition and function)', design: 'cross', arms: [], visits: ['Baseline'],
+      vars: [['Age'], ['Sex'], ['Residence'], ['Marital status'], ['Education'], ['Hypertension'], ['Diabetes'], ['Stroke'], ['Haemoglobin'], ['Vitamin D'], ['MMSE'], ['Barthel index'], ['PHQ-9']] },
+    vitd: { cat: 'Observational', name: 'Vitamin D and metabolic markers (cross-sectional)', design: 'cross', arms: [], visits: ['Baseline'],
+      vars: [['Age'], ['Sex'], ['Residence'], ['Weight'], ['Height'], ['BMI*'], ['Diabetes'], ['Hypertension'], ['Vitamin D'], ['Fasting glucose'], ['HbA1c'], ['LDL cholesterol'], ['CRP']] },
+    neonate: { cat: 'Observational', name: 'Neonatal outcomes cohort', design: 'cohort', arms: ['Preterm', 'Term'], visits: ['Birth', 'Discharge'],
+      vars: [['Sex'], ['Gestational age'], ['Birth weight'], ['Mode of delivery'], ['Apgar score at 1 minute'], ['Apgar score at 5 minutes'], ['Umbilical artery pH'], ['Mechanical ventilation'], ['NICU admission'], ['Total bilirubin', 'all'], ['Length of stay', 'last'], ['Mortality', 'last']],
+      primary: 'NICU admission', secondary: ['Length of stay', 'Mechanical ventilation'], ss: { a: 40, b: 10 } },
+    periop: { cat: 'Surgery', name: 'Major surgery: blood loss and transfusion cohort', design: 'cohort', arms: ['Technique A', 'Technique B'], visits: ['Pre-operative', 'Day 1', 'Day 3'],
+      vars: [['Age'], ['Sex'], ['ASA class'], ['Weight'], ['Anaesthesia'], ['Operative time'], ['Blood loss'], ['Haemoglobin', 'all'], ['Platelets', 'all'], ['INR', 'all'], ['Intraoperative complications'], ['ICU admission', 'last'], ['Complications', 'last'], ['Length of stay', 'last'], ['Reoperation', 'last']],
+      primary: 'Blood loss', secondary: ['Haemoglobin', 'Complications', 'Length of stay'], ss: { a: 450, b: 600, sd: 200 } }
   };
   const blank = () => ({ title: '', design: 'rct', n: 60, arms: ['Group A', 'Group B'], idPrefix: 'P', idDigits: 3, visits: [{ id: 'v0', name: 'Baseline' }], sections: [],
     conv: { naming: 'label', missing: 'blank', date: 'dd/mm/yyyy', catAs: 'words' }, layout: 'wide', rand: { on: false, type: 'block', sizes: '4', strata: [], seed: 20261106, prefill: true }, double: false, checks: [], vars: [] });
@@ -42305,7 +42348,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   function render() {
     const w = $('#mbWrap'); if (!w) return; const pr = problems(D);
     w.innerHTML = `<div class="mb-head"><b>🧱 Master sheet builder</b><span class="legend-note">${esc(D.title || 'Untitled study')} · ${D.vars.length} variables · ${columns(D).length} columns</span><span class="spacer"></span>
-      <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${['Anaesthesia and pain', 'Surgery', 'Trials', 'Observational', 'Diagnostic'].map(c => `<optgroup label="${c}">${opt(Object.entries(TEMPLATES).filter(([, t]) => (t.cat || 'Trials') === c).map(([k, t]) => [k, t.name]), '')}</optgroup>`).join('')}<option value="__blank">Empty design</option></select>
+      <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${['Anaesthesia and pain', 'Surgery', 'Medicine', 'Trials', 'Observational', 'Diagnostic'].map(c => `<optgroup label="${c}">${opt(Object.entries(TEMPLATES).filter(([, t]) => (t.cat || 'Trials') === c).map(([k, t]) => [k, t.name]), '')}</optgroup>`).join('')}<option value="__blank">Empty design</option></select>
       <select id="mbMine" style="width:auto"><option value="">My designs…</option>${opt(Object.keys(ls.get('designs', {})).map(k => [k, k]), '')}</select>
       <button class="btn ghost small" id="mbUndo" type="button" title="Undo (Ctrl+Z)" ${undoS.length ? '' : 'disabled'}>↶</button><button class="btn ghost small" id="mbRedo" type="button" title="Redo (Ctrl+Y)" ${redoS.length ? '' : 'disabled'}>↷</button>
       <label class="btn ghost small" style="margin:0" title="Make the design from a REDCap data dictionary (.csv) or an XLSForm of KoBoToolbox / ODK (.xlsx)">⬆ From REDCap / XLSForm<input type="file" id="mbFromDict" accept=".csv,.xlsx,.xls" hidden></label>
@@ -46543,7 +46586,7 @@ html.e-cb .chip.ok,html.e-cb .ux2-st.auto{color:#1565C0!important}html.e-cb .chi
 .ux-crumb{cursor:pointer;top:var(--u15top,62px)!important}.ux-crumb::after{content:' ▾';opacity:.7}.u15-cmenu{position:fixed;z-index:9000;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.2);padding:4px;max-height:60vh;overflow:auto;min-width:220px}
 .u15-cmenu button{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 10px;border-radius:7px;cursor:pointer;color:var(--ink);font:inherit}.u15-cmenu button:hover{background:var(--lav)}
 .card.u15-coll > :not(:first-child){display:none!important}.u15-ct{border:0;background:none;cursor:pointer;font-size:14px;color:var(--muted);padding:0 4px;margin-right:4px;transition:transform .15s}.card.u15-coll .u15-ct{transform:rotate(-90deg)}
-.u15-cbar{display:flex;gap:6px;justify-content:flex-end;margin:6px 0 4px}#u15GBar{max-width:var(--maxw,1600px);margin-left:auto;margin-right:auto;padding:0 6px}.u15-cbar button{font-size:12px}
+.u15-cbar{display:flex;gap:6px;justify-content:flex-end;margin:6px 0 4px}#u15GBar{max-width:var(--maxw,1600px);margin-left:auto;margin-right:auto;padding:0 6px}#u15GBar.u15-inphase{margin:0 0 0 14px;padding:0;max-width:none}.ph-build #u15GBar,.ph-generate #u15GBar{display:none}.u15-cbar button{font-size:12px}
 .u15-fav{border:0;background:none;cursor:pointer;color:#bbb;font-size:13px;padding:0 3px}.u15-fav.on{color:#E2A400}
 .u15-my{border:1px dashed #E2C060;background:#FFFBEF}.u15-my .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
 .u15-banner{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--lav);border:1px solid var(--lav2);border-radius:12px;padding:10px 12px;margin:0 0 10px}
@@ -46660,9 +46703,9 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
     const list = [...pnl.querySelectorAll(':scope .card')].filter(c => !c.closest('#report, .ux2-panel') && c.firstElementChild && c.firstElementChild.querySelector && (c.firstElementChild.matches('h2,h3') || c.firstElementChild.querySelector(':scope > h2, :scope > h3')));
     list.forEach(c => { if (c.dataset.u15c) return; c.dataset.u15c = '1'; const h = c.firstElementChild.matches('h2,h3') ? c.firstElementChild : c.firstElementChild.querySelector('h2, h3'); const b = el('button', 'u15-ct', '▾'); b.type = 'button'; b.title = 'Collapse / expand this card'; b.setAttribute('aria-expanded', 'true'); b.onclick = e => { e.stopPropagation(); toggleCard(c); }; h.prepend(b); if (s.has(cardKey(c))) toggleCard(c, true); });
     // one bar for every step, in the space above the step bar: it folds the cards of the step on screen
-    let bar = $('#u15GBar'); const sp = $('#stepper'); if (!bar && sp) { bar = el('div', 'u15-cbar', '<button class="btn ghost small" type="button" data-u15all="1">▸ Collapse all</button><button class="btn ghost small" type="button" data-u15all="0">▾ Expand all</button>'); bar.id = 'u15GBar'; sp.before(bar);
+    let bar = $('#u15GBar'); const sp = $('#stepper'); if (!bar && sp) { bar = el('div', 'u15-cbar', '<button class="btn ghost small" type="button" data-u15all="1">▸ Collapse all</button><button class="btn ghost small" type="button" data-u15all="0">▾ Expand all</button>'); bar.id = 'u15GBar'; const pbar = $('#phaseBar'); if (pbar) { bar.classList.add('u15-inphase'); pbar.append(bar); } else sp.before(bar);
       bar.onclick = e => { const b = e.target.closest('[data-u15all]'); if (!b) return; const p0 = $('#p' + step()); if (p0) p0.querySelectorAll('.card[data-u15c]').forEach(c => toggleCard(c, b.dataset.u15all === '1')); }; }
-    if (bar) bar.style.visibility = list.length ? 'visible' : 'hidden'; }
+    if (bar) bar.style.visibility = list.length && !document.documentElement.matches('.ph-build, .ph-generate') ? 'visible' : 'hidden'; }
   // A5: the scroll position of each step, per project
   let scT = null; addEventListener('scroll', () => { clearTimeout(scT); scT = setTimeout(() => { if (!S().data) return; const m = LS.get('scroll.' + proj(), {}); m[step()] = Math.round(scrollY); LS.set('scroll.' + proj(), m); }, 400); }, { passive: true });
 
@@ -47088,7 +47131,9 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
   // step 1: the ways to start, in one row before “📋 Paste from Excel”
   function startRow() { const pb = $('#btnPaste'); if (!pb) return; const row = pb.parentElement;
     ['#r19Imp .btn', '#r19Imp label.btn', '#ezSample', '#ezQuickB'].forEach(q => document.querySelectorAll(q).forEach(x => { if (x.parentElement !== row) row.insertBefore(x, pb); }));
-    ['#r19Imp', '#ezSample', '#ezQuickB'].forEach(() => {}); document.querySelectorAll('#p1 .card > .row').forEach(r => { if (r !== row && !r.children.length) r.remove(); }); }
+    // round 20: 📋 Paste from Excel first; no ⚡ Make my report, 🧱 Master sheet builder or 👀 example-report buttons here (the builder is in the bar above, the examples below)
+    ['#ezSample', '#ezQuickB', '#btnBuilder'].forEach(q => { const x = $(q); if (x) x.style.display = 'none'; }); if (row.firstElementChild !== pb) row.prepend(pb);
+    document.querySelectorAll('#p1 .card > .row').forEach(r => { if (r !== row && ![...r.children].some(c => c.style.display !== 'none')) r.style.display = 'none'; }); }
   setInterval(() => { if (S().step === 1 || !S().data) { details(); startRow(); } }, 800); details(); setTimeout(startRow, 900);
   window.EasyR16 = { drawTick, details };
 })();
@@ -47615,6 +47660,80 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
     setTimeout(() => { const m = $('.ux-menu'); if (!m) return; [['🛡 Data checks', 'Impossible values, digits, patterns, consistency', checks], ['✍ Suggested changes', 'A supervisor\'s suggestions and their status', reviewList], ['⇄ Compare with another project', 'This report against a saved project file: numbers and text', pickCompare], ['🌳 How the test was chosen', 'The decision tree of a variable', () => tree()], ['🎓 Likely examiner questions', 'Questions about your results, with suggested answers', questions], ['📋 Paste a table', 'From Word, a PDF, a web page or Google Sheets', () => pasteDialog()]].forEach(([t, ti, f]) => { const b = mk(t, ti, () => { m.classList.remove('open'); f(); }); m.appendChild(b); }); }, 800);
     new MutationObserver(() => { clearTimeout(decorate.t); decorate.t = setTimeout(decorate, 120); }).observe(document.getElementById('report') || document.body, { childList: true }); })();
   window.EasyR19 = { summaryTable, impossible, digits, suspicious, consistency, checks, tree, questions, compareProject, tableFromHtml, tableFromText, gsheetUrl, wordDiff };
+})();
+
+/* Prof Easy Stat — round 20: options for ⬇ Blank template (design, timepoints, patients, guide and codes sheets, Excel or CSV). */
+(function () {
+  'use strict';
+  const $ = s => document.querySelector(s), esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const LS = { get(k, d) { try { const v = localStorage.getItem('r20.' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('r20.' + k, JSON.stringify(v)); } catch (e) { /* none */ } } };
+  const DESIGNS = {
+    rct2: { name: 'Two-group trial / comparison', groups: ['A', 'B'], base: ['Age', 'Sex', 'Weight', 'Height', 'BMI', 'Diabetes', 'Hypertension'], rep: 'VAS', tps: 'Baseline, W1, M3, M6', end: ['Complications', 'Satisfaction'] },
+    rct3: { name: 'Three-group trial', groups: ['A', 'B', 'C'], base: ['Age', 'Sex', 'Weight', 'ASA'], rep: 'Pain', tps: 'Baseline, 6h, 12h, 24h', end: ['Rescue_analgesia', 'PONV'] },
+    before: { name: 'One group, before and after', groups: [], base: ['Age', 'Sex', 'BMI'], rep: 'Score', tps: 'Before, After', end: ['Adverse_event'] },
+    casecontrol: { name: 'Case-control study', groups: ['Case', 'Control'], base: ['Age', 'Sex', 'Residence', 'Smoking', 'Diabetes', 'Hypertension', 'BMI'], rep: '', tps: '', end: [] },
+    cross: { name: 'Cross-sectional survey (one group)', groups: [], base: ['Age', 'Sex', 'Residence', 'Education', 'Occupation', 'Smoking', 'BMI', 'Diabetes', 'Hypertension'], rep: '', tps: '', end: [] },
+    diag: { name: 'Diagnostic accuracy', groups: [], base: ['Age', 'Sex', 'Test_value', 'Test_result', 'Reference_standard'], rep: '', tps: '', end: [] },
+    survival: { name: 'Survival / follow-up cohort', groups: ['Exposed', 'Not_exposed'], base: ['Age', 'Sex', 'Stage', 'Diabetes'], rep: '', tps: '', end: ['Follow_up_months', 'Death'] }
+  };
+  const CODES = { Sex: 'Male / Female', Diabetes: 'Yes / No', Hypertension: 'Yes / No', Smoking: 'Yes / No (or Never / Former / Current)', Residence: 'Urban / Rural', Education: 'e.g. Illiterate / Primary / Secondary / University', ASA: 'I / II / III', PONV: 'Yes / No',
+    Complications: 'Yes / No', Satisfaction: 'e.g. 1–5', Adverse_event: 'Yes / No', Test_result: 'Positive / Negative', Reference_standard: 'Positive / Negative (the disease by the reference test)', Death: 'Yes / No (the event at the end of follow-up)', Follow_up_months: 'Months from the start to the event or the last visit',
+    Stage: 'e.g. I / II / III / IV', Rescue_analgesia: 'Yes / No', Age: 'Years', Weight: 'kg', Height: 'cm', BMI: 'kg/m² (or leave empty: it can be calculated)' };
+  const split = s => String(s || '').split(/[,;\n]/).map(x => x.trim().replace(/\s+/g, '_')).filter(Boolean);
+
+  function dlg() {
+    let d = $('#r20Tpl'); if (d) return d;
+    d = document.createElement('dialog'); d.id = 'r20Tpl'; d.className = 'app-dlg'; document.body.append(d);
+    d.addEventListener('change', e => { if (e.target.id === 'r20Des') fill(e.target.value); });
+    d.addEventListener('click', e => { const b = e.target.closest('[data-r20]'); if (!b) return; if (b.dataset.r20 === 'go') make(); d.close(); });
+    return d;
+  }
+  function fill(k) { const t = DESIGNS[k] || DESIGNS.rct2, d = $('#r20Tpl');
+    d.querySelector('#r20Groups').value = t.groups.join(', '); d.querySelector('#r20Base').value = t.base.join(', '); d.querySelector('#r20Rep').value = t.rep; d.querySelector('#r20Tps').value = t.tps; d.querySelector('#r20End').value = t.end.join(', '); }
+  function open() {
+    const o = { design: 'rct2', n: 0, idPrefix: 'P', fillGroups: false, guide: true, codes: true, format: 'xlsx', ...LS.get('opts', {}) }, d = dlg();
+    d.innerHTML = `<form method="dialog" onsubmit="return false"><h3>⬇ Blank template</h3><p class="legend-note" style="margin:0 0 8px">An empty Excel sheet laid out the way the app reads it. Change any of these; column names can be edited later in Excel.</p>
+      <div class="grid g2" style="gap:8px">
+        <div><label class="f">Study design</label><select id="r20Des">${Object.entries(DESIGNS).map(([k, t]) => `<option value="${k}" ${k === o.design ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+        <div><label class="f">Groups (empty = one group)</label><input type="text" id="r20Groups"></div>
+        <div style="grid-column:1/-1"><label class="f">Baseline columns (comma-separated)</label><input type="text" id="r20Base"></div>
+        <div><label class="f">Repeated measure(s) (e.g. VAS, HbA1c)</label><input type="text" id="r20Rep"></div>
+        <div><label class="f">Timepoints</label><input type="text" id="r20Tps" placeholder="e.g. Baseline, W1, M3"></div>
+        <div style="grid-column:1/-1"><label class="f">Outcome columns at the end</label><input type="text" id="r20End"></div>
+        <div><label class="f">Rows with IDs ready (0 = none)</label><input type="number" min="0" max="5000" id="r20N" value="${esc(o.n)}"></div>
+        <div><label class="f">ID prefix</label><input type="text" id="r20Pre" value="${esc(o.idPrefix)}" style="max-width:90px"></div>
+        <label class="chk" style="grid-column:1/-1"><input type="checkbox" id="r20Fill" ${o.fillGroups ? 'checked' : ''}> Fill the Group column in turn (A, B, A, B…)</label>
+        <label class="chk"><input type="checkbox" id="r20Guide" ${o.guide ? 'checked' : ''}> Guide sheet (how to fill it)</label>
+        <label class="chk"><input type="checkbox" id="r20Codes" ${o.codes ? 'checked' : ''}> Codes sheet (the values of each column)</label>
+        <div><label class="f">File</label><select id="r20Fmt"><option value="xlsx" ${o.format === 'xlsx' ? 'selected' : ''}>Excel (.xlsx)</option><option value="csv" ${o.format === 'csv' ? 'selected' : ''}>CSV (.csv, the data sheet only)</option></select></div>
+      </div>
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:12px"><button class="btn ghost" type="button" data-r20="x">Cancel</button><button class="btn primary" type="button" data-r20="go">⬇ Download</button></div></form>`;
+    fill(o.design); const saved = LS.get('cols', null); if (saved && saved.design === o.design) ['Groups', 'Base', 'Rep', 'Tps', 'End'].forEach(k => { if (saved[k] !== undefined) d.querySelector('#r20' + k).value = saved[k]; });
+    d.showModal();
+  }
+  function make() {
+    const d = $('#r20Tpl'), v = id => d.querySelector('#r20' + id), design = v('Des').value, groups = split(v('Groups').value), base = split(v('Base').value), reps = split(v('Rep').value), tps = split(v('Tps').value), end = split(v('End').value);
+    const n = Math.max(0, Math.min(5000, +v('N').value || 0)), pre = v('Pre').value.trim(), fillG = v('Fill').checked, guide = v('Guide').checked, codes = v('Codes').checked, fmt = v('Fmt').value;
+    LS.set('opts', { design, n, idPrefix: pre, fillGroups: fillG, guide, codes, format: fmt }); LS.set('cols', { design, Groups: v('Groups').value, Base: v('Base').value, Rep: v('Rep').value, Tps: v('Tps').value, End: v('End').value });
+    const head = ['ID', ...(groups.length ? ['Group'] : []), ...base, ...reps.flatMap(r => tps.length ? tps.map(t => `${r}_${t}`) : [r]), ...end];
+    const width = String(Math.max(n, 1)).length < 3 ? 3 : String(n).length;
+    const rows = Array.from({ length: n }, (_, i) => { const r = head.map(() => ''); r[0] = pre + String(i + 1).padStart(width, '0'); if (groups.length && fillG) r[1] = groups[i % groups.length]; return r; });
+    const name = `Easy Stat template - ${DESIGNS[design] ? DESIGNS[design].name.replace(/[\\/:*?"<>|]/g, '-') : 'data'}`;
+    if (fmt === 'csv') { const q = x => /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; const blob = new Blob(['﻿' + [head, ...rows].map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); return; }
+    const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet([head, ...rows]); ws['!cols'] = head.map(h => ({ wch: Math.max(8, h.length + 2) })); XLSX.utils.book_append_sheet(wb, ws, 'Data');
+    if (guide) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['How to fill the Data sheet'], [],
+      ['1', 'One row per patient, one column per variable. Keep the column names in the first row.'],
+      ['2', groups.length ? `Group: the study group of each patient (${groups.join(' / ')}).` : 'One group: no Group column is needed (add one to compare groups).'],
+      ['3', 'Numbers as numbers (54, not "54 years"); use a dot or a comma for decimals.'],
+      ['4', 'Categories as words (Male / Female, Yes / No) or codes (1 / 2) — codes can be labelled in step 2 (1=Male, 2=Female).'],
+      ['5', reps.length && tps.length ? `Repeated measures: one column per timepoint, e.g. ${reps[0]}_${tps[0]}, ${reps[0]}_${tps[1] || tps[0]}.` : 'Repeated measures: one column per timepoint with the timepoint in the name, e.g. VAS_Baseline, VAS_W1.'],
+      ['6', 'Leave missing values empty (or use one code such as 999 and blank it in step 1 → Prepare the data).'],
+      ['7', 'No merged cells, totals or notes below the data. Rename, add or delete columns as you need.']]), 'Guide');
+    if (codes) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Column', 'Values / unit'], ...head.map(h => [h, h === 'ID' ? 'A unique code per patient' : h === 'Group' ? groups.join(' / ') : CODES[h] || CODES[h.replace(/_.*$/, '')] || (reps.some(r => h.startsWith(r + '_')) ? `The value of ${h.split('_')[0]} at ${h.split('_').slice(1).join(' ')}` : '')])]), 'Codes');
+    XLSX.writeFile(wb, name + '.xlsx');
+  }
+  const b = $('#btnTemplate'); if (b) { b.onclick = open; b.textContent = '⬇ Blank template…'; b.title = 'An empty Excel sheet laid out the way the app reads it — choose the design, columns, timepoints and sheets'; }
+  window.EasyR20 = { open, make, DESIGNS };
 })();
 </script>
 </body>

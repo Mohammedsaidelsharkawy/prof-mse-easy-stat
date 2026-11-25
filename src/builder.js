@@ -187,7 +187,44 @@
       vars: [['Age'], ['Sex'], ['Weight'], ['Systolic BP', 'all'], ['Diastolic BP', 'all'], ['Heart rate', 'all'], ['Adverse event', 'post'], ['Withdrawn', 'last']],
       primary: 'Systolic BP', secondary: ['Diastolic BP'], ss: { m: 'anova', means: '132, 128, 125, 135', sd: 12 } },
     surgery: { cat: 'Surgery', name: 'Surgical outcomes study', design: 'cohort', arms: ['Technique A', 'Technique B'], visits: ['Pre-operative', 'Day 1', 'Month 1'],
-      vars: [['Age'], ['Sex'], ['ASA class'], ['Hypertension'], ['Diabetes'], ['Date of surgery'], ['Operative time'], ['Blood loss'], ['Pain VAS', 'all'], ['Date of admission'], ['Date of discharge'], ['LOS*'], ['Complications', 'last'], ['Reoperation', 'last']] }
+      vars: [['Age'], ['Sex'], ['ASA class'], ['Hypertension'], ['Diabetes'], ['Date of surgery'], ['Operative time'], ['Blood loss'], ['Pain VAS', 'all'], ['Date of admission'], ['Date of discharge'], ['LOS*'], ['Complications', 'last'], ['Reoperation', 'last']] },
+    // more designs (round 20)
+    dmrct: { cat: 'Medicine', name: 'Diabetes drug RCT (HbA1c)', design: 'rct', arms: ['New drug', 'Standard treatment'], visits: ['Baseline', 'Month 3', 'Month 6'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight', 'all'], ['Height'], ['BMI*'], ['Hypertension'], ['Dyslipidaemia'], ['Fasting glucose', 'all'], ['HbA1c', 'all'], ['LDL cholesterol', 'all'], ['Creatinine', 'all'], ['Adverse event', 'post'], ['Adherence', 'last'], ['Withdrawn', 'last']],
+      primary: 'HbA1c', secondary: ['Fasting glucose', 'Weight', 'LDL cholesterol'], ss: { a: 7.2, b: 7.7, sd: 1 } },
+    htnrct: { cat: 'Medicine', name: 'Antihypertensive RCT (blood pressure)', design: 'rct', arms: ['Drug A', 'Drug B'], visits: ['Baseline', 'Week 4', 'Week 12'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['Diabetes'], ['Smoking'], ['Systolic BP', 'all'], ['Diastolic BP', 'all'], ['Heart rate', 'all'], ['Potassium', 'all'], ['Creatinine', 'all'], ['Adverse event', 'post'], ['Withdrawn', 'last']],
+      primary: 'Systolic BP', secondary: ['Diastolic BP', 'Heart rate'], ss: { a: 132, b: 138, sd: 12 } },
+    acs: { cat: 'Medicine', name: 'Acute coronary syndrome cohort', design: 'cohort', arms: ['STEMI', 'NSTEMI'], visits: ['Admission', 'Discharge'],
+      vars: [['Age'], ['Sex'], ['Smoking'], ['Hypertension'], ['Diabetes'], ['Dyslipidaemia'], ['Chronic kidney disease'], ['Systolic BP'], ['Heart rate'], ['Troponin', 'all'], ['CRP'], ['Creatinine'], ['LDL cholesterol'], ['Heart failure', 'last'], ['ICU admission', 'last'], ['Length of stay', 'last'], ['Mortality', 'last']],
+      primary: 'Mortality', secondary: ['Heart failure', 'Length of stay'], ss: { a: 10, b: 5 } },
+    ckd: { cat: 'Medicine', name: 'Chronic kidney disease follow-up cohort', design: 'cohort', arms: ['Stage 3', 'Stage 4'], visits: ['Baseline', 'Month 6', 'Month 12'],
+      vars: [['Age'], ['Sex'], ['Hypertension'], ['Diabetes'], ['Systolic BP', 'all'], ['Creatinine', 'all'], ['Urea', 'all'], ['Haemoglobin', 'all'], ['Potassium', 'all'], ['Albumin', 'all'], ['Renal replacement therapy', 'last'], ['Readmission', 'last'], ['Mortality', 'last']],
+      primary: 'Renal replacement therapy', secondary: ['Creatinine', 'Haemoglobin'], ss: { a: 25, b: 10 } },
+    liver: { cat: 'Medicine', name: 'Chronic liver disease cohort', design: 'cohort', arms: ['Compensated', 'Decompensated'], visits: ['Baseline', 'Month 6'],
+      vars: [['Age'], ['Sex'], ['Diabetes'], ['ALT', 'all'], ['AST', 'all'], ['Albumin', 'all'], ['Total bilirubin', 'all'], ['INR', 'all'], ['Platelets', 'all'], ['Sodium'], ['Creatinine'], ['ICU admission', 'last'], ['Readmission', 'last'], ['Mortality', 'last']],
+      primary: 'Mortality', secondary: ['Total bilirubin', 'Albumin'], ss: { a: 20, b: 8 } },
+    sepsisdx: { cat: 'Diagnostic', name: 'Biomarker diagnostic study (e.g. sepsis)', design: 'diagnostic', arms: [], visits: ['Admission'],
+      vars: [['Age'], ['Sex'], ['Temperature'], ['Heart rate'], ['Respiratory rate'], ['WBC'], ['CRP'], ['Lactate'], ['Index test value'], ['Index test result'], ['Reference standard'], ['Mortality']] },
+    depress: { cat: 'Medicine', name: 'Depression treatment RCT (PHQ-9)', design: 'rct', arms: ['Intervention', 'Usual care'], visits: ['Baseline', 'Week 6', 'Week 12'], rand: true,
+      vars: [['Age'], ['Sex'], ['Marital status'], ['Education'], ['Occupation'], ['PHQ-9', 'all'], ['GAD-7', 'all'], ['Adverse event', 'post'], ['Adherence', 'last'], ['Satisfaction', 'last'], ['Withdrawn', 'last']],
+      primary: 'PHQ-9', secondary: ['GAD-7'], ss: { a: 8, b: 11, sd: 5 } },
+    knee: { cat: 'Surgery', name: 'Knee osteoarthritis RCT (WOMAC)', design: 'rct', arms: ['Injection', 'Physiotherapy'], visits: ['Baseline', 'Month 1', 'Month 3', 'Month 6'], rand: true,
+      vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['Diabetes'], ['Pain VAS', 'all'], ['WOMAC', 'all'], ['Adverse event', 'post'], ['Satisfaction', 'last']],
+      primary: 'WOMAC', secondary: ['Pain VAS'], ss: { a: 35, b: 45, sd: 15 } },
+    stroke: { cat: 'Medicine', name: 'Stroke rehabilitation RCT (Barthel)', design: 'rct', arms: ['Intensive rehabilitation', 'Standard rehabilitation'], visits: ['Baseline', 'Month 1', 'Month 3'], rand: true,
+      vars: [['Age'], ['Sex'], ['Hypertension'], ['Diabetes'], ['Glasgow coma scale'], ['Barthel index', 'all'], ['MMSE', 'all'], ['PHQ-9', 'last'], ['Readmission', 'last'], ['Mortality', 'last']],
+      primary: 'Barthel index', secondary: ['MMSE', 'PHQ-9'], ss: { a: 70, b: 60, sd: 18 } },
+    geri: { cat: 'Observational', name: 'Older adults cross-sectional study (cognition and function)', design: 'cross', arms: [], visits: ['Baseline'],
+      vars: [['Age'], ['Sex'], ['Residence'], ['Marital status'], ['Education'], ['Hypertension'], ['Diabetes'], ['Stroke'], ['Haemoglobin'], ['Vitamin D'], ['MMSE'], ['Barthel index'], ['PHQ-9']] },
+    vitd: { cat: 'Observational', name: 'Vitamin D and metabolic markers (cross-sectional)', design: 'cross', arms: [], visits: ['Baseline'],
+      vars: [['Age'], ['Sex'], ['Residence'], ['Weight'], ['Height'], ['BMI*'], ['Diabetes'], ['Hypertension'], ['Vitamin D'], ['Fasting glucose'], ['HbA1c'], ['LDL cholesterol'], ['CRP']] },
+    neonate: { cat: 'Observational', name: 'Neonatal outcomes cohort', design: 'cohort', arms: ['Preterm', 'Term'], visits: ['Birth', 'Discharge'],
+      vars: [['Sex'], ['Gestational age'], ['Birth weight'], ['Mode of delivery'], ['Apgar score at 1 minute'], ['Apgar score at 5 minutes'], ['Umbilical artery pH'], ['Mechanical ventilation'], ['NICU admission'], ['Total bilirubin', 'all'], ['Length of stay', 'last'], ['Mortality', 'last']],
+      primary: 'NICU admission', secondary: ['Length of stay', 'Mechanical ventilation'], ss: { a: 40, b: 10 } },
+    periop: { cat: 'Surgery', name: 'Major surgery: blood loss and transfusion cohort', design: 'cohort', arms: ['Technique A', 'Technique B'], visits: ['Pre-operative', 'Day 1', 'Day 3'],
+      vars: [['Age'], ['Sex'], ['ASA class'], ['Weight'], ['Anaesthesia'], ['Operative time'], ['Blood loss'], ['Haemoglobin', 'all'], ['Platelets', 'all'], ['INR', 'all'], ['Intraoperative complications'], ['ICU admission', 'last'], ['Complications', 'last'], ['Length of stay', 'last'], ['Reoperation', 'last']],
+      primary: 'Blood loss', secondary: ['Haemoglobin', 'Complications', 'Length of stay'], ss: { a: 450, b: 600, sd: 200 } }
   };
   const blank = () => ({ title: '', design: 'rct', n: 60, arms: ['Group A', 'Group B'], idPrefix: 'P', idDigits: 3, visits: [{ id: 'v0', name: 'Baseline' }], sections: [],
     conv: { naming: 'label', missing: 'blank', date: 'dd/mm/yyyy', catAs: 'words' }, layout: 'wide', rand: { on: false, type: 'block', sizes: '4', strata: [], seed: 20261106, prefill: true }, double: false, checks: [], vars: [] });
@@ -894,7 +931,7 @@
   function render() {
     const w = $('#mbWrap'); if (!w) return; const pr = problems(D);
     w.innerHTML = `<div class="mb-head"><b>🧱 Master sheet builder</b><span class="legend-note">${esc(D.title || 'Untitled study')} · ${D.vars.length} variables · ${columns(D).length} columns</span><span class="spacer"></span>
-      <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${['Anaesthesia and pain', 'Surgery', 'Trials', 'Observational', 'Diagnostic'].map(c => `<optgroup label="${c}">${opt(Object.entries(TEMPLATES).filter(([, t]) => (t.cat || 'Trials') === c).map(([k, t]) => [k, t.name]), '')}</optgroup>`).join('')}<option value="__blank">Empty design</option></select>
+      <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${['Anaesthesia and pain', 'Surgery', 'Medicine', 'Trials', 'Observational', 'Diagnostic'].map(c => `<optgroup label="${c}">${opt(Object.entries(TEMPLATES).filter(([, t]) => (t.cat || 'Trials') === c).map(([k, t]) => [k, t.name]), '')}</optgroup>`).join('')}<option value="__blank">Empty design</option></select>
       <select id="mbMine" style="width:auto"><option value="">My designs…</option>${opt(Object.keys(ls.get('designs', {})).map(k => [k, k]), '')}</select>
       <button class="btn ghost small" id="mbUndo" type="button" title="Undo (Ctrl+Z)" ${undoS.length ? '' : 'disabled'}>↶</button><button class="btn ghost small" id="mbRedo" type="button" title="Redo (Ctrl+Y)" ${redoS.length ? '' : 'disabled'}>↷</button>
       <label class="btn ghost small" style="margin:0" title="Make the design from a REDCap data dictionary (.csv) or an XLSForm of KoBoToolbox / ODK (.xlsx)">⬆ From REDCap / XLSForm<input type="file" id="mbFromDict" accept=".csv,.xlsx,.xls" hidden></label>
