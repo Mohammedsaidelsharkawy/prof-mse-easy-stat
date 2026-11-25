@@ -1079,11 +1079,14 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     v.min = r(v.min, b[2]); v.max = r(v.max, b[2]); v.refLo = r(v.refLo, b[2]); v.refHi = r(v.refHi, b[2]); if (v.expect) { v.expect = { ...v.expect, mean: r(v.expect.mean, b[2] + 1), sd: r(v.expect.sd, b[2] + 1) }; } v.unit = to; v.dec = String(b[2]); }
   // expected values in each group (optional): empty cells use the overall values above
   function groupExpect(v) { const A = (D.arms || []).filter(Boolean); if (A.length < 2 || !['num', 'calc', 'yn', 'cat'].includes(v.type)) return '';
-    const bg = (v.expect || {}).byGroup || [], num = v.type === 'num' || v.type === 'calc';
-    return `<details class="mb-expect" ${bg.some(x => x && Object.keys(x).length) ? 'open' : ''} style="margin-top:6px"><summary><b>Expected values in each group</b> <span class="legend-note">(optional — e.g. the effect you expect; empty cells use the values above)</span></summary>
-      <table class="t" style="margin-top:4px;font-size:13px"><thead><tr><th>Group</th>${num ? '<th>Mean</th><th>SD</th>' : v.cats.map(c => `<th>% ${esc(c)}</th>`).join('')}</tr></thead><tbody>${A.map((a, g) => { const x = bg[g] || {};
-        return `<tr><td>${esc(a)}</td>${num ? `<td><input type="number" step="any" data-mbg="${g}|mean" value="${esc(x.mean ?? '')}" placeholder="${esc((v.expect || {}).mean ?? '')}" style="width:90px"></td><td><input type="number" step="any" min="0" data-mbg="${g}|sd" value="${esc(x.sd ?? '')}" placeholder="${esc((v.expect || {}).sd ?? '')}" style="width:80px"></td>`
-          : v.cats.map((c, i) => `<td><input type="number" min="0" max="100" step="any" data-mbg="${g}|p${i}" value="${esc((x.pct || [])[i] ?? '')}" placeholder="${esc(((v.expect || {}).pct || [])[i] ?? '')}" style="width:70px"></td>`).join('')}</tr>`; }).join('')}</tbody></table></details>`; }
+    const E = v.expect || {}, bg = E.byGroup || [], num = v.type === 'num' || v.type === 'calc', mode = E.byMode || (E.lo !== undefined && E.lo !== '' || E.hi !== undefined && E.hi !== '' ? 'both' : 'msd');
+    const cols = !num ? [] : mode === 'range' ? [['lo', 'Min', E.lo ?? v.min], ['hi', 'Max', E.hi ?? v.max]] : mode === 'both' ? [['mean', 'Mean', E.mean], ['sd', 'SD', E.sd], ['lo', 'Min', E.lo ?? v.min], ['hi', 'Max', E.hi ?? v.max]] : [['mean', 'Mean', E.mean], ['sd', 'SD', E.sd]];
+    const how = num ? `<div class="row" style="gap:6px;align-items:center;margin-top:4px"><label class="f" style="margin:0">Generate by</label><select data-mbgmode="1" style="width:auto">${opt([['msd', 'Mean & SD'], ['range', 'Min & Max'], ['both', 'Both (mean & SD within min–max)']], mode)}</select></div>` : '';
+    return `<details class="mb-expect" ${bg.some(x => x && Object.keys(x).length) || E.byMode ? 'open' : ''} style="margin-top:6px"><summary><b>Expected values in each group</b> <span class="legend-note">(optional — e.g. the effect you expect; empty cells use the values above)</span></summary>${how}
+      <table class="t" style="margin-top:4px;font-size:13px"><thead><tr><th>Group</th>${num ? cols.map(c => `<th>${c[1]}</th>`).join('') : v.cats.map(c => `<th>% ${esc(c)}</th>`).join('')}</tr></thead><tbody>${A.map((a, g) => { const x = bg[g] || {};
+        return `<tr><td>${esc(a)}</td>${num ? cols.map(([k, , ph]) => `<td><input type="number" step="any" ${k === 'sd' ? 'min="0"' : ''} data-mbg="${g}|${k}" value="${esc(x[k] ?? '')}" placeholder="${esc(ph ?? '')}" style="width:80px"></td>`).join('')
+          : v.cats.map((c, i) => `<td><input type="number" min="0" max="100" step="any" data-mbg="${g}|p${i}" value="${esc((x.pct || [])[i] ?? '')}" placeholder="${esc((E.pct || [])[i] ?? '')}" style="width:70px"></td>`).join('')}</tr>`; }).join('')}</tbody></table>
+      ${num && mode === 'range' ? '<div class="legend-note">Min & Max: the values of each group are spread between its min and max (the mean is their midpoint, the SD a quarter of the range).</div>' : ''}</details>`; }
   function expectBox(v) { return expectBox0(v).replace(/<\/div>$/, groupExpect(v) + '</div>'); }
   function expectBox0(v) {
     const e = v.expect || (v.expect = expectOf(v.label, v.type, v.cats));
@@ -1233,6 +1236,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
       save(); if (t.tagName === 'SELECT' || t.type === 'checkbox' || k === 'section') render(); return; }
     if (d.mbvisit) { const on = new Set((v.visits || []).length ? v.visits : [D.visits[0].id]); if (val) on.add(d.mbvisit); else on.delete(d.mbvisit); v.visits = D.visits.map(x => x.id).filter(id => on.has(id)); if (v.visits.length === 1 && v.visits[0] === D.visits[0].id) v.visits = []; save(); return render(); }
     if (d.mbe) { v.expect = { ...(v.expect || {}), [d.mbe]: d.mbe === 'dist' ? val : val === '' ? '' : +val }; save(); return; }
+    if (d.mbgmode) { const e = v.expect = v.expect || {}; e.byMode = val; save(); render(); return; }
     if (d.mbg) { const [g, k] = d.mbg.split('|'), e = v.expect = v.expect || {}, bg = e.byGroup = e.byGroup || [], x = bg[+g] = bg[+g] || {};
       if (k[0] === 'p') { const i = +k.slice(1); x.pct = v.cats.map((_, j) => (x.pct || [])[j] ?? ''); x.pct[i] = val === '' ? '' : +val; if (x.pct.every(p => p === '')) delete x.pct; } else if (val === '') delete x[k]; else x[k] = +val;
       save(); return; }

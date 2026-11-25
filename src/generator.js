@@ -46,16 +46,17 @@
   // the SD shared by the groups at a visit (the root mean square of the groups' SDs), for effect sizes
   const sdPool = (D, v, key) => { const k = K(D); let s2 = 0; for (let g = 0; g < k; g++) s2 += sdCell(v, g, key) ** 2; return Math.sqrt(s2 / k); };
   const pick = (...xs) => { const x = xs.find(y => y !== undefined && y !== null && y !== '' && isFinite(+y)); return x === undefined ? null : +x; };
-  const modeOf = v => G.mode[v.id] || (pick(expect(v).lo) !== null || pick(expect(v).hi) !== null ? 'both' : 'msd');
+  const bgOf = (v, g) => ((((v.expect || {}).byGroup) || [])[g]) || {};
+  const modeOf = v => G.mode[v.id] || (v.expect || {}).byMode || (pick(expect(v).lo) !== null || pick(expect(v).hi) !== null ? 'both' : 'msd');
   // the limits of a number: those typed here, else the design's simulated Min / Max, else (for min & max) its allowed range
   const limits = (v, mode) => { const R0 = G.rng[v.id] || {}, e = expect(v); return mode === 'msd' ? { lo: pick(e.lo), hi: pick(e.hi) } : { lo: pick(R0.lo, e.lo, v.min), hi: pick(R0.hi, e.hi, v.max) }; };
   // min & max of a group at a visit (typed in its cell, else the limits)
-  const cellRange = (v, g, key) => { const c = (((G.rt[v.id] || {})[g] || {})[key]) || {}, L = limits(v, 'range'); return { lo: pick(c.lo, L.lo), hi: pick(c.hi, L.hi) }; };
+  const cellRange = (v, g, key) => { const c = (((G.rt[v.id] || {})[g] || {})[key]) || {}, L = limits(v, 'range'), R0 = G.rng[v.id] || {}, b = bgOf(v, g); return { lo: pick(c.lo, R0.lo, b.lo, L.lo), hi: pick(c.hi, R0.hi, b.hi, L.hi) }; };
   function numParams(v, g, key) {
     const mode = modeOf(v), e = expect(v);
     if (mode === 'range') { const r = cellRange(v, g, key); if (r.lo !== null && r.hi !== null && r.hi > r.lo) { const mid = (r.lo + r.hi) / 2, sg = ((SIG[v.id] || {})[g] || {})[key], sh = sg !== undefined ? sg - mid : 0;
       return { m: mid + sh, sd: (r.hi - r.lo) / 4, lo: r.lo + sh, hi: r.hi + sh, dist: 'normal' }; } }
-    const L = limits(v, mode === 'range' ? 'both' : mode); return { m: target(v, g, key), sd: sdCell(v, g, key), lo: L.lo, hi: L.hi, dist: G.dist[v.id] || e.dist };
+    const L = limits(v, mode === 'range' ? 'both' : mode), R0 = mode === 'msd' ? {} : G.rng[v.id] || {}, b = mode === 'msd' ? {} : bgOf(v, g); return { m: target(v, g, key), sd: sdCell(v, g, key), lo: pick(R0.lo, b.lo, L.lo), hi: pick(R0.hi, b.hi, L.hi), dist: G.dist[v.id] || e.dist };
   }
   // the count at the centile u: Poisson (mean m), or negative binomial with the SD asked (more spread than Poisson)
   function countQ(u, m, sd) { const s2 = sd * sd, nb = sd > 0 && s2 > m * 1.001, r = nb ? m * m / (s2 - m) : 0, q = nb ? r / (r + m) : 0;

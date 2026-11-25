@@ -42496,11 +42496,14 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     v.min = r(v.min, b[2]); v.max = r(v.max, b[2]); v.refLo = r(v.refLo, b[2]); v.refHi = r(v.refHi, b[2]); if (v.expect) { v.expect = { ...v.expect, mean: r(v.expect.mean, b[2] + 1), sd: r(v.expect.sd, b[2] + 1) }; } v.unit = to; v.dec = String(b[2]); }
   // expected values in each group (optional): empty cells use the overall values above
   function groupExpect(v) { const A = (D.arms || []).filter(Boolean); if (A.length < 2 || !['num', 'calc', 'yn', 'cat'].includes(v.type)) return '';
-    const bg = (v.expect || {}).byGroup || [], num = v.type === 'num' || v.type === 'calc';
-    return `<details class="mb-expect" ${bg.some(x => x && Object.keys(x).length) ? 'open' : ''} style="margin-top:6px"><summary><b>Expected values in each group</b> <span class="legend-note">(optional — e.g. the effect you expect; empty cells use the values above)</span></summary>
-      <table class="t" style="margin-top:4px;font-size:13px"><thead><tr><th>Group</th>${num ? '<th>Mean</th><th>SD</th>' : v.cats.map(c => `<th>% ${esc(c)}</th>`).join('')}</tr></thead><tbody>${A.map((a, g) => { const x = bg[g] || {};
-        return `<tr><td>${esc(a)}</td>${num ? `<td><input type="number" step="any" data-mbg="${g}|mean" value="${esc(x.mean ?? '')}" placeholder="${esc((v.expect || {}).mean ?? '')}" style="width:90px"></td><td><input type="number" step="any" min="0" data-mbg="${g}|sd" value="${esc(x.sd ?? '')}" placeholder="${esc((v.expect || {}).sd ?? '')}" style="width:80px"></td>`
-          : v.cats.map((c, i) => `<td><input type="number" min="0" max="100" step="any" data-mbg="${g}|p${i}" value="${esc((x.pct || [])[i] ?? '')}" placeholder="${esc(((v.expect || {}).pct || [])[i] ?? '')}" style="width:70px"></td>`).join('')}</tr>`; }).join('')}</tbody></table></details>`; }
+    const E = v.expect || {}, bg = E.byGroup || [], num = v.type === 'num' || v.type === 'calc', mode = E.byMode || (E.lo !== undefined && E.lo !== '' || E.hi !== undefined && E.hi !== '' ? 'both' : 'msd');
+    const cols = !num ? [] : mode === 'range' ? [['lo', 'Min', E.lo ?? v.min], ['hi', 'Max', E.hi ?? v.max]] : mode === 'both' ? [['mean', 'Mean', E.mean], ['sd', 'SD', E.sd], ['lo', 'Min', E.lo ?? v.min], ['hi', 'Max', E.hi ?? v.max]] : [['mean', 'Mean', E.mean], ['sd', 'SD', E.sd]];
+    const how = num ? `<div class="row" style="gap:6px;align-items:center;margin-top:4px"><label class="f" style="margin:0">Generate by</label><select data-mbgmode="1" style="width:auto">${opt([['msd', 'Mean & SD'], ['range', 'Min & Max'], ['both', 'Both (mean & SD within min–max)']], mode)}</select></div>` : '';
+    return `<details class="mb-expect" ${bg.some(x => x && Object.keys(x).length) || E.byMode ? 'open' : ''} style="margin-top:6px"><summary><b>Expected values in each group</b> <span class="legend-note">(optional — e.g. the effect you expect; empty cells use the values above)</span></summary>${how}
+      <table class="t" style="margin-top:4px;font-size:13px"><thead><tr><th>Group</th>${num ? cols.map(c => `<th>${c[1]}</th>`).join('') : v.cats.map(c => `<th>% ${esc(c)}</th>`).join('')}</tr></thead><tbody>${A.map((a, g) => { const x = bg[g] || {};
+        return `<tr><td>${esc(a)}</td>${num ? cols.map(([k, , ph]) => `<td><input type="number" step="any" ${k === 'sd' ? 'min="0"' : ''} data-mbg="${g}|${k}" value="${esc(x[k] ?? '')}" placeholder="${esc(ph ?? '')}" style="width:80px"></td>`).join('')
+          : v.cats.map((c, i) => `<td><input type="number" min="0" max="100" step="any" data-mbg="${g}|p${i}" value="${esc((x.pct || [])[i] ?? '')}" placeholder="${esc((E.pct || [])[i] ?? '')}" style="width:70px"></td>`).join('')}</tr>`; }).join('')}</tbody></table>
+      ${num && mode === 'range' ? '<div class="legend-note">Min & Max: the values of each group are spread between its min and max (the mean is their midpoint, the SD a quarter of the range).</div>' : ''}</details>`; }
   function expectBox(v) { return expectBox0(v).replace(/<\/div>$/, groupExpect(v) + '</div>'); }
   function expectBox0(v) {
     const e = v.expect || (v.expect = expectOf(v.label, v.type, v.cats));
@@ -42650,6 +42653,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
       save(); if (t.tagName === 'SELECT' || t.type === 'checkbox' || k === 'section') render(); return; }
     if (d.mbvisit) { const on = new Set((v.visits || []).length ? v.visits : [D.visits[0].id]); if (val) on.add(d.mbvisit); else on.delete(d.mbvisit); v.visits = D.visits.map(x => x.id).filter(id => on.has(id)); if (v.visits.length === 1 && v.visits[0] === D.visits[0].id) v.visits = []; save(); return render(); }
     if (d.mbe) { v.expect = { ...(v.expect || {}), [d.mbe]: d.mbe === 'dist' ? val : val === '' ? '' : +val }; save(); return; }
+    if (d.mbgmode) { const e = v.expect = v.expect || {}; e.byMode = val; save(); render(); return; }
     if (d.mbg) { const [g, k] = d.mbg.split('|'), e = v.expect = v.expect || {}, bg = e.byGroup = e.byGroup || [], x = bg[+g] = bg[+g] || {};
       if (k[0] === 'p') { const i = +k.slice(1); x.pct = v.cats.map((_, j) => (x.pct || [])[j] ?? ''); x.pct[i] = val === '' ? '' : +val; if (x.pct.every(p => p === '')) delete x.pct; } else if (val === '') delete x[k]; else x[k] = +val;
       save(); return; }
@@ -43608,16 +43612,17 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
   // the SD shared by the groups at a visit (the root mean square of the groups' SDs), for effect sizes
   const sdPool = (D, v, key) => { const k = K(D); let s2 = 0; for (let g = 0; g < k; g++) s2 += sdCell(v, g, key) ** 2; return Math.sqrt(s2 / k); };
   const pick = (...xs) => { const x = xs.find(y => y !== undefined && y !== null && y !== '' && isFinite(+y)); return x === undefined ? null : +x; };
-  const modeOf = v => G.mode[v.id] || (pick(expect(v).lo) !== null || pick(expect(v).hi) !== null ? 'both' : 'msd');
+  const bgOf = (v, g) => ((((v.expect || {}).byGroup) || [])[g]) || {};
+  const modeOf = v => G.mode[v.id] || (v.expect || {}).byMode || (pick(expect(v).lo) !== null || pick(expect(v).hi) !== null ? 'both' : 'msd');
   // the limits of a number: those typed here, else the design's simulated Min / Max, else (for min & max) its allowed range
   const limits = (v, mode) => { const R0 = G.rng[v.id] || {}, e = expect(v); return mode === 'msd' ? { lo: pick(e.lo), hi: pick(e.hi) } : { lo: pick(R0.lo, e.lo, v.min), hi: pick(R0.hi, e.hi, v.max) }; };
   // min & max of a group at a visit (typed in its cell, else the limits)
-  const cellRange = (v, g, key) => { const c = (((G.rt[v.id] || {})[g] || {})[key]) || {}, L = limits(v, 'range'); return { lo: pick(c.lo, L.lo), hi: pick(c.hi, L.hi) }; };
+  const cellRange = (v, g, key) => { const c = (((G.rt[v.id] || {})[g] || {})[key]) || {}, L = limits(v, 'range'), R0 = G.rng[v.id] || {}, b = bgOf(v, g); return { lo: pick(c.lo, R0.lo, b.lo, L.lo), hi: pick(c.hi, R0.hi, b.hi, L.hi) }; };
   function numParams(v, g, key) {
     const mode = modeOf(v), e = expect(v);
     if (mode === 'range') { const r = cellRange(v, g, key); if (r.lo !== null && r.hi !== null && r.hi > r.lo) { const mid = (r.lo + r.hi) / 2, sg = ((SIG[v.id] || {})[g] || {})[key], sh = sg !== undefined ? sg - mid : 0;
       return { m: mid + sh, sd: (r.hi - r.lo) / 4, lo: r.lo + sh, hi: r.hi + sh, dist: 'normal' }; } }
-    const L = limits(v, mode === 'range' ? 'both' : mode); return { m: target(v, g, key), sd: sdCell(v, g, key), lo: L.lo, hi: L.hi, dist: G.dist[v.id] || e.dist };
+    const L = limits(v, mode === 'range' ? 'both' : mode), R0 = mode === 'msd' ? {} : G.rng[v.id] || {}, b = mode === 'msd' ? {} : bgOf(v, g); return { m: target(v, g, key), sd: sdCell(v, g, key), lo: pick(R0.lo, b.lo, L.lo), hi: pick(R0.hi, b.hi, L.hi), dist: G.dist[v.id] || e.dist };
   }
   // the count at the centile u: Poisson (mean m), or negative binomial with the SD asked (more spread than Poisson)
   function countQ(u, m, sd) { const s2 = sd * sd, nb = sd > 0 && s2 > m * 1.001, r = nb ? m * m / (s2 - m) : 0, q = nb ? r / (r + m) : 0;
