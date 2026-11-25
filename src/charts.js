@@ -1066,12 +1066,14 @@ const Charts = (() => {
     const rk = spec.riskTable, rkH = rk ? (rk.rows.length + 1) * 38 * ts + 20 : 0, labW = rk ? (ctx.font = F(700, 22), Math.min(W * 0.35, Math.max(...rk.rows.map(r => ctx.measureText(r.name).width)) + 40)) : 0;
     const L = Math.max(110 + 40 * ts, labW), R = 50 + (lm.pos === 'right' ? lm.w + 40 : 0), T = 50 + (lm.pos === 'top' ? lm.band : 0), B = 120 * ts + (lm.pos === 'bottom' ? lm.band : 0) + rkH;
     const pw = W - L - R, ph = H - T - B;
-    const tMax = Math.max(1, ...spec.series.flatMap(s => [...s.steps.map(q => q.t), ...s.censored.map(q => q.t)]));
-    const sx = niceScale(0, tMax), X = v => L + v / sx.max * pw, Y = v => T + ph - v * ph;
+    const tMax0 = Math.max(1, ...spec.series.flatMap(s => [...s.steps.map(q => q.t), ...s.censored.map(q => q.t)])), tMax = +spec.xMax > 0 ? +spec.xMax : tMax0;
+    const sx = +spec.xStep > 0 ? { max: Math.ceil(tMax / +spec.xStep - 1e-9) * +spec.xStep, step: +spec.xStep } : niceScale(0, tMax);
+    const y0 = Math.max(0, Math.min(0.9, +spec.yFrom > 1 ? +spec.yFrom / 100 : +spec.yFrom || 0)), yStep = (1 - y0) <= 0.5 ? 0.1 : 0.2;
+    const X = v => L + v / sx.max * pw, Y = y0 ? v => T + ph - (v - y0) / (1 - y0) * ph : v => T + ph - v * ph, clipOn = y0 > 0 || +spec.xMax > 0;
     ctx.font = F(600, 26); ctx.lineWidth = 1.5;
-    for (let v = 0; v <= 1.0001; v += 0.2) {
+    for (let v = y0; v <= 1.0001; v += yStep) {
       if (st.grid) { gridPen(ctx, st); ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.setLineDash([]); }
-      ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(Math.round(v * 100) + '%', L - 14, Y(v));
+      ctx.fillStyle = '#444'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(spec.yProp ? (+v.toFixed(2)).toFixed(1) : Math.round(v * 100) + '%', L - 14, Y(v));
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for (let v = 0; v <= sx.max + 1e-9; v += sx.step) {
@@ -1082,6 +1084,7 @@ const Charts = (() => {
     ctx.font = F(700, 28); ctx.fillStyle = '#333';
     ctx.fillText(spec.xLabel || 'Time', L + pw / 2, T + ph + 60 * ts);
     ctx.save(); ctx.translate(40, T + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle'; ctx.fillText(spec.yLabel || 'Survival probability', 0, 0); ctx.restore();
+    ctx.save(); if (clipOn) { ctx.beginPath(); ctx.rect(L - 2, T - 14, pw + 4, ph + 16); ctx.clip(); } // only when an axis is cut
     // optional 95% CI bands, drawn as shaded steps under the curves
     if (spec.band) spec.series.forEach((s, i) => {
       const st2 = s.steps.filter(q => isFinite(q.lo) && isFinite(q.hi)); if (st2.length < 2) return;
@@ -1097,11 +1100,15 @@ const Charts = (() => {
       ctx.beginPath(); ctx.moveTo(X(0), Y(spec.cif ? 0 : 1));
       s.steps.forEach((q, k) => { if (k) { ctx.lineTo(X(q.t), Y(s.steps[k - 1].s)); ctx.lineTo(X(q.t), Y(q.s)); } });
       ctx.lineTo(X(end), Y(s.steps[s.steps.length - 1].s)); ctx.stroke(); ctx.setLineDash([]);
-      // censored patients as small vertical ticks
+      // censored patients as small vertical ticks (or plus signs, or none)
       ctx.lineWidth = 3;
-      s.censored.forEach(q => { ctx.beginPath(); ctx.moveTo(X(q.t), Y(q.s) - 12); ctx.lineTo(X(q.t), Y(q.s) + 12); ctx.stroke(); });
+      if (spec.censor !== 'none') s.censored.forEach(q => { ctx.beginPath(); ctx.moveTo(X(q.t), Y(q.s) - 12); ctx.lineTo(X(q.t), Y(q.s) + 12); if (spec.censor === 'plus') { ctx.moveTo(X(q.t) - 12, Y(q.s)); ctx.lineTo(X(q.t) + 12, Y(q.s)); } ctx.stroke(); });
     });
-    if (spec.note) {
+    // median survival: a dashed line at 50% to each curve's median time, and down to the time axis
+    if (spec.kmMedian && !spec.cif && y0 < 0.5) spec.series.forEach((s, i) => { const q = s.steps.find(z => z.s <= 0.5); if (!q) return; ctx.strokeStyle = items[i].color; ctx.lineWidth = 2; ctx.setLineDash([10, 8]);
+      ctx.beginPath(); ctx.moveTo(L, Y(0.5)); ctx.lineTo(X(q.t), Y(0.5)); ctx.lineTo(X(q.t), Y(y0)); ctx.stroke(); ctx.setLineDash([]); });
+    ctx.restore();
+    if (spec.note && !spec.noteOff) {
       ctx.font = F(700, 28); ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillStyle = '#222';
       ctx.fillText(spec.note, L + pw - 10, T + 10);
     }

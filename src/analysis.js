@@ -4077,7 +4077,7 @@ const Analysis = (() => {
           if (a.commentPlace === 'before' || a.commentPlace === 'after') sec.place = a.commentPlace;
           // the figure options of the card (step 8 → 🖼 Figure)
           if (a.figOff) sec.figures = [];
-          (sec.figures || []).forEach((f, fi) => { const sp = f.spec = { ...(f.spec || {}) }, num = x => { const t = parseFloat(String(x ?? '').replace(',', '.')); return isFinite(t) ? t : undefined; };
+          (sec.figures || []).forEach((f, fi) => { f.advIdx = cfg.advanced.indexOf(a); const sp = f.spec = { ...(f.spec || {}) }, num = x => { const t = parseFloat(String(x ?? '').replace(',', '.')); return isFinite(t) ? t : undefined; };
             if (a.figCaption && a.figCaption.trim()) f.caption = a.figCaption.trim() + ((sec.figures.length > 1 && fi) ? ` (${fi + 1})` : '');
             if (a.figTitle && a.figTitle.trim()) f.fmtTitle = a.figTitle.trim(); if (a.figX && a.figX.trim()) sp.xLabel = a.figX.trim(); if (a.figY && a.figY.trim()) sp.yLabel = a.figY.trim();
             if (num(a.figYMin) !== undefined) sp.yMin = num(a.figYMin); if (num(a.figYMax) !== undefined) sp.yMax = num(a.figYMax);

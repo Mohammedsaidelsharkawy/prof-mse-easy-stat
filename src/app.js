@@ -3933,14 +3933,25 @@
         out.push(`<div style="grid-column:1/-1"><label class="f">Order of the groups${col ? ` (${esc(Analysis.columnLabel(state.cfg, col))})` : ''} — the first is the reference</label><div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">${list.map(([g, l], i) => `<span class="chip">${i + 1}. ${esc(l)}${i ? ` <button class="btn ghost small" type="button" data-agup="${esc(String(g))}" title="Move up">↑</button>` : ''}</span>`).join('')}${ord.length ? '<button class="btn ghost small" type="button" data-agreset="1">↺ As the data</button>' : ''}</div></div>`); } }
     // the figure(s) of this analysis: shown or not, caption, titles, axis range, legend, labels, colours, width
     const inp = (k, l, ph, ty = 'text') => `<div><label class="f">${l}</label><input type="${ty}" ${ty === 'number' ? 'step="any"' : ''} data-af="${k}" value="${esc(a[k] ?? '')}" placeholder="${esc(ph)}"></div>`;
-    if (t !== 'ssize') { const on = ['figOff', 'figCaption', 'figTitle', 'figX', 'figY', 'figYMin', 'figYMax', 'figLegend', 'figLabels', 'figPal', 'figHalf'].some(k => a[k] !== undefined && a[k] !== '' && a[k] !== false);
+    if (t !== 'ssize') { const on = ['figOff', 'figCaption', 'figTitle', 'figX', 'figY', 'figYMin', 'figYMax', 'figLegend', 'figLabels', 'figPal', 'figHalf'].some(k => a[k] !== undefined && a[k] !== '' && a[k] !== false) || Object.keys(a).some(k => k.startsWith('fe_') && a[k] !== '' && a[k] !== undefined && a[k] !== false);
+      const AS2 = [['', 'As the report'], ['small', 'Small'], ['normal', 'Normal'], ['large', 'Large'], ['xlarge', 'Extra large']], kmT = ['survival', 'cif'].includes(t);
       out.push(`<details style="grid-column:1/-1" ${on ? 'open' : ''}><summary class="legend-note" style="cursor:pointer"><b>🖼 Figure</b> — caption, titles, axes, legend, colours${on ? ' (changed)' : ''}</summary><div class="grid g3" style="margin-top:6px">
         <div>${box('figOff', 'No figure for this analysis')}</div><div>${box('figHalf', 'Half width (two side by side)')}</div><div><label class="f">Colours</label>${sel('figPal', [['', 'As the report'], ...Object.entries(Charts.PALETTE_NAMES || {})], a.figPal || '')}</div>
         <div style="grid-column:1/-1">${inp('figCaption', 'Caption (empty: automatic)', 'e.g. Kaplan-Meier curves of overall survival by treatment')}</div>
         ${inp('figTitle', 'Title in the chart', 'none')}${inp('figX', 'X-axis title', 'automatic')}${inp('figY', 'Y-axis title', 'automatic')}
         ${inp('figYMin', 'Y-axis from', 'automatic', 'number')}${inp('figYMax', 'Y-axis to', 'automatic', 'number')}
         <div><label class="f">Legend</label>${sel('figLegend', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']], a.figLegend || '')}</div>
-        <div><label class="f">Value labels</label>${sel('figLabels', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']], a.figLabels || '')}</div></div></details>`); }
+        <div><label class="f">Value labels</label>${sel('figLabels', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']], a.figLabels || '')}</div>
+        ${kmT ? `<div class="adv-sep" style="grid-column:1/-1">Kaplan-Meier curves</div>${inp('fe_xMax', 'Time axis up to', 'all the follow-up', 'number')}${inp('fe_xStep', 'Time axis step', 'automatic', 'number')}${inp('fe_yFrom', 'Survival axis from (%)', '0', 'number')}
+          <div><label class="f">Survival shown as</label>${sel('fe_yProp', [['', 'Percent (0–100%)'], ['prop', 'Proportion (0–1)']], a.fe_yProp || '')}</div><div><label class="f">Censored patients</label>${sel('fe_censor', [['', 'Ticks |'], ['plus', 'Plus signs +'], ['none', 'Not shown']], a.fe_censor || '')}</div>
+          <div><label class="f">Median survival lines</label>${sel('fe_kmMedian', [['', 'Not shown'], ['on', 'Dashed lines at 50%']], a.fe_kmMedian || '')}</div><div><label class="f">P value on the plot</label>${sel('fe_pval', [['', 'As computed'], ['off', 'Hidden']], a.fe_pval || '')}</div>` : ''}
+        <div class="adv-sep" style="grid-column:1/-1">Look</div>
+        <div><label class="f">Legend position</label>${sel('fe_legendPos', [['', 'As the report'], ['bottom', 'Bottom'], ['top', 'Top'], ['right', 'Right'], ['inside', 'Inside the plot'], ['none', 'None']], a.fe_legendPos || '')}</div>
+        <div><label class="f">Font</label>${sel('fe_font', [['', 'As the report'], ['sans', 'Segoe UI'], ['arial', 'Arial'], ['calibri', 'Calibri'], ['times', 'Times New Roman']], a.fe_font || '')}</div>
+        <div><label class="f">Axis numbers size</label>${sel('fe_axisSize', AS2, a.fe_axisSize || '')}</div><div><label class="f">Axis titles size</label>${sel('fe_titleSize', AS2, a.fe_titleSize || '')}</div>
+        <div><label class="f">Line weight</label>${sel('fe_lineWeight', [['', 'As the report'], ['thin', 'Thin'], ['normal', 'Normal'], ['thick', 'Thick']], a.fe_lineWeight || '')}</div>
+        <div><label class="f">Gridlines</label>${sel('fe_grid', [['', 'As the report'], ['on', 'Shown'], ['off', 'Hidden']], a.fe_grid || '')}</div>
+        <div style="grid-column:1/-1" class="legend-note">More (each figure, or all figures at once): ✎ Edit figure under the figure in step 12.</div></div></details>`); }
     if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm', 'noninf', 'gee', 'crossover', 'weighted'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
@@ -6101,7 +6112,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         // the automatic texts, before any edit in step 11 (the review copy shows the edits as tracked changes)
         res.auto = { methods: res.methods || '', sections: res.sections.map(s => ({ title: s.title, comment: s.comment || '' })) }; state.rephraseBase = {}; state.rephraseK = {};
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
-          f.key = f.caption; figVarProps(f); applyFigEdit(f, (cfg.figEdits || {})[f.key]); renderFigure(f, cfg.options); const own = f.comb ? f.note || '' : '';
+          f.key = f.caption; figVarProps(f); applyFigEdit(f, cfg.figEditsAll); applyFigEdit(f, advFigE(cfg.advanced[f.advIdx])); applyFigEdit(f, (cfg.figEdits || {})[f.key]); renderFigure(f, cfg.options); const own = f.comb ? f.note || '' : '';
           f.note = [own, cfg.options.figSummary ? figSummaryText(f.spec, cfg.options) : '', cfg.options.figNotes || cfg.options.figNoteParts || cfg.options.figHowTo ? figNote(f.spec, cfg.options) : ''].filter(Boolean).join(' ');
           if (cfg.options.midDot) f.note = dot(f.note);
         }); });
@@ -6229,27 +6240,56 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   const FIG_CACHE = new Map();
   // ✎ Edit figure (step 12): the figure's own caption, title, axes, range, legend, labels, colours and width — drawn again at once, kept for the next runs
   function editFigure(f) {
-    const key = f.key || f.caption, cfg = state.cfg, E0 = (cfg.figEdits || {})[key] || {}; let d = document.getElementById('figEditDlg');
+    const key = f.key || f.caption, cfg = state.cfg, own = (cfg.figEdits || {})[key] || {}, all = cfg.figEditsAll || {}, km = f.spec && f.spec.type === 'km'; let d = document.getElementById('figEditDlg');
     if (!d) { d = document.createElement('dialog'); d.id = 'figEditDlg'; d.className = 'app-dlg'; document.body.append(d); }
-    const sel = (k, list) => `<select data-fe="${k}">${list.map(([v, l]) => `<option value="${esc(v)}" ${String(E0[k] ?? '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`, inp = (k, l, ph, ty = 'text') => `<div><label class="f">${l}</label><input type="${ty}" step="any" data-fe="${k}" value="${esc(E0[k] ?? '')}" placeholder="${esc(ph ?? '')}"></div>`;
-    d.innerHTML = `<form method="dialog" onsubmit="return false" style="min-width:min(640px,90vw)"><h3>✎ Edit figure</h3><div class="row" style="gap:12px;align-items:flex-start;flex-wrap:wrap"><img id="feImg" src="${f.url}" alt="" style="max-width:260px;border:1px solid var(--line);border-radius:8px">
-      <div class="grid g2" style="gap:6px;flex:1;min-width:280px"><div style="grid-column:1/-1">${inp('caption', 'Caption', f.caption)}</div>${inp('title', 'Title in the chart (“-” for none)', f.fmtTitle ?? '')}${inp('x', 'X-axis title', f.spec.xLabel || '')}${inp('y', 'Y-axis title', f.spec.yLabel || '')}
-        ${inp('ymin', 'Y-axis from', f.spec.yMin ?? 'automatic', 'number')}${inp('ymax', 'Y-axis to', f.spec.yMax ?? 'automatic', 'number')}
-        <div><label class="f">Legend</label>${sel('legend', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']])}</div><div><label class="f">Value labels</label>${sel('labels', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']])}</div>
-        <div><label class="f">Colours</label>${sel('pal', [['', 'As the report'], ...Object.entries(Charts.PALETTE_NAMES || {})])}</div><div><label class="f">Width</label>${sel('half', [['', 'As the report'], ['full', 'Full width'], ['half', 'Half width (two side by side)']])}</div></div></div>
-      <p class="legend-note" style="margin:8px 0 0">Kept for this figure when the report is run again. For every detail of a variable's figure (fonts, series colours, gridlines…), use the Format pane of step 7.</p>
-      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn ghost" type="button" data-fego="reset">↺ As drawn</button><button class="btn ghost" type="button" data-fego="x">Cancel</button><button class="btn primary" type="button" data-fego="ok">Apply</button></div></form>`;
-    const read = () => { const E = {}; d.querySelectorAll('[data-fe]').forEach(x => { if (x.value !== '') E[x.dataset.fe] = x.value; }); return E; };
-    const redraw = E => { const g = { ...f, spec: { ...f.spec } }; applyFigEdit(g, E); try { renderFigure(g, cfg.options); d.querySelector('#feImg').src = g.url; } catch (err) { /* preview only */ } };
-    d.oninput = () => redraw(read());
+    const E0 = { ...all, ...own }, AS = [['', 'As the report'], ['small', 'Small'], ['normal', 'Normal'], ['large', 'Large'], ['xlarge', 'Extra large']];
+    const sel = (k, l, list) => `<div><label class="f">${l}</label><select data-fe="${k}">${list.map(([v, t]) => `<option value="${esc(v)}" ${String(E0[k] ?? '') === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+    const inp = (k, l, ph, ty = 'text') => `<div><label class="f">${l}</label><input type="${ty}" step="any" data-fe="${k}" value="${esc(E0[k] ?? '')}" placeholder="${esc(ph ?? '')}"></div>`;
+    const sec = (t, body, open) => `<details ${open ? 'open' : ''} style="grid-column:1/-1;border-top:1px solid var(--line);padding-top:4px"><summary style="cursor:pointer"><b>${t}</b></summary><div class="grid g3" style="gap:6px;margin-top:6px">${body}</div></details>`;
+    d.innerHTML = `<form method="dialog" onsubmit="return false" style="width:min(900px,92vw)"><h3>✎ Edit figure</h3><div class="row" style="gap:14px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:0 0 300px;position:sticky;top:0"><img id="feImg" src="${f.url}" alt="" style="width:300px;border:1px solid var(--line);border-radius:8px"><div class="legend-note" style="margin-top:4px">Live preview</div></div>
+      <div class="grid g3" style="gap:6px;flex:1;min-width:300px;max-height:62vh;overflow:auto;padding-right:4px">
+        ${sec('Texts and axes', `<div style="grid-column:1/-1">${inp('caption', 'Caption', f.caption)}</div>${inp('title', 'Title in the chart (“-” for none)', f.fmtTitle ?? '')}${inp('x', 'X-axis title', f.spec.xLabel || '')}${inp('y', 'Y-axis title', f.spec.yLabel || '')}
+          ${km ? '' : inp('ymin', 'Y-axis from', f.spec.yMin ?? 'automatic', 'number') + inp('ymax', 'Y-axis to', f.spec.yMax ?? 'automatic', 'number')}`, true)}
+        ${km ? sec('Kaplan-Meier curves', `${inp('xMax', 'Time axis up to', 'all the follow-up', 'number')}${inp('xStep', 'Time axis step', 'automatic', 'number')}${inp('yFrom', 'Survival axis from (%)', '0', 'number')}
+          ${sel('yProp', 'Survival shown as', [['', 'Percent (0–100%)'], ['pct', 'Percent (0–100%)'], ['prop', 'Proportion (0–1)']])}${sel('censor', 'Censored patients', [['', 'Ticks |'], ['plus', 'Plus signs +'], ['none', 'Not shown']])}
+          ${sel('kmMedian', 'Median survival lines', [['', 'Not shown'], ['on', 'Dashed lines at 50%']])}${sel('pval', 'P value on the plot', [['', 'As computed'], ['off', 'Hidden'], ['on', 'Shown']])}
+          ${sel('band', '95% CI bands', [['', 'As the analysis'], ['on', 'Shown'], ['off', 'Hidden']])}${sel('risk', 'Number at risk', [['', 'As the analysis'], ['off', 'Hidden']])}`, true) : ''}
+        ${sec('Legend, labels, colours, width', `${sel('legend', 'Legend', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']])}${sel('legendPos', 'Legend position', [['', 'As the report'], ['bottom', 'Bottom'], ['top', 'Top'], ['right', 'Right'], ['inside', 'Inside the plot'], ['none', 'None']])}
+          ${sel('legendSize', 'Legend size', [['', 'As the report'], ['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']])}${sel('labels', 'Value labels', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']])}${sel('valueSize', 'Label size', AS)}
+          ${sel('pal', 'Colours', [['', 'As the report'], ...Object.entries(Charts.PALETTE_NAMES || {})])}${sel('half', 'Width', [['', 'As the report'], ['full', 'Full width'], ['half', 'Half width (two side by side)']])}`, true)}
+        ${sec('Look: fonts, sizes, lines, gridlines', `${sel('font', 'Font', [['', 'As the report'], ['sans', 'Segoe UI'], ['arial', 'Arial'], ['calibri', 'Calibri'], ['times', 'Times New Roman']])}${sel('axisSize', 'Axis numbers size', AS)}${sel('titleSize', 'Axis titles size', AS)}
+          ${sel('lineWeight', 'Line weight', [['', 'As the report'], ['thin', 'Thin'], ['normal', 'Normal'], ['thick', 'Thick']])}${sel('grid', 'Gridlines', [['', 'As the report'], ['on', 'Shown'], ['off', 'Hidden']])}${sel('gridStyle', 'Gridline style', [['', 'As the report'], ['solid', 'Solid, light'], ['dashed', 'Dashed'], ['dotted', 'Dotted'], ['dark', 'Solid, darker']])}
+          ${sel('frame', 'Border around the chart', [['', 'As the report'], ['on', 'Yes'], ['off', 'No']])}<div><label class="f">Background</label><input type="color" data-fe="bg" value="${esc(E0.bg || '#ffffff')}"></div>`, false)}
+      </div></div>
+      <label class="check" style="margin:10px 0 0"><input type="checkbox" id="feAll" ${Object.keys(all).length && !Object.keys(own).length ? 'checked' : ''}><span><b>Apply to all figures of the report</b> — legend, labels, colours, width, look${km ? ' and the Kaplan-Meier settings (to every Kaplan-Meier figure)' : ''}; the caption, titles and y-axis range stay this figure's own</span></label>
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px;flex-wrap:wrap">${Object.keys(all).length ? '<button class="btn ghost" type="button" data-fego="resetAll">↺ Remove the settings of all figures</button>' : ''}<button class="btn ghost" type="button" data-fego="reset">↺ This figure as drawn</button><button class="btn ghost" type="button" data-fego="x">Cancel</button><button class="btn primary" type="button" data-fego="ok">Apply</button></div></form>`;
+    const read = () => { const E = {}; d.querySelectorAll('[data-fe]').forEach(x => { if (x.value !== '' && !(x.type === 'color' && x.value.toLowerCase() === '#ffffff' && !E0.bg)) E[x.dataset.fe] = x.value; }); return E; };
+    const base = g => { if (!g.orig) g.orig = { caption: g.caption, spec: { ...g.spec }, pal: g.pal, half: g.half, fmtTitle: g.fmtTitle, fmtStyle: { ...(g.fmtStyle || {}) } }; Object.assign(g, { caption: g.orig.caption, spec: { ...g.orig.spec }, pal: g.orig.pal, half: g.orig.half, fmtTitle: g.orig.fmtTitle, fmtStyle: { ...g.orig.fmtStyle } }); };
+    const redraw = E => { const g = { ...f, spec: { ...f.spec }, orig: f.orig }; base(g); applyFigEdit(g, E); try { renderFigure(g, cfg.options); d.querySelector('#feImg').src = g.url; } catch (err) { /* preview only */ } };
+    d.oninput = () => redraw(read()); d.onchange = () => redraw(read());
     d.onclick = ev => { const b = ev.target.closest('[data-fego]'); if (!b) return; const act = b.dataset.fego; if (act === 'x') { d.close(); return; }
-      const E = act === 'reset' ? null : read(); cfg.figEdits = cfg.figEdits || {}; if (E && Object.keys(E).length) cfg.figEdits[key] = E; else delete cfg.figEdits[key];
-      // this figure now: back to its drawn state, then the edits
-      if (!f.orig) f.orig = { caption: f.caption, spec: { ...f.spec }, pal: f.pal, half: f.half, fmtTitle: f.fmtTitle };
-      Object.assign(f, { caption: f.orig.caption, spec: { ...f.orig.spec }, pal: f.orig.pal, half: f.orig.half, fmtTitle: f.orig.fmtTitle }); f.key = key; applyFigEdit(f, E); renderFigure(f, cfg.options);
-      d.close(); const y = scrollY; renderReport(); scrollTo(0, y); toast(E ? 'Figure changed — also in Word' : 'Figure as drawn'); };
+      cfg.figEdits = cfg.figEdits || {}; const E = act === 'reset' || act === 'resetAll' ? null : read(), toAll = !!(d.querySelector('#feAll') || {}).checked && act === 'ok';
+      if (act === 'resetAll') delete cfg.figEditsAll;
+      else if (toAll) { const A = {}, mine = {}; Object.entries(E).forEach(([k, x]) => { (FIG_ALL.includes(k) ? A : mine)[k] = x; }); cfg.figEditsAll = A; if (Object.keys(mine).length) cfg.figEdits[key] = mine; else delete cfg.figEdits[key]; }
+      else if (E && Object.keys(E).length) { const mine = {}; Object.entries(E).forEach(([k, x]) => { if (all[k] !== x) mine[k] = x; }); if (Object.keys(mine).length) cfg.figEdits[key] = mine; else delete cfg.figEdits[key]; }
+      else delete cfg.figEdits[key];
+      // every figure of the report drawn again: as drawn, then all figures' settings, the card's, its own
+      const figs = (state.result.sections || []).flatMap(s2 => s2.figures || []), only = toAll || act === 'resetAll' ? figs : [f];
+      only.forEach(g => { const k2 = g.key || g.caption; base(g); g.key = k2; applyFigEdit(g, cfg.figEditsAll); applyFigEdit(g, advFigE(cfg.advanced[g.advIdx])); applyFigEdit(g, cfg.figEdits[k2]); try { renderFigure(g, cfg.options); } catch (err) { console.error(err); } });
+      d.close(); const y = scrollY; renderReport(); scrollTo(0, y); toast(toAll ? `Applied to all ${figs.length} figures — also in Word` : act === 'resetAll' ? 'The settings of all figures were removed' : E ? 'Figure changed — also in Word' : 'Figure as drawn'); };
     d.showModal(); }
+  // the edits of a figure: texts, axes, legend, labels, colours, width, the look (fonts, sizes, gridlines, line weight, legend place, border, background)
+  // and, for Kaplan-Meier curves, the time and survival axes, censored marks, median lines, P value, CI bands and the number at risk
+  const FIG_STYLE = ['font', 'axisSize', 'titleSize', 'legendPos', 'legendSize', 'lineWeight', 'grid', 'gridStyle', 'frame', 'bg', 'valueSize'];
+  const FIG_KM = ['xMax', 'xStep', 'yFrom', 'yProp', 'censor', 'kmMedian', 'pval', 'band', 'risk'];
+  const FIG_ALL = ['legend', 'labels', 'pal', 'half', ...FIG_STYLE, ...FIG_KM]; // what “apply to all figures” carries (not the texts or the y range of one figure)
+  const advFigE = a => { if (!a) return null; const E = {}; Object.keys(a).forEach(k => { if (k.startsWith('fe_') && a[k] !== '' && a[k] !== undefined && a[k] !== false) E[k.slice(3)] = a[k] === true ? 'on' : a[k]; }); return Object.keys(E).length ? E : null; };
   function applyFigEdit(f, E) { if (!E) return; const n = x => { const t = parseFloat(String(x ?? '').replace(',', '.')); return isFinite(t) ? t : undefined; }; f.spec = { ...f.spec };
+    const st = { ...(f.fmtStyle || {}) }; FIG_STYLE.forEach(k => { const x = E[k]; if (x === undefined || x === '') return; if (k === 'legendPos') st.legend = x; else if (k === 'grid' || k === 'frame') st[k] = x === 'on'; else st[k] = x; }); f.fmtStyle = st;
+    if (f.spec.type === 'km') { const sp = f.spec; if (n(E.xMax) > 0) sp.xMax = n(E.xMax); if (n(E.xStep) > 0) sp.xStep = n(E.xStep); if (n(E.yFrom) !== undefined) sp.yFrom = n(E.yFrom);
+      if (E.yProp === 'prop') sp.yProp = true; if (E.yProp === 'pct') sp.yProp = false; if (E.censor) sp.censor = E.censor; if (E.kmMedian === 'on') sp.kmMedian = true; if (E.kmMedian === 'off') sp.kmMedian = false;
+      if (E.pval === 'off') sp.noteOff = true; if (E.pval === 'on') sp.noteOff = false; if (E.band === 'on') sp.band = true; if (E.band === 'off') sp.band = false; if (E.risk === 'off') delete sp.riskTable; }
     if (E.caption) f.caption = E.caption; if (E.title !== undefined && E.title !== '') f.fmtTitle = E.title === '-' ? '' : E.title; if (E.x) f.spec.xLabel = E.x; if (E.y) f.spec.yLabel = E.y;
     if (n(E.ymin) !== undefined) f.spec.yMin = n(E.ymin); if (n(E.ymax) !== undefined) f.spec.yMax = n(E.ymax); if (E.legend === 'on') f.spec.legend = true; if (E.legend === 'off') f.spec.legend = false;
     if (E.labels === 'on') f.spec.labels = true; if (E.labels === 'off') f.spec.labels = false; if (E.pal) f.pal = E.pal; if (E.half === 'half') f.half = true; if (E.half === 'full') f.half = false; }

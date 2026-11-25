@@ -250,6 +250,10 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**More figure options — Kaplan-Meier and every figure**:
+- Step 8 card → 🖼 Figure: for Kaplan-Meier, time axis up to and its step, survival axis from (%), survival as percent or proportion, censored patients as ticks, plus signs or not shown, dashed median survival lines, P value on the plot hidden; for every card, legend position, font, axis number and title sizes, line weight, gridlines.
+- Step 12 → ✎ Edit figure: texts and axes; Kaplan-Meier curves (as above, plus 95% CI bands and the number at risk); legend (shown, position, size), value labels and their size, colours, width; the look (font, sizes, line weight, gridlines and their style, border, background) — with a live preview.
+- **Apply to all figures of the report** (tick in ✎ Edit figure): the legend, labels, colours, width, look and Kaplan-Meier settings go to every figure (the caption, titles and y range stay each figure's own); kept when the report is run again; ↺ Remove the settings of all figures.
 **Order of the groups in step 8 analyses** (Kaplan-Meier and the others with groups): ↑ moves a group up, the first is the reference; it follows the column chosen for the curves (Kaplan-Meier) or for Cox; ↺ As the data.
 **✎ Edit figure in the report (step 12)**: caption, title in the chart, axis titles, y-axis range, legend, value labels, colours and width, with a live preview; kept when the report is run again and used in Word (↺ As drawn to undo).
 **Edit repeated measure → + Add a column…**: only columns of the same kind — numbers for a numeric measure, categories for a categorical one (those with the same categories first); a new measure made of category columns is categorical.
