@@ -250,6 +250,9 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Expected values in each group** (🧱 Master sheet builder → Variables, with two or more groups): a mean and SD per group for numbers, a % per category per group for yes/no and categories; the generator uses them (empty cells use the overall expected values; a % left empty shares what remains).
+**8 more example datasets** (18 in all): spinal hypotension RCT, heart-failure echo cohort, neonatal jaundice RCT, periodontal therapy RCT, glaucoma IOP 3-arm trial, IVF protocol cohort, stroke rehabilitation RCT, liver fibrosis diagnostic accuracy.
+**Footer**: “runs fully offline in your browser” removed.
 **Renamed: Prof Easy Stat** (app, landing page, share image, Word files' metadata).
 **Step 1**: “Enter your mastersheet”; the ways to start in one row before 📋 Paste from Excel — 📋 Paste a table, 🔗 Google Sheets link, 📷 Photo of a data sheet, 👀 See a finished example report, ⚡ Make my report (2 choices); the study-title field removed; **▸ Collapse all / ▾ Expand all** above the step bar for every step.
 **All patients as one group first**: titles and captions read “… of all patients” (e.g. “Demographic and baseline data of all patients”, “Distribution of age in all patients”).

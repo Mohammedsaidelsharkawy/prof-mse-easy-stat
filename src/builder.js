@@ -1040,7 +1040,15 @@ Date of surgery">${esc(pasteTxt)}</textarea>
   const convOf = v => { const k = Object.keys(CONV).find(n => n.toLowerCase() === String(v.label).replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase()); const cv = k && CONV[k]; return cv && cv.length > 1 && cv.some(([u]) => u === v.unit) ? cv : null; };
   function convert(v, to) { const cv = convOf(v); if (!cv) return; const a = cv.find(([u]) => u === v.unit), b = cv.find(([u]) => u === to); if (!a || !b || a === b) return; const f = b[1] / a[1], r = (x, d) => x === '' || x === undefined || x === null || !isFinite(+x) ? x : +(+x * f).toFixed(d);
     v.min = r(v.min, b[2]); v.max = r(v.max, b[2]); v.refLo = r(v.refLo, b[2]); v.refHi = r(v.refHi, b[2]); if (v.expect) { v.expect = { ...v.expect, mean: r(v.expect.mean, b[2] + 1), sd: r(v.expect.sd, b[2] + 1) }; } v.unit = to; v.dec = String(b[2]); }
-  function expectBox(v) {
+  // expected values in each group (optional): empty cells use the overall values above
+  function groupExpect(v) { const A = (D.arms || []).filter(Boolean); if (A.length < 2 || !['num', 'calc', 'yn', 'cat'].includes(v.type)) return '';
+    const bg = (v.expect || {}).byGroup || [], num = v.type === 'num' || v.type === 'calc';
+    return `<details class="mb-expect" ${bg.some(x => x && Object.keys(x).length) ? 'open' : ''} style="margin-top:6px"><summary><b>Expected values in each group</b> <span class="legend-note">(optional — e.g. the effect you expect; empty cells use the values above)</span></summary>
+      <table class="t" style="margin-top:4px;font-size:13px"><thead><tr><th>Group</th>${num ? '<th>Mean</th><th>SD</th>' : v.cats.map(c => `<th>% ${esc(c)}</th>`).join('')}</tr></thead><tbody>${A.map((a, g) => { const x = bg[g] || {};
+        return `<tr><td>${esc(a)}</td>${num ? `<td><input type="number" step="any" data-mbg="${g}|mean" value="${esc(x.mean ?? '')}" placeholder="${esc((v.expect || {}).mean ?? '')}" style="width:90px"></td><td><input type="number" step="any" min="0" data-mbg="${g}|sd" value="${esc(x.sd ?? '')}" placeholder="${esc((v.expect || {}).sd ?? '')}" style="width:80px"></td>`
+          : v.cats.map((c, i) => `<td><input type="number" min="0" max="100" step="any" data-mbg="${g}|p${i}" value="${esc((x.pct || [])[i] ?? '')}" placeholder="${esc(((v.expect || {}).pct || [])[i] ?? '')}" style="width:70px"></td>`).join('')}</tr>`; }).join('')}</tbody></table></details>`; }
+  function expectBox(v) { return expectBox0(v).replace(/<\/div>$/, groupExpect(v) + '</div>'); }
+  function expectBox0(v) {
     const e = v.expect || (v.expect = expectOf(v.label, v.type, v.cats));
     if (v.type === 'num' || v.type === 'calc') return `<div class="mb-expect"><b>Expected values</b> <span class="legend-note">(used to simulate data)</span><div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px">
       <div><label class="f">Mean</label><input type="number" step="any" data-mbe="mean" value="${esc(e.mean ?? '')}" style="width:100px"></div><div><label class="f">SD</label><input type="number" step="any" min="0" data-mbe="sd" value="${esc(e.sd ?? '')}" style="width:100px"></div>
@@ -1188,6 +1196,9 @@ Date of surgery">${esc(pasteTxt)}</textarea>
       save(); if (t.tagName === 'SELECT' || t.type === 'checkbox' || k === 'section') render(); return; }
     if (d.mbvisit) { const on = new Set((v.visits || []).length ? v.visits : [D.visits[0].id]); if (val) on.add(d.mbvisit); else on.delete(d.mbvisit); v.visits = D.visits.map(x => x.id).filter(id => on.has(id)); if (v.visits.length === 1 && v.visits[0] === D.visits[0].id) v.visits = []; save(); return render(); }
     if (d.mbe) { v.expect = { ...(v.expect || {}), [d.mbe]: d.mbe === 'dist' ? val : val === '' ? '' : +val }; save(); return; }
+    if (d.mbg) { const [g, k] = d.mbg.split('|'), e = v.expect = v.expect || {}, bg = e.byGroup = e.byGroup || [], x = bg[+g] = bg[+g] || {};
+      if (k[0] === 'p') { const i = +k.slice(1); x.pct = v.cats.map((_, j) => (x.pct || [])[j] ?? ''); x.pct[i] = val === '' ? '' : +val; if (x.pct.every(p => p === '')) delete x.pct; } else if (val === '') delete x[k]; else x[k] = +val;
+      save(); return; }
     if (d.mbep !== undefined) { const e = v.expect = v.expect || {}; e.pct = v.cats.map((_, i) => (e.pct || [])[i] ?? +(100 / v.cats.length).toFixed(1)); e.pct[+d.mbep] = +val || 0; save(); return; }
     if (d.mbflist) { const L = new Set((v.formula || {}).list || []); if (val) L.add(d.mbflist); else L.delete(d.mbflist); v.formula = { ...(v.formula || {}), list: [...L] }; save(); return render(); }
     if (d.mbfw) { const f = v.formula = v.formula || {}; f.weights = { ...(f.weights || {}), [d.mbfw]: val === '' ? '' : +val }; save(); return; }

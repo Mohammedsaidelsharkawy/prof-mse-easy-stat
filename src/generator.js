@@ -27,18 +27,22 @@
   const visitName = (D, key) => key === 'once' ? '' : (D.visits.find(x => x.id === key) || {}).name || key;
   const expect = v => v.expect && Object.keys(v.expect).length ? v.expect : B.expectOf(v.label, v.type, v.cats);
   // the target of a variable for a group at a visit: a mean (numbers) or the % of each category
+  // a group's typed percentages; the empty cells share what is left (100 − typed) like the overall values
+  const fillPct = (p, all) => { const typed = p.reduce((a, x) => a + (x === '' ? 0 : +x || 0), 0), rest = Math.max(0, 100 - typed), w = p.reduce((a, x, i) => a + (x === '' ? +all[i] || 0 : 0), 0), nE = p.filter(x => x === '').length;
+    return p.map((x, i) => x !== '' ? +x || 0 : w > 0 ? rest * (+all[i] || 0) / w : rest / nE); };
   function target(v, g, key) {
     const sg = ((SIG[v.id] || {})[g] || {})[key]; if (sg !== undefined) return sg;
-    const t = ((G.targets[v.id] || {})[g] || {})[key], e = expect(v);
-    if (v.type === 'num' || v.type === 'calc') return t !== undefined && t !== '' ? +t : e.mean !== '' && e.mean !== undefined ? +e.mean : (v.min !== '' && v.max !== '' ? (+v.min + +v.max) / 2 : 10);
+    const t = ((G.targets[v.id] || {})[g] || {})[key], e = expect(v), bg = (((v.expect || {}).byGroup) || [])[g] || {};
+    if (v.type === 'num' || v.type === 'calc') return t !== undefined && t !== '' ? +t : bg.mean !== undefined && bg.mean !== '' && isFinite(+bg.mean) ? +bg.mean : e.mean !== '' && e.mean !== undefined ? +e.mean : (v.min !== '' && v.max !== '' ? (+v.min + +v.max) / 2 : 10);
     // ordinal categories: the other groups from the first group's % by a proportional odds ratio (higher categories more likely when > 1)
     if (v.type === 'cat' && v.cats.length >= 3 && +G.ordOR[v.id] > 0 && g > 0 && !Array.isArray(t)) { const p0 = target(v, 0, key), b = Math.log(+G.ordOR[v.id]), lg = x => Math.log(x / (1 - x)), out = []; let cum = 0, prev = 0;
       p0.forEach((x, j) => { cum += x; const c = j === p0.length - 1 ? 1 : 1 / (1 + Math.exp(-(lg(Math.min(1 - 1e-9, Math.max(1e-9, cum))) - b))); out.push(Math.max(0, c - prev)); prev = c; }); return out; }
-    const pc = Array.isArray(t) ? t : (e.pct && e.pct.length === v.cats.length ? e.pct : v.cats.map(() => 100 / v.cats.length)); const s = pc.reduce((a, b) => a + (+b || 0), 0) || 1; return pc.map(x => (+x || 0) / s);
+    const bgp = Array.isArray(bg.pct) && bg.pct.length === v.cats.length && bg.pct.some(x => x !== '') ? fillPct(bg.pct, e.pct && e.pct.length === v.cats.length ? e.pct : v.cats.map(() => 1)) : null;
+    const pc = Array.isArray(t) ? t : bgp || (e.pct && e.pct.length === v.cats.length ? e.pct : v.cats.map(() => 100 / v.cats.length)); const s = pc.reduce((a, b) => a + (+b || 0), 0) || 1; return pc.map(x => (+x || 0) / s);
   }
   const sdOf = v => { const s = G.sds[v.id] !== undefined && G.sds[v.id] !== '' ? +G.sds[v.id] : +expect(v).sd; return isFinite(s) && s > 0 ? s : Math.max(0.5, Math.abs(target(v, 0, 'once')) * 0.2); };
   // the SD of a group at a visit: typed in its cell, else the variable's SD
-  const sdCell = (v, g, key) => { const c = ((G.sdt[v.id] || {})[g] || {})[key]; return c !== undefined && c !== '' && +c > 0 ? +c : sdOf(v); };
+  const sdCell = (v, g, key) => { const c = ((G.sdt[v.id] || {})[g] || {})[key], b = ((((v.expect || {}).byGroup) || [])[g] || {}).sd; return c !== undefined && c !== '' && +c > 0 ? +c : b !== undefined && b !== '' && +b > 0 ? +b : sdOf(v); };
   // the SD shared by the groups at a visit (the root mean square of the groups' SDs), for effect sizes
   const sdPool = (D, v, key) => { const k = K(D); let s2 = 0; for (let g = 0; g < k; g++) s2 += sdCell(v, g, key) ** 2; return Math.sqrt(s2 / k); };
   const pick = (...xs) => { const x = xs.find(y => y !== undefined && y !== null && y !== '' && isFinite(+y)); return x === undefined ? null : +x; };

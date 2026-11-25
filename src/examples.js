@@ -254,6 +254,159 @@ const Examples = (() => {
         }
         return out;
       }
+    },
+    {
+      id: 'spinal-hypotension-rct', name: 'Two-group RCT — hypotension after spinal anaesthesia',
+      flow: { type: 'consort', excluded: [{ text: 'Not meeting inclusion criteria', n: 9 }, { text: 'Declined to participate', n: 5 }], groups: [{ lost: 1, lostReason: 'Converted to general anaesthesia' }, { lost: 0 }] },
+      description: 'Phenylephrine versus ephedrine infusion at caesarean section, 70 mothers. MAP and heart rate every few minutes, hypotension, bradycardia, nausea, neonatal Apgar and umbilical pH.',
+      title: 'Prophylactic phenylephrine versus ephedrine infusion for spinal hypotension during caesarean section: a randomized controlled trial',
+      options: { within: true },
+      advanced: [{ type: 'logistic', outcome: 'Hypotension', positive: 'Yes', predictors: ['Group', 'Age_years', 'BMI_kg_m2', 'MAP_baseline'], univariable: true }],
+      rows() {
+        const R = rng(303), out = [];
+        ['Phenylephrine', 'Ephedrine'].forEach((g, gi) => { for (let i = 0; i < 35; i++) {
+          const m0 = R.n(90, 8), h0 = R.n(88, 10), sens = R.n(1, 0.25), fix = gi ? 4 : 8;
+          const map = t => Math.round(m0 - 22 * sens * (1 - Math.exp(-t / 5)) + fix * (t > 2 ? 1 : 0) + R.n(0, 4));
+          const maps = [0, 3, 6, 9, 12, 15].map(map), hyp = maps.slice(1).some(m => m < 0.8 * m0);
+          out.push({ ID: out.length + 1, Group: g, Age_years: Math.round(R.n(29, 5)), BMI_kg_m2: r1(R.n(29, 3.5)), Gestational_age_weeks: r1(R.n(38.6, 0.8)),
+            MAP_baseline: maps[0], MAP_3min: maps[1], MAP_6min: maps[2], MAP_9min: maps[3], MAP_12min: maps[4], MAP_15min: maps[5],
+            HR_baseline: Math.round(h0), HR_6min: Math.round(h0 + (gi ? 9 : -9) + R.n(0, 6)), HR_12min: Math.round(h0 + (gi ? 7 : -7) + R.n(0, 6)),
+            Hypotension: hyp ? 'Yes' : 'No', Bradycardia: R.yes(gi ? 0.03 : 0.17), Nausea_vomiting: R.yes(hyp ? 0.35 : 0.1),
+            Apgar_1min: clamp(Math.round(R.n(8.3, 0.8)), 4, 10), Apgar_5min: clamp(Math.round(R.n(9.2, 0.6)), 6, 10), Umbilical_pH: R.miss(Math.round((R.n(gi ? 7.26 : 7.30, 0.04)) * 100) / 100) });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'heart-failure-echo', name: 'Case-control study — echocardiography in heart failure',
+      flow: { type: 'strobe', excluded: [{ text: 'Poor echocardiographic window', n: 6 }, { text: 'Atrial fibrillation', n: 8 }], groups: [{ description: 'Heart failure with reduced ejection fraction' }, { description: 'Age-matched controls' }] },
+      description: 'Heart failure versus controls, 100 patients. A full echo panel (EF, LV volumes and mass, E/e′, TAPSE, PASP, GLS) and NT-proBNP. Good for correlation, ROC and comparing many skewed and normal measures.',
+      title: 'Echocardiographic and biochemical markers in patients with heart failure with reduced ejection fraction compared with controls',
+      levels: { NYHA_class: ['I', 'II', 'III', 'IV'] },
+      advanced: [{ type: 'roc', outcome: 'Group', positive: 'Heart failure', predictors: ['NT_proBNP_pg_mL', 'GLS_percent'] },
+        { type: 'correlation', outcome: 'LVEF_percent', predictors: ['GLS_percent', 'NT_proBNP_pg_mL', 'TAPSE_mm', 'E_e_ratio'], method: 'auto', scatter: '2' }],
+      rows() {
+        const R = rng(404), out = [];
+        ['Heart failure', 'Control'].forEach((g, gi) => { for (let i = 0; i < 50; i++) {
+          const hf = gi === 0, ef = clamp(hf ? R.n(32, 7) : R.n(62, 5), 15, 75), edv = clamp(hf ? R.n(185, 35) : R.n(112, 18), 60, 320);
+          out.push({ ID: out.length + 1, Group: g, Age_years: Math.round(R.n(hf ? 61 : 59, 9)), Sex: R.pick(['Male', 'Female'], [62, 38]), Diabetes: R.yes(hf ? 0.42 : 0.2), Hypertension: R.yes(hf ? 0.58 : 0.35),
+            NYHA_class: hf ? R.pick(['I', 'II', 'III', 'IV'], [10, 40, 38, 12]) : 'I', LVEF_percent: Math.round(ef), LVEDV_mL: Math.round(edv), LVESV_mL: Math.round(edv * (1 - ef / 100)),
+            LV_mass_index_g_m2: Math.round(R.n(hf ? 128 : 88, 20)), E_e_ratio: r1(Math.exp(R.n(hf ? Math.log(14) : Math.log(8), 0.3))), TAPSE_mm: r1(R.n(hf ? 16 : 23, 3)),
+            PASP_mmHg: Math.round(R.n(hf ? 44 : 26, 9)), GLS_percent: r1(R.n(hf ? -11 : -19.5, 2.4)), NT_proBNP_pg_mL: R.miss(Math.round(Math.exp(R.n(hf ? Math.log(2400) : Math.log(90), 0.8)))) });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'neonatal-jaundice-rct', name: 'Two-group RCT — phototherapy for neonatal jaundice',
+      flow: { type: 'consort', excluded: [{ text: 'Haemolytic disease', n: 7 }, { text: 'Parents declined', n: 3 }], groups: [{ lost: 1, lostReason: 'Transferred to another hospital' }, { lost: 1, lostReason: 'Discharged against advice' }] },
+      description: 'LED versus conventional phototherapy, 80 term neonates. Total serum bilirubin at 0, 12, 24 and 48 hours, duration of phototherapy, rebound, exchange transfusion.',
+      title: 'LED versus conventional phototherapy for hyperbilirubinaemia in term neonates: a randomized controlled trial',
+      options: { within: true },
+      advanced: [{ type: 'survival', outcome: 'Phototherapy_hours', event: 'Phototherapy_stopped', positive: 'Yes' }],
+      rows() {
+        const R = rng(505), out = [];
+        ['LED', 'Conventional'].forEach((g, gi) => { for (let i = 0; i < 40; i++) {
+          const b0 = R.n(18.5, 2), rate = gi ? 0.18 : 0.26, tsb = h => r1(Math.max(5, b0 * Math.exp(-rate * h / 12) + R.n(0, 0.7)));
+          const hrs = Math.round(clamp(R.n(gi ? 46 : 34, 10), 12, 96));
+          out.push({ ID: out.length + 1, Group: g, Sex: R.pick(['Male', 'Female']), Gestational_age_weeks: r1(R.n(38.7, 1)), Birth_weight_kg: r1(R.n(3.2, 0.4) * 10) / 10, Age_at_admission_days: R.int(2, 7),
+            Feeding: R.pick(['Breast', 'Mixed', 'Formula'], [60, 30, 10]), TSB_0h: r1(b0), TSB_12h: tsb(12), TSB_24h: tsb(24), TSB_48h: R.miss(tsb(48)),
+            Phototherapy_hours: hrs, Phototherapy_stopped: R.yes(0.95), Rebound_hyperbilirubinaemia: R.yes(gi ? 0.12 : 0.08), Exchange_transfusion: R.yes(gi ? 0.05 : 0.02), Skin_rash: R.yes(gi ? 0.04 : 0.1) });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'periodontal-therapy-rct', name: 'Two-group RCT — periodontal therapy (dentistry)',
+      flow: { type: 'consort', excluded: [{ text: 'Not meeting inclusion criteria', n: 8 }, { text: 'Declined to participate', n: 3 }], groups: [{ lost: 2, lostReason: 'Missed follow-up' }, { lost: 1, lostReason: 'Moved away' }] },
+      description: 'Scaling and root planing with versus without a local antimicrobial gel, 60 patients with periodontitis. Plaque index, gingival index, probing depth and clinical attachment level at baseline, 3 and 6 months.',
+      title: 'Adjunctive local antimicrobial gel with scaling and root planing in stage III periodontitis: a randomized controlled trial',
+      options: { within: true },
+      advanced: [{ type: 'ancova', outcome: 'PD_6m', predictors: ['PD_baseline', 'Smoking'] }],
+      rows() {
+        const R = rng(606), out = [];
+        ['SRP + gel', 'SRP alone'].forEach((g, gi) => { for (let i = 0; i < 30; i++) {
+          const pd0 = R.n(5.6, 0.6), cal0 = pd0 + R.n(0.9, 0.4), gain = gi ? 1 : 1.45;
+          out.push({ ID: out.length + 1, Group: g, Age_years: Math.round(R.n(44, 9)), Sex: R.pick(['Male', 'Female']), Smoking: R.yes(0.35), Diabetes: R.yes(0.2),
+            PI_baseline: r1(R.n(1.9, 0.4) * 10) / 10, PI_3m: r1(R.n(gi ? 1.1 : 0.9, 0.3) * 10) / 10, PI_6m: r1(R.n(gi ? 1.2 : 0.9, 0.3) * 10) / 10,
+            GI_baseline: r1(R.n(1.8, 0.35) * 10) / 10, GI_3m: r1(R.n(gi ? 1.0 : 0.8, 0.3) * 10) / 10, GI_6m: r1(R.n(gi ? 1.1 : 0.8, 0.3) * 10) / 10,
+            PD_baseline: r1(pd0), PD_3m: r1(pd0 - 1.3 * gain + R.n(0, 0.4)), PD_6m: R.miss(r1(pd0 - 1.6 * gain + R.n(0, 0.45))),
+            CAL_baseline: r1(cal0), CAL_6m: r1(cal0 - 1.1 * gain + R.n(0, 0.5)), Bleeding_on_probing_percent: Math.round(clamp(R.n(gi ? 32 : 22, 9), 2, 80)) });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'glaucoma-iop-3arm', name: 'Three-group trial — eye drops for glaucoma (ophthalmology)',
+      flow: { type: 'consort', excluded: [{ text: 'Not meeting inclusion criteria', n: 12 }, { text: 'Declined to participate', n: 4 }] },
+      description: 'Timolol, latanoprost and the fixed combination, 90 eyes. Intraocular pressure at baseline, 2 weeks, 1 and 3 months, target pressure reached, side effects, central corneal thickness.',
+      title: 'Timolol, latanoprost and their fixed combination in primary open-angle glaucoma: a randomized three-arm trial',
+      options: { within: true, chiPost: true },
+      advanced: [{ type: 'linear', outcome: 'IOP_3m', predictors: ['Group', 'IOP_baseline', 'CCT_um', 'Age_years'], univariable: true }],
+      rows() {
+        const R = rng(707), out = [];
+        ['Timolol', 'Latanoprost', 'Fixed combination'].forEach((g, gi) => { for (let i = 0; i < 30; i++) {
+          const i0 = R.n(26, 3), drop = [5.5, 7.5, 9.5][gi], iop = f => r1(i0 - drop * f + R.n(0, 1.6));
+          const i3 = iop(1);
+          out.push({ ID: out.length + 1, Group: g, Age_years: Math.round(R.n(58, 9)), Sex: R.pick(['Male', 'Female']), Eye: R.pick(['Right', 'Left']), CCT_um: Math.round(R.n(545, 30)),
+            IOP_baseline: r1(i0), IOP_2w: iop(0.8), IOP_1m: iop(0.95), IOP_3m: i3, Target_IOP_reached: i3 <= 18 ? 'Yes' : 'No',
+            Hyperaemia: R.yes([0.05, 0.25, 0.2][gi]), Burning_sensation: R.yes([0.2, 0.1, 0.18][gi]) });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'ivf-protocol-cohort', name: 'Cohort study — IVF stimulation protocols',
+      flow: { type: 'strobe', excluded: [{ text: 'Poor responders (previous cycle)', n: 10 }, { text: 'Missing outcome data', n: 6 }], groups: [{ description: 'GnRH antagonist protocol' }, { description: 'Long agonist protocol' }] },
+      description: 'Antagonist versus long agonist protocol, 120 women. AMH, antral follicle count, oocytes retrieved (counts), fertilisation rate, OHSS and clinical pregnancy. Good for counts and logistic regression.',
+      title: 'GnRH antagonist versus long agonist protocol in women undergoing ICSI: outcomes of a cohort study',
+      advanced: [{ type: 'logistic', outcome: 'Clinical_pregnancy', positive: 'Yes', predictors: ['Group', 'Age_years', 'AMH_ng_mL', 'Oocytes_retrieved'], univariable: true }],
+      rows() {
+        const R = rng(808), out = [], pois = l => { let k = 0, p = 1; const L = Math.exp(-l); do { k++; p *= R.u(); } while (p > L); return k - 1; };
+        ['Antagonist', 'Long agonist'].forEach((g, gi) => { for (let i = 0; i < 60; i++) {
+          const age = Math.round(R.n(31, 4)), amh = Math.exp(R.n(Math.log(2.6), 0.6)), afc = Math.max(2, Math.round(R.n(6 + 3 * amh, 3))), ooc = Math.max(0, pois(clamp(3 + 2.3 * amh + (gi ? 1 : 0), 1, 30)));
+          const fert = clamp(R.n(0.68, 0.12), 0.2, 1), preg = R.u() < 1 / (1 + Math.exp(-(-0.9 - 0.08 * (age - 31) + 0.06 * ooc)));
+          out.push({ ID: out.length + 1, Group: g, Age_years: age, BMI_kg_m2: r1(R.n(26, 3.5)), Infertility_cause: R.pick(['Male factor', 'Tubal', 'Unexplained', 'PCOS'], [40, 20, 25, 15]),
+            AMH_ng_mL: r1(amh * 10) / 10, AFC: afc, Stimulation_days: Math.round(R.n(gi ? 12 : 10, 1.5)), Oocytes_retrieved: ooc, Fertilisation_rate_percent: Math.round(fert * 100),
+            Embryos_transferred: R.pick([1, 2, 3], [25, 60, 15]), OHSS: R.yes(gi ? 0.11 : 0.04), Clinical_pregnancy: preg ? 'Yes' : 'No' });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'stroke-rehab-rct', name: 'Two-group RCT — rehabilitation after stroke',
+      flow: { type: 'consort', excluded: [{ text: 'Not meeting inclusion criteria', n: 13 }, { text: 'Declined to participate', n: 4 }], groups: [{ lost: 3, lostReason: 'Recurrent stroke (n=1), withdrew (n=2)' }, { lost: 2, lostReason: 'Withdrew consent' }] },
+      description: 'Mirror therapy plus conventional therapy versus conventional therapy alone, 64 patients after stroke. Fugl-Meyer upper-limb score and Barthel index at baseline, 4 and 8 weeks; modified Rankin scale (ordinal).',
+      title: 'Mirror therapy for upper-limb recovery after subacute ischaemic stroke: a randomized controlled trial',
+      options: { within: true },
+      levels: { mRS_8w: ['0', '1', '2', '3', '4', '5'], Side: ['Right', 'Left'] },
+      advanced: [{ type: 'ancova', outcome: 'FMA_UE_8w', predictors: ['FMA_UE_baseline', 'Age_years', 'Days_since_stroke'] }],
+      rows() {
+        const R = rng(909), out = [];
+        ['Mirror therapy', 'Conventional'].forEach((g, gi) => { for (let i = 0; i < 32; i++) {
+          const f0 = clamp(R.n(28, 9), 6, 55), gain = gi ? 1 : 1.5, b0 = clamp(R.n(45, 12), 10, 80);
+          out.push({ ID: out.length + 1, Group: g, Age_years: Math.round(R.n(62, 9)), Sex: R.pick(['Male', 'Female'], [58, 42]), Side: R.pick(['Right', 'Left']), Days_since_stroke: Math.round(R.n(35, 12)),
+            NIHSS_baseline: clamp(Math.round(R.n(8, 3)), 2, 20), FMA_UE_baseline: Math.round(f0), FMA_UE_4w: Math.round(clamp(f0 + 6 * gain + R.n(0, 4), 0, 66)), FMA_UE_8w: R.miss(Math.round(clamp(f0 + 10 * gain + R.n(0, 5), 0, 66))),
+            Barthel_baseline: Math.round(b0), Barthel_4w: Math.round(clamp(b0 + 12 * gain + R.n(0, 7), 0, 100)), Barthel_8w: Math.round(clamp(b0 + 19 * gain + R.n(0, 8), 0, 100)),
+            mRS_8w: String(clamp(Math.round(R.n(gi ? 3 : 2.4, 0.9)), 0, 5)) });
+        } });
+        return out;
+      }
+    },
+    {
+      id: 'liver-fibrosis-diagnostic', name: 'Diagnostic study — non-invasive scores for liver fibrosis',
+      flow: { type: 'stard', excluded: [{ text: 'Failed elastography', n: 6 }, { text: 'Declined to participate', n: 3 }] },
+      description: 'FIB-4, APRI and platelets against elastography (significant fibrosis F ≥ 2), 110 patients with chronic hepatitis C. Good for ROC curves compared, cut-offs, sensitivity and specificity.',
+      title: 'Diagnostic accuracy of FIB-4 and APRI for significant liver fibrosis in chronic hepatitis C, with transient elastography as the reference',
+      advanced: [{ type: 'roc', outcome: 'Group', positive: 'Significant fibrosis', predictors: ['FIB4', 'APRI', 'Platelets_10e3'] },
+        { type: 'logistic', outcome: 'Group', positive: 'Significant fibrosis', predictors: ['Age_years', 'FIB4', 'Albumin_g_dL'], univariable: true }],
+      rows() {
+        const R = rng(1010), out = [];
+        for (let i = 0; i < 110; i++) { const f = R.u() < 0.45, age = Math.round(R.n(f ? 52 : 44, 9)), plt = Math.round(clamp(R.n(f ? 165 : 235, 45), 50, 420)), ast = Math.round(Math.exp(R.n(Math.log(f ? 62 : 38), 0.35))), alt = Math.round(Math.exp(R.n(Math.log(f ? 70 : 48), 0.4)));
+          out.push({ ID: i + 1, Group: f ? 'Significant fibrosis' : 'No or mild fibrosis', Age_years: age, Sex: R.pick(['Male', 'Female'], [55, 45]), BMI_kg_m2: r1(R.n(27.5, 4)), AST_U_L: ast, ALT_U_L: alt, Platelets_10e3: plt,
+            Albumin_g_dL: r1(R.n(f ? 3.8 : 4.2, 0.35)), Elastography_kPa: r1(Math.exp(R.n(Math.log(f ? 10.5 : 5.6), 0.3))), FIB4: Math.round(age * ast / (plt * Math.sqrt(alt)) * 100) / 100, APRI: Math.round((ast / 40) / plt * 100 * 100) / 100 }); }
+        return out;
+      }
     }
   ];
 
