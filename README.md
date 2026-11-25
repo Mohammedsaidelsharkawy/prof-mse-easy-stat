@@ -250,6 +250,7 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**↶ Undo / ↷ Redo in the Analyse steps (1–12)**: every change of the settings (groups, variables, timepoints, tests, tables, comments, figures, advanced analyses, report) and every edit of the data, in one history of up to 80 steps — the top-bar buttons or Ctrl+Z / Ctrl+Y; the step on screen is drawn again as it was. In Build and Generate, Ctrl+Z acts on that stage only.
 **The view stays where it is** in 🧱 Build and 🎲 Generate after any change (expected values in each group, Generate's options, a duplicated variable…): the page, the boxes that scroll on their own (the list of variables, the editor) and the sections you opened or closed. Choosing another variable opens its editor at the top.
 **↶ Undo / ↷ Redo** for 🧱 Build the master sheet and 🎲 Generate the data, in the top bar (for the stage on screen) and with Ctrl+Z / Ctrl+Y; Generate now keeps the history of its settings (up to 80 changes).
 **More figure options — Kaplan-Meier and every figure**:

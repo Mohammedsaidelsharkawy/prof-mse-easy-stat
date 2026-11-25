@@ -33,7 +33,7 @@ html.r21-all .ux2-pane::before{content:attr(data-r21lab);flex-basis:100%;font-we
   setInterval(() => { place(); openAll(); }, 700); place(); openAll();
   // the Undo / Redo buttons: shown in Build and Generate, enabled when there is something to undo or redo
   function undoState() { const u = $('#r21Undo'); if (!u) return; const B = window.EasyBuilder, G = window.EasyGen, build = H.classList.contains('ph-build'), gen = H.classList.contains('ph-generate');
-    u.style.display = build || gen ? '' : 'none'; const src = build ? B : gen ? G : null; const [bu, br] = u.querySelectorAll('button'); bu.disabled = !(src && src.canUndo); br.disabled = !(src && src.canRedo); }
+    const A = window.EasyR23, an = !build && !gen; u.style.display = build || gen || (an && A && window.EasyUI && window.EasyUI.state.cfg) ? '' : 'none'; const src = build ? B : gen ? G : A; const [bu, br] = u.querySelectorAll('button'); bu.disabled = !(src && src.canUndo); br.disabled = !(src && src.canRedo); }
   new MutationObserver(undoState).observe(H, { attributes: true, attributeFilter: ['class'] });
   window.EasyR21 = { set, openAll, undoState, get on() { return on(); } };
 })();

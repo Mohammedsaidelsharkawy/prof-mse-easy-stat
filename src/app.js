@@ -7549,8 +7549,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     if (mod && !e.altKey) {
       if (k === 's') { e.preventDefault(); $('#btnSaveProj').click(); }
       else if (k === 'o') { e.preventDefault(); $('#projFile').click(); }
-      else if ((k === 'z' || k === 'y') && !typing(e.target) && state.data) {
-        e.preventDefault(); const redo = k === 'y' || e.shiftKey;
+      else if ((k === 'z' || k === 'y') && !typing(e.target) && state.data && !document.documentElement.matches('.ph-build, .ph-generate')) {
+        e.preventDefault(); const redo = k === 'y' || e.shiftKey; if (window.EasyR23) { window.EasyR23.undo(!redo); return; } // settings and data in one history (round 23)
         if (undoRedo(redo)) { if (state.step === 10) { const y = window.scrollY; renderExplore(); window.scrollTo(0, y); } renderGrid(); renderPrep(); renderStepper(); if (state.step === 2) renderVariables(); }
       }
       return;
