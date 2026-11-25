@@ -624,9 +624,11 @@
     const sig = canSig ? `<label class="gen-ctl">${K(D) >= 2 ? 'Difference between groups' : 'Change over the visits'} <select data-gsig="${v.id}">${opt([['', 'As typed'], ['sig', 'Significant'], ['ns', 'Not significant']], G.sig[v.id] || '')}</select></label><span class="gen-sigout" data-gsigout="${v.id}">${sigBadge(D, v, si)}</span>` : '';
     return `<div class="gen-vhead"><b>${esc(v.label)}</b>${v.unit ? ` <span class="legend-note">(${esc(v.unit)})</span>` : ''}${card ? '' : '<br>'}<span class="gen-ctls">${how} ${sig}
       <label class="gen-ctl">missing % <input type="number" min="0" max="100" step="any" data-gmiss="${v.id}" value="${esc(G.miss[v.id] ?? '')}" placeholder="${esc(G.missAll)}" style="width:54px"></label>
-      <button class="btn ghost small ${G.more[v.id] ? 'on' : ''}" type="button" data-gmore="${v.id}" title="Shape, rounding, effect size, pattern over the visits, subgroup">⋯ More${moreCount(v) ? ` (${moreCount(v)})` : ''}</button>
-      <button class="btn ghost small" type="button" data-gre="${v.id}" title="Draw this variable again (the others stay as they are)">🎲 Redraw${+G.vseed[v.id] ? ` (${G.vseed[v.id]})` : ''}</button>${+G.vseed[v.id] ? `<button class="btn ghost small" type="button" data-greset="${v.id}" title="Back to the first draw">↺</button>` : ''}</span></div>${G.more[v.id] ? morePanel(D, v) : ''}`;
+      <button class="btn ghost small ${moreOpen(v) ? 'on' : ''}" type="button" data-gmore="${v.id}" title="Shape, rounding, effect size, pattern over the visits, subgroup">⋯ More${moreCount(v) ? ` (${moreCount(v)})` : ''}</button>
+      <button class="btn ghost small" type="button" data-gre="${v.id}" title="Draw this variable again (the others stay as they are)">🎲 Redraw${+G.vseed[v.id] ? ` (${G.vseed[v.id]})` : ''}</button>${+G.vseed[v.id] ? `<button class="btn ghost small" type="button" data-greset="${v.id}" title="Back to the first draw">↺</button>` : ''}</span></div>${moreOpen(v) ? morePanel(D, v) : ''}`;
   }
+  // open when asked, or by default while every option is shown (html.r21-all); a closed one stays closed
+  const moreOpen = v => G.more[v.id] === undefined ? document.documentElement.classList.contains('r21-all') : !!G.more[v.id];
   const moreCount = v => [G.dist[v.id], +G.round[v.id] > 0, G.subg[v.id] && G.subg[v.id].v, +G.ordOR[v.id] > 0].filter(Boolean).length;
   function morePanel(D, v) {
     const k = K(D), keys = visitKeys(D, v), gl = k >= 2 ? arms(D) : ['All patients'], e = expect(v), sg = G.subg[v.id] || {}, mods = D.vars.filter(x => x.id !== v.id && (x.type === 'yn' || x.type === 'cat') && x.cats.length), mod = mods.find(x => x.id === sg.v);
@@ -913,7 +915,7 @@
     if (b.dataset.gxadd) { const [kind, id] = b.dataset.gxadd.split('|'); (G[kind][id] = G[kind][id] || []).push(kind === 'risk' ? { v: '', or: 2, per: 1 } : { v: '', b: 1 }); save(); return render(); }
     if (b.dataset.gxdel) { const [kind, id, i] = b.dataset.gxdel.split('|'); G[kind][id].splice(+i, 1); save(); if (last) { last = generate(D); resStamp++; } return render(); }
     if (b.dataset.gxrm) { const [kind, id] = b.dataset.gxrm.split('|'); delete G[kind][id]; save(); if (last) { last = generate(D); resStamp++; } return render(); }
-    if (b.dataset.gmore) { G.more[b.dataset.gmore] = !G.more[b.dataset.gmore]; save(); return render(); }
+    if (b.dataset.gmore) { const id = b.dataset.gmore, on = moreOpen({ id }); G.more[id] = !on; save(); const y0 = scrollY; render(); scrollTo(0, y0); requestAnimationFrame(() => scrollTo(0, y0)); return; }
     if (b.dataset.geffgo) { const v = D.vars.find(x => x.id === b.dataset.geffgo), inp = b.parentNode.querySelector('[data-geff]'), eff = inp && inp.value !== '' ? +inp.value : (v && v.type === 'num' ? 0.5 : 0.5); if (!v || !isFinite(eff)) return; delete G.sig[v.id]; applyEffect(D, v, eff); save(); if (last) { last = generate(D); resStamp++; } render(); toast(`${v.label}: ${v.type === 'num' ? `d = ${eff}` : `relative risk ${eff}`} set for the other groups`); return; }
     if (b.dataset.gpatgo) { const v = D.vars.find(x => x.id === b.dataset.gpatgo); if (!v) return; const box = b.parentNode, by = box.querySelector('[data-gpatby]'), amt = by && by.value !== '' ? +by.value : -sdOf(v); let n = 0;
       box.querySelectorAll('[data-gpat]').forEach(sel => { if (!sel.value) return; applyPattern(D, v, +sel.dataset.gpat.split('|')[1], sel.value, amt); n++; }); if (!n) { toast('Choose a pattern for at least one group'); return; } save(); if (last) { last = generate(D); resStamp++; } render(); toast(`${v.label}: pattern over the visits set`); return; }
@@ -967,7 +969,7 @@
     if (d.gpack) { G.pack[d.gpack] = val; save(); return; }
     if (d.gcv) { G.curve[d.gcv] = val; save(); return; }
     if (d.geff || d.gpat || d.gpatby) return;
-    if (d.gmode) { G.mode[d.gmode] = val; save(); if (last) { try { last = generate(D0()); resStamp++; } catch (err) { console.error(err); } } return render(); }
+    if (d.gmode) { G.mode[d.gmode] = val; save(); if (last) { try { last = generate(D0()); resStamp++; } catch (err) { console.error(err); } } const y0 = scrollY; render(); scrollTo(0, y0); requestAnimationFrame(() => scrollTo(0, y0)); return; }
     if (d.gsig !== undefined) { if (val) G.sig[d.gsig] = val; else delete G.sig[d.gsig]; save(); if (last) { try { last = generate(D0()); resStamp++; } catch (err) { console.error(err); } } return render(); }
     if (d.grng) { const [id, k] = d.grng.split('|'); (G.rng[id] = G.rng[id] || {})[k] = val === '' ? '' : +val; save(); return live(D0()); }
     if (d.grt) { const [id, g, key, k] = d.grt.split('|'); (((G.rt[id] = G.rt[id] || {})[g] = G.rt[id][g] || {})[key] = G.rt[id][g][key] || {})[k] = val === '' ? '' : +val; save(); return live(D0()); }

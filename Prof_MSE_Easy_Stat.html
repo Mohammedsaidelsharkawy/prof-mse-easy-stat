@@ -42653,7 +42653,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
       save(); if (t.tagName === 'SELECT' || t.type === 'checkbox' || k === 'section') render(); return; }
     if (d.mbvisit) { const on = new Set((v.visits || []).length ? v.visits : [D.visits[0].id]); if (val) on.add(d.mbvisit); else on.delete(d.mbvisit); v.visits = D.visits.map(x => x.id).filter(id => on.has(id)); if (v.visits.length === 1 && v.visits[0] === D.visits[0].id) v.visits = []; save(); return render(); }
     if (d.mbe) { v.expect = { ...(v.expect || {}), [d.mbe]: d.mbe === 'dist' ? val : val === '' ? '' : +val }; save(); return; }
-    if (d.mbgmode) { const e = v.expect = v.expect || {}; e.byMode = val; save(); render(); return; }
+    if (d.mbgmode) { const e = v.expect = v.expect || {}; e.byMode = val; save(); const y0 = scrollY; render(); scrollTo(0, y0); requestAnimationFrame(() => scrollTo(0, y0)); return; }
     if (d.mbg) { const [g, k] = d.mbg.split('|'), e = v.expect = v.expect || {}, bg = e.byGroup = e.byGroup || [], x = bg[+g] = bg[+g] || {};
       if (k[0] === 'p') { const i = +k.slice(1); x.pct = v.cats.map((_, j) => (x.pct || [])[j] ?? ''); x.pct[i] = val === '' ? '' : +val; if (x.pct.every(p => p === '')) delete x.pct; } else if (val === '') delete x[k]; else x[k] = +val;
       save(); return; }
@@ -44190,9 +44190,11 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
     const sig = canSig ? `<label class="gen-ctl">${K(D) >= 2 ? 'Difference between groups' : 'Change over the visits'} <select data-gsig="${v.id}">${opt([['', 'As typed'], ['sig', 'Significant'], ['ns', 'Not significant']], G.sig[v.id] || '')}</select></label><span class="gen-sigout" data-gsigout="${v.id}">${sigBadge(D, v, si)}</span>` : '';
     return `<div class="gen-vhead"><b>${esc(v.label)}</b>${v.unit ? ` <span class="legend-note">(${esc(v.unit)})</span>` : ''}${card ? '' : '<br>'}<span class="gen-ctls">${how} ${sig}
       <label class="gen-ctl">missing % <input type="number" min="0" max="100" step="any" data-gmiss="${v.id}" value="${esc(G.miss[v.id] ?? '')}" placeholder="${esc(G.missAll)}" style="width:54px"></label>
-      <button class="btn ghost small ${G.more[v.id] ? 'on' : ''}" type="button" data-gmore="${v.id}" title="Shape, rounding, effect size, pattern over the visits, subgroup">⋯ More${moreCount(v) ? ` (${moreCount(v)})` : ''}</button>
-      <button class="btn ghost small" type="button" data-gre="${v.id}" title="Draw this variable again (the others stay as they are)">🎲 Redraw${+G.vseed[v.id] ? ` (${G.vseed[v.id]})` : ''}</button>${+G.vseed[v.id] ? `<button class="btn ghost small" type="button" data-greset="${v.id}" title="Back to the first draw">↺</button>` : ''}</span></div>${G.more[v.id] ? morePanel(D, v) : ''}`;
+      <button class="btn ghost small ${moreOpen(v) ? 'on' : ''}" type="button" data-gmore="${v.id}" title="Shape, rounding, effect size, pattern over the visits, subgroup">⋯ More${moreCount(v) ? ` (${moreCount(v)})` : ''}</button>
+      <button class="btn ghost small" type="button" data-gre="${v.id}" title="Draw this variable again (the others stay as they are)">🎲 Redraw${+G.vseed[v.id] ? ` (${G.vseed[v.id]})` : ''}</button>${+G.vseed[v.id] ? `<button class="btn ghost small" type="button" data-greset="${v.id}" title="Back to the first draw">↺</button>` : ''}</span></div>${moreOpen(v) ? morePanel(D, v) : ''}`;
   }
+  // open when asked, or by default while every option is shown (html.r21-all); a closed one stays closed
+  const moreOpen = v => G.more[v.id] === undefined ? document.documentElement.classList.contains('r21-all') : !!G.more[v.id];
   const moreCount = v => [G.dist[v.id], +G.round[v.id] > 0, G.subg[v.id] && G.subg[v.id].v, +G.ordOR[v.id] > 0].filter(Boolean).length;
   function morePanel(D, v) {
     const k = K(D), keys = visitKeys(D, v), gl = k >= 2 ? arms(D) : ['All patients'], e = expect(v), sg = G.subg[v.id] || {}, mods = D.vars.filter(x => x.id !== v.id && (x.type === 'yn' || x.type === 'cat') && x.cats.length), mod = mods.find(x => x.id === sg.v);
@@ -44479,7 +44481,7 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
     if (b.dataset.gxadd) { const [kind, id] = b.dataset.gxadd.split('|'); (G[kind][id] = G[kind][id] || []).push(kind === 'risk' ? { v: '', or: 2, per: 1 } : { v: '', b: 1 }); save(); return render(); }
     if (b.dataset.gxdel) { const [kind, id, i] = b.dataset.gxdel.split('|'); G[kind][id].splice(+i, 1); save(); if (last) { last = generate(D); resStamp++; } return render(); }
     if (b.dataset.gxrm) { const [kind, id] = b.dataset.gxrm.split('|'); delete G[kind][id]; save(); if (last) { last = generate(D); resStamp++; } return render(); }
-    if (b.dataset.gmore) { G.more[b.dataset.gmore] = !G.more[b.dataset.gmore]; save(); return render(); }
+    if (b.dataset.gmore) { const id = b.dataset.gmore, on = moreOpen({ id }); G.more[id] = !on; save(); const y0 = scrollY; render(); scrollTo(0, y0); requestAnimationFrame(() => scrollTo(0, y0)); return; }
     if (b.dataset.geffgo) { const v = D.vars.find(x => x.id === b.dataset.geffgo), inp = b.parentNode.querySelector('[data-geff]'), eff = inp && inp.value !== '' ? +inp.value : (v && v.type === 'num' ? 0.5 : 0.5); if (!v || !isFinite(eff)) return; delete G.sig[v.id]; applyEffect(D, v, eff); save(); if (last) { last = generate(D); resStamp++; } render(); toast(`${v.label}: ${v.type === 'num' ? `d = ${eff}` : `relative risk ${eff}`} set for the other groups`); return; }
     if (b.dataset.gpatgo) { const v = D.vars.find(x => x.id === b.dataset.gpatgo); if (!v) return; const box = b.parentNode, by = box.querySelector('[data-gpatby]'), amt = by && by.value !== '' ? +by.value : -sdOf(v); let n = 0;
       box.querySelectorAll('[data-gpat]').forEach(sel => { if (!sel.value) return; applyPattern(D, v, +sel.dataset.gpat.split('|')[1], sel.value, amt); n++; }); if (!n) { toast('Choose a pattern for at least one group'); return; } save(); if (last) { last = generate(D); resStamp++; } render(); toast(`${v.label}: pattern over the visits set`); return; }
@@ -44533,7 +44535,7 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
     if (d.gpack) { G.pack[d.gpack] = val; save(); return; }
     if (d.gcv) { G.curve[d.gcv] = val; save(); return; }
     if (d.geff || d.gpat || d.gpatby) return;
-    if (d.gmode) { G.mode[d.gmode] = val; save(); if (last) { try { last = generate(D0()); resStamp++; } catch (err) { console.error(err); } } return render(); }
+    if (d.gmode) { G.mode[d.gmode] = val; save(); if (last) { try { last = generate(D0()); resStamp++; } catch (err) { console.error(err); } } const y0 = scrollY; render(); scrollTo(0, y0); requestAnimationFrame(() => scrollTo(0, y0)); return; }
     if (d.gsig !== undefined) { if (val) G.sig[d.gsig] = val; else delete G.sig[d.gsig]; save(); if (last) { try { last = generate(D0()); resStamp++; } catch (err) { console.error(err); } } return render(); }
     if (d.grng) { const [id, k] = d.grng.split('|'); (G.rng[id] = G.rng[id] || {})[k] = val === '' ? '' : +val; save(); return live(D0()); }
     if (d.grt) { const [id, g, key, k] = d.grt.split('|'); (((G.rt[id] = G.rt[id] || {})[g] = G.rt[id][g] || {})[key] = G.rt[id][g][key] || {})[k] = val === '' ? '' : +val; save(); return live(D0()); }
@@ -45877,7 +45879,7 @@ html.e-cb .chip.ok,html.e-cb .ux2-st.auto{color:#1565C0!important}html.e-cb .chi
   const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}" ${String(cur) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('');
 
   /* ---------- E1: quick start: the group column and the outcome, then the report ---------- */
-  function quickStart() { const st = S(); if (!st.data || !st.cfg) { U.toast('Open your data first'); return; } const H = st.data.headers, vs = st.cfg.variables, guessO = vs.find(v => /primary|outcome|vas|pain|score|mortal|death|success|cure|complic/i.test(v.label)) || vs[vs.length - 1];
+  function quickStart() { const st = S(); if (!st.data || !st.cfg) { U.toast('Open your data first (Excel, CSV, SPSS or Stata) — then ⚡ Make my report'); const f = $('#file'); if (f) f.click(); return; } const H = st.data.headers, vs = st.cfg.variables, guessO = vs.find(v => /primary|outcome|vas|pain|score|mortal|death|success|cure|complic/i.test(v.label)) || vs[vs.length - 1];
     const p = panel('ezQuick', '⚡ Make my report', `<p>Two choices; everything else uses the recommended settings (change them later in any step).</p><div class="grid g2"><div><label class="f">Groups are in the column</label><select id="ezQG"><option value="">— one group (describe the patients) —</option>${opt(H.map(h => [h, h]), st.cfg.groupCol || '')}</select></div><div><label class="f">The main outcome</label><select id="ezQO">${opt(vs.map(v => [v.id, v.label]), (vs.find(v => v.role === 'primary') || guessO || {}).id)}</select></div></div><button class="btn primary" type="button" id="ezQGo" style="margin-top:10px">Make my report ›</button>`);
     $('#ezQGo').onclick = () => { const g = $('#ezQG').value, o = $('#ezQO').value; p.classList.remove('open'); U.go(2); setTimeout(() => { const sel = $('#groupCol'); if (g && sel && sel.value !== g) { sel.value = g; sel.dispatchEvent(new Event('change', { bubbles: true })); }
         setTimeout(() => { st.cfg.variables.forEach(v => { if (v.role === 'primary' && v.id !== o) v.role = 'secondary'; }); const v = st.cfg.variables.find(x => x.id === o); if (v) { v.role = 'primary'; v.include = true; } U.renderVariables(); log(`Quick start: groups ${g || 'none'}, outcome ${v ? v.label : '—'}`); U.go(12); }, 250); }, 200); }; }
@@ -47137,7 +47139,8 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
   function startRow() { const pb = $('#btnPaste'); if (!pb) return; const row = pb.parentElement;
     ['#r19Imp .btn', '#r19Imp label.btn', '#ezSample', '#ezQuickB'].forEach(q => document.querySelectorAll(q).forEach(x => { if (x.parentElement !== row) row.insertBefore(x, pb); }));
     // round 20: 📋 Paste from Excel first; no ⚡ Make my report, 🧱 Master sheet builder or 👀 example-report buttons here (the builder is in the bar above, the examples below)
-    ['#ezSample', '#ezQuickB', '#btnBuilder'].forEach(q => { const x = $(q); if (x) x.style.display = 'none'; }); if (row.firstElementChild !== pb) row.prepend(pb);
+    ['#ezSample', '#btnBuilder'].forEach(q => { const x = $(q); if (x) x.style.display = 'none'; }); if (row.firstElementChild !== pb) row.prepend(pb);
+    const qb = $('#ezQuickB'); if (qb) { qb.style.display = ''; if (pb.nextElementSibling !== qb) pb.after(qb); }
     document.querySelectorAll('#p1 .card > .row').forEach(r => { if (r !== row && ![...r.children].some(c => c.style.display !== 'none')) r.style.display = 'none'; }); }
   setInterval(() => { if (S().step === 1 || !S().data) { details(); startRow(); } }, 800); details(); setTimeout(startRow, 900);
   window.EasyR16 = { drawTick, details };
@@ -47739,6 +47742,39 @@ html.u15-live main,html.u15-live .wrap,html.u15-live #app{margin-right:var(--u15
   }
   const b = $('#btnTemplate'); if (b) { b.onclick = open; b.textContent = '⬇ Blank template…'; b.title = 'An empty Excel sheet laid out the way the app reads it — choose the design, columns, timepoints and sheets'; }
   window.EasyR20 = { open, make, DESIGNS };
+})();
+
+/* Prof Easy Stat — round 21: every option shown in all stages (Build, Generate, Analyse), with a switch;
+   ▸ Collapse all / ▾ Expand all and the switch at the right end of the phase bar. */
+(function () {
+  'use strict';
+  const $ = s => document.querySelector(s), H = document.documentElement;
+  const LS = { get(k, d) { try { const v = localStorage.getItem('r21.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('r21.' + k, JSON.stringify(v)); } catch (e) { /* none */ } } };
+  const css = document.createElement('style');
+  css.textContent = `#phaseBar{position:relative;max-width:none}
+#r21Right{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px}
+#r21Right #u15GBar.u15-inphase{margin:0}
+#r21Right .r21-sw{font-size:12px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;color:var(--muted);cursor:pointer}
+@media (max-width:1180px){#r21Right{position:static;transform:none;margin-left:auto}}
+html.r21-all .ux2-tabs{display:none}html.r21-all .ux2-pane{display:flex!important;padding-top:4px}
+html.r21-all .ux2-pane::before{content:attr(data-r21lab);flex-basis:100%;font-weight:700;font-size:13px;color:var(--title,#3B2A8C);margin-top:6px}`;
+  document.head.append(css);
+  const on = () => H.classList.contains('r21-all');
+  // a details section the user closes stays closed until the page is drawn again
+  document.addEventListener('toggle', e => { const d = e.target; if (d.tagName === 'DETAILS' && !d.open && on()) d.dataset.r21 = 'shut'; }, true);
+  function openAll() { if (!on()) return;
+    document.querySelectorAll('#mbWrap details:not([open]):not([data-r21]), #genWrap details:not([open]):not([data-r21]), main section.panel details:not([open]):not([data-r21])').forEach(d => { if (d.closest('#report')) return; d.dataset.r21 = 'auto'; d.open = true; });
+    document.querySelectorAll('.ux2-pane:not([data-r21lab])').forEach(p => { const b = document.querySelector(`[data-ux2tab="${p.dataset.ux2pane}"]`); p.dataset.r21lab = b ? b.textContent.trim() : ''; });
+    if (H.classList.contains('e-simple')) { H.classList.remove('e-simple'); try { localStorage.setItem('ez.simple', 'false'); } catch (e) { /* none */ } document.querySelectorAll('[data-ezsimple],[data-ezv2="simple"]').forEach(x => { x.checked = false; }); } }
+  function set(v) { H.classList.toggle('r21-all', v); LS.set('all', v); const sw = $('#r21All'); if (sw) sw.checked = v;
+    if (!v) document.querySelectorAll('details[data-r21="auto"]').forEach(d => { d.open = false; delete d.dataset.r21; });
+    openAll(); if (window.EasyGen && H.classList.contains('ph-generate')) { const y = scrollY; window.EasyGen.render(); scrollTo(0, y); } }
+  function place() { const pb = $('#phaseBar'); if (!pb) return; let r = $('#r21Right');
+    if (!r) { r = document.createElement('div'); r.id = 'r21Right'; r.innerHTML = `<label class="r21-sw" title="Show every option of every step, with no folded sections (untick for a shorter page)"><input type="checkbox" id="r21All" ${on() ? 'checked' : ''}> Show all options</label>`; pb.append(r); r.querySelector('#r21All').onchange = e => set(e.target.checked); }
+    const g = $('#u15GBar'); if (g && g.parentElement !== r) r.append(g); }
+  H.classList.toggle('r21-all', LS.get('all', true));
+  setInterval(() => { place(); openAll(); }, 700); place(); openAll();
+  window.EasyR21 = { set, openAll, get on() { return on(); } };
 })();
 </script>
 </body>

@@ -1236,7 +1236,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
       save(); if (t.tagName === 'SELECT' || t.type === 'checkbox' || k === 'section') render(); return; }
     if (d.mbvisit) { const on = new Set((v.visits || []).length ? v.visits : [D.visits[0].id]); if (val) on.add(d.mbvisit); else on.delete(d.mbvisit); v.visits = D.visits.map(x => x.id).filter(id => on.has(id)); if (v.visits.length === 1 && v.visits[0] === D.visits[0].id) v.visits = []; save(); return render(); }
     if (d.mbe) { v.expect = { ...(v.expect || {}), [d.mbe]: d.mbe === 'dist' ? val : val === '' ? '' : +val }; save(); return; }
-    if (d.mbgmode) { const e = v.expect = v.expect || {}; e.byMode = val; save(); render(); return; }
+    if (d.mbgmode) { const e = v.expect = v.expect || {}; e.byMode = val; save(); const y0 = scrollY; render(); scrollTo(0, y0); requestAnimationFrame(() => scrollTo(0, y0)); return; }
     if (d.mbg) { const [g, k] = d.mbg.split('|'), e = v.expect = v.expect || {}, bg = e.byGroup = e.byGroup || [], x = bg[+g] = bg[+g] || {};
       if (k[0] === 'p') { const i = +k.slice(1); x.pct = v.cats.map((_, j) => (x.pct || [])[j] ?? ''); x.pct[i] = val === '' ? '' : +val; if (x.pct.every(p => p === '')) delete x.pct; } else if (val === '') delete x[k]; else x[k] = +val;
       save(); return; }

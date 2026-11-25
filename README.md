@@ -250,6 +250,10 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Show all options** (on by default; a switch at the right end of the top bar): every folded section of Build, Generate and Analyse open, each variable's ⋯ More panel open in Generate, all tool groups of step 12 at once, and no “essential options only” view. Untick it for a shorter page.
+**▸ Collapse all / ▾ Expand all** at the right end of the top bar.
+**⚡ Make my report (2 choices)** back in step 1, after 📋 Paste from Excel (with no data open it asks for the file first).
+**Generate by** (builder and Generate): changing it keeps the page where it is.
 **Expected values in each group — Generate by**: Mean & SD, Min & Max, or Both (mean & SD within min–max), as in 🎲 Generate; the columns of the group table follow the choice, and Generate starts with the same choice.
 **Step 1**: 📋 Paste from Excel first; a lower drop zone; ⚡ Make my report, 🧱 Master sheet builder and 👀 See a finished example report removed from the start row (the builder stays in the bar at the top); “Example dataset” heading; the software-statement hint removed.
 **⬇ Blank template…** now has options: study design (two or three groups, before/after, case-control, cross-sectional, diagnostic, survival), groups, baseline columns, repeated measures and timepoints, outcome columns, rows with IDs ready (and the Group column filled in turn), Guide and Codes sheets, Excel or CSV.
