@@ -250,6 +250,10 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🎲 Generate → change values case by case**: in “Each variable with its results”, click a patient's value in “Data of each group”, type, Enter (Esc cancels). Changed values are marked, kept over the generated ones (also after a new draw, for the same patients), go into the Excel file and the analysis; ↺ Undo all brings the generated values back.
+**Range in the summary table** of each variable in Generate (min – max of each group, also for repeated measures).
+**Links between variables** (Generate): besides a correlation (r), the second variable can be made from the first — × a number, ÷ a number, + a change or − a change (drawn between two values, or from a mean ± SD) — overall or different in each group; a missing first value gives a missing second.
+**Patients in each group**: the builder's plan (Study → Planned number of patients: in each group; the total becomes their sum) and Generate (Patients in each group, overriding the number and the ratio; a group left empty keeps the plan).
 **Categorical repeated measures — pairwise comparisons**: after a significant overall test (or always, as chosen in step 4), McNemar / McNemar-Bowker between the timepoints (vs the first, consecutive, every pair or first vs last; Bonferroni or Holm), as rows of the table, a sentence in the comment and the Methods.
 **Cox regression → Groups compared**: as ticked, the study groups first, all patients as one group (no group term), or another categorical column instead of the study groups.
 **🖼 Figure options in every analysis of step 8** (Kaplan-Meier and the others): no figure, caption, title in the chart, axis titles, y-axis range, legend, value labels, colours, half width.

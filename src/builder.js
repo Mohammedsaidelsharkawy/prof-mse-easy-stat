@@ -946,7 +946,8 @@
   const tStudy = () => ext('studyTop') + `<div class="grid g3">
       <div style="grid-column:span 2"><label class="f">Study title</label><input type="text" data-mb="title" value="${esc(D.title)}" placeholder="e.g. Ozone injection versus steroid for shoulder pain: a randomised trial"></div>
       <div><label class="f">Design</label><select data-mb="design">${opt([['rct', 'Randomised controlled trial'], ['cohort', 'Cohort'], ['casecontrol', 'Case-control'], ['cross', 'Cross-sectional'], ['diagnostic', 'Diagnostic accuracy'], ['beforeafter', 'One group, before and after']], D.design)}</select></div>
-      <div><label class="f">Planned number of patients (rows)</label><input type="number" min="1" max="20000" data-mb="n" value="${esc(D.n)}"></div>
+      <div><label class="f">Planned number of patients (rows)${(D.nBy || []).some(x => +x > 0) ? ' — the sum of the groups' : ''}</label><input type="number" min="1" max="20000" data-mb="n" value="${esc(D.n)}" ${(D.nBy || []).some(x => +x > 0) ? 'disabled' : ''}>
+        ${(D.arms || []).filter(Boolean).length >= 2 ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px"><span class="legend-note">In each group:</span>${D.arms.filter(Boolean).map((a, i) => `<span class="row" style="gap:4px;align-items:center">${esc(a)} <input type="number" min="0" max="20000" data-mbnby="${i}" value="${esc((D.nBy || [])[i] ?? '')}" placeholder="${Math.round((+D.n || 0) / D.arms.filter(Boolean).length)}" style="width:72px"></span>`).join('')}</div>` : ''}</div>
       <div><label class="f">Patient ID: prefix</label><input type="text" data-mb="idPrefix" value="${esc(D.idPrefix)}" style="width:90px"></div>
       <div><label class="f">Patient ID: digits</label><input type="number" min="1" max="8" data-mb="idDigits" value="${esc(D.idDigits)}" style="width:90px"> <span class="legend-note">e.g. ${esc(D.idPrefix)}${'0'.repeat(Math.max(0, (+D.idDigits || 3) - 1))}1</span></div></div>
     <h3>Conventions</h3><div class="grid g4">
@@ -1233,6 +1234,8 @@ Date of surgery">${esc(pasteTxt)}</textarea>
         if (k === 'visits') { const ids = D.visits.map(x => x.id), cur = (v.visits || []).length ? v.visits : [ids[0]]; v.visits = val === 'first' ? [] : val === 'all' ? [...ids] : val === 'last' ? [ids[ids.length - 1]] : ids.filter(id => cur.includes(id) || '+' + id === val); if (v.visits.length === 1 && v.visits[0] === ids[0]) v.visits = []; } });
       save(); render(); toast(`${vs.length} variable${vs.length > 1 ? 's' : ''}: ${k} set`); return; }
     if (t.id === 'mbLibQ') { libQ = t.value; const pos = t.selectionStart; render(); const q = $('#mbLibQ'); if (q) { q.focus(); q.setSelectionRange(pos, pos); } return; }
+    if (d.mbnby !== undefined) { const A = D.arms.filter(Boolean); D.nBy = A.map((_, i) => (D.nBy || [])[i] ?? ''); D.nBy[+d.mbnby] = val === '' ? '' : Math.max(0, Math.round(+val));
+      if (D.nBy.some(x => +x > 0)) D.n = D.nBy.reduce((a2, x) => a2 + (+x || 0), 0); else delete D.nBy; save(); const ni = $('#mbWrap [data-mb="n"]'); if (ni) { ni.value = D.n; ni.disabled = !!D.nBy; } return; }
     if (d.mb) { D[d.mb] = d.mb === 'n' || d.mb === 'idDigits' ? +val : val; save(); if (t.type !== 'text' && t.type !== 'number') render(); return; }
     if (d.mbc) { D.conv[d.mbc] = val; save(); return render(); }
     if (d.mbs) { ssDef(D)[d.mbs] = ['v', 'm', 'nik', 'means'].includes(d.mbs) ? val : val === '' ? '' : +val; if (d.mbs === 'v') { D.ss.a = ''; D.ss.b = ''; D.ss.sd = ''; } save(); if (t.tagName === 'SELECT') return render(); const o = $('#mbSsOut'); if (o) o.innerHTML = ssOut(ssCalc(D)); return; }

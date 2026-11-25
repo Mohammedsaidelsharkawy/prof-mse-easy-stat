@@ -4655,17 +4655,17 @@
       return { title: 'Summary', head: [...d.head, 'P value', 'Effect size'], rows: levels.map((r, i) => [...r, i ? '' : P, i ? '' : ef]),
         note: used ? `${used[0]}${used[1] ? ` (${used[1]}${used[2] ? `, df ${used[2]}` : ''})` : ''}.${/^RR/.test(ef) ? ' RR: relative risk (95% CI).' : ''}` : it.test };
     }
-    const ms = r => `${r[ix('Mean')]} ± ${r[ix('SD')]}`, mi = r => `${r[ix('Median')]} (${r[ix('IQR')]})`;
+    const ms = r => `${r[ix('Mean')]} ± ${r[ix('SD')]}`, mi = r => `${r[ix('Median')]} (${r[ix('IQR')]})`, rg = r => ix('Min') >= 0 ? `${r[ix('Min')]} – ${r[ix('Max')]}` : '';
     if (it.kind === 'repeated') {
       const bt = tests.find(t => t.head[0] === 'Timepoint'), normalAt = tp => d.rows.filter(r => r[0] === tp).every(r => /\(normal\)/.test(r[r.length - 1]));
       const at = tp => { const r = bt && bt.rows.find(x => x[0] === tp); return r ? [normalAt(tp) ? r[1] : r[2], r[3] || ''] : ['', '']; };
       const tps = [...new Set(d.rows.map(r => r[0]))];
-      return { title: 'Summary', head: ['Timepoint', '', 'n', 'Mean ± SD', 'Median (IQR)', 'P value', 'Effect size'],
-        rows: d.rows.filter(r => r[1] !== 'All patients').map((r, i, all) => { const first = all.findIndex(x => x[0] === r[0]) === i, [p, e] = at(r[0]); return [first ? r[0] : '', r[1], r[ix('n')], ms(r), mi(r), first ? p : '', first ? e : '']; }),
+      return { title: 'Summary', head: ['Timepoint', '', 'n', 'Mean ± SD', 'Median (IQR)', 'Range', 'P value', 'Effect size'],
+        rows: d.rows.filter(r => r[1] !== 'All patients').map((r, i, all) => { const first = all.findIndex(x => x[0] === r[0]) === i, [p, e] = at(r[0]); return [first ? r[0] : '', r[1], r[ix('n')], ms(r), mi(r), rg(r), first ? p : '', first ? e : '']; }),
         note: `P value between the groups at each timepoint: ${bt ? `${bt.head[1].replace(/ P$/, '')} when every group is normally distributed, otherwise ${bt.head[2].replace(/ P$/, '')}` : '—'}. ${tps.length} timepoints.` };
     }
-    const rows = d.rows.map((r, i) => [r[0], r[ix('n')], ms(r), mi(r), i ? '' : P, i ? '' : (used && used[4]) || '—']);
-    return { title: 'Summary', head: ['', 'n', 'Mean ± SD', 'Median (IQR)', 'P value', 'Effect size'], rows,
+    const rows = d.rows.map((r, i) => [r[0], r[ix('n')], ms(r), mi(r), rg(r), i ? '' : P, i ? '' : (used && used[4]) || '—']);
+    return { title: 'Summary', head: ['', 'n', 'Mean ± SD', 'Median (IQR)', 'Range', 'P value', 'Effect size'], rows,
       note: used ? `${used[0]}${used[1] ? ` (${used[1]}${used[2] ? `, df ${used[2]}` : ''})` : ''}.` : it.test };
   }
   // the half view drawn as the Word file: titled grid tables (grey header, report font), the groups' patients side by side, values still editable
@@ -4684,7 +4684,7 @@
     return wordTbl("Data of each group — every patient's value", head, body, 'small')
       + `<div class="xp-legend">${Analysis.OUT_RULE[xpo().out] ? `Orange: outlier (${Analysis.OUT_RULE[xpo().out]} of its group) · ` : ''}red: missing · purple edge: changed here. Click a value to change it; Enter to confirm, Esc to cancel.</div>`;
   }
-  const sumWordHtml = it => { const rep = xpReportHtml(it); if (rep) return rep; const t = summaryTable(it); if (!t) return xpTables(it).map(tblHtml).join('');
+  const sumWordHtml = it => { const rep = state.xpCompact ? '' : xpReportHtml(it); if (rep) return rep; const t = summaryTable(it); if (!t) return xpTables(it).map(tblHtml).join('');
     return wordTbl(t.note ? `Summary — ${t.note}` : 'Summary', t.head, t.rows.map(r => `<tr>${r.map(c => `<td class="${/\*$/.test(c) ? 'sigp' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')); };
   const effWordHtml = it => it.effects ? wordTbl(it.effects.title, it.effects.head, it.effects.rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join(''))
     + (it.effects.note ? `<div class="xp-sum-note">${esc(it.effects.note)}</div>` : '') : '';
@@ -4828,7 +4828,7 @@
     if ((cfg.xpFlags || []).includes(it.id)) out.push('<span class="chip warn" title="Flagged to check later">⚑ check later</span>');
     return out.join('');
   }
-  const sumHtml = it => { const rep = xpReportHtml(it); if (rep) return rep; const t = summaryTable(it); return t ? tblHtml(t) + (t.note ? `<div class="xp-sum-note">${esc(t.note)}</div>` : '') : xpTables(it).map(tblHtml).join(''); };
+  const sumHtml = it => { const rep = state.xpCompact ? '' : xpReportHtml(it); if (rep) return rep; const t = summaryTable(it); return t ? tblHtml(t) + (t.note ? `<div class="xp-sum-note">${esc(t.note)}</div>` : '') : xpTables(it).map(tblHtml).join(''); };
   // a card's lines: each group's mean ± SD or median (IQR), its frequencies, or the values at the first and last timepoint
   function keyLines(it) {
     const t = it.tables.find(x => x.cat === 'desc'); if (!t) return [];
@@ -4842,7 +4842,7 @@
   }
   /* ---------- phase 2: the results of each variable of a simulated master sheet, drawn as in step 10 — the data of phase 3 are not touched ---------- */
   function simResults(wb, opt = {}) {
-    const keep = { data: state.data, cfg: state.cfg, explore: state.explore, xpComments: state.xpComments, xpChanged: state.xpChanged, xpOpen: state.xpOpen };
+    const keep = { data: state.data, cfg: state.cfg, explore: state.explore, xpComments: state.xpComments, xpChanged: state.xpChanged, xpOpen: state.xpOpen, xpSecs: state.xpSecs, xpCompact: state.xpCompact }; state.xpCompact = true;
     try {
       const S0 = builderSetup(wb), name = wb.SheetNames.find(n => !['_EasyStatSetup', 'Lists', 'Codebook', 'Instructions', 'Randomisation', 'Compare', 'Entry 2'].includes(n)) || wb.SheetNames[0];
       const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: true, blankrows: false }), filled = r => r.filter(v => v !== null && String(v).trim() !== '').length;
@@ -4858,8 +4858,10 @@
       const x = Analysis.explore(state.data, cfg, { fig: 'auto', out: '1.5' }), o = cfg.options, alpha = o.alpha;
       const list = x.items.filter(it => !opt.only || it.id === opt.only || it.label === opt.only);
       const figUrl = it => { if (opt.figs === false || ['compact', 'tables'].includes(cfg.explore.view) || !it.spec) return ''; try { return Charts.draw(it.spec, chartPalette(o), { ...chartStyle(o), res: 1 }).toDataURL('image/png'); } catch (e) { return ''; } };
-      const parts = list.map(it => itemHtml(it, cfg.explore.view, figUrl(it), true).replace(/ contenteditable="true"/g, '').replace(/ data-xr="\d+"/g, '')
-        .replace(/Click a value to change it; Enter to confirm, Esc to cancel\./g, '').replace(/ · purple edge: changed here\./g, '.'));
+      const idc = cfg.idCols && cfg.idCols[0], ed = opt.editable && idc;
+      const parts = list.map(it => { const h = itemHtml(it, cfg.explore.view, figUrl(it), true);
+        return (ed ? h.replace(/ data-xr="(\d+)"/g, (m, i) => ` data-gid="${esc(String((rows[+i] || {})[idc] ?? ''))}"`).replace(/ · purple edge: changed here\./g, ' · purple: changed by hand.')
+          : h.replace(/ contenteditable="true"/g, '').replace(/ data-xr="\d+"/g, '').replace(/Click a value to change it; Enter to confirm, Esc to cancel\./g, '').replace(/ · purple edge: changed here\./g, '.')); });
       return { html: parts.join(''), parts, items: list.map(it => ({ id: it.id, label: it.label, kind: it.kind, p: it.p, pTxt: isFinite(it.p) ? Analysis.fmtP(it.p, alpha) : '', sig: !!it.sig, test: it.test || '' })), n: rows.length, groups: cfg.groupOrder ? cfg.groupOrder.length : 0 };
     } finally { Object.assign(state, keep); }
   }
