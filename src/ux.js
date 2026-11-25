@@ -238,7 +238,9 @@
   /* ---------- 2. "What do you want to do?" — sets up the analyses for the goal ---------- */
   const GOALS = [['groups', 'Compare groups'], ['paired', 'Before / after'], ['survival', 'Survival'], ['diagnostic', 'Diagnostic test'], ['agreement', 'Agreement'], ['prediction', 'Prediction model'], ['risk', 'Risk factors'], ['adjusted', 'Adjusted comparison'], ['correlation', 'Correlation'], ['linreg', 'Predict a number'], ['methods', 'Compare two methods']];
   const p1card = $('#p1 .card');
-  if (p1card) { const g = el('div', 'ux-goals'); g.innerHTML = `<span class="legend-note">What do you want to do?</span> ${GOALS.map(([k, l]) => `<button class="chip ux-goal ${ls.get('goal') === k ? 'on' : ''}" data-goal="${k}" type="button">${l}</button>`).join('')}<span class="legend-note" id="uxGoalNote"></span>`;
+  // several goals can be chosen together (the earlier single choice is kept as the first)
+  const goals = () => { const a = ls.get('goals', null); if (Array.isArray(a)) return a; const one = ls.get('goal', null); return one ? [one] : []; };
+  if (p1card) { const g = el('div', 'ux-goals'); g.innerHTML = `<span class="legend-note">What do you want to do?</span> ${GOALS.map(([k, l]) => `<button class="chip ux-goal ${goals().includes(k) ? 'on' : ''}" data-goal="${k}" type="button">${l}</button>`).join('')}<span class="legend-note" id="uxGoalNote"></span>`;
     p1card.insertBefore(g, p1card.children[1] || null);
     // the type of the study puts its usual goals first (marked ★); the others stay after them
     const SUGG = { rct: ['groups', 'adjusted', 'paired', 'survival'], nrct: ['groups', 'adjusted', 'paired'], pcohort: ['groups', 'survival', 'risk', 'prediction'], rcohort: ['groups', 'survival', 'risk', 'prediction'],
@@ -248,10 +250,13 @@
       let after = note; btns.forEach(b => { after.after(b); after = b; const on = sg.includes(b.dataset.goal); b.classList.toggle('ux-sugg', on); b.textContent = (on ? '★ ' : '') + GOALS.find(x => x[0] === b.dataset.goal)[1]; b.style.opacity = sg.length && !on ? '.6' : ''; b.title = on ? 'Usual for this type of study' : ''; });
       let s = g.querySelector('.ux-gsep'); if (s) s.remove(); const firstOther = btns.find(b => !sg.includes(b.dataset.goal)); if (sg.length && firstOther) { s = el('span', 'legend-note ux-gsep', '· other:'); firstOther.before(s); } };
     document.addEventListener('change', e => { if (e.target.id === 'studyType') order(); }); setTimeout(order, 500); setInterval(() => { const t = ($('#studyType') || {}).value || ''; if (g.dataset.st !== t) { g.dataset.st = t; order(); } }, 1000);
-    g.onclick = e => { const b = e.target.closest('[data-goal]'); if (!b) return; const k = ls.get('goal') === b.dataset.goal ? null : b.dataset.goal; ls.set('goal', k); $$('.ux-goal').forEach(x => x.classList.toggle('on', x.dataset.goal === k)); S().uxGoalDone = null;
-      $('#uxGoalNote').textContent = k ? 'The matching analyses are added when you reach step 2.' : ''; if (k && S().cfg) applyGoal(); }; }
-  function applyGoal() {
-    const st = S(), k = ls.get('goal'); if (!k || !st.cfg || !st.data || st.uxGoalDone === st.file + k) return; st.uxGoalDone = st.file + k;
+    g.onclick = e => { const b = e.target.closest('[data-goal]'); if (!b) return; const k = b.dataset.goal, cur = goals(), on = !cur.includes(k), next = on ? [...cur, k] : cur.filter(x => x !== k); ls.set('goals', next); ls.set('goal', next[0] || null);
+      $$('.ux-goal').forEach(x => x.classList.toggle('on', next.includes(x.dataset.goal)));
+      $('#uxGoalNote').textContent = next.length ? `${next.length > 1 ? `${next.length} goals chosen — their` : 'The matching'} analyses are added when you reach step 2.` : ''; if (on && S().cfg) applyGoal(k); }; }
+  // each chosen goal once per data file (a goal ticked later is added then)
+  function applyGoal(only) { (only ? [only] : goals()).forEach(applyOne); }
+  function applyOne(k) {
+    const st = S(); if (!k || !st.cfg || !st.data) return; const done = st.uxGoalsDone = st.uxGoalsDone || new Set(); if (done.has(st.file + '|' + k)) return; done.add(st.file + '|' + k);
     const H = st.data.headers, rows = st.data.rows, isNum = h => rows.filter(r => r[h] !== null && r[h] !== '' && r[h] !== undefined).every(r => isFinite(+r[h])) && rows.some(r => isFinite(+r[h]) && r[h] !== '' && r[h] !== null);
     const lv = h => [...new Set(rows.map(r => r[h]).filter(v => v !== null && v !== undefined && v !== ''))], bin = H.filter(h => !isNum(h) && lv(h).length === 2 && h !== st.cfg.groupCol), num = H.filter(h => isNum(h) && !st.cfg.idCols.includes(h));
     const pos = h => lv(h).find(v => /^(yes|1|true|positive|dead|died|death|event)$/i.test(String(v))) || lv(h)[1], A = st.cfg.advanced, n0 = A.length, add = a => { if (!A.some(x => x.type === a.type && (x.outcome || '') === (a.outcome || ''))) A.push({ include: true, predictors: [], ...(U.advDefaults ? U.advDefaults(a.type) : {}), ...a }); };

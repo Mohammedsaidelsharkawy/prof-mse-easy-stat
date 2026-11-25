@@ -32,7 +32,7 @@
     return p.map((x, i) => x !== '' ? +x || 0 : w > 0 ? rest * (+all[i] || 0) / w : rest / nE); };
   function target(v, g, key) {
     const sg = ((SIG[v.id] || {})[g] || {})[key]; if (sg !== undefined) return sg;
-    const t = ((G.targets[v.id] || {})[g] || {})[key], e = expect(v), bg = (((v.expect || {}).byGroup) || [])[g] || {};
+    const t = ((G.targets[v.id] || {})[g] || {})[key], e = expect(v), bg = bgOf(v, g, key);
     if (v.type === 'num' || v.type === 'calc') return t !== undefined && t !== '' ? +t : bg.mean !== undefined && bg.mean !== '' && isFinite(+bg.mean) ? +bg.mean : e.mean !== '' && e.mean !== undefined ? +e.mean : (v.min !== '' && v.max !== '' ? (+v.min + +v.max) / 2 : 10);
     // ordinal categories: the other groups from the first group's % by a proportional odds ratio (higher categories more likely when > 1)
     if (v.type === 'cat' && v.cats.length >= 3 && +G.ordOR[v.id] > 0 && g > 0 && !Array.isArray(t)) { const p0 = target(v, 0, key), b = Math.log(+G.ordOR[v.id]), lg = x => Math.log(x / (1 - x)), out = []; let cum = 0, prev = 0;
@@ -42,21 +42,23 @@
   }
   const sdOf = v => { const s = G.sds[v.id] !== undefined && G.sds[v.id] !== '' ? +G.sds[v.id] : +expect(v).sd; return isFinite(s) && s > 0 ? s : Math.max(0.5, Math.abs(target(v, 0, 'once')) * 0.2); };
   // the SD of a group at a visit: typed in its cell, else the variable's SD
-  const sdCell = (v, g, key) => { const c = ((G.sdt[v.id] || {})[g] || {})[key], b = ((((v.expect || {}).byGroup) || [])[g] || {}).sd; return c !== undefined && c !== '' && +c > 0 ? +c : b !== undefined && b !== '' && +b > 0 ? +b : sdOf(v); };
+  const sdCell = (v, g, key) => { const c = ((G.sdt[v.id] || {})[g] || {})[key], b = bgOf(v, g, key).sd; return c !== undefined && c !== '' && +c > 0 ? +c : b !== undefined && b !== '' && +b > 0 ? +b : sdOf(v); };
   // the SD shared by the groups at a visit (the root mean square of the groups' SDs), for effect sizes
   const sdPool = (D, v, key) => { const k = K(D); let s2 = 0; for (let g = 0; g < k; g++) s2 += sdCell(v, g, key) ** 2; return Math.sqrt(s2 / k); };
   const pick = (...xs) => { const x = xs.find(y => y !== undefined && y !== null && y !== '' && isFinite(+y)); return x === undefined ? null : +x; };
-  const bgOf = (v, g) => ((((v.expect || {}).byGroup) || [])[g]) || {};
+  // a variable's setting in Generate, else the one given with its expected values in the builder (Expected values in each group)
+  const GX = (k, v) => { const x = (G[k] || {})[v.id]; if (x !== undefined && x !== '' && x !== null) return x; const b = ((v.expect || {}).gen || {})[k]; return b === undefined ? x : b; };
+  const bgOf = (v, g, key) => { const b = ((((v.expect || {}).byGroup) || [])[g]) || {}, at = key && (v.expect || {}).byVisit && b.vis ? b.vis[key] : null; return at ? { ...b, ...Object.fromEntries(Object.entries(at).filter(([, x]) => x !== '' && x !== undefined)) } : b; };
   const modeOf = v => G.mode[v.id] || (v.expect || {}).byMode || (pick(expect(v).lo) !== null || pick(expect(v).hi) !== null ? 'both' : 'msd');
   // the limits of a number: those typed here, else the design's simulated Min / Max, else (for min & max) its allowed range
   const limits = (v, mode) => { const R0 = G.rng[v.id] || {}, e = expect(v); return mode === 'msd' ? { lo: pick(e.lo), hi: pick(e.hi) } : { lo: pick(R0.lo, e.lo, v.min), hi: pick(R0.hi, e.hi, v.max) }; };
   // min & max of a group at a visit (typed in its cell, else the limits)
-  const cellRange = (v, g, key) => { const c = (((G.rt[v.id] || {})[g] || {})[key]) || {}, L = limits(v, 'range'), R0 = G.rng[v.id] || {}, b = bgOf(v, g); return { lo: pick(c.lo, R0.lo, b.lo, L.lo), hi: pick(c.hi, R0.hi, b.hi, L.hi) }; };
+  const cellRange = (v, g, key) => { const c = (((G.rt[v.id] || {})[g] || {})[key]) || {}, L = limits(v, 'range'), R0 = G.rng[v.id] || {}, b = bgOf(v, g, key); return { lo: pick(c.lo, R0.lo, b.lo, L.lo), hi: pick(c.hi, R0.hi, b.hi, L.hi) }; };
   function numParams(v, g, key) {
     const mode = modeOf(v), e = expect(v);
     if (mode === 'range') { const r = cellRange(v, g, key); if (r.lo !== null && r.hi !== null && r.hi > r.lo) { const mid = (r.lo + r.hi) / 2, sg = ((SIG[v.id] || {})[g] || {})[key], sh = sg !== undefined ? sg - mid : 0;
       return { m: mid + sh, sd: (r.hi - r.lo) / 4, lo: r.lo + sh, hi: r.hi + sh, dist: 'normal' }; } }
-    const L = limits(v, mode === 'range' ? 'both' : mode), R0 = mode === 'msd' ? {} : G.rng[v.id] || {}, b = mode === 'msd' ? {} : bgOf(v, g); return { m: target(v, g, key), sd: sdCell(v, g, key), lo: pick(R0.lo, b.lo, L.lo), hi: pick(R0.hi, b.hi, L.hi), dist: G.dist[v.id] || e.dist };
+    const L = limits(v, mode === 'range' ? 'both' : mode), R0 = mode === 'msd' ? {} : G.rng[v.id] || {}, b = mode === 'msd' ? {} : bgOf(v, g, key); return { m: target(v, g, key), sd: sdCell(v, g, key), lo: pick(R0.lo, b.lo, L.lo), hi: pick(R0.hi, b.hi, L.hi), dist: GX('dist', v) || e.dist };
   }
   // the count at the centile u: Poisson (mean m), or negative binomial with the SD asked (more spread than Poisson)
   function countQ(u, m, sd) { const s2 = sd * sd, nb = sd > 0 && s2 > m * 1.001, r = nb ? m * m / (s2 - m) : 0, q = nb ? r / (r + m) : 0;
@@ -95,7 +97,7 @@
   // "significant": group targets far enough apart for a power of about 95% with these patients; "not significant": the same targets in every group
   function sigTargets(D) {
     const out = {}, k = K(D), n = Math.max(2, +G.n || +D.n || 60), za = 1.96, zb = 1.645, St = typeof Stats !== 'undefined' ? Stats : null;
-    D.vars.forEach(v => { const want = G.sig[v.id]; if (!want || !['num', 'yn', 'cat'].includes(v.type)) return; const keys = visitKeys(D, v), key = sigKey(D, v), o = out[v.id] = {}, put = (g, kk, x) => { (o[g] = o[g] || {})[kk] = x; };
+    D.vars.forEach(v => { const want = GX('sig', v); if (!want || !['num', 'yn', 'cat'].includes(v.type)) return; const keys = visitKeys(D, v), key = sigKey(D, v), o = out[v.id] = {}, put = (g, kk, x) => { (o[g] = o[g] || {})[kk] = x; };
       if (k < 2 && keys.length < 2) { delete out[v.id]; return; }
       if (v.type === 'num') { const mode = modeOf(v), base = (g, kk) => { if (mode === 'range') { const r = cellRange(v, g, kk); return r.lo !== null && r.hi !== null ? (r.lo + r.hi) / 2 : target(v, g, kk); } return target(v, g, kk); };
         const sd = mode === 'range' ? (() => { const r = cellRange(v, 0, key); return r.lo !== null && r.hi !== null ? (r.hi - r.lo) / 4 : sdPool(D, v, key); })() : sdPool(D, v, key), L = limits(v, mode === 'msd' ? 'both' : mode);
@@ -183,7 +185,7 @@
   // the variables made by a special relation keep their own values (rescaling them would break the relation)
   const specialIds = () => { const T0 = G.tte || {}, Dg = G.diag || {}, A0 = G.agree || {}, M = G.match || {}; return new Set([T0.ev, T0.time, T0.cev, Dg.ref, Dg.idx, Dg.num, A0.b, A0.b2, ...(M.on ? [M.status, M.exp, M.pair, ...(M.by || [])] : []), ...Object.keys(G.risk || {}), ...Object.keys(G.reg || {}), (G.ni || {}).v, (G.xo || {}).on && G.xo.v, (G.sw || {}).on && G.sw.v].filter(Boolean)); };
   function exactMatch(D, P, opt) { const rx = B.prng(((+opt.seed || +G.seed || 1) + 61001) >>> 0), k = K(D), skip = specialIds();
-    D.vars.forEach(v => { if (!['num', 'yn', 'cat'].includes(v.type) || skip.has(v.id) || G.dist[v.id] === 'poisson' || G.dist[v.id] === 'negbin') return;
+    D.vars.forEach(v => { if (!['num', 'yn', 'cat'].includes(v.type) || skip.has(v.id) || GX('dist', v) === 'poisson' || GX('dist', v) === 'negbin') return;
       visitKeys(D, v).forEach(key => { for (let g = 0; g < k; g++) { const ps = P.filter(p => p.g === g && p.vals[v.id] && p.vals[v.id][key] != null && p.vals[v.id][key] !== ''); if (ps.length < 2) continue;
         if (v.type === 'num') { const np = numParams(v, g, key), xs = ps.map(p => +p.vals[v.id][key]), m = xs.reduce((a, b) => a + b, 0) / xs.length, sd = Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / (xs.length - 1)); if (!(sd > 0)) continue;
           const dd = decOf(v, np.sd), u = 10 ** -dd, raw = xs.map(x0 => np.m + (x0 - m) * np.sd / sd), ys = raw.map(x0 => +x0.toFixed(dd));
@@ -223,7 +225,7 @@
     const ni = niShift(D, P);
     if (opt.plain) return;
     sigInfo = {};
-    D.vars.forEach(v => { const want = G.sig[v.id]; if (!want || !SIG[v.id]) return; const key = sigKey(D, v); let p = pTest(D, v, key, P), t = 0; const ok = () => want === 'sig' ? p < 0.05 : !(p < 0.05);
+    D.vars.forEach(v => { const want = GX('sig', v); if (!want || !SIG[v.id]) return; const key = sigKey(D, v); let p = pTest(D, v, key, P), t = 0; const ok = () => want === 'sig' ? p < 0.05 : !(p < 0.05);
       while (isFinite(p) && !ok() && t < 15) { t++; redraw(v, 5000 + t + (+G.vseed[v.id] || 0)); p = pTest(D, v, key, P); } sigInfo[v.id] = { p, ok: isFinite(p) && ok(), key, want }; });
     // non-inferiority: drawn again until the 95% CI tells the scenario asked (non-inferior, inferior or inconclusive)
     niInfo = null; if (ni) { const want = G.ni.scen || 'noninf', okk = r => want === 'noninf' ? r.verdict === 'noninf' || r.verdict === 'superior' : r.verdict === want; let r = niStat(D, P), t = 0;
@@ -310,7 +312,7 @@
           if (v.type === 'num') { const np = numParams(v, g, key), m = np.m, sd = np.sd, e = { dist: np.dist }; let x;
             const ln = zz => { const s2 = Math.log(1 + sd * sd / (m * m)); return Math.exp(Math.log(m) - s2 / 2 + Math.sqrt(s2) * zz); };
             // normal; skewed to the right (log-normal); skewed to the left (its mirror image); uniform (the same mean and SD)
-            const zp = Math.min(0.9, Math.max(0, (+G.zpct[v.id] || 30) / 100));
+            const zp = Math.min(0.9, Math.max(0, (+GX('zpct', v) || 30) / 100));
             const draw = zz => { if (e.dist === 'poisson' || e.dist === 'negbin') return countQ(jStat.normal.cdf(zz, 0, 1), Math.max(0.01, m), e.dist === 'negbin' ? sd : 0);
               if (e.dist === 'bimodal') { const uu = jStat.normal.cdf(zz, 0, 1), w2 = uu < 0.5 ? -1 : 1, q = normInv(uu < 0.5 ? Math.max(1e-9, 2 * uu) : Math.min(1 - 1e-9, 2 * uu - 1)); return m + sd * (0.9 * w2 + 0.436 * q); }
               if (e.dist === 'zeroinf') { const uu = jStat.normal.cdf(zz, 0, 1); if (uu < zp) return Math.max(0, np.lo ?? 0); const m1 = m / (1 - zp), sd1 = Math.max(0.01, sd * 0.7), s2 = Math.log(1 + sd1 * sd1 / (m1 * m1)); return Math.exp(Math.log(m1) - s2 / 2 + Math.sqrt(s2) * normInv((uu - zp) / (1 - zp))); }
@@ -319,11 +321,11 @@
             // the simulated Min and Max of the design: a value outside is drawn again (a truncated distribution), then kept within them
             const lo = np.lo, hi = np.hi;
             // patient-level trajectories: a slope of its own over the visits (SD of the change from the first to the last visit)
-            if (+G.slope[v.id] > 0 && keys.length > 1) { const sl = (p0s[v.id] ??= norm() * +G.slope[v.id]); x += sl * keys.indexOf(key) / (keys.length - 1); }
+            if (+GX('slope', v) > 0 && keys.length > 1) { const sl = (p0s[v.id] ??= norm() * +GX('slope', v)); x += sl * keys.indexOf(key) / (keys.length - 1); }
             const pile = e.dist === 'ceiling' || e.dist === 'floor'; if (pile) { const L2 = limits(v, 'both'); if (e.dist === 'ceiling' && L2.hi !== null) x = Math.min(L2.hi, x); if (e.dist === 'floor' && L2.lo !== null) x = Math.max(L2.lo, x); }
             if (!pile && (lo !== null || hi !== null)) { for (let t = 0; t < 30 && ((lo !== null && x < lo) || (hi !== null && x > hi)); t++) x = draw(norm()); if (lo !== null) x = Math.max(lo, x); if (hi !== null) x = Math.min(hi, x); }
             if (v.min !== '' && isFinite(+v.min)) x = Math.max(+v.min, x); if (v.max !== '' && isFinite(+v.max)) x = Math.min(+v.max, x);
-            const dd = e.dist === 'poisson' || e.dist === 'negbin' ? 0 : decOf(v, sd), rr = +G.round[v.id] || 0; if (rr > 0) { x = Math.round(x / rr) * rr; o[key] = +x.toFixed(Math.max(0, (String(rr).split('.')[1] || '').length)); } else o[key] = +x.toFixed(dd); }
+            const dd = e.dist === 'poisson' || e.dist === 'negbin' ? 0 : decOf(v, sd), rr = +GX('round', v) || 0; if (rr > 0) { x = Math.round(x / rr) * rr; o[key] = +x.toFixed(Math.max(0, (String(rr).split('.')[1] || '').length)); } else o[key] = +x.toFixed(dd); }
           else { const p = target(v, g, key), zz = yesFirst(v) ? -z : z; let c = 0, cum = 0; for (; c < p.length - 1; c++) { cum += p[c]; if (zz <= normInv(cum)) break; } o[key] = D.conv.catAs === 'codes' ? c + 1 : v.cats[c]; } }); });
       // free text: plausible words for the text columns (by their names), drawn from their own stream so that the other values do not change
       if (G.freeText !== false) vars.filter(v => v.type === 'text').forEach(v => { const tl = TEXT_LIB.find(([re]) => re.test(v.label)); if (!tl) return; const rt = B.prng((hashOf(v.id) + 7 * i + (+opt.seed || +G.seed || 1)) >>> 0), keys = visitKeys(D, v);
@@ -372,7 +374,7 @@
     P.forEach(p => { const drop = (D.visits.length > 1 && rnd() * 100 < (isFinite(dropG[p.g]) ? dropG[p.g] : +G.dropout || 0) ? 1 + Math.floor(dropAt(rnd()) * (D.visits.length - 1)) : 0) || p.__drop || 0;
       vars.forEach(v => { const o = p.vals[v.id]; if (!o) return; Object.keys(o).forEach(key => { const vi = VK.indexOf(key);
         if (drop && vi >= drop && !devKeep.has(v.id)) { o[key] = null; return; }
-        const pm = (G.miss[v.id] !== undefined && G.miss[v.id] !== '' ? +G.miss[v.id] : +G.missAll || 0) * missWeight(D, p, v, key) * (+G.missTrend > 0 && VK.length > 1 && vi > 0 ? 1 + +G.missTrend * vi / (VK.length - 1) : 1); if (v.type !== 'calc' && !v.required && rnd() * 100 < pm) o[key] = null;
+        const pm = (GX('miss', v) !== undefined && GX('miss', v) !== '' ? +GX('miss', v) : +G.missAll || 0) * missWeight(D, p, v, key) * (+G.missTrend > 0 && VK.length > 1 && vi > 0 ? 1 + +G.missTrend * vi / (VK.length - 1) : 1); if (v.type !== 'calc' && !v.required && rnd() * 100 < pm) o[key] = null;
         if (v.type === 'num' && o[key] != null && rnd() * 100 < (+G.outliers || 0)) { const m = target(v, p.g, key), sd = sdCell(v, p.g, key); const osd = +G.outSD > 0 ? +G.outSD : 4, sgn = G.outDir === 'high' ? 1 : G.outDir === 'low' ? -1 : (rnd() < 0.5 && !(+v.min >= 0) ? -1 : 1); o[key] = +(m + sgn * osd * sd).toFixed(decOf(v, sd)); } }); }); });
     // messy entries, for practice in cleaning data: units in cells, typing errors, 999 codes, mixed spelling of categories, duplicated IDs
     if (!opt.stage1) lastErrors = [];
@@ -468,8 +470,8 @@
   // G23: the settings of the simulation as a methods page (Word)
   async function methodsDoc(D) { const d = window.docx, { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } = d, P0 = (t, o = {}) => new Paragraph({ spacing: { after: 100 }, children: [new TextRun({ text: t, bold: o.b, size: o.s || 21, font: 'Calibri' })] });
     const cell = (t, b) => new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(t ?? ''), bold: b, size: 18, font: 'Calibri' })] })] }), A = arms(D), tl = targetsList(D);
-    const vs = D.vars.filter(v => ['num', 'yn', 'cat'].includes(v.type)), rows = vs.map(v => { const t = tl.filter(x => x.varId === v.id); const e = expect(v), how = v.type === 'num' ? `${{ msd: 'mean & SD', range: 'min & max', both: 'mean & SD within min–max' }[modeOf(v)]}, SD ${(+sdOf(v)).toFixed(2)}${Object.keys(G.sdt[v.id] || {}).length ? ' (own SD for some groups / visits)' : ''}, ${G.dist[v.id] || e.dist || 'normal'}` : '% of each category';
-      return [v.label + (v.unit ? ` (${v.unit})` : ''), how, t.map(x => `${x.visitName ? x.visitName + ': ' : ''}${x.group} ${x.kind === 'mean' ? (+x.target).toFixed(2) : x.target + '% ' + x.cat}`).join('; '), G.sig[v.id] ? (G.sig[v.id] === 'sig' ? 'set significant' : 'set not significant') : '', `${G.miss[v.id] !== undefined && G.miss[v.id] !== '' ? G.miss[v.id] : G.missAll}%`]; });
+    const vs = D.vars.filter(v => ['num', 'yn', 'cat'].includes(v.type)), rows = vs.map(v => { const t = tl.filter(x => x.varId === v.id); const e = expect(v), how = v.type === 'num' ? `${{ msd: 'mean & SD', range: 'min & max', both: 'mean & SD within min–max' }[modeOf(v)]}, SD ${(+sdOf(v)).toFixed(2)}${Object.keys(G.sdt[v.id] || {}).length ? ' (own SD for some groups / visits)' : ''}, ${GX('dist', v) || e.dist || 'normal'}` : '% of each category';
+      return [v.label + (v.unit ? ` (${v.unit})` : ''), how, t.map(x => `${x.visitName ? x.visitName + ': ' : ''}${x.group} ${x.kind === 'mean' ? (+x.target).toFixed(2) : x.target + '% ' + x.cat}`).join('; '), GX('sig', v) ? (GX('sig', v) === 'sig' ? 'set significant' : 'set not significant') : '', `${GX('miss', v) !== undefined && GX('miss', v) !== '' ? GX('miss', v) : G.missAll}%`]; });
     const txt = [`${+G.n || +D.n || 60} patients were simulated${A.length >= 2 ? ` in ${A.length} groups (${A.join(', ')})` : ''} with the Prof Easy Stat data generator (seed ${G.seed}${last ? `, dataset code ${dataCode(last)}` : ''}).`,
       `Numbers were drawn from the distributions below; a patient's visits were correlated (r = ${G.visitR}); ${(G.corr || []).length ? `${G.corr.length} link${G.corr.length > 1 ? 's' : ''} between variables were set; ` : ''}missing values were ${{ mcar: 'missing completely at random', mar: 'missing at random (depending on another variable)', mnar: 'missing not at random (depending on the value itself)', group: 'more frequent in one group' }[G.missType] || 'at random'} (${G.missAll}% of each variable)${+G.dropout ? `, ${G.dropout}% of patients dropped out` : ''}${+G.outliers ? `, ${G.outliers}% of numbers were outliers` : ''}${G.messy ? ', and messy entries were added for cleaning practice' : ''}.`];
     if ((G.clus || {}).on) txt.push(`Groups were given to whole clusters (cluster randomised), with an intraclass correlation of ${G.clus.icc}.`);
@@ -492,7 +494,9 @@
 
   /* ---------- the workspace ---------- */
   const opt = (list, cur) => list.map(([k, l]) => `<option value="${esc(k)}" ${String(cur) === String(k) ? 'selected' : ''}>${esc(l)}</option>`).join('');
-  function render() {
+  // the page stays where it is when the panel is drawn again (a change, a copy, a new option)
+  function render() { const y = window.scrollY; render0(); if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); requestAnimationFrame(() => { if (Date.now() - (window.__phaseAt || 0) > 400 && Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); }); }
+  function render0() {
     const w = $('#genWrap'); if (!w) return; const D = D0(), A = arms(D), k = K(D), gl = A.length >= 2 ? A : ['All patients'];
     if (!w.dataset.wired) { w.dataset.wired = 1; w.addEventListener('input', onInput); w.addEventListener('click', onClick); }
     const vs = D.vars.filter(v => ['num', 'yn', 'cat'].includes(v.type)), dates = D.vars.filter(v => v.type === 'date'), calcs = D.vars.filter(v => v.type === 'calc');
@@ -621,23 +625,23 @@
       ${mode !== 'range' ? `<label class="gen-ctl">SD <input type="number" step="any" min="0" data-gsd="${v.id}" value="${esc(G.sds[v.id] ?? '')}" placeholder="${esc(e.sd ?? '')}" style="width:64px"></label>` : ''}
       ${mode !== 'msd' ? `<label class="gen-ctl">${mode === 'range' ? 'Default min' : 'Min'} <input type="number" step="any" data-grng="${v.id}|lo" value="${esc(R0.lo ?? '')}" placeholder="${esc(Lb.lo ?? '')}" style="width:64px"></label><label class="gen-ctl">${mode === 'range' ? 'max' : 'Max'} <input type="number" step="any" data-grng="${v.id}|hi" value="${esc(R0.hi ?? '')}" placeholder="${esc(Lb.hi ?? '')}" style="width:64px"></label>` : ''}
       ${mode !== 'range' ? `<span class="legend-note">${e.dist === 'skewed' ? 'skewed' : 'normal'}</span>` : ''}` : `<span class="legend-note">${v.type === 'yn' || v.cats.length === 2 ? `% ${esc(v.cats[0])}` : `% of ${esc(v.cats.join(' / '))}`}</span>`;
-    const sig = canSig ? `<label class="gen-ctl">${K(D) >= 2 ? 'Difference between groups' : 'Change over the visits'} <select data-gsig="${v.id}">${opt([['', 'As typed'], ['sig', 'Significant'], ['ns', 'Not significant']], G.sig[v.id] || '')}</select></label><span class="gen-sigout" data-gsigout="${v.id}">${sigBadge(D, v, si)}</span>` : '';
+    const sig = canSig ? `<label class="gen-ctl">${K(D) >= 2 ? 'Difference between groups' : 'Change over the visits'} <select data-gsig="${v.id}">${opt([['', 'As typed'], ['sig', 'Significant'], ['ns', 'Not significant']], GX('sig', v) || '')}</select></label><span class="gen-sigout" data-gsigout="${v.id}">${sigBadge(D, v, si)}</span>` : '';
     return `<div class="gen-vhead"><b>${esc(v.label)}</b>${v.unit ? ` <span class="legend-note">(${esc(v.unit)})</span>` : ''}${card ? '' : '<br>'}<span class="gen-ctls">${how} ${sig}
-      <label class="gen-ctl">missing % <input type="number" min="0" max="100" step="any" data-gmiss="${v.id}" value="${esc(G.miss[v.id] ?? '')}" placeholder="${esc(G.missAll)}" style="width:54px"></label>
+      <label class="gen-ctl">missing % <input type="number" min="0" max="100" step="any" data-gmiss="${v.id}" value="${esc(GX('miss', v) ?? '')}" placeholder="${esc(G.missAll)}" style="width:54px"></label>
       <button class="btn ghost small ${moreOpen(v) ? 'on' : ''}" type="button" data-gmore="${v.id}" title="Shape, rounding, effect size, pattern over the visits, subgroup">⋯ More${moreCount(v) ? ` (${moreCount(v)})` : ''}</button>
       <button class="btn ghost small" type="button" data-gre="${v.id}" title="Draw this variable again (the others stay as they are)">🎲 Redraw${+G.vseed[v.id] ? ` (${G.vseed[v.id]})` : ''}</button>${+G.vseed[v.id] ? `<button class="btn ghost small" type="button" data-greset="${v.id}" title="Back to the first draw">↺</button>` : ''}</span></div>${moreOpen(v) ? morePanel(D, v) : ''}`;
   }
   // open when asked, or by default while every option is shown (html.r21-all); a closed one stays closed
   const moreOpen = v => G.more[v.id] === undefined ? document.documentElement.classList.contains('r21-all') : !!G.more[v.id];
-  const moreCount = v => [G.dist[v.id], +G.round[v.id] > 0, G.subg[v.id] && G.subg[v.id].v, +G.ordOR[v.id] > 0].filter(Boolean).length;
+  const moreCount = v => [GX('dist', v), +GX('round', v) > 0, G.subg[v.id] && G.subg[v.id].v, +G.ordOR[v.id] > 0].filter(Boolean).length;
   function morePanel(D, v) {
     const k = K(D), keys = visitKeys(D, v), gl = k >= 2 ? arms(D) : ['All patients'], e = expect(v), sg = G.subg[v.id] || {}, mods = D.vars.filter(x => x.id !== v.id && (x.type === 'yn' || x.type === 'cat') && x.cats.length), mod = mods.find(x => x.id === sg.v);
     const num = v.type === 'num', bin = v.type === 'yn' || v.cats.length === 2;
     return `<div class="gen-more">
-      ${num ? `<label class="gen-ctl">Shape <select data-gdist="${v.id}">${opt([['', `As the design (${e.dist === 'skewed' ? 'skewed' : 'normal'})`], ['normal', 'Normal'], ['skewed', 'Skewed to the right (log-normal)'], ['lskew', 'Skewed to the left'], ['uniform', 'Uniform (flat)'], ['bimodal', 'Two subpopulations (bimodal)'], ['zeroinf', 'Many zeros (zero-inflated)'], ['ceiling', 'Piling at the maximum (ceiling)'], ['floor', 'Piling at the minimum (floor)'], ['poisson', 'Counts (Poisson: SD = √mean)'], ['negbin', 'Counts, more spread (negative binomial, SD as typed)']], G.dist[v.id] || '')}</select></label>
-        ${G.dist[v.id] === 'zeroinf' ? `<label class="gen-ctl">% zeros <input type="number" min="0" max="90" data-gzp="${v.id}" value="${esc(G.zpct[v.id] ?? 30)}" style="width:56px"></label>` : ''}
-        ${keys.length > 1 ? `<label class="gen-ctl" title="Each patient has a slope of their own: the SD of the change from the first to the last visit">patient slopes SD <input type="number" step="any" min="0" data-gslope="${v.id}" value="${esc(G.slope[v.id] ?? '')}" placeholder="0" style="width:62px"></label>` : ''}
-        <label class="gen-ctl" title="Digit preference, e.g. blood pressure read to the nearest 5">Round to <select data-ground="${v.id}">${opt([['', 'decimals of the design'], ['0.1', '0.1'], ['0.5', '0.5'], ['1', '1'], ['2', '2'], ['5', '5'], ['10', '10']], G.round[v.id] || '')}</select></label>` : ''}
+      ${num ? `<label class="gen-ctl">Shape <select data-gdist="${v.id}">${opt([['', `As the design (${e.dist === 'skewed' ? 'skewed' : 'normal'})`], ['normal', 'Normal'], ['skewed', 'Skewed to the right (log-normal)'], ['lskew', 'Skewed to the left'], ['uniform', 'Uniform (flat)'], ['bimodal', 'Two subpopulations (bimodal)'], ['zeroinf', 'Many zeros (zero-inflated)'], ['ceiling', 'Piling at the maximum (ceiling)'], ['floor', 'Piling at the minimum (floor)'], ['poisson', 'Counts (Poisson: SD = √mean)'], ['negbin', 'Counts, more spread (negative binomial, SD as typed)']], GX('dist', v) || '')}</select></label>
+        ${GX('dist', v) === 'zeroinf' ? `<label class="gen-ctl">% zeros <input type="number" min="0" max="90" data-gzp="${v.id}" value="${esc(GX('zpct', v) ?? 30)}" style="width:56px"></label>` : ''}
+        ${keys.length > 1 ? `<label class="gen-ctl" title="Each patient has a slope of their own: the SD of the change from the first to the last visit">patient slopes SD <input type="number" step="any" min="0" data-gslope="${v.id}" value="${esc(GX('slope', v) ?? '')}" placeholder="0" style="width:62px"></label>` : ''}
+        <label class="gen-ctl" title="Digit preference, e.g. blood pressure read to the nearest 5">Round to <select data-ground="${v.id}">${opt([['', 'decimals of the design'], ['0.1', '0.1'], ['0.5', '0.5'], ['1', '1'], ['2', '2'], ['5', '5'], ['10', '10']], GX('round', v) || '')}</select></label>` : ''}
       ${k >= 2 && (num || bin) ? `<span class="gen-ctl">Effect: ${num ? `Cohen's d <input type="number" step="0.05" data-geff="${v.id}" placeholder="0.5" style="width:62px">` : `relative risk <input type="number" step="0.05" min="0" data-geff="${v.id}" placeholder="0.5" style="width:62px">`}<button class="btn ghost small" type="button" data-geffgo="${v.id}" title="Fill the other groups' ${num ? 'means' : '%'} from the first group's${keys.length > 1 ? ' at every visit after the first' : ''}">Apply</button></span>` : ''}
       ${num && keys.length > 2 ? `<span class="gen-ctl">Over the visits: ${gl.map((g, gi) => `<span title="${esc(g)}">${esc(g)} <select data-gpat="${v.id}|${gi}">${opt([['', '—'], ['flat', 'Flat'], ['linear', 'Steady change'], ['fast', 'Fast, then plateau'], ['late', 'Slow, then fast'], ['dip', 'Change, then back']], '')}</select></span>`).join(' ')}
         by <input type="number" step="any" data-gpatby="${v.id}" placeholder="${esc(+((sdOf(v)) * -1).toFixed(2))}" style="width:66px" title="The change from the first visit at its largest (negative: a fall)"><button class="btn ghost small" type="button" data-gpatgo="${v.id}">Apply</button></span>` : ''}
@@ -804,7 +808,7 @@
     const P0 = (t, o = {}) => new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: t, bold: o.b, italics: o.i, size: o.s || 22, font: 'Calibri' })] }), f = (x, dd = 1) => isFinite(x) ? (+x).toFixed(dd) : '—', fp = p => !isFinite(p) ? '—' : p < 0.001 ? '< 0.001' : p.toFixed(3);
     const Q = [], Ans = [], add = (q, a) => { Q.push(q); Ans.push(a); };
     add(`How many patients are in the dataset${k >= 2 ? ', and how many in each group' : ''}? Are any IDs duplicated?`, `${P.length} rows${k >= 2 ? ` — ${A.map((a, g) => `${a}: ${P.filter(p => p.g === g).length}`).join(', ')}` : ''}. ${new Set(P.map(p => p.id)).size < P.length ? `${P.length - new Set(P.map(p => p.id)).size} ID(s) appear twice: remove the duplicates before analysing.` : 'No duplicated IDs.'}`);
-    const pv = (G.power.v && D.vars.find(v => v.id === G.power.v)), pool = D.vars.filter(v => ['num', 'yn', 'cat'].includes(v.type) && (k >= 2 || visitKeys(D, v).length > 1)), pickV = [...new Set([pv, ...pool.filter(v => G.sig[v.id]), ...pool].filter(Boolean))].slice(0, Math.max(1, Math.min(15, +(G.ex || {}).n || 6)));
+    const pv = (G.power.v && D.vars.find(v => v.id === G.power.v)), pool = D.vars.filter(v => ['num', 'yn', 'cat'].includes(v.type) && (k >= 2 || visitKeys(D, v).length > 1)), pickV = [...new Set([pv, ...pool.filter(v => GX('sig', v)), ...pool].filter(Boolean))].slice(0, Math.max(1, Math.min(15, +(G.ex || {}).n || 6)));
     pickV.forEach(v => { const key = sigKey(D, v), vn = key !== 'once' ? ` at ${visitName(D, key)}` : '', p = pTest(D, v, key, P), tl = targetsList(D).filter(x => x.varId === v.id && x.visit === key);
       const test = v.type === 'num' ? (k === 2 ? 'Welch t test (or Mann-Whitney U if skewed)' : k > 2 ? 'one-way ANOVA (or Kruskal-Wallis if skewed)' : `paired t test (${visitName(D, visitKeys(D, v)[0])} against${vn})`) : `chi-square test (Fisher's exact test if an expected count is below 5)`;
       const desc = tl.map(t => { const o = observed(D, P, t); return t.kind === 'mean' ? `${t.group}: mean ${f(o.m, 2)} (SD ${f(o.sd, 2)}), n = ${o.n}` : `${t.group}: ${f(o.m)}% ${t.cat}, n = ${o.n}`; }).join('; ');
@@ -916,7 +920,7 @@
     if (b.dataset.gxdel) { const [kind, id, i] = b.dataset.gxdel.split('|'); G[kind][id].splice(+i, 1); save(); if (last) { last = generate(D); resStamp++; } return render(); }
     if (b.dataset.gxrm) { const [kind, id] = b.dataset.gxrm.split('|'); delete G[kind][id]; save(); if (last) { last = generate(D); resStamp++; } return render(); }
     if (b.dataset.gmore) { const id = b.dataset.gmore, on = moreOpen({ id }); G.more[id] = !on; save(); const y0 = scrollY; render(); scrollTo(0, y0); requestAnimationFrame(() => scrollTo(0, y0)); return; }
-    if (b.dataset.geffgo) { const v = D.vars.find(x => x.id === b.dataset.geffgo), inp = b.parentNode.querySelector('[data-geff]'), eff = inp && inp.value !== '' ? +inp.value : (v && v.type === 'num' ? 0.5 : 0.5); if (!v || !isFinite(eff)) return; delete G.sig[v.id]; applyEffect(D, v, eff); save(); if (last) { last = generate(D); resStamp++; } render(); toast(`${v.label}: ${v.type === 'num' ? `d = ${eff}` : `relative risk ${eff}`} set for the other groups`); return; }
+    if (b.dataset.geffgo) { const v = D.vars.find(x => x.id === b.dataset.geffgo), inp = b.parentNode.querySelector('[data-geff]'), eff = inp && inp.value !== '' ? +inp.value : (v && v.type === 'num' ? 0.5 : 0.5); if (!v || !isFinite(eff)) return; delete GX('sig', v); applyEffect(D, v, eff); save(); if (last) { last = generate(D); resStamp++; } render(); toast(`${v.label}: ${v.type === 'num' ? `d = ${eff}` : `relative risk ${eff}`} set for the other groups`); return; }
     if (b.dataset.gpatgo) { const v = D.vars.find(x => x.id === b.dataset.gpatgo); if (!v) return; const box = b.parentNode, by = box.querySelector('[data-gpatby]'), amt = by && by.value !== '' ? +by.value : -sdOf(v); let n = 0;
       box.querySelectorAll('[data-gpat]').forEach(sel => { if (!sel.value) return; applyPattern(D, v, +sel.dataset.gpat.split('|')[1], sel.value, amt); n++; }); if (!n) { toast('Choose a pattern for at least one group'); return; } save(); if (last) { last = generate(D); resStamp++; } render(); toast(`${v.label}: pattern over the visits set`); return; }
     if (b.id === 'genScenSave') { const nm = (prompt('Name of this scenario (e.g. Expected, Optimistic, Pessimistic):', 'Expected') || '').trim(); if (!nm) return; const all = scenarios(); all[nm] = JSON.parse(JSON.stringify(G)); ls.set('scenarios', all); render(); toast(`Scenario “${nm}” saved`); return; }

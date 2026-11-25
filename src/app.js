@@ -3705,7 +3705,8 @@
         + levelSelect('Event value (others are censored)', a.event, a.positive)
         + `<div><label class="f">Survival at time(s) (optional)</label><input type="text" data-af="at" value="${esc(a.at || '')}" placeholder="e.g. 12 or 6, 12, 24"></div>`;
       const cat = cols.filter(isCat);
-      if (t === 'cox') { fields = select('outcome', 'Follow-up time', num, a.outcome) + select('event', 'Event column', cat, a.event) + levelSelect('Event value (others are censored)', a.event, a.positive); predLabel = 'Predictors (covariates, e.g. group, age, stage)'; preds = cols.filter(c => c.col !== a.event); }
+      if (t === 'cox') { fields = select('outcome', 'Follow-up time', num, a.outcome) + select('event', 'Event column', cat, a.event) + levelSelect('Event value (others are censored)', a.event, a.positive)
+        + `<div><label class="f">Groups compared</label><select data-af="coxBy"><option value="">As ticked in the predictors</option>${cfg.noGroups ? '' : `<option value="__groups" ${a.coxBy === '__groups' ? 'selected' : ''}>The study groups (first predictor)</option>`}<option value="__all" ${a.coxBy === '__all' ? 'selected' : ''}>All patients as one group (no group term)</option>${cat.filter(c => c.col !== a.event && c.col !== cfg.groupCol).map(c => `<option value="${esc(c.col)}" ${a.coxBy === c.col ? 'selected' : ''}>${esc(c.label)} (instead of the study groups)</option>`).join('')}</select></div>`; predLabel = 'Predictors (covariates, e.g. group, age, stage)'; preds = cols.filter(c => c.col !== a.event); }
       if (t === 'mcnemar') fields = select('outcome', 'First measurement (e.g. before)', cat, a.outcome) + select('second', 'Second measurement (e.g. after)', cat.filter(c => c.col !== a.outcome), a.second) + levelSelect('Category to report', a.outcome, a.positive);
       if (t === 'kappa') fields = select('outcome', 'Rater / method A', cat, a.outcome) + select('second', 'Rater / method B', cat.filter(c => c.col !== a.outcome), a.second);
       if (t === 'paired') fields = select('outcome', 'First measurement (e.g. before)', num, a.outcome) + select('second', 'Second measurement (e.g. after)', num.filter(c => c.col !== a.outcome), a.second);
@@ -3919,6 +3920,16 @@
       `<div><label class="f">Text before the comment (optional)</label><input type="text" data-af="commentPre" value="${esc(a.commentPre || '')}" placeholder="e.g. To identify the predictors of …"></div>`,
       `<div><label class="f">Text after the comment (optional)</label><input type="text" data-af="commentPost" value="${esc(a.commentPost || '')}" placeholder="e.g. This supports the hypothesis that …"></div>`,
       `<div style="grid-column:1/-1"><label class="f">Your own comment (optional — replaces the automatic one)</label><textarea data-af="commentCustom" rows="2" placeholder="Leave empty for the automatic comment">${esc(a.commentCustom || '')}</textarea></div>`].join('')}</div></details>`); }
+    // the figure(s) of this analysis: shown or not, caption, titles, axis range, legend, labels, colours, width
+    const inp = (k, l, ph, ty = 'text') => `<div><label class="f">${l}</label><input type="${ty}" ${ty === 'number' ? 'step="any"' : ''} data-af="${k}" value="${esc(a[k] ?? '')}" placeholder="${esc(ph)}"></div>`;
+    if (t !== 'ssize') { const on = ['figOff', 'figCaption', 'figTitle', 'figX', 'figY', 'figYMin', 'figYMax', 'figLegend', 'figLabels', 'figPal', 'figHalf'].some(k => a[k] !== undefined && a[k] !== '' && a[k] !== false);
+      out.push(`<details style="grid-column:1/-1" ${on ? 'open' : ''}><summary class="legend-note" style="cursor:pointer"><b>🖼 Figure</b> — caption, titles, axes, legend, colours${on ? ' (changed)' : ''}</summary><div class="grid g3" style="margin-top:6px">
+        <div>${box('figOff', 'No figure for this analysis')}</div><div>${box('figHalf', 'Half width (two side by side)')}</div><div><label class="f">Colours</label>${sel('figPal', [['', 'As the report'], ...Object.entries(Charts.PALETTE_NAMES || {})], a.figPal || '')}</div>
+        <div style="grid-column:1/-1">${inp('figCaption', 'Caption (empty: automatic)', 'e.g. Kaplan-Meier curves of overall survival by treatment')}</div>
+        ${inp('figTitle', 'Title in the chart', 'none')}${inp('figX', 'X-axis title', 'automatic')}${inp('figY', 'Y-axis title', 'automatic')}
+        ${inp('figYMin', 'Y-axis from', 'automatic', 'number')}${inp('figYMax', 'Y-axis to', 'automatic', 'number')}
+        <div><label class="f">Legend</label>${sel('figLegend', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']], a.figLegend || '')}</div>
+        <div><label class="f">Value labels</label>${sel('figLabels', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']], a.figLabels || '')}</div></div></details>`); }
     if (!['ancova', 'survival', 'cif', 'mcnemar', 'anova2', 'psm', 'lmm', 'noninf', 'gee', 'crossover', 'weighted'].includes(t))
       out.push(`<div><label class="f">Patients</label>${sel('subset', [['all', 'All patients'], ['each', 'Each group separately'], ...activeGroups().map(g => [g, 'Only ' + (state.cfg.groupLabels[g] || g)])], a.subset)}</div>`);
     if (['linear', 'logistic', 'cox'].includes(t))
@@ -4601,7 +4612,7 @@
     const o = xpo(); renderXpOpts();
     let x;
     try { x = Analysis.explore(state.data, state.cfg, { dec: o.dec, extra: o.extra, fig: o.fig === 'none' ? 'auto' : o.fig, out: o.out }); } catch (err) { console.error(err); box.innerHTML = `<p style="color:var(--bad)">${esc(err.message)}</p>`; return; }
-    state.explore = x; state.xpComments = new Map();
+    state.explore = x; state.xpComments = new Map(); state.xpSecs = new Map();
     // results history: the P value of every variable at each run of this step (this session)
     const snap = { time: new Date().toLocaleTimeString(), p: Object.fromEntries(x.items.map(it => [it.id, it.p])) }, runs = state.xpRuns = state.xpRuns || [], last = runs[runs.length - 1];
     if (!last || JSON.stringify(last.p) !== JSON.stringify(snap.p)) { runs.push(snap); if (runs.length > 8) runs.shift(); }
@@ -4673,11 +4684,22 @@
     return wordTbl("Data of each group — every patient's value", head, body, 'small')
       + `<div class="xp-legend">${Analysis.OUT_RULE[xpo().out] ? `Orange: outlier (${Analysis.OUT_RULE[xpo().out]} of its group) · ` : ''}red: missing · purple edge: changed here. Click a value to change it; Enter to confirm, Esc to cancel.</div>`;
   }
-  const sumWordHtml = it => { const t = summaryTable(it); if (!t) return xpTables(it).map(tblHtml).join('');
+  const sumWordHtml = it => { const rep = xpReportHtml(it); if (rep) return rep; const t = summaryTable(it); if (!t) return xpTables(it).map(tblHtml).join('');
     return wordTbl(t.note ? `Summary — ${t.note}` : 'Summary', t.head, t.rows.map(r => `<tr>${r.map(c => `<td class="${/\*$/.test(c) ? 'sigp' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')); };
   const effWordHtml = it => it.effects ? wordTbl(it.effects.title, it.effects.head, it.effects.rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join(''))
     + (it.effects.note ? `<div class="xp-sum-note">${esc(it.effects.note)}</div>` : '') : '';
   // the comment the report writes for this variable alone (as in step 11), shown below its figure
+  // the report's own table(s) of this variable alone (exactly as in the report: its rows, columns, test and footnote)
+  function xpReportSecs(it) {
+    const cache = state.xpSecs || (state.xpSecs = new Map()); if (cache.has(it.id)) return cache.get(it.id);
+    const cfg = state.cfg; let v = cfg.variables.find(x => x.id === it.id), out = [];
+    if (!v) { const m = /^(.*)_(\d+)$/.exec(it.id), o = m && cfg.variables.find(x => x.id === m[1]), c = o && o.cols.find(x => x.col === it.cols[0].col);
+      if (c) v = { ...o, id: it.id, kind: 'single', type: 'numeric', split: false, cols: [c], label: it.label }; }
+    if (v) try { out = Analysis.run(state.data, { ...cfg, variables: [{ ...v, include: true }], advanced: [], consort: null, options: { ...effOptions(), correlation: false, figures: 'none', summary: false, rmEachGroup: false } }).sections.filter(s => s.head && s.rows && s.rows.length)
+      .map(s => rmLayoutOf(cfg, s) === 'cols' ? transposeSec(s) : s); } catch (e) { console.error(e); }
+    cache.set(it.id, out); return out;
+  }
+  const xpReportHtml = it => { const L = xpReportSecs(it); return L.length ? L.map(s => `<div class="xw-title">${esc(s.title)}</div><div style="overflow-x:auto">${htmlTable(s.head, s.rows, s)}</div>${s.footnote ? `<div class="xp-sum-note">${esc(s.footnote)}</div>` : ''}`).join('') : ''; };
   function xpComment(it) {
     if (!xpo().comments) return '';
     const cache = state.xpComments || (state.xpComments = new Map());
@@ -4806,7 +4828,7 @@
     if ((cfg.xpFlags || []).includes(it.id)) out.push('<span class="chip warn" title="Flagged to check later">⚑ check later</span>');
     return out.join('');
   }
-  const sumHtml = it => { const t = summaryTable(it); return t ? tblHtml(t) + (t.note ? `<div class="xp-sum-note">${esc(t.note)}</div>` : '') : xpTables(it).map(tblHtml).join(''); };
+  const sumHtml = it => { const rep = xpReportHtml(it); if (rep) return rep; const t = summaryTable(it); return t ? tblHtml(t) + (t.note ? `<div class="xp-sum-note">${esc(t.note)}</div>` : '') : xpTables(it).map(tblHtml).join(''); };
   // a card's lines: each group's mean ± SD or median (IQR), its frequencies, or the values at the first and last timepoint
   function keyLines(it) {
     const t = it.tables.find(x => x.cat === 'desc'); if (!t) return [];
@@ -4830,7 +4852,7 @@
       if (S0) { const lead = new Set([S0.idCol, S0.groupCol, 'Visit', S0.siteCol, ...(S0.helperCols || [])].filter(Boolean));
         if (S0.missing === '999') rows.forEach(r => headers.forEach(h => { if (r[h] === 999 || r[h] === '999') r[h] = null; }));
         for (let i = rows.length - 1; i >= 0; i--) if (!headers.some(h => !lead.has(h) && !isMissing(rows[i][h]))) rows.splice(i, 1); }
-      state.data = { headers, rows }; state.xpComments = new Map(); state.xpChanged = new Set(); state.xpOpen = new Set();
+      state.data = { headers, rows }; state.xpComments = new Map(); state.xpSecs = new Map(); state.xpChanged = new Set(); state.xpOpen = new Set();
       const cfg = state.cfg = detect(state.data); if (S0) applyBuilderSetup(cfg, S0, true);
       cfg.explore = { ...XP_DEFAULT, view: opt.view || 'half', comments: opt.comments !== false };
       const x = Analysis.explore(state.data, cfg, { fig: 'auto', out: '1.5' }), o = cfg.options, alpha = o.alpha;

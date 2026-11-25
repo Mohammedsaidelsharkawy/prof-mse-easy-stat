@@ -250,6 +250,15 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Categorical repeated measures — pairwise comparisons**: after a significant overall test (or always, as chosen in step 4), McNemar / McNemar-Bowker between the timepoints (vs the first, consecutive, every pair or first vs last; Bonferroni or Holm), as rows of the table, a sentence in the comment and the Methods.
+**Cox regression → Groups compared**: as ticked, the study groups first, all patients as one group (no group term), or another categorical column instead of the study groups.
+**🖼 Figure options in every analysis of step 8** (Kaplan-Meier and the others): no figure, caption, title in the chart, axis titles, y-axis range, legend, value labels, colours, half width.
+**Dialog boxes and floating panels close when you click outside them.**
+**What do you want to do?**: several goals can be chosen together.
+**Expected values in each group** (builder) now has the options of 🎲 Generate: difference between groups (as typed / significant / not significant), missing %, shape, % zeros, round to, patient slopes SD, an effect size that fills the other groups (Cohen's d or relative risk), and different values at each visit.
+**No jumps to the top**: duplicating a variable in the builder, or changing a variable's options in Generate, keeps the page where it is; typing a value and moving to the next box keeps that box (and its typing).
+**Builder → Variables**: the section is picked from a list (＋ New section…, ✎ Rename this section…); a variable is renamed straight in the list (click the name of the chosen variable, or double-click).
+**10 · Results by variable → Summary**: the report's own table of the variable, exactly as in the report (rows, columns, test and footnote).
 **⇄ Transpose the tables of each group separately**: their own choice in step 4 (as the main table, in rows, or as columns), and table by table in step 12.
 **⚡ Make my report (2 choices)** on the line of “Enter your mastersheet”, at its right end.
 **Type of the study → What do you want to do?**: the usual goals of the chosen type come first, marked ★ (e.g. diagnostic accuracy: diagnostic test, agreement, compare two methods; retrospective cohort: compare groups, survival, risk factors, prediction model); the others follow.

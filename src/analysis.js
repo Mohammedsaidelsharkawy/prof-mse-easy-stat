@@ -1427,7 +1427,12 @@ const Analysis = (() => {
   // Cox proportional hazards regression: hazard ratios for time to event
   function coxSection(a, cfg, rows, alpha, d, used) {
     const timeLabel = columnLabel(cfg, a.outcome), evLabel = columnLabel(cfg, a.event);
-    const preds = (a.predictors || []).filter(c => c !== a.outcome && c !== a.event).map(c => encodeOwn(a, cfg, rows, c)).filter(e => e.terms.length);
+    // the groups compared: as ticked, the study groups first, none (all patients as one group) or another column first (instead of the study groups)
+    let plist = (a.predictors || []).slice(); const gcol = cfg.noGroups ? '' : cfg.groupCol;
+    if (a.coxBy === '__all') plist = plist.filter(c => c !== gcol);
+    else if (a.coxBy === '__groups' && gcol) plist = [gcol, ...plist.filter(c => c !== gcol)];
+    else if (a.coxBy && a.coxBy !== '__groups' && rows.length && a.coxBy in rows[0]) plist = [a.coxBy, ...plist.filter(c => c !== a.coxBy && c !== gcol)];
+    const preds = plist.filter(c => c !== a.outcome && c !== a.event).map(c => encodeOwn(a, cfg, rows, c)).filter(e => e.terms.length);
     if (!preds.length) return null;
     const e1 = preds.find(e => e.col === a.int1), e2 = preds.find(e => e.col === a.int2);
     if (e1 && e2 && e1 !== e2) { preds.push({ col: '__int', parts: [e1, e2], label: `${e1.label} × ${e2.label}`, terms: e1.terms.flatMap(t1 => e2.terms.map(t2 => ({ label: `${t1.label} × ${t2.label}`, get: r => t1.get(r) * t2.get(r) }))), ok: r => e1.ok(r) && e2.ok(r) }); used.add('interaction'); }
@@ -3204,8 +3209,11 @@ const Analysis = (() => {
       // within each group: the change over time
       const within = sets.map(([, rs]) => { const M = rs.map(r => v.cols.map(c => toCat(r[c.col]))).filter(m => m.every(x => x !== null && levels.includes(x))); if (M.length < 3) return { n: M.length, p: NaN, test: '' };
         if (T === 2) { const t = levels.map(a => levels.map(b2 => M.filter(m => m[0] === a && m[1] === b2).length)); const q = S.mcnemar(t); used.add('mcnemar'); return { n: M.length, p: q.p, test: levels.length === 2 ? 'McNemar' : 'McNemar-Bowker' }; }
-        if (binary) { const q = S.cochranQ(M.map(m => m.map(x => +(x === pos)))); used.add('cochran'); return { n: M.length, p: q ? q.p : NaN, test: "Cochran's Q" }; }
-        const q = S.friedman(M.map(m => m.map(x => levels.indexOf(x) + 1))); used.add('friedcat'); return { n: M.length, p: q.p, test: 'Friedman' }; });
+        const om = binary ? (q => ({ n: M.length, p: q ? q.p : NaN, test: "Cochran's Q" }))(S.cochranQ(M.map(m => m.map(x => +(x === pos))))) : (q => ({ n: M.length, p: q.p, test: 'Friedman' }))(S.friedman(M.map(m => m.map(x => levels.indexOf(x) + 1))));
+        used.add(binary ? 'cochran' : 'friedcat');
+        if (isFinite(om.p) && (om.p <= alpha || RO.always)) { const P = rmPairs(T), raw = P.map(([a, b2]) => S.mcnemar(levels.map(x => levels.map(y => M.filter(m => m[a] === x && m[b2] === y).length))).p), adj = adjust(raw);
+          om.post = P.map(([a, b2], q) => ({ a, b: b2, p: adj[q] })); used.add('mcnemarpost'); }
+        return om; });
       // between the groups: at each time
       const between = k >= 2 ? v.cols.map(c => { const gv = byGroup.map(rs => rs.map(r => toCat(r[c.col])).filter(x => x !== null && levels.includes(x))); return analyzeCategorical(gv, levels, used, opts, v.ordinal ? v.ordTest || 'rank' : null, v.test); }) : [];
       const cnt = (rs, c, l) => { const xs = rs.map(r => toCat(r[c.col])).filter(x => x !== null && levels.includes(x)); return [xs.filter(x => x === l).length, xs.length]; };
@@ -3215,6 +3223,8 @@ const Analysis = (() => {
       v.cols.forEach((c, t) => show.forEach((l, li) => trows.push([{ t: [li ? '' : tps[t]], b: !li }, ...(binary ? [] : [{ t: [l] }]), ...sets.map(([, rs]) => cell(rs, c, l)),
         ...(k >= 2 ? [{ t: [li ? '' : isFinite(between[t].p) ? fmtP(between[t].p, alpha) : '—'] }] : [])])));
       trows.push([{ t: ['P value over time'], b: true }, ...(binary ? [] : [{ t: [''] }]), ...within.map(w => ({ t: [isFinite(w.p) ? fmtP(w.p, alpha) : '—'] })), ...(k >= 2 ? [{ t: [''] }] : [])]);
+      const postPairs = T > 2 ? rmPairs(T) : [], anyPost = within.some(w => w.post);
+      if (anyPost) postPairs.forEach(([a, b2]) => trows.push([{ t: [`P (${tps[b2]} vs ${tps[a]})`], b: false }, ...(binary ? [] : [{ t: [''] }]), ...within.map(w => { const q = (w.post || []).find(x => x.a === a && x.b === b2); return { t: [q && isFinite(q.p) ? fmtP(q.p, alpha) : '—'] }; }), ...(k >= 2 ? [{ t: [''] }] : [])]));
       // the comment
       const sent = [], at = t => lowerFirst(tps[t]), pctOf = (rs, t, l) => { const [a, n] = cnt(rs, v.cols[t], l); return n ? 100 * a / n : 0; };
       const what = binary ? (POSITIVE.test(pos) ? lowerFirst(lab) : `“${pos}”`) : lowerFirst(lab);
@@ -3222,7 +3232,10 @@ const Analysis = (() => {
         if (!isFinite(w.p)) { sent.push(`${who}, the change in ${lowerFirst(lab)} over time could not be tested (fewer than three patients had every measurement).`); return; }
         const sig = w.p <= alpha;
         if (binary) sent.push(`${who}, ${what} was found in ${pctTxt(pctOf(rs, 0, pos))}% at ${at(0)} and ${pctTxt(pctOf(rs, T - 1, pos))}% at ${at(T - 1)}; this ${sig ? 'change was significant' : 'did not change significantly'} (${w.test}, P value ${pTxt(w.p)}).`.replace('this did not change', 'it did not change'));
-        else sent.push(`${who}, the distribution of ${lowerFirst(lab)} ${sig ? 'changed significantly' : 'did not change significantly'} over time (${w.test}, P value ${pTxt(w.p)}).`); });
+        else sent.push(`${who}, the distribution of ${lowerFirst(lab)} ${sig ? 'changed significantly' : 'did not change significantly'} over time (${w.test}, P value ${pTxt(w.p)}).`);
+        if (w.post) { const sp = w.post.filter(q => isFinite(q.p) && q.p <= alpha), corr = RO.adjust === 'none' ? '' : ` after ${RO.adjust === 'holm' ? 'Holm' : 'Bonferroni'} correction`;
+          sent.push(sp.length ? `Pairwise, it differed significantly between ${listJoin(sp.map(q => `${at(q.b)} and ${at(q.a)}`))} (P value ${sp.length > 1 ? pList(sp.map(q => q.p)) : pTxt(sp[0].p)})${corr}${sp.length < w.post.length ? `, but not in the other ${w.post.length - sp.length > 1 ? 'comparisons' : 'comparison'}` : ''}.`
+            : `None of the pairwise comparisons ${POST_WHAT(tps.map(lowerFirst))} was significant${corr}.`); } });
       if (k >= 2) { const sigT = between.map((b2, t) => [t, b2.p]).filter(([, q]) => isFinite(q) && q <= alpha), nsT = between.map((b2, t) => [t, b2.p]).filter(([, q]) => isFinite(q) && q > alpha);
         if (sigT.length) sent.push(`${binary ? `The proportion of patients with ${what}` : `The distribution of ${lowerFirst(lab)}`} differed significantly between the groups at ${listJoin(sigT.map(([t]) => at(t)))} (P value ${sigT.length > 1 ? pList(sigT.map(x => x[1])) : pTxt(sigT[0][1])})${nsT.length ? `, but not at ${listJoin(nsT.map(([t]) => at(t)))}` : ''}.`);
         else if (nsT.length) sent.push(`The groups did not differ significantly at any time (P value > ${alpha}).`); }
@@ -3231,6 +3244,7 @@ const Analysis = (() => {
       f.push(`Data are presented as frequency (%)`);
       if (k >= 2) f.push(`P value: groups compared at each time (${[...new Set(between.map(b2 => b2.test).filter(x => x && x !== '—'))].join(' / ') || 'Chi-square'} test)`);
       const wt = [...new Set(within.map(w => w.test).filter(Boolean))]; if (wt.length) f.push(`P value over time: ${wt.join(' / ')} test of the patients with every measurement${wt.includes('Friedman') ? ' (categories in their order)' : ''}`);
+      if (anyPost) f.push(`P (… vs …): ${ADJ_NAME[RO.adjust] || 'Bonferroni-adjusted'} ${binary ? 'McNemar' : 'McNemar-Bowker'} test`);
       if (v.note) f.push(v.note);
       const cats = sets.flatMap(([g]) => tps.map(tp => k >= 2 ? `${g}: ${tp}` : tp));
       const figures = v.chart === 'none' ? [] : [{ sig: anySig, vid: v.id, caption: v.caption || `${v.label} of the studied ${k >= 2 ? 'groups' : 'patients'} over time`,
@@ -4058,6 +4072,14 @@ const Analysis = (() => {
           if (a.commentDetail === 'brief' && sec.comment) sec.comment = (sec.comment.match(/^.*?\.(?=\s+[A-Z(]|$)/) || [sec.comment])[0];
           sec.comment = wording(advComment(a, sec.comment || '', si));
           if (a.commentPlace === 'before' || a.commentPlace === 'after') sec.place = a.commentPlace;
+          // the figure options of the card (step 8 → 🖼 Figure)
+          if (a.figOff) sec.figures = [];
+          (sec.figures || []).forEach((f, fi) => { const sp = f.spec = { ...(f.spec || {}) }, num = x => { const t = parseFloat(String(x ?? '').replace(',', '.')); return isFinite(t) ? t : undefined; };
+            if (a.figCaption && a.figCaption.trim()) f.caption = a.figCaption.trim() + ((sec.figures.length > 1 && fi) ? ` (${fi + 1})` : '');
+            if (a.figTitle && a.figTitle.trim()) sp.title = a.figTitle.trim(); if (a.figX && a.figX.trim()) sp.xLabel = a.figX.trim(); if (a.figY && a.figY.trim()) sp.yLabel = a.figY.trim();
+            if (num(a.figYMin) !== undefined) sp.yMin = num(a.figYMin); if (num(a.figYMax) !== undefined) sp.yMax = num(a.figYMax);
+            if (a.figLegend === 'on') sp.legend = true; if (a.figLegend === 'off') sp.legend = false; if (a.figLabels === 'on') sp.labels = true; if (a.figLabels === 'off') sp.labels = false;
+            if (a.figPal) f.pal = a.figPal; if (a.figHalf) f.half = true; });
           sections.push(sec);
         });
       }
@@ -4687,6 +4709,7 @@ const Analysis = (() => {
     if (used.has('icc')) s.push(`Agreement between quantitative measurements was assessed using the intraclass correlation coefficient (ICC; ${used.has('iccC') ? 'two-way mixed effects, consistency' : 'two-way random effects, absolute agreement'}) and Bland-Altman analysis with 95% limits of agreement.`);
     if (used.has('diagnostic')) s.push('Diagnostic accuracy was expressed as sensitivity, specificity, positive and negative predictive values, likelihood ratios and accuracy, with exact (Clopper-Pearson) 95% CI.');
     if (used.has('cochran')) s.push("Repeated yes/no outcomes were compared across the measurements with Cochran's Q test.");
+    if (used.has('mcnemarpost')) s.push(`Pairwise comparisons between the timepoints of categorical outcomes used the McNemar (or McNemar-Bowker) test with ${RO.adjust === 'holm' ? 'Holm' : RO.adjust === 'none' ? 'no' : 'Bonferroni'} correction.`);
     if (used.has('friedcat')) s.push('Ordered categorical outcomes measured three or more times were compared across the measurements with the Friedman test.');
     if (used.has('noPBaseline')) s.push('As recommended by the CONSORT statement, baseline characteristics were described without significance tests.');
     const M8 = { poisson: 'Count outcomes were analysed with Poisson regression (incidence rate ratios).', negbin: 'Overdispersed count outcomes were analysed with negative binomial regression (incidence rate ratios).',
