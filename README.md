@@ -250,6 +250,10 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Order of the groups in step 8 analyses** (Kaplan-Meier and the others with groups): ↑ moves a group up, the first is the reference; it follows the column chosen for the curves (Kaplan-Meier) or for Cox; ↺ As the data.
+**✎ Edit figure in the report (step 12)**: caption, title in the chart, axis titles, y-axis range, legend, value labels, colours and width, with a live preview; kept when the report is run again and used in Word (↺ As drawn to undo).
+**Edit repeated measure → + Add a column…**: only columns of the same kind — numbers for a numeric measure, categories for a categorical one (those with the same categories first); a new measure made of category columns is categorical.
+**Transposed categorical repeated measures (several categories)**: the times as columns and a row per category (a block per group), then P value (vs Baseline) — or the pairs chosen in step 4 — P value over time and, with groups, P value between the groups.
 **🎲 Generate → change values case by case**: in “Each variable with its results”, click a patient's value in “Data of each group”, type, Enter (Esc cancels). Changed values are marked, kept over the generated ones (also after a new draw, for the same patients), go into the Excel file and the analysis; ↺ Undo all brings the generated values back.
 **Range in the summary table** of each variable in Generate (min – max of each group, also for repeated measures).
 **Links between variables** (Generate): besides a correlation (r), the second variable can be made from the first — × a number, ÷ a number, + a change or − a change (drawn between two values, or from a mean ± SD) — overall or different in each group; a missing first value gives a missing second.

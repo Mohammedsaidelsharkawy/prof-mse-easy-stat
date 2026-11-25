@@ -2337,7 +2337,12 @@
     if (!repEdit) { $('#repEditor').innerHTML = ''; return; }
     // columns that can be added: numeric, not the group / ID, not already in another repeated measure
     const used = new Set(cfg.variables.filter(v => v.kind === 'repeated' && v.id !== repEdit.id).flatMap(v => v.cols.map(c => c.col)));
-    const avail = state.data.headers.filter(h => h !== cfg.groupCol && !cfg.idCols.includes(h) && !used.has(h) && !repEdit.cols.some(c => c.col === h) && columnInfo(state.data.rows, h).numeric);
+    // only columns of the same kind: numbers with a numeric measure, categories with a categorical one (those with the same categories first)
+    const rowsD = state.data.rows, isNumCol = h => { const i = columnInfo(rowsD, h); return i.numeric && i.distinct.length > 5; }, v0 = repEdit.id && cfg.variables.find(x => x.id === repEdit.id);
+    const kind = v0 ? v0.type : repEdit.cols.length ? (isNumCol(repEdit.cols[0].col) ? 'numeric' : 'categorical') : '';
+    const lvSet = new Set(repEdit.cols.flatMap(c => columnInfo(rowsD, c.col).distinct.map(String))), shared = h => columnInfo(rowsD, h).distinct.filter(x => lvSet.has(String(x))).length;
+    let avail = state.data.headers.filter(h => h !== cfg.groupCol && !cfg.idCols.includes(h) && !used.has(h) && !repEdit.cols.some(c => c.col === h) && (kind === 'categorical' ? !isNumCol(h) && columnInfo(rowsD, h).distinct.length <= 12 : kind === 'numeric' ? columnInfo(rowsD, h).numeric : true));
+    if (kind === 'categorical' && lvSet.size) { const same = avail.filter(h => shared(h) > 0); if (same.length) avail = same.sort((x, y) => shared(y) - shared(x)); }
     $('#repEditor').innerHTML = `<div class="gcard" style="margin-top:10px">
       <h4>${repEdit.id ? 'Edit repeated measure' : 'New repeated measure'}</h4>
       <div class="grid g2"><div><label class="f">Name (outcome label)</label><input type="text" id="repName" value="${esc(repEdit.label)}" placeholder="e.g. Pain score"></div></div>
@@ -2345,7 +2350,7 @@
       <table class="t"><thead><tr><th>#</th><th>Column</th><th>Timepoint label</th><th></th></tr></thead><tbody>${repEdit.cols.map((c, i) => `<tr>
         <td>${i + 1}</td><td class="mono">${esc(c.col)}</td><td><input type="text" data-reptp="${i}" value="${esc(c.label ?? tpText(c.tp))}"></td>
         <td><button class="btn ghost small" data-repmove="${i},-1" type="button">↑</button> <button class="btn ghost small" data-repmove="${i},1" type="button">↓</button> <button class="btn ghost small" data-repdel="${i}" type="button">✕</button></td></tr>`).join('') || '<tr><td colspan="4" class="legend-note">Add at least two columns.</td></tr>'}</tbody></table>
-      <div class="row" style="margin-top:8px"><select id="repAdd" style="max-width:320px"><option value="">+ Add a column…</option>${avail.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('')}</select>
+      <div class="row" style="margin-top:8px"><select id="repAdd" style="max-width:320px"><option value="">+ Add a column…${kind ? ` (${kind === 'categorical' ? 'categorical, same categories' : 'numbers'})` : ''}</option>${avail.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('')}</select>
         <span class="spacer"></span><button class="btn ghost" data-repact="cancel" type="button">Cancel</button><button class="btn primary" data-repact="save" type="button">Save repeated measure</button></div>
     </div>`;
   }
@@ -2380,7 +2385,8 @@
     const pos = Math.min(...cols.map(c => h.indexOf(c.col)));
     const label = repEdit.label.trim() || labelFrom(tokens(cols[0].col));
     if (old) Object.assign(old, { cols, label, pos, ownOrder: true });
-    else cfg.variables.push({ id: 'rc' + pos + '_' + Date.now().toString(36), kind: 'repeated', pos, cols, label, type: 'numeric', dist: 'auto', table: '', levels: [], note: '', include: true, ownOrder: true });
+    else { const ci = cols.map(c => columnInfo(state.data.rows, c.col)), cat = ci.every(i => !(i.numeric && i.distinct.length > 5)) && ci.some(i => !i.numeric || i.distinct.length <= 5) && !ci.every(i => i.numeric && i.distinct.length > 2); // text categories (or 2-level codes): a categorical repeated measure
+      cfg.variables.push({ id: 'rc' + pos + '_' + Date.now().toString(36), kind: 'repeated', pos, cols, label, type: cat ? 'categorical' : 'numeric', dist: 'auto', table: '', levels: cat ? defaultLevels([...new Set(ci.flatMap(i => i.distinct))]) : [], note: '', include: true, ownOrder: true }); }
     cfg.variables.sort((a, b) => a.pos - b.pos);
     repEdit = null;
     renderVariables();
@@ -3920,6 +3926,11 @@
       `<div><label class="f">Text before the comment (optional)</label><input type="text" data-af="commentPre" value="${esc(a.commentPre || '')}" placeholder="e.g. To identify the predictors of …"></div>`,
       `<div><label class="f">Text after the comment (optional)</label><input type="text" data-af="commentPost" value="${esc(a.commentPost || '')}" placeholder="e.g. This supports the hypothesis that …"></div>`,
       `<div style="grid-column:1/-1"><label class="f">Your own comment (optional — replaces the automatic one)</label><textarea data-af="commentCustom" rows="2" placeholder="Leave empty for the automatic comment">${esc(a.commentCustom || '')}</textarea></div>`].join('')}</div></details>`); }
+    // the order of the groups in this analysis (its tables, curves and comparisons): the study groups, or the column chosen for the curves
+    { const col = t === 'survival' && a.kmBy && a.kmBy !== '__all' ? a.kmBy : (t === 'cox' && a.coxBy && !a.coxBy.startsWith('__') ? a.coxBy : ''), rows0 = analysedRows();
+      const lv = col ? Analysis.levelsOf(state.cfg, rows0, col).map(l => [l, valueLabel(col, l)]) : state.cfg.noGroups || (t === 'survival' && a.kmBy === '__all') ? [] : activeGroups().map(g => [g, state.cfg.groupLabels[g] || g]);
+      if (lv.length >= 2) { const ord = (a.gOrder || []).filter(g => lv.some(x => String(x[0]) === g)), list = [...ord.map(g => lv.find(x => String(x[0]) === g)), ...lv.filter(x => !ord.includes(String(x[0])))];
+        out.push(`<div style="grid-column:1/-1"><label class="f">Order of the groups${col ? ` (${esc(Analysis.columnLabel(state.cfg, col))})` : ''} — the first is the reference</label><div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">${list.map(([g, l], i) => `<span class="chip">${i + 1}. ${esc(l)}${i ? ` <button class="btn ghost small" type="button" data-agup="${esc(String(g))}" title="Move up">↑</button>` : ''}</span>`).join('')}${ord.length ? '<button class="btn ghost small" type="button" data-agreset="1">↺ As the data</button>' : ''}</div></div>`); } }
     // the figure(s) of this analysis: shown or not, caption, titles, axis range, legend, labels, colours, width
     const inp = (k, l, ph, ty = 'text') => `<div><label class="f">${l}</label><input type="${ty}" ${ty === 'number' ? 'step="any"' : ''} data-af="${k}" value="${esc(a[k] ?? '')}" placeholder="${esc(ph)}"></div>`;
     if (t !== 'ssize') { const on = ['figOff', 'figCaption', 'figTitle', 'figX', 'figY', 'figYMin', 'figYMax', 'figLegend', 'figLabels', 'figPal', 'figHalf'].some(k => a[k] !== undefined && a[k] !== '' && a[k] !== false);
@@ -3996,6 +4007,8 @@
     }
     return out.join('');
   }
+  function advGroupList(a) { const t = a.type, col = t === 'survival' && a.kmBy && a.kmBy !== '__all' ? a.kmBy : (t === 'cox' && a.coxBy && !a.coxBy.startsWith('__') ? a.coxBy : '');
+    const lv = col ? Analysis.levelsOf(state.cfg, analysedRows(), col) : activeGroups(); const ord = (a.gOrder || []).filter(g => lv.some(x => String(x) === g)); return [...ord, ...lv.map(String).filter(x => !ord.includes(x))]; }
   function readAdvanced() {
     document.querySelectorAll('[data-adv]').forEach(card => {
       const a = state.cfg.advanced[+card.dataset.adv]; if (!a) return;
@@ -4016,6 +4029,9 @@
     renderAdvanced();
   });
   $('#advList').addEventListener('click', e => {
+    { const up = e.target.closest('[data-agup],[data-agreset]'); if (up) { readAdvanced(); const card = up.closest('[data-adv]'), a = card && state.cfg.advanced[+card.dataset.adv]; if (!a) return;
+      if (up.dataset.agreset) delete a.gOrder; else { const cur = advGroupList(a), k = cur.indexOf(up.dataset.agup); if (k > 0) [cur[k - 1], cur[k]] = [cur[k], cur[k - 1]]; a.gOrder = cur; }
+      const y = scrollY; renderAdvanced(); scrollTo(0, y); return; } }
     { const x = e.target.closest('[data-rocexp]'); if (x) { readUiIntoCfg(); if (window.EasyRocUI) window.EasyRocUI.explorer(+x.dataset.rocexp); return; } }
     const cf = e.target.closest('[data-cfafill]');
     if (cf) { readAdvanced(); const a = state.cfg.advanced[+cf.dataset.cfafill], cols = a.predictors || [], rows = analysedRows().filter(r => cols.every(c => isFinite(Analysis.toNum(r[c]))));
@@ -6085,7 +6101,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
         // the automatic texts, before any edit in step 11 (the review copy shows the edits as tracked changes)
         res.auto = { methods: res.methods || '', sections: res.sections.map(s => ({ title: s.title, comment: s.comment || '' })) }; state.rephraseBase = {}; state.rephraseK = {};
         res.sections.forEach(s => { s.key = s.title; s.figures.forEach(f => {
-          f.key = f.caption; figVarProps(f); renderFigure(f, cfg.options); const own = f.comb ? f.note || '' : '';
+          f.key = f.caption; figVarProps(f); applyFigEdit(f, (cfg.figEdits || {})[f.key]); renderFigure(f, cfg.options); const own = f.comb ? f.note || '' : '';
           f.note = [own, cfg.options.figSummary ? figSummaryText(f.spec, cfg.options) : '', cfg.options.figNotes || cfg.options.figNoteParts || cfg.options.figHowTo ? figNote(f.spec, cfg.options) : ''].filter(Boolean).join(' ');
           if (cfg.options.midDot) f.note = dot(f.note);
         }); });
@@ -6211,6 +6227,32 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   // draws a figure's image; the caption is printed on the chart when "chart titles" is on
   // a figure drawn once for the same content and look: a re-run that does not change it reuses the picture
   const FIG_CACHE = new Map();
+  // ✎ Edit figure (step 12): the figure's own caption, title, axes, range, legend, labels, colours and width — drawn again at once, kept for the next runs
+  function editFigure(f) {
+    const key = f.key || f.caption, cfg = state.cfg, E0 = (cfg.figEdits || {})[key] || {}; let d = document.getElementById('figEditDlg');
+    if (!d) { d = document.createElement('dialog'); d.id = 'figEditDlg'; d.className = 'app-dlg'; document.body.append(d); }
+    const sel = (k, list) => `<select data-fe="${k}">${list.map(([v, l]) => `<option value="${esc(v)}" ${String(E0[k] ?? '') === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`, inp = (k, l, ph, ty = 'text') => `<div><label class="f">${l}</label><input type="${ty}" step="any" data-fe="${k}" value="${esc(E0[k] ?? '')}" placeholder="${esc(ph ?? '')}"></div>`;
+    d.innerHTML = `<form method="dialog" onsubmit="return false" style="min-width:min(640px,90vw)"><h3>✎ Edit figure</h3><div class="row" style="gap:12px;align-items:flex-start;flex-wrap:wrap"><img id="feImg" src="${f.url}" alt="" style="max-width:260px;border:1px solid var(--line);border-radius:8px">
+      <div class="grid g2" style="gap:6px;flex:1;min-width:280px"><div style="grid-column:1/-1">${inp('caption', 'Caption', f.caption)}</div>${inp('title', 'Title in the chart (“-” for none)', f.fmtTitle ?? '')}${inp('x', 'X-axis title', f.spec.xLabel || '')}${inp('y', 'Y-axis title', f.spec.yLabel || '')}
+        ${inp('ymin', 'Y-axis from', f.spec.yMin ?? 'automatic', 'number')}${inp('ymax', 'Y-axis to', f.spec.yMax ?? 'automatic', 'number')}
+        <div><label class="f">Legend</label>${sel('legend', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']])}</div><div><label class="f">Value labels</label>${sel('labels', [['', 'Automatic'], ['on', 'Shown'], ['off', 'Hidden']])}</div>
+        <div><label class="f">Colours</label>${sel('pal', [['', 'As the report'], ...Object.entries(Charts.PALETTE_NAMES || {})])}</div><div><label class="f">Width</label>${sel('half', [['', 'As the report'], ['full', 'Full width'], ['half', 'Half width (two side by side)']])}</div></div></div>
+      <p class="legend-note" style="margin:8px 0 0">Kept for this figure when the report is run again. For every detail of a variable's figure (fonts, series colours, gridlines…), use the Format pane of step 7.</p>
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn ghost" type="button" data-fego="reset">↺ As drawn</button><button class="btn ghost" type="button" data-fego="x">Cancel</button><button class="btn primary" type="button" data-fego="ok">Apply</button></div></form>`;
+    const read = () => { const E = {}; d.querySelectorAll('[data-fe]').forEach(x => { if (x.value !== '') E[x.dataset.fe] = x.value; }); return E; };
+    const redraw = E => { const g = { ...f, spec: { ...f.spec } }; applyFigEdit(g, E); try { renderFigure(g, cfg.options); d.querySelector('#feImg').src = g.url; } catch (err) { /* preview only */ } };
+    d.oninput = () => redraw(read());
+    d.onclick = ev => { const b = ev.target.closest('[data-fego]'); if (!b) return; const act = b.dataset.fego; if (act === 'x') { d.close(); return; }
+      const E = act === 'reset' ? null : read(); cfg.figEdits = cfg.figEdits || {}; if (E && Object.keys(E).length) cfg.figEdits[key] = E; else delete cfg.figEdits[key];
+      // this figure now: back to its drawn state, then the edits
+      if (!f.orig) f.orig = { caption: f.caption, spec: { ...f.spec }, pal: f.pal, half: f.half, fmtTitle: f.fmtTitle };
+      Object.assign(f, { caption: f.orig.caption, spec: { ...f.orig.spec }, pal: f.orig.pal, half: f.orig.half, fmtTitle: f.orig.fmtTitle }); f.key = key; applyFigEdit(f, E); renderFigure(f, cfg.options);
+      d.close(); const y = scrollY; renderReport(); scrollTo(0, y); toast(E ? 'Figure changed — also in Word' : 'Figure as drawn'); };
+    d.showModal(); }
+  function applyFigEdit(f, E) { if (!E) return; const n = x => { const t = parseFloat(String(x ?? '').replace(',', '.')); return isFinite(t) ? t : undefined; }; f.spec = { ...f.spec };
+    if (E.caption) f.caption = E.caption; if (E.title !== undefined && E.title !== '') f.fmtTitle = E.title === '-' ? '' : E.title; if (E.x) f.spec.xLabel = E.x; if (E.y) f.spec.yLabel = E.y;
+    if (n(E.ymin) !== undefined) f.spec.yMin = n(E.ymin); if (n(E.ymax) !== undefined) f.spec.yMax = n(E.ymax); if (E.legend === 'on') f.spec.legend = true; if (E.legend === 'off') f.spec.legend = false;
+    if (E.labels === 'on') f.spec.labels = true; if (E.labels === 'off') f.spec.labels = false; if (E.pal) f.pal = E.pal; if (E.half === 'half') f.half = true; if (E.half === 'full') f.half = false; }
   function renderFigure(f, o) {
     const spec = { ...f.spec, title: figTitle(f, o) }, pal = figPal(f, o), st = { ...chartStyle(o), ...(f.fmtStyle || {}) };
     let key = null; try { key = JSON.stringify([spec, pal, st]); } catch (e) { key = null; }
@@ -6331,7 +6373,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
       const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f);
       const label = isOut(fk) ? 'Not exported:' : plan.kept.has(f) ? lab(plan.figNum.get(f)) : (f.sig === false && !plan.rep.nonSig ? 'Not in the paper (not significant):' : `Not in the paper (limit ${plan.rep.maxFigs}):`);
       const note = f.note !== undefined && (f.note || o.figNotes) ? `<input type="text" class="fcap fnote" data-fnote="${si}:${fi}" value="${esc(f.note)}" title="Explanation of the symbols (printed after the caption)" placeholder="Explanation of the symbols">` : '';
-      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption">${note} <button class="btn ghost small" data-copyfig="${si}:${fi}" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button></figcaption>${exBox(fk, 'Figure')}</figure>`;
+      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption">${note} <button class="btn ghost small" data-copyfig="${si}:${fi}" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" data-editfig="${si}:${fi}" type="button" title="Caption, title, axes, range, legend, labels, colours, width">✎ Edit figure</button></figcaption>${exBox(fk, 'Figure')}</figure>`;
     };
     r.sections.forEach((s, i) => {
       if (s.figOnly) { if (!atEnd) html += `<div class="report-sec"><div class="legend-note">Figure placed here (step 7)</div><div class="figs">${s.figures.map(figHtml).join('')}</div></div>`; return; }
@@ -6868,6 +6910,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       if (b.dataset.rerun1 !== undefined) { const name = tbNameOfSec(s0); const sec = name !== null ? tbSection(name) : null; if (!sec) { toast('This table could not be run alone — press Re-run'); return; } sec.figures = s0.figures; sec.key = s0.key; state.result.sections[i] = { ...s0, head: sec.head, rows: sec.rows, footnote: sec.footnote, comment: lockOf(s0) ? s0.comment : sec.comment, meta: sec.meta }; renderReport(); toast(`${s0.title}: run again`); return; }
       if (b.dataset.locksec !== undefined) { const L = state.cfg.lockedSecs = state.cfg.lockedSecs || {}, k = s0.key || s0.title; if (L[k]) { delete L[k]; delete s0.lockWarn; toast('Unlocked: the comment follows the results again'); } else { L[k] = { comment: s0.comment, cells: secCells(s0), at: new Date().toISOString().slice(0, 16).replace('T', ' ') }; toast('Locked: the comment is kept as it is'); } renderReport(); return; }
       if (b.dataset.testhelp !== undefined) { const G = testsIn(s0); $('#accOut').innerHTML = `<div class="report-sec"><h3 style="margin:0 0 6px">The tests of “${esc(s0.title)}”</h3>${G.map(g => `<p><b>${esc(g[0])}</b> — ${esc(g[1])}${g[2] ? `<br><span class="legend-note"><b>Check:</b> ${esc(g[2])}</span>` : ''}${g[3] ? `<br><i class="legend-note">${esc(g[3])}</i>` : ''}</p>`).join('')}</div>`; $('#accOut').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return; } } }
+    { const ef = e.target.closest('[data-editfig]'); if (ef) { syncEdits(); const [si, fi] = ef.dataset.editfig.split(':').map(Number), f = (state.result.sections[si] || {}).figures[fi]; if (f) editFigure(f); return; } }
     const fc = e.target.closest('[data-copyfig]'), tc = e.target.closest('[data-copytbl]'), wt = e.target.closest('[data-wordtbl]'), pt = e.target.closest('[data-pngtbl]');
     if (wt) { syncEdits(); const s = state.result.sections[+wt.dataset.wordtbl], plan = exportPlan(state.result), n = plan.tabNum.get(s) || 1;
       Report.build({ sections: [{ ...s, tableOn: true, figures: [] }], methods: '', consort: null }, { ...wordOptions(), tabStart: n, listTF: false, title: '', sectionHeads: false, tableNewPage: false, bare: true })

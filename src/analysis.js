@@ -3251,7 +3251,7 @@ const Analysis = (() => {
         spec: binary ? { type: k >= 2 ? 'line' : 'bar', categories: tps, yLabel: v.ylabel || `% ${POSITIVE.test(pos) ? lab : pos}`, xLabel: 'Time', legend: k >= 2, series: sets.map(([g, rs]) => ({ name: g, values: tps.map((_, t) => +pctOf(rs, t, pos).toFixed(2)) })) }
           : { type: 'stacked', categories: cats, yLabel: v.ylabel || '% of patients', series: levels.map(l => ({ name: l, values: sets.flatMap(([, rs]) => tps.map((_, t) => +pctOf(rs, t, l).toFixed(2))) })) } }];
       return { kind: 'repeated', vid: v.id, title: `${v.label} of the studied ${k >= 2 ? 'groups' : 'patients'} over time`, head, rows: trows, footnote: f.join(', ') + '.', comment: wording(sent.join(' ')),
-        brief: opts.paperStyle ? wording(sent[0] || '') : '', briefSig: anySig, figures, meta: { cat: true, tps, levels, within, between: between.map(b2 => ({ p: b2.p, test: b2.test })) } };
+        brief: opts.paperStyle ? wording(sent[0] || '') : '', briefSig: anySig, figures, meta: { cat: true, tps, levels, within, between: between.map(b2 => ({ p: b2.p, test: b2.test })), alpha, binary, show, sets: sets.map(([g, rs]) => opts.nHead === false ? g : `${g} (n=${rs.length})`), cells: sets.map(([, rs]) => v.cols.map(c => show.map(l => cell(rs, c, l).t[0]))) } };
     }
     // the options of a table (step 2, Tables): its columns and order, for that table only
     const TB_KEYS = ['ynBlock', 'ynTitle', 'hideZero', 'rareOther', 'boldSigMax', 'smdCol', 'adjCol', 'adjVars', 'commentStyle', 'nsWord', 'commentOrder', 'totalCol', 'nCol', 'missCol', 'effect', 'showStat', 'hideNs', 'postLetters', 'groupTrend', 'tableSort', 'pairCols', 'nntCol', 'tableGroupOrder', 'hlSig', 'hlMiss', 'hlEff'];
@@ -4061,6 +4061,9 @@ const Analysis = (() => {
       let cfgA = cfg, GA = G;
       if (a.type === 'survival' && a.kmBy === '__all') { cfgA = { ...cfg, noGroups: true }; GA = { gl: ['All patients'], groups: [ALL_GROUP] }; }
       else if (a.type === 'survival' && a.kmBy && data.headers.includes(a.kmBy)) { const lv = levelsOf(cfg, rows, a.kmBy); if (lv.length >= 2) { cfgA = { ...cfg, noGroups: false, groupCol: a.kmBy }; GA = { gl: [...lv], groups: lv }; } }
+      if (Array.isArray(a.gOrder) && a.gOrder.length && GA.groups.length >= 2) { const idx = GA.groups.map((g, i) => i), rank = g => { const r = a.gOrder.indexOf(String(g)); return r < 0 ? 999 : r; };
+        idx.sort((i, j) => rank(GA.groups[i]) - rank(GA.groups[j]) || i - j); GA = { gl: idx.map(i => GA.gl[i]), groups: idx.map(i => GA.groups[i]) };
+        if (cfgA.groupCol === cfg.groupCol && !cfgA.noGroups) cfgA = { ...cfgA, groupOrder: [...GA.groups, ...(cfgA.groupOrder || []).filter(g => !GA.groups.includes(g))] }; }
       for (const sub of subsets) {
         let made = make(a, cfgA, sub.rows, alpha, d, used, GA);
         if (!made) continue;
@@ -4076,7 +4079,7 @@ const Analysis = (() => {
           if (a.figOff) sec.figures = [];
           (sec.figures || []).forEach((f, fi) => { const sp = f.spec = { ...(f.spec || {}) }, num = x => { const t = parseFloat(String(x ?? '').replace(',', '.')); return isFinite(t) ? t : undefined; };
             if (a.figCaption && a.figCaption.trim()) f.caption = a.figCaption.trim() + ((sec.figures.length > 1 && fi) ? ` (${fi + 1})` : '');
-            if (a.figTitle && a.figTitle.trim()) sp.title = a.figTitle.trim(); if (a.figX && a.figX.trim()) sp.xLabel = a.figX.trim(); if (a.figY && a.figY.trim()) sp.yLabel = a.figY.trim();
+            if (a.figTitle && a.figTitle.trim()) f.fmtTitle = a.figTitle.trim(); if (a.figX && a.figX.trim()) sp.xLabel = a.figX.trim(); if (a.figY && a.figY.trim()) sp.yLabel = a.figY.trim();
             if (num(a.figYMin) !== undefined) sp.yMin = num(a.figYMin); if (num(a.figYMax) !== undefined) sp.yMax = num(a.figYMax);
             if (a.figLegend === 'on') sp.legend = true; if (a.figLegend === 'off') sp.legend = false; if (a.figLabels === 'on') sp.labels = true; if (a.figLabels === 'off') sp.labels = false;
             if (a.figPal) f.pal = a.figPal; if (a.figHalf) f.half = true; });
@@ -5003,6 +5006,17 @@ const Analysis = (() => {
   // "P (within group)" becomes a last column, "P (time vs first)" a row per group, and an overall test a row across the timepoints
   function timepointsAsColumns(s) {
     if (!s || s.kind !== 'repeated' || s.tpCols) return s;
+    if (s.meta && s.meta.cat && s.meta.cells && !s.meta.binary) {
+      const M = s.meta, tps = M.tps, T = tps.length, al = M.alpha ?? 0.05, P = p => isFinite(p) ? fmtP(p, al) : '—', many = M.sets.length > 1, rows = [];
+      M.sets.forEach((name, gi) => {
+        if (many) rows.push([{ t: [name], b: true, left: true, span: T + 1 }]);
+        M.show.forEach((l, li) => rows.push([{ t: [l], b: true, left: true }, ...tps.map((_, t) => ({ t: [M.cells[gi][t][li]] }))]));
+        const w = M.within[gi] || {};
+        if (w.post && w.post.length) { const refs = [...new Set(w.post.map(q => q.a))]; refs.forEach(a => rows.push([{ t: [`P value (vs ${tps[a]})`], b: true, left: true }, ...tps.map((_, t) => { const q = w.post.find(x => x.a === a && x.b === t); return { t: [q ? P(q.p) : ''] }; })])); }
+        if (isFinite(w.p)) rows.push([{ t: [`P value over time${w.test ? ` (${w.test})` : ''}`], b: true, left: true }, { t: [P(w.p)], span: T }]); });
+      if (many && M.between && M.between.length) rows.push([{ t: ['P value (between the groups)'], b: true, left: true }, ...tps.map((_, t) => ({ t: [P((M.between[t] || {}).p)] }))]);
+      return { ...s, head: ['', ...tps], rows, tpCols: true };
+    }
     if (s.meta && s.meta.cat && s.meta.levels && s.meta.levels.length > 2 && s.head.length > 2 && !String(s.head[1] && s.head[1].t !== undefined ? s.head[1].t : s.head[1]).trim()) {
       // time and category in two columns: one label "time: category" per row
       let tp = ''; const rows = s.rows.map(r => { const a = [].concat(r[0].t).join(' ').trim(), b = [].concat((r[1] || {}).t || '').join(' ').trim(); if (a) tp = a; return [{ ...r[0], t: [b ? `${tp}: ${b}` : a] }, ...r.slice(2)]; });
