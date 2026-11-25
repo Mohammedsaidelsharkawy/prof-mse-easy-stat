@@ -4976,6 +4976,10 @@ const Analysis = (() => {
   // "P (within group)" becomes a last column, "P (time vs first)" a row per group, and an overall test a row across the timepoints
   function timepointsAsColumns(s) {
     if (!s || s.kind !== 'repeated' || s.tpCols) return s;
+    if (s.meta && s.meta.cat && s.meta.levels && s.meta.levels.length > 2 && s.head.length > 2 && !String(s.head[1] && s.head[1].t !== undefined ? s.head[1].t : s.head[1]).trim()) {
+      // time and category in two columns: one label "time: category" per row
+      let tp = ''; const rows = s.rows.map(r => { const a = [].concat(r[0].t).join(' ').trim(), b = [].concat((r[1] || {}).t || '').join(' ').trim(); if (a) tp = a; return [{ ...r[0], t: [b ? `${tp}: ${b}` : a] }, ...r.slice(2)]; });
+      return timepointsAsColumns({ ...s, head: [s.head[0], ...s.head.slice(2)], rows, meta: { ...s.meta, levels: null } }); }
     const txt = c => [].concat(c && c.t !== undefined ? c.t : c ?? '').join(' ').trim();
     const H = s.head.map(h => typeof h === 'string' ? { t: h } : { ...h }), W = H.length;
     if (H.some(h => (h.span || 1) > 1)) return s;

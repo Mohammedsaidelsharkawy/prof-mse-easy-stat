@@ -250,6 +250,7 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**⇄ Transpose repeated measures** (timepoints as columns): for every table in step 4 (Repeated measures → Transpose), or table by table in step 12 (⇄ Transpose under each repeated-measures table, and ⇄ Transpose all). The choice of each table is kept when the report is run again and goes to Word; categorical repeated measures with several categories get one column per time and category.
 **Repeated measures for categorical variables**: columns such as Nausea_Baseline, Nausea_W1, Nausea_M3 (yes/no or categories) are read as one repeated variable. The table gives n (%) at each time in each group, the groups compared at each time (chi-square / Fisher) and the change over time in each group (McNemar or McNemar-Bowker for two times; Cochran's Q for yes/no or Friedman on the ordered categories for three or more), with a comment, a figure (% over time, or stacked bars), and the Methods sentences. A column of such a family is no longer taken for the group column, and data with only an ID column are analysed as one group.
 **Show all options** (on by default; a switch at the right end of the top bar): every folded section of Build, Generate and Analyse open, each variable's ⋯ More panel open in Generate, all tool groups of step 12 at once, and no “essential options only” view. Untick it for a shorter page.
 **▸ Collapse all / ▾ Expand all** at the right end of the top bar.
