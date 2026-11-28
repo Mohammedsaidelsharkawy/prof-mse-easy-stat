@@ -41975,6 +41975,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const findLib = label => { for (const [sec, list] of LIB) { const e = list.find(x => x[0].toLowerCase() === label.toLowerCase()); if (e) return libVar(sec, e); } return null; };
 
   /* ---------- templates ---------- */
+  const TPL_FIRST = ['ra2', 'rarct3']; // the regional anaesthesia RCTs first in the list
   const RA_VISITS = ['Baseline', 'PACU', '2h', '4h', '6h', '8h', '12h', '18h', '24h', '36h', '48h'];
   const RA_VARS = [['Age', 0, { section: 'Demographic and operative characteristics', min: 18, max: 80, expect: { mean: 53, sd: 5.5 } }], ['Sex', 0, { section: 'Demographic and operative characteristics' }],
         ['Weight', 0, { section: 'Demographic and operative characteristics', expect: { mean: 82, sd: 11 } }], ['Height', 0, { section: 'Demographic and operative characteristics', expect: { mean: 171, sd: 6 } }], ['BMI*', 0, { section: 'Demographic and operative characteristics' }],
@@ -42015,11 +42016,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
     obstetric: { cat: 'Observational', name: 'Obstetric cohort', design: 'cohort', arms: ['Induction', 'Expectant management'], visits: ['Booking', 'Delivery'],
       vars: [['Age'], ['Gravidity'], ['Parity'], ['Weight'], ['Height'], ['BMI*'], ['Gestational diabetes'], ['Preeclampsia', 'last'], ['Gestational age', 'last'], ['Mode of delivery', 'last'], ['Postpartum haemorrhage', 'last'], ['Birth weight', 'last'], ['Apgar score at 5 minutes', 'last'], ['NICU admission', 'last']] },
     // anaesthesia, analgesia and perioperative care
-    rarct3: { cat: 'Anaesthesia and pain', name: 'Three-arm regional anaesthesia RCT (block A vs block B vs control)', design: 'rct', arms: ['Block A', 'Block B', 'Control'], visits: ['Baseline', 'PACU', '2 h', '6 h', '12 h', '24 h'], rand: true,
-      vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['ASA class'], ['Operative time'], ['Duration of anaesthesia'], ['Intraoperative fentanyl'], ['Onset of sensory block'], ['Duration of sensory block'],
-        ['Total morphine consumption (24 h)'], ['Time to first rescue analgesia'], ['Number of rescue analgesic doses'], ['Pain NRS', 'post'], ['Pain NRS on movement', 'post'], ['Mean arterial pressure', 'all'], ['Heart rate', 'all'], ['Ramsay sedation score', 'post'],
-        ['PONV', 'last'], ['Pruritus', 'last'], ['Hypotension'], ['Bradycardia'], ['Block-related complications'], ['Satisfaction', 'last']],
-      primary: 'Total morphine consumption (24 h)', secondary: ['Time to first rescue analgesia', 'Pain NRS', 'Pain NRS on movement', 'Number of rescue analgesic doses'], ss: { m: 'anova', means: '12, 8, 8', sd: 6 } },
+    rarct3: { cat: 'Anaesthesia and pain', name: 'Three-group regional anaesthesia RCT (block A vs block B vs control)', design: 'rct', arms: ['Intervention A', 'Intervention B', 'Control'], visits: RA_VISITS, rand: true, n: 90, nBy: [30, 30, 30], vars: RA_VARS,
+      primary: 'Time to first rescue analgesia', secondary: ['Total morphine consumption (24 h)', 'NRS', 'QoR-15 score'] },
     spinal2: { cat: 'Anaesthesia and pain', name: 'Spinal anaesthesia adjuvant RCT', design: 'rct', arms: ['Bupivacaine + adjuvant', 'Bupivacaine alone'], visits: ['Baseline', '5 min', '10 min', '20 min', '30 min', 'PACU'], rand: true,
       vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['ASA class'], ['Operative time'], ['Onset of sensory block'], ['Onset of motor block'], ['Bromage score', [1, 2, 3, 4]], ['Duration of sensory block'], ['Duration of motor block'],
         ['Time to first rescue analgesia'], ['Mean arterial pressure', 'all'], ['Heart rate', 'all'], ['Hypotension'], ['Bradycardia'], ['Shivering'], ['PONV'], ['Pruritus'], ['Ramsay sedation score', 'last'], ['Satisfaction', 'last']],
@@ -42057,8 +42055,6 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
       primary: 'Systolic BP', secondary: ['Diastolic BP'], ss: { m: 'anova', means: '132, 128, 125, 135', sd: 12 } },
     // the regional anaesthesia RCTs (two and three groups): the same sections and variables
     ra2: { cat: 'Anaesthesia and pain', name: 'Two-group regional anaesthesia RCT (block A vs block B)', design: 'rct', arms: ['Intervention', 'Control'], visits: RA_VISITS, rand: true, n: 60, nBy: [30, 30], vars: RA_VARS,
-      primary: 'Time to first rescue analgesia', secondary: ['Total morphine consumption (24 h)', 'NRS', 'QoR-15 score'] },
-    ra3: { cat: 'Anaesthesia and pain', name: 'Three-group regional anaesthesia RCT (block A vs block B vs control)', design: 'rct', arms: ['Intervention A', 'Intervention B', 'Control'], visits: RA_VISITS, rand: true, n: 90, nBy: [30, 30, 30], vars: RA_VARS,
       primary: 'Time to first rescue analgesia', secondary: ['Total morphine consumption (24 h)', 'NRS', 'QoR-15 score'] },
     surgery: { cat: 'Surgery', name: 'Surgical outcomes study', design: 'cohort', arms: ['Technique A', 'Technique B'], visits: ['Pre-operative', 'Day 1', 'Month 1'],
       vars: [['Age'], ['Sex'], ['ASA class'], ['Hypertension'], ['Diabetes'], ['Date of surgery'], ['Operative time'], ['Blood loss'], ['Pain VAS', 'all'], ['Date of admission'], ['Date of discharge'], ['LOS*'], ['Complications', 'last'], ['Reoperation', 'last']] },
@@ -42846,7 +42842,7 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   function render0() {
     const w = $('#mbWrap'); if (!w) return; const pr = problems(D);
     w.innerHTML = `<div class="mb-head"><b>🧱 Master sheet builder</b><span class="legend-note">${esc(D.title || 'Untitled study')} · ${D.vars.length} variables · ${columns(D).length} columns</span><span class="spacer"></span>
-      <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${['Anaesthesia and pain', 'Surgery', 'Medicine', 'Trials', 'Observational', 'Diagnostic'].map(c => `<optgroup label="${c}">${opt(Object.entries(TEMPLATES).filter(([, t]) => (t.cat || 'Trials') === c).map(([k, t]) => [k, t.name]), '')}</optgroup>`).join('')}<option value="__blank">Empty design</option></select>
+      <select id="mbTpl" style="width:auto"><option value="">New from template…</option>${['Anaesthesia and pain', 'Surgery', 'Medicine', 'Trials', 'Observational', 'Diagnostic'].map(c => `<optgroup label="${c}">${opt(Object.entries(TEMPLATES).filter(([, t]) => (t.cat || 'Trials') === c).sort((x, y) => (TPL_FIRST.indexOf(x[0]) + 1 || 99) - (TPL_FIRST.indexOf(y[0]) + 1 || 99)).map(([k, t]) => [k, t.name]), '')}</optgroup>`).join('')}<option value="__blank">Empty design</option></select>
       <select id="mbMine" style="width:auto"><option value="">My designs…</option>${opt(Object.keys(ls.get('designs', {})).map(k => [k, k]), '')}</select>
       <button class="btn ghost small" id="mbUndo" type="button" title="Undo (Ctrl+Z)" ${undoS.length ? '' : 'disabled'}>↶</button><button class="btn ghost small" id="mbRedo" type="button" title="Redo (Ctrl+Y)" ${redoS.length ? '' : 'disabled'}>↷</button>
       <label class="btn ghost small" style="margin:0" title="Make the design from a REDCap data dictionary (.csv) or an XLSForm of KoBoToolbox / ODK (.xlsx)">⬆ From REDCap / XLSForm<input type="file" id="mbFromDict" accept=".csv,.xlsx,.xls" hidden></label>
