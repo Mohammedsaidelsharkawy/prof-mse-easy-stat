@@ -579,6 +579,7 @@
   function render0() {
     const w = $('#genWrap'); if (!w) return; const D = D0(), A = arms(D), k = K(D), gl = A.length >= 2 ? A : ['All patients'];
     if (!w.dataset.wired) { w.dataset.wired = 1; w.addEventListener('input', onInput); w.addEventListener('click', onClick);
+      w.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.gnarms) onInput(e); });
       w.addEventListener('focusin', e => { const td = e.target.closest && e.target.closest('[data-gid][data-xc]'); if (td) td.dataset.was = td.textContent; });
       w.addEventListener('keydown', e => { const td = e.target.closest && e.target.closest('[data-gid][data-xc]'); if (!td) return; if (e.key === 'Enter') { e.preventDefault(); td.blur(); } if (e.key === 'Escape') { td.textContent = td.dataset.was || ''; td.blur(); } });
       w.addEventListener('focusout', e => { const td = e.target.closest && e.target.closest('[data-gid][data-xc]'); if (!td || td.textContent === td.dataset.was) return; if (caseEdit(td, D0())) { resStamp++; const y = scrollY; analyseOut(D0()); scrollTo(0, y); } });
@@ -586,7 +587,7 @@
     const vs = D.vars.filter(v => ['num', 'yn', 'cat'].includes(v.type)), dates = D.vars.filter(v => v.type === 'date'), calcs = D.vars.filter(v => v.type === 'calc');
     const block = v => `<tr><td>${varHead(D, v)}</td>${gl.map((_, g) => `<td>${cellsOf(D, v, g)}</td>`).join('')}</tr>`;
     const res = last ? targetsList(D).map(t => ({ ...t, o: observed(D, last, t) })) : [];
-    w.innerHTML = `<div class="mb-head"><b>🎲 Generate the data</b><span class="legend-note">${esc(D.title || 'Untitled study')} · ${D.vars.length} variables · simulated patients for teaching, testing the analysis and checking the sample size</span><span class="spacer"></span>
+    w.innerHTML = `<div class="mb-head"><b>🎲 Generate the data</b><input type="text" data-gtitle="1" value="${esc(D.title || '')}" placeholder="Study title" title="The study title — the same as in 🧱 Build; it names the files and the project in Analyse" style="width:min(340px,40vw);margin:0 6px"><label class="legend-note" style="display:inline-flex;align-items:center;gap:4px" title="The number of study groups (as in 🧱 Build → Groups & visits)">groups <input type="number" min="1" max="12" data-gnarms="1" value="${arms(D).length || 1}" style="width:56px"></label><span class="legend-note">· ${D.vars.length} variables · simulated patients for teaching, testing the analysis and checking the sample size</span><span class="spacer"></span>
         <button class="btn ghost small" type="button" data-gtab="build">‹ Back to the design</button><button class="btn primary small" type="button" id="genSend">📊 Analyse these data ›</button></div>
       <div class="mb-body" style="border-radius:12px;margin-top:10px">
       <div class="gen-scen"><b>Scenarios</b><select data-gscen="1" style="width:auto"><option value="">Open a saved scenario…</option>${Object.keys(scenarios()).map(nm => `<option value="${esc(nm)}">${esc(nm)}</option>`).join('')}</select><button class="btn ghost small" type="button" id="genScenSave" title="Keep these settings under a name (e.g. optimistic, expected, pessimistic)">💾 Save as…</button>${Object.keys(scenarios()).length ? `<button class="btn ghost small" type="button" id="genScenDel">🗑 Delete…</button>` : ''}<button class="btn ghost small" type="button" id="genScenNull" title="The same values in every group for every variable: about 5% of the tests come out significant by chance">∅ No differences (null scenario)</button></div>
@@ -1010,7 +1011,8 @@
     const vals = JSON.parse(JSON.stringify(p.vals)); mine.forEach(k => { const [, vid, key] = k.split('|'); (vals[vid] = vals[vid] || {})[key] = E[k]; }); return vals; }
   function fill(D) { return { patients: last.map(p => ({ id: p.id, site: p.site, group: p.group, vals: withEdits(p) })), simulated: { at: new Date().toISOString().slice(0, 10), seed: G.seed, n: last.length, code: dataCode(last), consort: lastConsort || undefined }, targets: targetsList(D).map(t => ({ ...t, cols: B.columns(D).filter(c => c.v.id === t.varId && (t.visit === 'once' ? !c.visit || c.visit.id === D.visits[0].id : c.visit && c.visit.id === t.visit)).map(c => c.col) })) }; }
   const fileName = D => `Simulated - ${B.fileBase()} - master sheet.xlsx`;
-  async function send(D) { if (!last) { last = generate(D); } const blob = B.buildWorkbook(D, fill(D)), f = new File([blob], fileName(D)); B.setPhase('analyse'); U.go(1); await U.loadFile(f); }
+  async function send(D) { if (!last) { last = generate(D); } const blob = B.buildWorkbook(D, fill(D)), f = new File([blob], fileName(D)); B.setPhase('analyse'); U.go(1); await U.loadFile(f);
+    if (D.title) { const pn = document.querySelector('#projName'), st = document.querySelector('#studyTitle'); if (pn) pn.value = D.title; if (st) st.value = D.title; const c = U.state.cfg; if (c && c.study) { c.study.project = D.title; c.study.title = D.title; } } } // the project in Analyse named after the study
   function onClick(e) {
     if (window.EasyGen3 && window.EasyGen3.onClick(e)) return;
     const go0 = e.target.closest('[data-grgo]'); if (go0) { G.res.only = go0.dataset.grgo; save(); return redrawOut(D0()); }
@@ -1096,6 +1098,9 @@
     if (d.gsd) { G.sds[d.gsd] = val; save(); return live(D0()); }
     if (d.gsdt) { const [id, g, key] = d.gsdt.split('|'); ((G.sdt[id] = G.sdt[id] || {})[g] = G.sdt[id][g] || {})[key] = val === '' ? '' : +val; save(); return live(D0()); }
     if (d.gmiss) { G.miss[d.gmiss] = val; save(); return live(D0()); }
+    if (d.gtitle) { D0().title = val; B.save(); return; } // one study title: Build, Generate, the file names and the project in Analyse
+    if (d.gnarms) { const D = D0(), n = Math.max(1, Math.min(12, Math.round(+val) || 1)), A = arms(D); if (n <= 1) D.arms = []; else { while (A.length < n) { let k = A.length, nm; do { nm = `Group ${String.fromCharCode(65 + k++)}`; } while (A.includes(nm)); A.push(nm); } D.arms = A.slice(0, n); }
+      if (G.nBy) G.nBy = G.nBy.slice(0, Math.max(n, 0)); B.save(); if (e.type === 'change') { if (last) { try { last = generate(D); resStamp++; } catch (err) { console.error(err); } } render(); } return; }
     if (d.gfrom) { const vid = d.gfrom; G.corr = (G.corr || []).filter(c => !(c.b === vid && c.how && c.how !== 'corr')); if (val) G.corr.push({ a: val, b: vid, how: 'inc', diffAs: 'range', lo: 0, hi: 0 }); save(); return render(); }
     if (d.gif) { const [i, path] = d.gif.split('|'), r = G.ifs[+i], [o, k] = path.split('.'); r[o] = r[o] || {}; r[o][k] = t.type === 'number' ? (val === '' ? '' : +val) : val;
       if (path === 'if.v') { r.if.val = ''; r.if.op = '>='; } if (path === 'then.v') r.then = { v: val, kind: '' }; save(); if (t.tagName === 'SELECT') return render(); return live(D0()); }

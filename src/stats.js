@@ -390,7 +390,9 @@ const Stats = (() => {
       atRisk -= d + c;
     }
     const med = steps.find(q => q.s <= 0.5 + 1e-12);
-    return { steps, censored, median: med ? med.t : NaN, n: times.length, events: events.filter(Boolean).length };
+    // 95% CI of the median: the times where the upper and the lower limits of the curve reach 50% (Brookmeyer-Crowley, from the log-log limits)
+    const mLo = steps.find(q => q.lo <= 0.5 + 1e-12), mHi = steps.find(q => q.hi <= 0.5 + 1e-12); // the lower curve reaches 50% first
+    return { steps, censored, median: med ? med.t : NaN, medLo: mLo ? mLo.t : NaN, medHi: mHi ? mHi.t : NaN, n: times.length, events: events.filter(Boolean).length };
   }
   // k-group log-rank test (chi-square, df = k − 1)
   function logRank(groupTimes, groupEvents) {

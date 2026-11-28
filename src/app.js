@@ -3974,7 +3974,7 @@
     d.showModal(); });
   // per-analysis options: title, patients (subset), variable selection and type-specific extras
   // the defaults of a new analysis card: regression enters the variables significant in univariable analysis; ROC compares the AUCs, draws all curves together and each alone, with a detailed comment
-  function advDefaults(t) { return ['linear', 'logistic', 'cox'].includes(t) ? { method: 'screen', univariable: true } : t === 'roc' ? { compare: true, figure: 'both', commentDetail: 'detailed' } : {}; }
+  function advDefaults(t) { return t === 'survival' ? { ciBand: true, medCI: true } : ['linear', 'logistic', 'cox'].includes(t) ? { method: 'screen', univariable: true } : t === 'roc' ? { compare: true, figure: 'both', commentDetail: 'detailed' } : {}; }
   // round 10: more options for ROC and regression cards (see rocreg.js)
   function advMore(a, sel, box) {
     const t = a.type, out = [], cols = state.data ? state.data.headers : [], lab = c => Analysis.columnLabel(state.cfg, c), rowsA = analysedRows(), kindOf = c => Analysis.columnKind(state.cfg, rowsA, c), catCols = cols.filter(c => kindOf(c) !== 'numeric' && c !== a.outcome), numCols = cols.filter(c => kindOf(c) === 'numeric' && c !== a.outcome);
@@ -4081,7 +4081,7 @@
     if (t === 'agreement') out.push(`<div>${box('baReg', 'Proportional bias line on the Bland-Altman plot')}</div>`);
     if (t === 'roc') out.push(`<div>${box('rocBand', '95% confidence band of the curve (bootstrap)')}</div>`);
     out.push(...advMore(a, sel, box));
-    if (t === 'survival') out.push(`<div>${box('swimmer', 'Swimmer plot of every patient')}</div>`, `<div>${box('ciBand', '95% CI bands on the curves')}</div>`, `<div>${box('riskUnder', 'Number at risk under the curve')}</div>`, `<div>${box('riskCens', 'Events and censored per interval (risk table)')}</div>`, `<div>${box('risk', 'Number at risk table')}</div>`, `<div>${box('pairwise', 'Pairwise log-rank tests (3+ groups, Bonferroni)')}</div>`);
+    if (t === 'survival') out.push(`<div>${box('swimmer', 'Swimmer plot of every patient')}</div>`, `<div>${box('ciBand', '95% CI bands on the curves')}</div>`, `<div>${box('medCI', '95% CI of the median survival (table)')}</div>`, `<div>${box('riskUnder', 'Number at risk under the curve')}</div>`, `<div>${box('riskCens', 'Events and censored per interval (risk table)')}</div>`, `<div>${box('risk', 'Number at risk table')}</div>`, `<div>${box('pairwise', 'Pairwise log-rank tests (3+ groups, Bonferroni)')}</div>`);
     if (t === 'kappa') out.push(`<div><label class="f">Weighted kappa (ordered categories)</label>${sel('weights', [['none', 'No — Cohen\'s kappa only'], ['linear', 'Linear weights'], ['quadratic', 'Quadratic weights']], a.weights)}</div>`);
     if (t === 'agreement') out.push(`<div><label class="f">ICC type</label>${sel('iccType', [['agreement', 'Absolute agreement (A,1)'], ['consistency', 'Consistency (C,1)']], a.iccType)}</div>`, `<div>${box('baPct', 'Bland-Altman of % differences')}</div>`);
     if (t === 'diagnostic') out.push(`<div><label class="f">Predictive values at a prevalence of (%)</label><input type="text" data-af="prev" value="${esc(a.prev || '')}" placeholder="e.g. 10"></div>`);

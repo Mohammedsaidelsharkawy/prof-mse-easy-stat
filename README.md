@@ -250,6 +250,10 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🧱 Build → Variables**: the selected variables move to a section picked from a list (or ＋ New section…); each section has ＋ (a new variable in it) and ↑ ↓; **drag and drop** a variable onto another variable or a section, and a visit onto another visit; **Collected at: ✓ All / First only**.
+**Number of groups** in 🧱 Build (Groups & visits) and in 🎲 Generate (top line): groups added as Group A, B, C… or removed from the end.
+**One study title**: typed in 🎲 Generate (or Build), it names the files and the project in Analyse (project name and study title) when the data are sent there.
+**Kaplan-Meier: 95% CI by default** — shaded 95% CI bands on the curves and the median survival with its 95% CI (Brookmeyer-Crowley) in the table; both can be unticked on the card.
 **🎲 Generate → Values: drawn or made from another variable** (each number variable): choose “made from …” and its values come from that variable (× ÷ + − a change, overall or by group) instead of being drawn; the link opens in the variable's card.
 **🎲 Generate → If … then …** (a section, and ＋ If… on every variable): if a variable has a value (Diabetes = Yes, Age ≥ 60, Group = Control), then another is drawn from a mean ± SD, set, changed by + or ×, given a category in a % of these patients, or left empty — at each visit; rules on a source variable come before the variables made from it.
 **✎ Edit figure**: a wider dialog (up to 1120 px) with a larger preview, no sideways scrolling.

@@ -1373,9 +1373,10 @@ const Analysis = (() => {
     const survAt = (m, tt = at) => { let sv = 1; for (const q of m.steps) if (q.t <= tt) sv = q.s; return sv; };
     const unit = ((timeLabel.match(/\(([^)]*)\)\s*$/) || [])[1] || '').trim(), u = unit ? ' ' + unit : '';
     const one = k === 1; // one group: a single survival curve, nothing to compare
-    const head = ['', 'n', 'Events (%)', `Median survival${unit ? ` (${unit})` : ''}`, ...ats.map(tt => `Survival at ${fmt(tt, d)}${u}`), ...(one ? [] : ['Log-rank P'])];
+    const mci = !!a.medCI, ciM = m => !mci || !isFinite(m.median) ? '' : ` (${isFinite(m.medLo) ? fmt(m.medLo, d) : '—'}–${isFinite(m.medHi) ? fmt(m.medHi, d) : 'NR'})`;
+    const head = ['', 'n', 'Events (%)', `Median survival${mci ? ' (95% CI)' : ''}${unit ? ` (${unit})` : ''}`, ...ats.map(tt => `Survival at ${fmt(tt, d)}${u}`), ...(one ? [] : ['Log-rank P'])];
     const trows = km.map((m, g) => {
-      const row = [{ t: [gl[g]], b: true }, { t: [String(m.n)] }, { t: [`${m.events} (${fmt(100 * m.events / m.n, 1)}%)`] }, { t: [isFinite(m.median) ? fmt(m.median, d) : 'Not reached'] }];
+      const row = [{ t: [gl[g]], b: true }, { t: [String(m.n)] }, { t: [`${m.events} (${fmt(100 * m.events / m.n, 1)}%)`] }, { t: [isFinite(m.median) ? fmt(m.median, d) + ciM(m) : 'Not reached'] }];
       ats.forEach(tt => row.push({ t: [`${fmt(100 * survAt(m, tt), 1)}%`] }));
       if (g === 0 && !one) row.push({ t: [fmtP(lr.p, alpha)], rs: k });
       return row;
@@ -1398,6 +1399,7 @@ const Analysis = (() => {
     const f = [`Event: ${evLabel} = ${a.positive}; other patients are censored at their last follow-up`, ...(one ? [] : [`Log-rank χ²(${lr.df}) = ${fmt(lr.chi, 2)}`])];
     if (!one && lr.p <= alpha) f.unshift(`*: Significant as P value ≤ ${alpha}`);
     if (pw) f.push(`Pairwise log-rank (Bonferroni): ${pw.map(q => `${gl[q.i]} vs ${gl[q.j]} P ${pTxt(q.p)}`).join('; ')}`);
+    if (mci) f.push('Median survival with its 95% CI (Brookmeyer-Crowley; NR: not reached)');
     if (a.ciBand) f.push('Shaded bands: 95% CI of the survival curves (log-log)');
     if (one) used.add('survival1');
     const sec = {
