@@ -35342,6 +35342,7 @@ if (typeof module !== 'undefined') module.exports = Sav;
     box.innerHTML = `<details ${L.length <= 8 ? 'open' : ''}><summary><b>⚠ The data against its design</b> <span class="legend-note">— ${L.length} point${L.length > 1 ? 's' : ''} to check before analysing (the master sheet's own lists and ranges)</span></summary><ul style="margin:6px 0 0 18px">${L.map(x => `<li>${esc(x.msg)}</li>`).join('')}</ul><p class="legend-note">Fix them in the sheet (step 1, cleaning) or in Excel, then open the file again.</p></details>`;
     const p1 = $('#p1'); if (p1) { const ref = p1.querySelector('.restore-bar'); p1.insertBefore(box, ref ? ref.nextSibling : p1.firstChild); } setTimeout(() => toast(`${L.length} point${L.length > 1 ? 's' : ''} where the data differ from the design — see step 1`), 1400); }
   function applyBuilderSetup(cfg, S0, sandbox) {
+    { const T = { rct: 'rct', cohort: 'pcohort', casecontrol: 'casecontrol', cross: 'cross', diagnostic: 'diagnostic', beforeafter: 'prepost' }[S0.design]; if (T && cfg.study) { cfg.study.type = T; if (!sandbox) { const s0 = document.getElementById('studyType'); if (s0) s0.value = T; } } } // the type of the study from the master sheet
     const H = state.data.headers, rows = state.data.rows, owner = col => cfg.variables.find(v => v.cols.some(c => c.col === col));
     if (S0.idCol && H.includes(S0.idCol)) { cfg.idCols = [S0.idCol]; const v = owner(S0.idCol); if (v) v.include = false; }
     (S0.helperCols || []).forEach(c => { const v = owner(c); if (v) v.include = false; });
@@ -43060,6 +43061,20 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     const drop = D.visits.slice(names.length); if (drop.length && D.vars.some(v => (v.visits || []).some(id => drop.some(x => x.id === id))) && !confirm(`Remove ${drop.length} visit${drop.length > 1 ? 's' : ''} (${drop.map(x => x.name).join(', ')})? Variables collected there lose ${drop.length > 1 ? 'them' : 'it'}.`)) return false;
     const vs = names.map((nm, i) => D.visits[i] ? { ...D.visits[i], name: nm } : { id: 'v' + uid(), name: nm }); const ids = new Set(vs.map(x => x.id));
     D.vars.forEach(v => { if (v.visits) v.visits = v.visits.filter(id => ids.has(id)); }); D.visits = vs; return true; }
+  // deleting a section: its variables deleted, or moved (with all their options) to another section
+  function delSection(sec) { const vs = D.vars.filter(x => x.section === sec), others = secOrder(D).filter(x => x !== sec);
+    let d = document.getElementById('mbSecDelDlg'); if (!d) { d = document.createElement('dialog'); d.id = 'mbSecDelDlg'; d.className = 'app-dlg'; document.body.append(d); }
+    d.innerHTML = `<form method="dialog" onsubmit="return false"><h3>🗑 Delete the section “${esc(sec)}”</h3>${vs.length ? `<p class="legend-note">It has ${vs.length} variable${vs.length > 1 ? 's' : ''}: ${esc(vs.slice(0, 8).map(x => x.label).join(', '))}${vs.length > 8 ? '…' : ''}</p>
+      <label class="check"><input type="radio" name="sdw" value="move" ${others.length ? 'checked' : ''}><span>Move ${vs.length > 1 ? 'them' : 'it'} to <select id="sdTo" style="width:auto">${others.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('')}<option value="__new">＋ New section…</option></select> (with all ${vs.length > 1 ? 'their' : 'its'} options)</span></label>
+      <label class="check"><input type="radio" name="sdw" value="del" ${others.length ? '' : 'checked'}><span>Delete ${vs.length > 1 ? 'them' : 'it'} too</span></label>` : '<p class="legend-note">It has no variable.</p>'}
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn ghost" type="button" data-sd="x">Cancel</button><button class="btn primary" type="button" data-sd="ok">Delete the section</button></div></form>`;
+    d.onclick = ev => { const b = ev.target.closest('[data-sd]'); if (!b) return; if (b.dataset.sd === 'x') { d.close(); return; }
+      const how = (d.querySelector('input[name="sdw"]:checked') || {}).value || 'del'; let to = (d.querySelector('#sdTo') || {}).value || '';
+      if (vs.length && how === 'move') { if (to === '__new') { to = (prompt('Name of the new section', '') || '').trim(); if (!to) return; } const last = D.vars.map(x => x.section).lastIndexOf(to), moving = D.vars.filter(x => x.section === sec); D.vars = D.vars.filter(x => x.section !== sec);
+        moving.forEach(x => { x.section = to; }); const at = last < 0 ? D.vars.length : D.vars.map(x => x.section).lastIndexOf(to) + 1; D.vars.splice(at, 0, ...moving); if (!D.sections.includes(to)) D.sections.push(to); }
+      else if (vs.length) { const ids = new Set(vs.map(x => x.id)); D.vars = D.vars.filter(x => !ids.has(x.id)); D.checks = (D.checks || []).filter(c => !ids.has(c.a) && !ids.has(c.b)); ids.forEach(id => bulk.delete(id)); if (ids.has(sel)) sel = null; }
+      D.sections = (D.sections || []).filter(x => x !== sec); d.close(); save(); render(); toast(vs.length && how === 'move' ? `Section “${sec}” deleted — its variables moved to “${to}” (↶ Undo restores)` : `Section “${sec}” deleted (↶ Undo restores)`); };
+    d.showModal(); }
   function setArms(n) { const A = D.arms.filter(Boolean); if (n <= 1) { D.arms = []; return; } while (A.length < n) { let k = A.length, nm; do { nm = `Group ${String.fromCharCode(65 + k++)}`; } while (A.includes(nm)); A.push(nm); } D.arms = A.slice(0, n); if (D.nBy) D.nBy = D.nBy.slice(0, n); }
   async function onClick(e) {
     { const run = e.target.closest('[data-mbgenrun]'); if (run) { const out = document.querySelector(`[data-mbgenres="${run.dataset.mbgenrun}"]`); if (out) out.dataset.on = '1'; genRefresh(run.dataset.mbgenrun, false); return; } }
@@ -43068,8 +43083,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     { const va = e.target.closest('[data-mbvisall]'); if (va) { const v = D.vars.find(x => x.id === sel); if (!v) return; v.visits = va.dataset.mbvisall === '1' ? D.visits.map(x => x.id) : []; save(); render(); return; } }
     { const sa = e.target.closest('[data-mbsecadd]'); if (sa) { const sec = sa.dataset.mbsecadd, v = { id: uid(), section: sec, label: 'New variable', type: 'num', unit: '', min: '', max: '', cats: [], dec: '', required: false, visits: [], group: '', role: '', definition: '' }; v.expect = expectOf(v.label, v.type, v.cats);
       const last = D.vars.map(x => x.section).lastIndexOf(sec); D.vars.splice(last + 1, 0, v); sel = v.id; save(); render(); setTimeout(() => { const n = document.querySelector(`[data-mbren="${v.id}"]`); if (n) n.scrollIntoView({ block: 'nearest' }); }, 0); toast(`New variable in “${sec}” — click its name to rename it`); return; } }
-    { const sx = e.target.closest('[data-mbsecdel]'); if (sx) { const sec = sx.dataset.mbsecdel, vs = D.vars.filter(x => x.section === sec); if (!confirm(`Delete the section “${sec}”${vs.length ? ` and its ${vs.length} variable${vs.length > 1 ? 's' : ''}` : ''}? (↶ Undo brings ${vs.length ? 'them' : 'it'} back)`)) return;
-      const ids = new Set(vs.map(x => x.id)); D.vars = D.vars.filter(x => !ids.has(x.id)); D.checks = (D.checks || []).filter(c => !ids.has(c.a) && !ids.has(c.b)); D.sections = (D.sections || []).filter(x => x !== sec); ids.forEach(id => bulk.delete(id)); if (ids.has(sel)) sel = null; save(); render(); toast(`Section “${sec}” deleted`); return; } }
+    { const sx = e.target.closest('[data-mbsecdel]'); if (sx) { delSection(sx.dataset.mbsecdel); return; } }
     { const sc = e.target.closest('[data-mbsecchk]'); if (sc) { const vs = D.vars.filter(x => x.section === sc.dataset.mbsecchk); if (sc.checked) vs.forEach(x => bulk.add(x.id)); else vs.forEach(x => bulk.delete(x.id)); render(); return; } }
     { const sd = e.target.closest('[data-mbsecdn]'); if (sd) { const i = +sd.dataset.mbsecdn; D.sections = secOrder(D); if (i < D.sections.length - 1) [D.sections[i + 1], D.sections[i]] = [D.sections[i], D.sections[i + 1]]; save(); render(); return; } }
     if (e.target.closest('[data-mbtryclear]')) { tryVals = {}; drawTry(); return; }
@@ -48543,6 +48557,30 @@ html.r21-all .ux2-pane::before{content:attr(data-r21lab);flex-basis:100%;font-we
   document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-r21ur]'); if (!b || !analyse()) return; e.stopImmediatePropagation(); move(b.dataset.r21ur === 'undo'); }, true);
   setInterval(state, 800);
   window.EasyR23 = { undo: back => move(back !== false), get canUndo() { return hist.length > 0; }, get canRedo() { return fut.length > 0; }, snap };
+})();
+
+/* Prof Easy Stat — round 24: the type of the study shared by 📊 Analyse and 🧱 Build; the page not saved or shown as source by the usual shortcuts. */
+(function () {
+  'use strict';
+  const $ = s => document.querySelector(s), U = () => window.EasyUI, B = () => window.EasyBuilder;
+  // Build's designs ↔ Analyse's types of study
+  const B2A = { rct: 'rct', cohort: 'pcohort', casecontrol: 'casecontrol', cross: 'cross', diagnostic: 'diagnostic', beforeafter: 'prepost' };
+  const A2B = { rct: 'rct', nrct: 'rct', pcohort: 'cohort', rcohort: 'cohort', casecontrol: 'casecontrol', cross: 'cross', diagnostic: 'diagnostic', prepost: 'beforeafter' };
+  let busy = false;
+  function toAnalyse(design) { const t = B2A[design], s = $('#studyType'); if (!t || !s || busy) return; busy = true; try { if (s.value !== t && !(A2B[s.value] === design)) { s.value = t; s.dispatchEvent(new Event('change', { bubbles: true })); }
+    const st = U() && U().state; if (st && st.cfg && st.cfg.study && A2B[st.cfg.study.type] !== design) st.cfg.study.type = t; } finally { busy = false; } }
+  function toBuild(type) { const d = A2B[type], b = B(); if (!d || !b || busy) return; const D = b.design; if (!D || D.design === d) return; busy = true; try { D.design = d; b.save(); } finally { busy = false; } }
+  const onPick = e => { const t = e.target; if (!t) return; if (t.id === 'studyType') toBuild(t.value); else if (t.dataset && t.dataset.mb === 'design') toAnalyse(t.value); };
+  document.addEventListener('input', onPick, true); document.addEventListener('change', onPick, true); // (the builder redraws on input: read it first)
+  // (data made from a master sheet of the builder bring its design into Analyse: see applyBuilderSetup)
+  window.EasyR24 = { toAnalyse, toBuild, B2A, A2B };
+
+  // the page itself not saved or opened as source by the keyboard (Ctrl+S saves the project instead) nor by the right-click menu (kept in boxes for copy / paste)
+  document.addEventListener('keydown', e => { const k = (e.key || '').toLowerCase(), mod = e.ctrlKey || e.metaKey;
+    if ((mod && (k === 'u' || (k === 's' && e.shiftKey))) || (mod && e.shiftKey && ['i', 'j', 'c'].includes(k)) || e.key === 'F12' || (e.metaKey && e.altKey && ['i', 'j', 'u'].includes(k))) { e.preventDefault(); e.stopPropagation(); }
+    if (mod && k === 's' && !e.shiftKey) e.preventDefault(); // Ctrl+S: the project (step 1 handler), never the page
+  }, true);
+  document.addEventListener('contextmenu', e => { const t = e.target; if (t && t.closest && t.closest('input, textarea, select, [contenteditable="true"]')) return; e.preventDefault(); }, true);
 })();
 </script>
 </body>

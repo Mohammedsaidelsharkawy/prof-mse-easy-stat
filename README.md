@@ -250,6 +250,9 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🗑 Deleting a section** asks what to do with its variables: move them (with all their options) to another section or a new one, or delete them too.
+**Type of the study linked**: 📊 Analyse (Report details → Type of the study) and 🧱 Build (Study → Design) follow each other, and data made from a builder master sheet bring their design into Analyse.
+**The page is not saved or shown as source from the keyboard or the right-click menu**: Ctrl+S saves the project (never the page); Ctrl+Shift+S, Ctrl+U, F12, Ctrl+Shift+I/J/C and the page's right-click menu are blocked (still allowed in boxes, for copy and paste). A determined user can still save it from the browser menu.
 **Fixed: + Visit (several at once) and All the visits at once** — leaving their box no longer redraws the page before the click, so the number and the list are applied; Enter applies them too.
 **🧱 Build → sections**: ☐ selects all the variables of a section (then ✕ Remove, move to section, role…), 🗑 deletes a section with its variables (↶ Undo restores).
 **Sections become the tables in 📊 Analyse**: data generated or made from a builder master sheet put each variable in the table named after its section.

@@ -2136,6 +2136,7 @@
     box.innerHTML = `<details ${L.length <= 8 ? 'open' : ''}><summary><b>⚠ The data against its design</b> <span class="legend-note">— ${L.length} point${L.length > 1 ? 's' : ''} to check before analysing (the master sheet's own lists and ranges)</span></summary><ul style="margin:6px 0 0 18px">${L.map(x => `<li>${esc(x.msg)}</li>`).join('')}</ul><p class="legend-note">Fix them in the sheet (step 1, cleaning) or in Excel, then open the file again.</p></details>`;
     const p1 = $('#p1'); if (p1) { const ref = p1.querySelector('.restore-bar'); p1.insertBefore(box, ref ? ref.nextSibling : p1.firstChild); } setTimeout(() => toast(`${L.length} point${L.length > 1 ? 's' : ''} where the data differ from the design — see step 1`), 1400); }
   function applyBuilderSetup(cfg, S0, sandbox) {
+    { const T = { rct: 'rct', cohort: 'pcohort', casecontrol: 'casecontrol', cross: 'cross', diagnostic: 'diagnostic', beforeafter: 'prepost' }[S0.design]; if (T && cfg.study) { cfg.study.type = T; if (!sandbox) { const s0 = document.getElementById('studyType'); if (s0) s0.value = T; } } } // the type of the study from the master sheet
     const H = state.data.headers, rows = state.data.rows, owner = col => cfg.variables.find(v => v.cols.some(c => c.col === col));
     if (S0.idCol && H.includes(S0.idCol)) { cfg.idCols = [S0.idCol]; const v = owner(S0.idCol); if (v) v.include = false; }
     (S0.helperCols || []).forEach(c => { const v = owner(c); if (v) v.include = false; });
