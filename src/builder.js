@@ -930,6 +930,9 @@
     phase = ph; window.__phaseAt = Date.now(); const h = document.documentElement; PHASES.forEach(([k]) => h.classList.toggle('ph-' + k, k === ph));
     document.querySelectorAll('[data-phase]').forEach(b => b.classList.toggle('on', b.dataset.phase === ph));
     if (ph === 'build') { const w = $('#mbWrap'); if (!w.dataset.wired) { w.dataset.wired = 1; w.addEventListener('input', onInput); w.addEventListener('change', onChange); w.addEventListener('click', onClick); w.addEventListener('dblclick', onRename);
+      w.addEventListener('toggle', e => { if (e.target.matches && e.target.matches('[data-mbgenv]')) genOpenV = e.target.open; }, true);
+      w.addEventListener('focusin', e => { if (inGen(e) && window.EasyGen) window.EasyGen.cellIn(e); }); w.addEventListener('keydown', e => { if (inGen(e) && window.EasyGen) window.EasyGen.cellKey(e); });
+      w.addEventListener('focusout', e => { if (inGen(e) && window.EasyGen) { const vid = genVid(e); window.EasyGen.cellOut(e, () => genRefresh(vid, false)); } });
       let drag = null; const clear = () => w.querySelectorAll('.mb-dropon').forEach(x => x.classList.remove('mb-dropon'));
       w.addEventListener('dragstart', e => { const v = e.target.closest && e.target.closest('[data-mbsel]'), vi = e.target.closest && e.target.closest('[data-mbdragvis]'); if (v) drag = { kind: 'var', id: v.dataset.mbsel }; else if (vi) drag = { kind: 'vis', i: +vi.dataset.mbdragvis }; else return; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', 'x'); } catch (er) { /* */ } });
       w.addEventListener('dragover', e => { if (!drag) return; const tg = drag.kind === 'var' ? e.target.closest('[data-mbsel],[data-mbdropsec]') : e.target.closest('[data-mbdragvis]'); if (!tg) return; e.preventDefault(); clear(); tg.classList.add('mb-dropon'); });
@@ -1073,6 +1076,13 @@ Date of surgery">${esc(pasteTxt)}</textarea>
         <div class="mb-lib-sec"><div class="legend-note"><b>Repeating forms</b> <span>(one row per event, on a sheet of its own)</span></div><button type="button" class="mb-lib" id="mbAE" title="Event, dates, CTCAE grade, serious, relation to the treatment, action and outcome">+ Adverse-event log</button><button type="button" class="mb-lib" id="mbMeds" title="Medicine, dose, route, start and stop">+ Concomitant medications</button></div>
         ${lib.map(([sec, list]) => `<div class="mb-lib-sec"><div class="legend-note"><b>${esc(sec)}</b></div>${list.map(e => { const has = D.vars.some(x => x.label.toLowerCase() === e[0].toLowerCase()); return `<button type="button" class="mb-lib ${has ? 'has' : ''}" data-mblib="${esc(sec)}|${esc(e[0])}" title="${esc([e[2], e[3] !== undefined && e[3] !== null ? `${e[3]}–${e[4]}` : '', e[5] ? e[5].join(' / ') : ''].filter(Boolean).join(' · '))}">${has ? '✓' : '+'} ${esc(e[0])}</button>`; }).join('')}</div>`).join('')}</div></div>`;
   }
+  // 🎲 Generate this variable: the options of 🎲 Generate the data for it (the same card) and its results on the simulated patients
+  let genOpenV = true, genResT = 0;
+  function genBox(v) { if (!window.EasyGen || !window.EasyGen.cardFor) return '';
+    return `<details class="mb-genv" data-mbgenv="${v.id}" ${genOpenV ? 'open' : ''} style="grid-column:1/-1;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:6px 10px"><summary style="cursor:pointer"><b>🎲 Generate this variable</b> <span class="legend-note">— every option of 🎲 Generate the data for it, and its results on the simulated patients</span></summary>
+      <div class="gen-embed" style="margin-top:6px">${window.EasyGen.cardFor(v.id)}</div><div class="row" style="gap:6px;margin:6px 0"><button class="btn primary small" type="button" data-mbgenrun="${v.id}">🎲 Generate and show its results</button><span class="legend-note">The same patients as in 🎲 Generate the data (same seed).</span></div><div class="gen-embed-res" data-mbgenres="${v.id}"></div></details>`; }
+  function genRefresh(vid, card = true) { const box = document.querySelector(`[data-mbgenv="${vid}"]`); if (!box || !window.EasyGen) return; const c = box.querySelector('.gen-embed'); if (card && c && !c.contains(document.activeElement)) c.innerHTML = window.EasyGen.cardFor(vid);
+    clearTimeout(genResT); const out = box.querySelector('[data-mbgenres]'); if (!out || !box.open || !out.dataset.on) return; out.innerHTML = '<p class="legend-note">Analysing…</p>'; genResT = setTimeout(async () => { const h = await window.EasyGen.resultFor(vid); const o2 = document.querySelector(`[data-mbgenres="${vid}"]`); if (o2) o2.innerHTML = h; }, 500); }
   function editor(v) {
     const others = D.vars.filter(x => x.id !== v.id), sel2 = (k, cur, list) => `<select data-mbv="${k}">${opt(list, cur)}</select>`, varOpt = (filter) => [['', '—'], ...others.filter(filter).map(x => [x.id, x.label])];
     return `<div class="row" style="gap:6px"><b>${esc(v.label)}</b><span class="legend-note">→ ${esc(columns(D).filter(c => c.v.id === v.id).map(c => c.col).join(', '))}</span></div>
@@ -1106,7 +1116,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
       <div style="grid-column:1/-1"><label class="f">Asked only when <span class="legend-note">(skip logic — greyed in Excel otherwise, “if …” in the CRF, branching logic in REDCap)</span></label><div class="row" style="gap:6px;flex-wrap:wrap">${(() => { const pw = whenParent(D, v), cands = others.filter(x => (x.type === 'yn' || x.type === 'cat') && x.cats.length);
         return `<select data-mbv="whenV" style="width:auto">${opt([['', '— always asked —'], ...cands.map(x => [x.id, x.label])], pw ? pw.id : '')}</select>${pw ? `<span>is</span><select data-mbv="whenC" style="width:auto">${opt(pw.cats.map(c => [c, c]), v.when.cat)}</select>` : ''}`; })()}</div></div>
       <div><label class="check" style="margin-top:6px"><input type="checkbox" data-mbv="required" ${v.required ? 'checked' : ''}><span>Required</span></label></div></div>
-      ${expectBox(v)}`;
+      ${expectBox(v)}${genBox(v)}`;
   }
   // expected values (for the generator, phase 2): the same fields are in the generator
   // the unit conversions of a variable (by its library name)
@@ -1194,6 +1204,8 @@ Date of surgery">${esc(pasteTxt)}</textarea>
   // the number of groups: names kept, new ones Group A, B, C …; one group = a one-group study
   function setArms(n) { const A = D.arms.filter(Boolean); if (n <= 1) { D.arms = []; return; } while (A.length < n) { let k = A.length, nm; do { nm = `Group ${String.fromCharCode(65 + k++)}`; } while (A.includes(nm)); A.push(nm); } D.arms = A.slice(0, n); if (D.nBy) D.nBy = D.nBy.slice(0, n); }
   async function onClick(e) {
+    { const run = e.target.closest('[data-mbgenrun]'); if (run) { const out = document.querySelector(`[data-mbgenres="${run.dataset.mbgenrun}"]`); if (out) out.dataset.on = '1'; genRefresh(run.dataset.mbgenrun, false); return; } }
+    if (inGen(e)) { if (e.target.closest('.gen-embed') && e.target.closest('button')) { window.EasyGen.onClick(e); const vid = genVid(e); setTimeout(() => genRefresh(vid, true), 0); } return; }
     { const va = e.target.closest('[data-mbvisall]'); if (va) { const v = D.vars.find(x => x.id === sel); if (!v) return; v.visits = va.dataset.mbvisall === '1' ? D.visits.map(x => x.id) : []; save(); render(); return; } }
     { const sa = e.target.closest('[data-mbsecadd]'); if (sa) { const sec = sa.dataset.mbsecadd, v = { id: uid(), section: sec, label: 'New variable', type: 'num', unit: '', min: '', max: '', cats: [], dec: '', required: false, visits: [], group: '', role: '', definition: '' }; v.expect = expectOf(v.label, v.type, v.cats);
       const last = D.vars.map(x => x.section).lastIndexOf(sec); D.vars.splice(last + 1, 0, v); sel = v.id; save(); render(); setTimeout(() => { const n = document.querySelector(`[data-mbren="${v.id}"]`); if (n) n.scrollIntoView({ block: 'nearest' }); }, 0); toast(`New variable in “${sec}” — click its name to rename it`); return; } }
@@ -1273,7 +1285,9 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     if (b.id === 'mbRedcap') { U.saveUrl(URL.createObjectURL(redcap(D)), `${fileBase()} - REDCap data dictionary.csv`); toast('REDCap data dictionary saved'); return; }
     if (b.id === 'mbTry') { const blob = buildWorkbook(D), f = new File([blob], `${fileBase()} - master sheet.xlsx`); setPhase('analyse'); U.go(1); await U.loadFile(f); return; }
   }
+  const inGen = e => e.target && e.target.closest && e.target.closest('.gen-embed, .gen-embed-res'), genVid = e => { const b = e.target.closest('[data-mbgenv]'); return b && b.dataset.mbgenv; };
   function onInput(e) {
+    if (inGen(e)) { if (e.target.closest('.gen-embed')) { window.EasyGen.onInput(e); const t0 = e.target; genRefresh(genVid(e), t0.tagName === 'SELECT' || t0.type === 'checkbox'); } return; }
     const t = e.target, d = t.dataset, val = t.type === 'checkbox' ? t.checked : t.value;
     if (window.EasyBuilderExt && window.EasyBuilderExt.onInput && window.EasyBuilderExt.onInput(e, D)) return;
     if (t.id === 'mbPasteTxt') { pasteTxt = t.value; return; }
@@ -1343,6 +1357,7 @@ Date of surgery">${esc(pasteTxt)}</textarea>
     n.addEventListener('keydown', k => { if (k.key === 'Enter') { k.preventDefault(); end(true); } else if (k.key === 'Escape') { k.preventDefault(); end(false); } k.stopPropagation(); });
     n.addEventListener('click', k => k.stopPropagation()); n.addEventListener('blur', () => end(true), { once: true }); }
   function onChange(e) {
+    if (inGen(e)) { if (e.target.closest('.gen-embed')) genRefresh(genVid(e), true); return; }
     const t = e.target; if (window.EasyBuilderExt && window.EasyBuilderExt.onChange && window.EasyBuilderExt.onChange(e, D)) return;
     if (t.id === 'mbTpl' && t.value) { if (D.vars.length && !confirm('Replace the current design?')) { t.value = ''; return; } D = t.value === '__blank' ? blank() : fromTemplate(t.value); sel = null; tab = 'study'; save(); return render(); }
     if (t.id === 'mbMine' && t.value) { const all = ls.get('designs', {}); if (all[t.value] && (!D.vars.length || confirm(`Open “${t.value}” (the current design is replaced)?`))) { D = JSON.parse(JSON.stringify(all[t.value])); sel = null; save(); render(); } else t.value = ''; return; }

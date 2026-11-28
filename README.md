@@ -250,6 +250,7 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🧱 Build → Variables → 🎲 Generate this variable**: under each variable's editor, the full card of 🎲 Generate the data for it (values drawn or made from another variable, Generate by, SD, min/max, difference between groups, ＋ If…, missing %, ⋯ More, Redraw, the targets of each group and visit) and, with 🎲 Generate and show its results, its output as in Generate (asked vs obtained, the data of each group — editable case by case — the summary, the comparisons, the comment and the figure); the same settings and patients as in Generate.
 **🧱 Build → Variables**: the selected variables move to a section picked from a list (or ＋ New section…); each section has ＋ (a new variable in it) and ↑ ↓; **drag and drop** a variable onto another variable or a section, and a visit onto another visit; **Collected at: ✓ All / First only**.
 **Number of groups** in 🧱 Build (Groups & visits) and in 🎲 Generate (top line): groups added as Group A, B, C… or removed from the end.
 **One study title**: typed in 🎲 Generate (or Build), it names the files and the project in Analyse (project name and study title) when the data are sent there.

@@ -1013,6 +1013,18 @@
   const fileName = D => `Simulated - ${B.fileBase()} - master sheet.xlsx`;
   async function send(D) { if (!last) { last = generate(D); } const blob = B.buildWorkbook(D, fill(D)), f = new File([blob], fileName(D)); B.setPhase('analyse'); U.go(1); await U.loadFile(f);
     if (D.title) { const pn = document.querySelector('#projName'), st = document.querySelector('#studyTitle'); if (pn) pn.value = D.title; if (st) st.value = D.title; const c = U.state.cfg; if (c && c.study) { c.study.project = D.title; c.study.title = D.title; } } } // the project in Analyse named after the study
+  function cardFor(vid) { const D = D0(), v = D.vars.find(x => x.id === vid); if (!v) return ''; if (!['num', 'yn', 'cat'].includes(v.type)) return `<p class="legend-note">${v.type === 'calc' ? 'A formula: calculated from its variables.' : v.type === 'date' ? 'Dates are drawn in order (Generate the data → Dates).' : 'Not generated (free text).'}</p>`;
+    const A = arms(D), gl = A.length >= 2 ? A : ['All patients'];
+    return `<div class="gen-card" data-gcard="${v.id}">${varHead(D, v, true)}<div class="tbl-wrap"><table class="t gen-tbl"><thead><tr>${gl.map(g => `<th>${esc(g)}</th>`).join('')}</tr></thead><tbody><tr>${gl.map((_, g) => `<td>${cellsOf(D, v, g)}</td>`).join('')}</tr></tbody></table></div></div>`; }
+  async function resultFor(vid) { const D = D0(), v = D.vars.find(x => x.id === vid); if (!v || !U.simResults || typeof XLSX === 'undefined') return '';
+    if (!last) { try { last = generate(D); } catch (err) { return `<p style="color:var(--bad)">Could not generate: ${esc(err.message)}</p>`; } }
+    try { const wb = XLSX.read(await B.buildWorkbook(D, fill(D)).arrayBuffer(), { type: 'array' }), r = U.simResults(wb, { view: G.res.view || 'half', comments: G.res.comments !== false, editable: true });
+      const k = r.items.findIndex(it => it.label === v.label || it.label.startsWith(v.label + ' (') || it.label.startsWith(v.label + ' —')), res = targetsList(D).map(t => ({ ...t, o: observed(D, last, t) }));
+      return k >= 0 ? askedLine(D, res, r.items[k].label) + r.parts[k] : '<p class="legend-note">Not analysed (see Analyse).</p>'; } catch (err) { console.error(err); return `<p style="color:var(--bad)">Could not analyse: ${esc(err.message)}</p>`; } }
+  // the events of a variable's values typed in its results table (Enter confirms, Esc cancels, leaving the cell saves)
+  const cellIn = e => { const td = e.target.closest && e.target.closest('[data-gid][data-xc]'); if (td) td.dataset.was = td.textContent; };
+  const cellKey = e => { const td = e.target.closest && e.target.closest('[data-gid][data-xc]'); if (!td) return; if (e.key === 'Enter') { e.preventDefault(); td.blur(); } if (e.key === 'Escape') { td.textContent = td.dataset.was || ''; td.blur(); } };
+  const cellOut = (e, after) => { const td = e.target.closest && e.target.closest('[data-gid][data-xc]'); if (!td || td.textContent === td.dataset.was) return false; if (caseEdit(td, D0())) { resStamp++; if (after) after(); return true; } return false; };
   function onClick(e) {
     if (window.EasyGen3 && window.EasyGen3.onClick(e)) return;
     const go0 = e.target.closest('[data-grgo]'); if (go0) { G.res.only = go0.dataset.grgo; save(); return redrawOut(D0()); }
@@ -1111,6 +1123,6 @@
       c[k] = ['r', 'f', 'lo', 'hi', 'm', 's'].includes(k) ? (val === '' ? '' : +val) : val; save(); if (['how', 'diffAs', 'a', 'b'].includes(k)) return render(); return live(D0()); }
     if (d.gp) { G.power[d.gp] = val; save(); if (t.tagName === 'SELECT') render(); return; }
   }
-  window.EasyGen = { undo: back => gUndoDo(back !== false), get canUndo() { return gUndo.length > 0; }, get canRedo() { return gRedo.length > 0; }, render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; }, get results() { return resOut; }, get errors() { return lastErrors; }, get consort() { return lastConsort; }, dataCode: P => dataCode(P || last), pTestX: (v, key, P, test) => pTestX(D0(), v, key, P, test), multiPower: r => multiPower(D0(), r), interimSim: r => interimSim(D0(), r), variability: r => variability(D0(), r), get sigInfo() { return sigInfo; }, numParams: v => numParams(v, 0, 'once') };
+  window.EasyGen = { cardFor, resultFor, onInput: e => onInput(e), onClick: e => onClick(e), cellIn, cellKey, cellOut, undo: back => gUndoDo(back !== false), get canUndo() { return gUndo.length > 0; }, get canRedo() { return gRedo.length > 0; }, render, generate: (d, o) => generate(d || D0(), o), power: d => power(d || D0()), targetsList, observed, get settings() { return G; }, set settings(x) { G = { ...defaults(), ...x }; save(); }, get last() { return last; }, get results() { return resOut; }, get errors() { return lastErrors; }, get consort() { return lastConsort; }, dataCode: P => dataCode(P || last), pTestX: (v, key, P, test) => pTestX(D0(), v, key, P, test), multiPower: r => multiPower(D0(), r), interimSim: r => interimSim(D0(), r), variability: r => variability(D0(), r), get sigInfo() { return sigInfo; }, numParams: v => numParams(v, 0, 'once') };
   if (document.documentElement.classList.contains('ph-generate')) render();
 })();
