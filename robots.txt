@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mohammedsaidelsharkawy.github.io/prof-mse-easy-stat/sitemap.xml
