@@ -250,6 +250,7 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Fixed: “Could not analyse: Cannot read properties of null (reading 'p')”** — with very small groups (e.g. 4 patients or the same value in a group), the normality test gives no result; the results of each variable (Generate, Results by variable) now show no normality P for that group instead of stopping.
 **Fixed: “tukey.inv failed to converge”** — Tukey and Games-Howell comparisons (three groups or more) no longer stop the analysis: when jStat's studentized-range quantile does not converge, it is found by bisection (results that worked before are unchanged).
 **Generate: the expected values when a box is empty** — each empty group box shows (in grey) the value it will use: the expected value of that group (🧱 Build → Expected values in each group), else of the variable (Expected values); **↺ Expected values** on a variable clears what was typed for it in Generate.
 **🧱 Build → 2 · Groups & visits**: the total number of patients and the number in each group (moved from 1 · Study).

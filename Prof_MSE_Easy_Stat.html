@@ -26914,7 +26914,7 @@ const Analysis = (() => {
         Object.assign(it, { n: gv.flat().length, test: res ? TEST_NAME[res.test] || res.test : '', p: res ? res.p : NaN,
           normal: nn.length ? (nn.every(r => r.p > 0.05) ? 'normal' : `non-normal (${nn.filter(r => r.p <= 0.05).length} of ${nn.length} groups)`) : '—' });
         // normality P of each group, and whether the parametric and non-parametric tests disagree on significance
-        it.normPs = gv.map(x => x.length >= 3 ? normality(x).p : NaN);
+        it.normPs = gv.map(x => { const t = x.length >= 3 ? normality(x) : null; return t && isFinite(t.p) ? t.p : NaN; }); // no test (too few or equal values): no P
         if (k >= 2 && gv.every(x => x.length >= 2)) it.levP = S.levene(gv);
         if (k >= 2 && gv.every(x => x.length >= 2)) { const pp = k === 2 ? S.tTest(gv[0], gv[1]).p : S.anova(gv).p, pn = k === 2 ? S.mannWhitney(gv[0], gv[1]).p : S.kruskalWallis(gv).p;
           it.disagree = isFinite(pp) && isFinite(pn) && (pp <= alpha) !== (pn <= alpha); }
