@@ -120,6 +120,20 @@
   const findLib = label => { for (const [sec, list] of LIB) { const e = list.find(x => x[0].toLowerCase() === label.toLowerCase()); if (e) return libVar(sec, e); } return null; };
 
   /* ---------- templates ---------- */
+  const RA_VISITS = ['Baseline', 'PACU', '2h', '4h', '6h', '8h', '12h', '18h', '24h', '36h', '48h'];
+  const RA_VARS = [['Age', 0, { section: 'Demographic and operative characteristics', min: 18, max: 80, expect: { mean: 53, sd: 5.5 } }], ['Sex', 0, { section: 'Demographic and operative characteristics' }],
+        ['Weight', 0, { section: 'Demographic and operative characteristics', expect: { mean: 82, sd: 11 } }], ['Height', 0, { section: 'Demographic and operative characteristics', expect: { mean: 171, sd: 6 } }], ['BMI*', 0, { section: 'Demographic and operative characteristics' }],
+        ['ASA class', 0, { as: 'ASA physical status', section: 'Demographic and operative characteristics', cats: ['I', 'II', 'III'], expect: { pct: [25, 57, 18] } }],
+        ['Operative time', 0, { as: 'Duration of surgery', section: 'Demographic and operative characteristics', expect: { mean: 135, sd: 27 } }],
+        ['Fentanyl needed', 0, { type: 'yn', section: 'Analgesic requirements', definition: 'Intraoperative fentanyl given for a rise of heart rate or blood pressure above 20% of baseline', expect: { pct: [12, 88] } }],
+        ['Time to first rescue analgesia', 0, { section: 'Analgesic requirements', unit: 'h', min: 0, max: 48, dec: '1', expect: { mean: 8, sd: 3.5, dist: 'skewed' } }],
+        ['Total morphine consumption (24 h)', 0, { section: 'Analgesic requirements', min: 0, max: 60, dec: '0', expect: { mean: 7.5, sd: 2, dist: 'skewed' } }],
+        ['Pain NRS', 'post', { as: 'NRS', section: 'NRS', expect: { mean: 3, sd: 1.5, dist: 'skewed' } }],
+        ['Bradycardia', 'last', { section: 'Complications', expect: { pct: [10, 90] } }], ['Hypotension', 'last', { section: 'Complications', expect: { pct: [13, 87] } }],
+        ['PONV', 'last', { as: 'Nausea and vomiting', section: 'Complications', expect: { pct: [8, 92] } }], ['Respiratory depression', 'last', { section: 'Complications', expect: { pct: [1, 99] } }],
+        ['Pruritus', 'last', { section: 'Complications', expect: { pct: [2, 98] } }], ['Block-related complications', 'last', { section: 'Complications', expect: { pct: [1, 99] } }],
+        ['Quality of recovery (QoR-15)', [8], { as: 'QoR-15 score', section: 'QoR-15', expect: { mean: 120, sd: 20 } }],
+        ['Satisfaction', 'last', { as: 'Patient satisfaction', section: 'Patient satisfaction', cats: ['Extremely satisfied', 'Satisfied', 'Neutral', 'Unsatisfied', 'Extremely dissatisfied'], expect: { pct: [38, 27, 23, 10, 2] } }]];
   const TEMPLATES = {
     rct2: { cat: 'Trials', name: 'Two-arm randomised trial', design: 'rct', arms: ['Intervention', 'Control'], visits: ['Baseline', 'Week 2', 'Month 3'], rand: true,
       vars: [['Age'], ['Sex'], ['Weight'], ['Height'], ['BMI*'], ['Hypertension'], ['Diabetes'], ['Ischaemic heart disease'], ['Smoking'], ['Pain VAS', 'all'], ['Complications', 'last'], ['Satisfaction', 'last']] },
@@ -186,22 +200,10 @@
     dose4: { cat: 'Trials', name: 'Dose-finding trial (three doses and placebo)', design: 'rct', arms: ['Low dose', 'Medium dose', 'High dose', 'Placebo'], visits: ['Baseline', 'Week 4', 'Week 12'], rand: true,
       vars: [['Age'], ['Sex'], ['Weight'], ['Systolic BP', 'all'], ['Diastolic BP', 'all'], ['Heart rate', 'all'], ['Adverse event', 'post'], ['Withdrawn', 'last']],
       primary: 'Systolic BP', secondary: ['Diastolic BP'], ss: { m: 'anova', means: '132, 128, 125, 135', sd: 12 } },
-    ra2: { cat: 'Anaesthesia and pain', name: 'Two-group regional anaesthesia RCT (block A vs block B)', design: 'rct', arms: ['Intervention', 'Control'], visits: ['Baseline', 'PACU', '2h', '4h', '6h', '8h', '12h', '18h', '24h', '36h', '48h'], rand: true, n: 60, nBy: [30, 30],
-      vars: [['Age', 0, { section: 'Demographic and operative characteristics', min: 18, max: 80, expect: { mean: 53, sd: 5.5 } }], ['Sex', 0, { section: 'Demographic and operative characteristics' }],
-        ['Weight', 0, { section: 'Demographic and operative characteristics', expect: { mean: 82, sd: 11 } }], ['Height', 0, { section: 'Demographic and operative characteristics', expect: { mean: 171, sd: 6 } }], ['BMI*', 0, { section: 'Demographic and operative characteristics' }],
-        ['ASA class', 0, { as: 'ASA physical status', section: 'Demographic and operative characteristics', cats: ['I', 'II', 'III'], expect: { pct: [25, 57, 18] } }],
-        ['Operative time', 0, { as: 'Duration of surgery', section: 'Demographic and operative characteristics', expect: { mean: 135, sd: 27 } }],
-        ['Number of operated levels', 0, { type: 'num', section: 'Demographic and operative characteristics', min: 1, max: 6, dec: '0', expect: { mean: 2.6, sd: 0.7, dist: 'normal' } }],
-        ['Fusion/instrumentation', 0, { type: 'yn', section: 'Demographic and operative characteristics', expect: { pct: [32, 68] } }],
-        ['Fentanyl needed', 0, { type: 'yn', section: 'Analgesic requirements', definition: 'Intraoperative fentanyl given for a rise of heart rate or blood pressure above 20% of baseline', expect: { pct: [12, 88] } }],
-        ['Time to first rescue analgesia', 0, { section: 'Analgesic requirements', unit: 'h', min: 0, max: 48, dec: '1', expect: { mean: 8, sd: 3.5, dist: 'skewed' } }],
-        ['Total morphine consumption (24 h)', 0, { section: 'Analgesic requirements', min: 0, max: 60, dec: '0', expect: { mean: 7.5, sd: 2, dist: 'skewed' } }],
-        ['Pain NRS', 'post', { as: 'NRS', section: 'NRS', expect: { mean: 3, sd: 1.5, dist: 'skewed' } }],
-        ['Quality of recovery (QoR-15)', [8], { as: 'QoR-15 score', section: 'Complications, QoR-15 and satisfaction', expect: { mean: 120, sd: 20 } }],
-        ['Bradycardia', 'last', { section: 'Complications, QoR-15 and satisfaction', group: 'Complications', expect: { pct: [10, 90] } }], ['Hypotension', 'last', { section: 'Complications, QoR-15 and satisfaction', group: 'Complications', expect: { pct: [13, 87] } }],
-        ['PONV', 'last', { as: 'Nausea and vomiting', section: 'Complications, QoR-15 and satisfaction', group: 'Complications', expect: { pct: [8, 92] } }], ['Respiratory depression', 'last', { section: 'Complications, QoR-15 and satisfaction', group: 'Complications', expect: { pct: [1, 99] } }],
-        ['Pruritus', 'last', { section: 'Complications, QoR-15 and satisfaction', group: 'Complications', expect: { pct: [2, 98] } }], ['Block-related complications', 'last', { section: 'Complications, QoR-15 and satisfaction', group: 'Complications', expect: { pct: [1, 99] } }],
-        ['Satisfaction', 'last', { as: 'Patient satisfaction', section: 'Complications, QoR-15 and satisfaction', cats: ['Extremely satisfied', 'Satisfied', 'Neutral', 'Unsatisfied', 'Extremely dissatisfied'], expect: { pct: [38, 27, 23, 10, 2] } }]],
+    // the regional anaesthesia RCTs (two and three groups): the same sections and variables
+    ra2: { cat: 'Anaesthesia and pain', name: 'Two-group regional anaesthesia RCT (block A vs block B)', design: 'rct', arms: ['Intervention', 'Control'], visits: RA_VISITS, rand: true, n: 60, nBy: [30, 30], vars: RA_VARS,
+      primary: 'Time to first rescue analgesia', secondary: ['Total morphine consumption (24 h)', 'NRS', 'QoR-15 score'] },
+    ra3: { cat: 'Anaesthesia and pain', name: 'Three-group regional anaesthesia RCT (block A vs block B vs control)', design: 'rct', arms: ['Intervention A', 'Intervention B', 'Control'], visits: RA_VISITS, rand: true, n: 90, nBy: [30, 30, 30], vars: RA_VARS,
       primary: 'Time to first rescue analgesia', secondary: ['Total morphine consumption (24 h)', 'NRS', 'QoR-15 score'] },
     surgery: { cat: 'Surgery', name: 'Surgical outcomes study', design: 'cohort', arms: ['Technique A', 'Technique B'], visits: ['Pre-operative', 'Day 1', 'Month 1'],
       vars: [['Age'], ['Sex'], ['ASA class'], ['Hypertension'], ['Diabetes'], ['Date of surgery'], ['Operative time'], ['Blood loss'], ['Pain VAS', 'all'], ['Date of admission'], ['Date of discharge'], ['LOS*'], ['Complications', 'last'], ['Reoperation', 'last']] },
