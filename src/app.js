@@ -5243,7 +5243,7 @@
   };
 
   /* ---------- report format: thesis, journal paper, or as configured ---------- */
-  const DEFAULT_REPORT = { stamp: false, bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: true, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, forestAll: false, appFull: false, thesisPage: '', citeText: '', autoNum: true, appSheet: '', appSheetCols: '', appSheetRows: '', appSheetAllRows: false, appSheetByGroup: false, appSheetOut: 'in', appSheetFmt: 'docx', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 0, paperText: 'table', paperSig: false, paperTable: 'grid', paperSpacing: '2', abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
+  const DEFAULT_REPORT = { stamp: false, bilingual: false, cover: false, coverCandidate: '', coverSupervisor: '', coverDept: '', coverDate: '', toc: false, wordStyles: true, headNum: false, lineNumbers: false, twoCol: false, watermark: '', abbrFoot: false, refs: false, checklist: '', wordLimit: '', appCodebook: false, appPlan: false, forestAll: false, appFull: false, thesisPage: '', citeText: '', autoNum: true, appSheet: '', appSheetCols: '', appSheetRows: '', appSheetAllRows: false, appSheetByGroup: false, appSheetOut: 'in', appSheetFmt: 'docx', altText: false, appData: false, frontDecl: '', frontDed: '', frontAck: '', format: 'custom', chapter: '', sectionHeads: true, maxFigs: 3, paperText: 'table', paperSig: false, paperTable: 'grid', paperSpacing: '2', abstract: true, style: 'none', newPage: true, nonSig: false, tabStart: 1, figStart: 1 };
   // journal styles: number, P value and caption conventions applied on top of the format (italicP and midDot are applied in Word / to the text)
   const JOURNAL_STYLES = {
     none: { name: 'As in steps 5–7', note: 'Number and caption styles exactly as chosen in steps 5–7.', o: {} },
@@ -6253,6 +6253,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
           res.consort = { url: cv.toDataURL('image/png'), w: cv.width, h: cv.height };
         }
         res.sections = res.sections.map(s => rmLayoutOf(cfg, s) === 'cols' ? transposeSec(s) : s);
+        res.sections.forEach(s => { if (s.comment) s.comment = fullWords(s.comment); }); if (res.methods) res.methods = fullWords(res.methods); // full words in the text
         { const defs = state.cfg.variables.filter(v => v.include && v.definition).map(v => { const d0 = v.definition.trim().replace(/\.$/, ''); return /\bdefined\b/i.test(d0) ? d0 + '.' : `${v.label.replace(/\s*\([^)]*\)\s*$/, '')} was defined as ${/^[A-Z][a-z]+\b/.test(d0) ? d0.charAt(0).toLowerCase() + d0.slice(1) : d0}.`; });
           if (defs.length && res.methods) res.methods = `${res.methods.trim()} Definitions: ${defs.join(' ')}`; }
         if (state.cfg.simulated && state.cfg.simulated.partial && state.cfg.simStatement && res.methods) res.methods = `${res.methods.trim()} The values of ${(state.cfg.simulated.cols || []).map(c => Analysis.columnLabel(state.cfg, c)).join(', ')} were simulated (Prof Easy Stat) and do not describe real patients.`;
@@ -6438,12 +6439,16 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
   const isOut = key => !!state.cfg.exportExclude[key];
   const exBox = (key, label) => `<label class="check exp"><input type="checkbox" data-export="${esc(key)}" ${isOut(key) ? '' : 'checked'}><span>${label}</span></label>`;
   // pull the editable text back into the result before re-rendering or exporting
+  // comments in full words: weren't → were not, don't → do not, can't → cannot, it's → it is …
+  const fullWords = t => typeof t !== 'string' ? t : t.replace(/\b([Cc])an['’]t\b/g, '$1annot').replace(/\b([Ww])on['’]t\b/g, (m, w) => `${w === 'W' ? 'W' : 'w'}ill not`).replace(/\b([Ss])han['’]t\b/g, '$1hall not')
+    .replace(/\b(\w+)n['’]t\b/g, '$1 not').replace(/\b([Ii]t|[Tt]hat|[Tt]here|[Ww]hat)['’]s\b/g, '$1 is').replace(/\b(\w+)['’]re\b/g, '$1 are').replace(/\b(\w+)['’]ve\b/g, '$1 have');
+  document.addEventListener('change', e => { const pf = e.target.closest && e.target.closest('[data-paperfig]'); if (!pf || !state.result) return; syncEdits(); const rp = report(); rp.paperFig = { ...(rp.paperFig || {}), [pf.dataset.paperfig]: pf.checked }; const y = scrollY; renderReport(); scrollTo(0, y); });
   function syncEdits() {
     const r = state.result; if (!r || !$('#edMethods')) return;
     r.methods = $('#edMethods').value;
     if ($('#edIntro')) r.intro = $('#edIntro').value;
     if ($('#edGroupIntro')) r.groupIntro = $('#edGroupIntro').value;
-    document.querySelectorAll('[data-comment]').forEach(t => { r.sections[+t.dataset.comment].comment = t.value; });
+    document.querySelectorAll('[data-comment]').forEach(t => { r.sections[+t.dataset.comment].comment = fullWords(t.value); });
     document.querySelectorAll('[data-fcap]').forEach(t => { const [si, fi] = t.dataset.fcap.split(':').map(Number); r.sections[si].figures[fi].caption = t.value; });
     document.querySelectorAll('[data-fnote]').forEach(t => { const [si, fi] = t.dataset.fnote.split(':').map(Number); r.sections[si].figures[fi].note = t.value; });
     document.querySelectorAll('[data-ttl]').forEach(t => { r.sections[+t.dataset.ttl].title = t.value; });
@@ -6462,7 +6467,8 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
       const kindOf = f => r.sections.find(s => s.figures.includes(f)).kind;
       // only figures of significant results; the limit is a maximum
       const ranked = figs.filter(f => rep.nonSig || f.sig !== false).map((f, i) => ({ f, i, k: kindOf(f) === 'repeated' ? 0 : 1 })).sort((a, b) => a.k - b.k || a.i - b.i);
-      const keep = new Set(ranked.slice(0, rep.maxFigs).map(x => x.f));
+      const pick = rep.paperFig || {}, keep = new Set(ranked.filter(x => pick[exKey.figure(x.f)] !== false).slice(0, rep.maxFigs).map(x => x.f));
+      figs.forEach(f => { const k = exKey.figure(f); if (pick[k] === true) keep.add(f); if (pick[k] === false) keep.delete(f); }); // a figure ticked “In the paper” is always in its Results
       figs = figs.filter(f => keep.has(f));
     }
     const kept = new Set(figs);
@@ -6545,7 +6551,7 @@ document.querySelectorAll('img').forEach(function(im){im.style.cursor='zoom-in';
       const si = r.sections.findIndex(s => s.figures.includes(f)), fi = r.sections[si].figures.indexOf(f), fk = exKey.figure(f);
       const label = isOut(fk) ? 'Not exported:' : plan.kept.has(f) ? lab(plan.figNum.get(f)) : (f.sig === false && !plan.rep.nonSig ? 'Not in the paper (not significant):' : `Not in the paper (limit ${plan.rep.maxFigs}):`);
       const note = f.note !== undefined && (f.note || o.figNotes) ? `<input type="text" class="fcap fnote" data-fnote="${si}:${fi}" value="${esc(f.note)}" title="Explanation of the symbols (printed after the caption)" placeholder="Explanation of the symbols">` : '';
-      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption">${note} <button class="btn ghost small" data-copyfig="${si}:${fi}" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" data-editfig="${si}:${fi}" type="button" title="Caption, title, axes, range, legend, labels, colours, width">✎ Edit figure</button></figcaption>${exBox(fk, 'Figure')}</figure>`;
+      return `<figure class="${plan.kept.has(f) ? '' : 'off'}"><img src="${f.url}" alt=""><figcaption>${report().format === 'paper' && !isOut(fk) ? `<label class="check" style="margin:0 6px 0 0;display:inline-flex" title="Put this figure in the Results of the paper (whatever its significance or the limit of figures)"><input type="checkbox" data-paperfig="${esc(fk)}" ${plan.kept.has(f) ? 'checked' : ''}><span>In the paper</span></label>` : ''}${label} <input type="text" class="fcap" data-fcap="${si}:${fi}" value="${esc(f.caption)}" title="Edit the caption">${note} <button class="btn ghost small" data-copyfig="${si}:${fi}" type="button" title="Copy the figure, to paste into Word or PowerPoint">⧉ Copy</button> <button class="btn ghost small" data-editfig="${si}:${fi}" type="button" title="Caption, title, axes, range, legend, labels, colours, width">✎ Edit figure</button></figcaption>${exBox(fk, 'Figure')}</figure>`;
     };
     r.sections.forEach((s, i) => {
       if (s.figOnly) { if (!atEnd) html += `<div class="report-sec"><div class="legend-note">Figure placed here (step 7)</div><div class="figs">${s.figures.map(figHtml).join('')}</div></div>`; return; }

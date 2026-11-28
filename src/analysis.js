@@ -3028,7 +3028,7 @@ const Analysis = (() => {
     const EF = opts.catEffect === 'or' ? 'OR' : opts.catEffect === 'rd' ? 'RD' : 'RR', efName = { OR: 'Odds ratio', RD: 'Risk difference (percentage points, Newcombe CI)', RR: 'Relative risk' }[EF], rsep = EF === 'RD' ? ' to ' : '-';
     const rrLines = c => c.rr.map((q, idx) => q.rr === null ? `${numbered ? EF + (idx + 1) + ': ' : ''}—` :
       `${numbered ? EF + (idx + 1) + ': ' : ''}${fmt(q.rr, EF === 'RD' ? 1 : 2)} (${fmt(q.lo, EF === 'RD' ? 1 : 2)}${rsep}${fmt(q.hi, EF === 'RD' ? 1 : 2)})`);
-    const postHocLines = res => res.pairs.map((q, idx) => `P${idx + 1}=${fmtP(q.p, alpha)}`);
+    const postHocLines = res => res.pairs.map((q, idx) => { const t = fmtP(q.p, alpha); return `P${idx + 1}${/^[<>≤≥]/.test(t) ? '' : '='}${t}`; });
 
     // the tests behind a table's P values: listed in its footnote, or as letters after each P value (testNote = 'list' / 'marks')
     const SUP = opts.noteSyms === 'symbols' ? ['†', '‡', '§', '‖', '¶', '#', '††', '‡‡'] : opts.noteSyms === 'numbers' ? '¹²³⁴⁵⁶⁷⁸' : 'ᵃᵇᶜᵈᵉᶠᵍʰ';
