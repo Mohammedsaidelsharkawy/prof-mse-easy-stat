@@ -250,6 +250,9 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Fixed: + Visit (several at once) and All the visits at once** — leaving their box no longer redraws the page before the click, so the number and the list are applied; Enter applies them too.
+**🧱 Build → sections**: ☐ selects all the variables of a section (then ✕ Remove, move to section, role…), 🗑 deletes a section with its variables (↶ Undo restores).
+**Sections become the tables in 📊 Analyse**: data generated or made from a builder master sheet put each variable in the table named after its section.
 **Comments in full words**: weren’t → were not, don’t → do not, can’t → cannot, it’s → it is … (generated, edited or pasted comments, and the methods).
 **Post hoc P values**: P2<0.001 (no “=<”); P1=0.019 stays with “=”.
 **Journal paper: the figures in the Results** — 3 figures by default (was none), and **In the paper** on every figure of the report: a ticked figure is always in the Results (whatever its significance or the limit); unticking takes it out.
