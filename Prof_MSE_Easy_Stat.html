@@ -44755,6 +44755,13 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
     const res = last ? targetsList(D).map(t => ({ ...t, o: observed(D, last, t) })) : [];
     w.innerHTML = `<div class="mb-head"><b>🎲 Generate the data</b><input type="text" data-gtitle="1" value="${esc(D.title || '')}" placeholder="Study title" title="The study title — the same as in 🧱 Build; it names the files and the project in Analyse" style="width:min(340px,40vw);margin:0 6px"><label class="legend-note" style="display:inline-flex;align-items:center;gap:4px" title="The number of study groups (as in 🧱 Build → Groups & visits)">groups <input type="number" min="1" max="12" data-gnarms="1" value="${arms(D).length || 1}" style="width:56px"></label><label class="legend-note" style="display:inline-flex;align-items:center;gap:4px;margin-left:8px" title="All the visits at once, separated by commas (as in 🧱 Build → Groups & visits); Enter to apply">visits <input type="text" data-gvislist="1" value="${esc(D.visits.map(x => x.name).join(', '))}" placeholder="Baseline, 2h, 24h" style="width:min(300px,30vw)"></label><span class="legend-note">· ${D.vars.length} variables · simulated patients for teaching, testing the analysis and checking the sample size</span><span class="spacer"></span>
         <button class="btn ghost small" type="button" data-gtab="build">‹ Back to the design</button><button class="btn primary small" type="button" id="genSend">📊 Analyse these data ›</button></div>
+      <div class="row gen-top" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">
+        <button class="btn ghost small" type="button" data-gtop="add" title="A new variable in the design (also in 🧱 Build), generated with the others">＋ Variable</button>
+        <button class="btn primary small" type="button" data-gtop="go">🎲 Generate</button><span class="legend-note">Download:</span>
+        <button class="btn ghost small" type="button" data-gtop="xlsx" title="The simulated master sheet, as the Excel file of the design">⬇ Excel (.xlsx)</button>
+        <button class="btn ghost small" type="button" data-gtop="csv" title="One row per patient">⬇ CSV</button>
+        ${D.visits.length > 1 ? '<button class="btn ghost small" type="button" data-gtop="csvlong" title="One row per patient and visit">⬇ CSV (a row per visit)</button>' : ''}
+        <button class="btn ghost small" type="button" data-gtop="json" title="The patients and their values, for other software (JSON)">⬇ JSON</button></div>
       <div class="mb-body" style="border-radius:12px;margin-top:10px">
       <div class="gen-scen"><b>Scenarios</b><select data-gscen="1" style="width:auto"><option value="">Open a saved scenario…</option>${Object.keys(scenarios()).map(nm => `<option value="${esc(nm)}">${esc(nm)}</option>`).join('')}</select><button class="btn ghost small" type="button" id="genScenSave" title="Keep these settings under a name (e.g. optimistic, expected, pessimistic)">💾 Save as…</button>${Object.keys(scenarios()).length ? `<button class="btn ghost small" type="button" id="genScenDel">🗑 Delete…</button>` : ''}<button class="btn ghost small" type="button" id="genScenNull" title="The same values in every group for every variable: about 5% of the tests come out significant by chance">∅ No differences (null scenario)</button></div>
       <div class="grid g4">
@@ -45180,6 +45187,32 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
   const fileName = D => `Simulated - ${B.fileBase()} - master sheet.xlsx`;
   async function send(D) { if (!last) { last = generate(D); } const blob = B.buildWorkbook(D, fill(D)), f = new File([blob], fileName(D)); B.setPhase('analyse'); U.go(1); await U.loadFile(f);
     if (D.title) { const pn = document.querySelector('#projName'), st = document.querySelector('#studyTitle'); if (pn) pn.value = D.title; if (st) st.value = D.title; const c = U.state.cfg; if (c && c.study) { c.study.project = D.title; c.study.title = D.title; } } } // the project in Analyse named after the study
+  function addVarDialog(D) { let d = document.getElementById('genAddDlg'); if (!d) { d = document.createElement('dialog'); d.id = 'genAddDlg'; d.className = 'app-dlg'; document.body.append(d); }
+    const secs = [...new Set(D.vars.map(v => v.section).filter(Boolean))];
+    d.innerHTML = `<form method="dialog" onsubmit="return false"><h3>＋ A new variable</h3><div class="grid g2" style="gap:8px">
+      <div style="grid-column:1/-1"><label class="f">Name</label><input type="text" id="gaName" placeholder="e.g. Heart rate, Diabetes, Pain severity"></div>
+      <div><label class="f">Type</label><select id="gaType"><option value="num">Number</option><option value="yn">Yes / no</option><option value="cat">Categories</option></select></div>
+      <div id="gaUnitBox"><label class="f">Unit</label><input type="text" id="gaUnit" placeholder="e.g. beats/min"></div>
+      <div id="gaCatBox" style="display:none;grid-column:1/-1"><label class="f">Categories (one per line or separated by /)</label><textarea id="gaCats" rows="3" placeholder="Mild&#10;Moderate&#10;Severe"></textarea></div>
+      <div id="gaRange"><label class="f">Mean ± SD (expected)</label><div class="row" style="gap:4px"><input type="number" step="any" id="gaMean" placeholder="mean" style="width:90px"><span>±</span><input type="number" step="any" min="0" id="gaSd" placeholder="SD" style="width:80px"></div></div>
+      <div><label class="f">Section (= table)</label><select id="gaSec">${secs.map(x => `<option>${esc(x)}</option>`).join('')}<option value="__new">＋ New section…</option></select></div>
+      ${D.visits.length > 1 ? `<div><label class="f">Collected at</label><select id="gaVis"><option value="first">The first visit (${esc(D.visits[0].name)})</option><option value="all">Every visit</option><option value="post">Every visit after the first</option><option value="last">The last visit (${esc(D.visits[D.visits.length - 1].name)})</option></select></div>` : ''}</div>
+      <div class="row" style="justify-content:flex-end;gap:6px;margin-top:10px"><button class="btn ghost" type="button" data-ga="x">Cancel</button><button class="btn primary" type="button" data-ga="ok">Add and generate</button></div></form>`;
+    const sync = () => { const t = d.querySelector('#gaType').value; d.querySelector('#gaUnitBox').style.display = t === 'num' ? '' : 'none'; d.querySelector('#gaRange').style.display = t === 'num' ? '' : 'none'; d.querySelector('#gaCatBox').style.display = t === 'cat' ? '' : 'none'; };
+    d.onchange = sync; sync();
+    d.onclick = ev => { const b = ev.target.closest('[data-ga]'); if (!b) return; if (b.dataset.ga === 'x') { d.close(); return; }
+      const nm = d.querySelector('#gaName').value.trim(); if (!nm) { U.toast('Type the name of the variable'); return; } const ty = d.querySelector('#gaType').value; let sec = d.querySelector('#gaSec').value;
+      if (sec === '__new') { sec = (prompt('Name of the new section', '') || '').trim(); if (!sec) return; }
+      const cats = ty === 'cat' ? d.querySelector('#gaCats').value.split(/\n|\//).map(x => x.trim()).filter(Boolean) : ty === 'yn' ? ['Yes', 'No'] : [];
+      if (ty === 'cat' && cats.length < 2) { U.toast('Give at least two categories'); return; }
+      const unit = ty === 'num' ? d.querySelector('#gaUnit').value.trim() : '', line = `${nm}${unit ? ` (${unit})` : ''}${cats.length ? `: ${cats.join(' / ')}` : ''}`;
+      const v = B.fromLine(line, sec); if (!v) return; v.section = sec; if (ty === 'num' && v.type !== 'num') { v.type = 'num'; v.cats = []; } if (ty !== 'num' && v.type === 'num') { v.type = ty; v.cats = cats; }
+      v.expect = B.expectOf(v.label, v.type, v.cats); const m = +d.querySelector('#gaMean').value, sd = +d.querySelector('#gaSd').value; if (ty === 'num' && d.querySelector('#gaMean').value !== '') { v.expect.mean = m; if (sd > 0) v.expect.sd = sd; }
+      const ids = D.visits.map(x => x.id), vw = (d.querySelector('#gaVis') || {}).value || 'first'; v.visits = vw === 'all' ? [...ids] : vw === 'post' ? ids.slice(1) : vw === 'last' ? [ids[ids.length - 1]] : [];
+      const last0 = D.vars.map(x => x.section).lastIndexOf(sec); D.vars.splice(last0 < 0 ? D.vars.length : last0 + 1, 0, v); if (!(D.sections || []).includes(sec)) (D.sections = D.sections || []).push(sec); B.save();
+      d.close(); try { resStamp++; last = generate(D); } catch (err) { console.error(err); } render(); U.toast(`“${v.label}” added (also in 🧱 Build) and generated`);
+      setTimeout(() => { const c = document.querySelector(`[data-gcard="${v.id}"]`); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 200); };
+    d.showModal(); setTimeout(() => d.querySelector('#gaName').focus(), 50); }
   function cardFor(vid) { const D = D0(), v = D.vars.find(x => x.id === vid); if (!v) return ''; if (!['num', 'yn', 'cat'].includes(v.type)) return `<p class="legend-note">${v.type === 'calc' ? 'A formula: calculated from its variables.' : v.type === 'date' ? 'Dates are drawn in order (Generate the data → Dates).' : 'Not generated (free text).'}</p>`;
     const A = arms(D), gl = A.length >= 2 ? A : ['All patients'];
     return `<div class="gen-card" data-gcard="${v.id}">${varHead(D, v, true)}<div class="tbl-wrap"><table class="t gen-tbl"><thead><tr>${gl.map(g => `<th>${esc(g)}</th>`).join('')}</tr></thead><tbody><tr>${gl.map((_, g) => `<td>${cellsOf(D, v, g)}</td>`).join('')}</tr></tbody></table></div></div>`; }
@@ -45200,6 +45233,15 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
     if (b.id === 'genInterim') { const out = $('#genInterimOut'); out.textContent = 'Simulating…'; setTimeout(() => { try { out.innerHTML = interimSim(D, Math.min(1000, Math.max(20, +G.power.reps || 200))); } catch (err) { console.error(err); out.textContent = 'Failed: ' + err.message; } }, 30); return; }
     if (b.id === 'genVar') { const out = $('#genVarOut'); out.textContent = 'Simulating 100 studies…'; setTimeout(() => { try { out.innerHTML = variability(D, 100); } catch (err) { console.error(err); out.textContent = 'Failed: ' + err.message; } }, 30); return; }
     if (b.id === 'genCmpSc') { const out = $('#genCmpScOut'); out.textContent = 'Simulating…'; setTimeout(() => { try { out.innerHTML = compareScenarios(D, Math.min(500, Math.max(20, +G.curve.reps || 100))); } catch (err) { console.error(err); out.textContent = 'Failed: ' + err.message; } }, 30); return; }
+    if (b.dataset.gtop) { const k = b.dataset.gtop;
+      if (k === 'add') { addVarDialog(D); return; }
+      const ensure = () => { if (!last) { try { resStamp++; last = generate(D); } catch (err) { console.error(err); toast('Could not generate: ' + err.message); return false; } } return true; };
+      if (k === 'go') { try { resStamp++; last = generate(D); toast(`${last.length} simulated patients`); } catch (err) { console.error(err); toast('Could not generate: ' + err.message); } return render(); }
+      if (!ensure()) return;
+      if (k === 'xlsx') { U.saveUrl(URL.createObjectURL(B.buildWorkbook(D, fill(D))), fileName(D)); toast('Simulated master sheet saved'); }
+      else if (k === 'csv' || k === 'csvlong') csvOut(D, k === 'csvlong').catch(err => { console.error(err); toast('Could not make it: ' + err.message); });
+      else if (k === 'json') { const blob = new Blob([JSON.stringify({ study: D.title || '', seed: G.seed, groups: arms(D), visits: D.visits.map(x => x.name), variables: D.vars.map(v => ({ id: v.id, label: v.label, type: v.type, unit: v.unit || '', categories: v.cats || [] })), patients: fill(D).patients }, null, 1)], { type: 'application/json' }); U.saveUrl(URL.createObjectURL(blob), fileName(D).replace(/ - master sheet\.xlsx$/, ' - data.json')); toast('JSON saved'); }
+      render(); return; }
     if (b.id === 'genCsv' || b.id === 'genCsvLong') { csvOut(D, b.id === 'genCsvLong').catch(err => { console.error(err); toast('Could not make it: ' + err.message); }); return; }
     if (b.id === 'genMethods') { methodsDoc(D).catch(err => { console.error(err); toast('Could not make it: ' + err.message); }); return; }
     if (b.id === 'genErrKey') { errorKey(D); return; }

@@ -250,6 +250,7 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**🎲 Generate → toolbar at the top**: **＋ Variable** (name, number / yes-no / categories, unit or categories, expected mean ± SD, section, visits — added to the design and 🧱 Build, and generated), **🎲 Generate**, and downloads **⬇ Excel (.xlsx)**, **⬇ CSV**, **⬇ CSV (a row per visit)**, **⬇ JSON** — the data are generated first when needed.
 **🧱 Build → groups of variables**: select variables (e.g. DM, HTN, IHD), then **🧩 Group as…** (e.g. Co-morbidities) or **Ungroup**; the group shows beside each variable and becomes one block in the table of 📊 Analyse.
 **Templates: Two-group and Three-group regional anaesthesia RCT** (first in the list; the three-group one replaces the former three-arm regional anaesthesia template, with the same variables and sections as the two-group one): groups Intervention and Control (60 patients, 30 + 30), or Intervention A, Intervention B and Control (90, 30 + 30 + 30); visits Baseline, PACU, 2h–48h; the same sections (= tables): Demographic and operative characteristics · Analgesic requirements · NRS · Complications · QoR-15 · Patient satisfaction — with their variables, units, categories (ASA I–III, 5-level satisfaction), the primary outcome (time to first rescue analgesia) and expected values for simulation.
 **🗑 Deleting a section** asks what to do with its variables: move them (with all their options) to another section or a new one, or delete them too.
