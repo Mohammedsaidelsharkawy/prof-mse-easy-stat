@@ -22224,14 +22224,19 @@ const Stats = (() => {
     return { F, df1, df2, p, msw, etaSq: ssb / (ssb + ssw) };
   }
 
+  // the studentized-range quantile: jStat's, else (when it does not converge) by bisection on its distribution function
+  function qTukey(p, k, df) { if (!(df > 0) || !(k >= 2)) return NaN; try { const q = jStat.tukey.inv(p, k, df); if (isFinite(q) && q > 0) return q; } catch (e) { /* bisection below */ }
+    const d = Math.min(df, 5000), F = x => { try { return jStat.tukey.cdf(x, k, d); } catch (e) { return NaN; } }; let lo = 0, hi = 60;
+    for (let i = 0; i < 100; i++) { const m = (lo + hi) / 2, c = F(m); if (!isFinite(c)) return NaN; if (c < p) lo = m; else hi = m; if (hi - lo < 1e-9) break; } return (lo + hi) / 2; }
+  const ptukeyUp = (q, k, df) => { try { const c = jStat.tukey.cdf(q, k, df); return isFinite(c) ? Math.min(1, Math.max(0, 1 - c)) : NaN; } catch (e) { return NaN; } };
   function tukey(groups) {
     const a = anova(groups), k = groups.length, out = [];
-    const qc = jStat.tukey.inv(CONF, k, a.df2);
+    const qc = qTukey(CONF, k, a.df2);
     for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
       const d = mean(groups[i]) - mean(groups[j]);
       const se = Math.sqrt(a.msw / 2 * (1 / groups[i].length + 1 / groups[j].length));
       const q = se === 0 ? 0 : Math.abs(d) / se;
-      const p = Math.min(1, Math.max(0, 1 - jStat.tukey.cdf(q, k, a.df2)));
+      const p = ptukeyUp(q, k, a.df2);
       out.push({ i, j, diff: d, lo: d - qc * se, hi: d + qc * se, p });
     }
     return out;
@@ -22386,8 +22391,8 @@ const Stats = (() => {
       const a = groups[i], b = groups[j], va = variance(a) / a.length, vb = variance(b) / b.length;
       const d = mean(a) - mean(b), se = Math.sqrt(va + vb);
       const df = (va + vb) ** 2 / (va * va / (a.length - 1) + vb * vb / (b.length - 1));
-      const q = Math.abs(d) / se * Math.SQRT2, qc = jStat.tukey.inv(CONF, k, df) / Math.SQRT2;
-      out.push({ i, j, diff: d, lo: d - qc * se, hi: d + qc * se, p: Math.min(1, Math.max(0, 1 - jStat.tukey.cdf(q, k, df))) });
+      const q = Math.abs(d) / se * Math.SQRT2, qc = qTukey(CONF, k, df) / Math.SQRT2;
+      out.push({ i, j, diff: d, lo: d - qc * se, hi: d + qc * se, p: ptukeyUp(q, k, df) });
     }
     return out;
   }
@@ -42824,8 +42829,6 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   const tStudy = () => ext('studyTop') + `<div class="grid g3">
       <div style="grid-column:span 2"><label class="f">Study title</label><input type="text" data-mb="title" value="${esc(D.title)}" placeholder="e.g. Ozone injection versus steroid for shoulder pain: a randomised trial"></div>
       <div><label class="f">Design</label><select data-mb="design">${opt([['rct', 'Randomised controlled trial'], ['cohort', 'Cohort'], ['casecontrol', 'Case-control'], ['cross', 'Cross-sectional'], ['diagnostic', 'Diagnostic accuracy'], ['beforeafter', 'One group, before and after']], D.design)}</select></div>
-      <div><label class="f">Planned number of patients (rows)${(D.nBy || []).some(x => +x > 0) ? ' — the sum of the groups' : ''}</label><input type="number" min="1" max="20000" data-mb="n" value="${esc(D.n)}" ${(D.nBy || []).some(x => +x > 0) ? 'disabled' : ''}>
-        ${(D.arms || []).filter(Boolean).length >= 2 ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px"><span class="legend-note">In each group:</span>${D.arms.filter(Boolean).map((a, i) => `<span class="row" style="gap:4px;align-items:center">${esc(a)} <input type="number" min="0" max="20000" data-mbnby="${i}" value="${esc((D.nBy || [])[i] ?? '')}" placeholder="${Math.round((+D.n || 0) / D.arms.filter(Boolean).length)}" style="width:72px"></span>`).join('')}</div>` : ''}</div>
       <div><label class="f">Patient ID: prefix</label><input type="text" data-mb="idPrefix" value="${esc(D.idPrefix)}" style="width:90px"></div>
       <div><label class="f">Patient ID: digits</label><input type="number" min="1" max="8" data-mb="idDigits" value="${esc(D.idDigits)}" style="width:90px"> <span class="legend-note">e.g. ${esc(D.idPrefix)}${'0'.repeat(Math.max(0, (+D.idDigits || 3) - 1))}1</span></div></div>
     <h3>Conventions</h3><div class="grid g4">
@@ -42867,6 +42870,8 @@ document.getElementById('out').textContent=L?(100/(1+Math.exp(-z))).toFixed(1)+'
   }
   const tVisits = () => `<h3 style="margin-top:0">Study groups (arms)</h3><p class="legend-note">Leave one or none for a one-group study.</p>
     <div class="row" style="gap:8px;align-items:center;margin-bottom:6px"><label class="f" style="margin:0">Number of groups</label><input type="number" min="1" max="12" data-mbnarms="1" value="${D.arms.filter(Boolean).length || 1}" style="width:70px"></div>
+      <div style="margin:8px 0 10px;max-width:640px"><label class="f">Number of patients — total (rows)${(D.nBy || []).some(x => +x > 0) ? ' — the sum of the groups' : ''}</label><input type="number" min="1" max="20000" data-mb="n" value="${esc(D.n)}" ${(D.nBy || []).some(x => +x > 0) ? 'disabled' : ''}>
+        ${(D.arms || []).filter(Boolean).length >= 2 ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:4px"><span class="legend-note">In each group (optional; the total becomes their sum):</span>${D.arms.filter(Boolean).map((a, i) => `<span class="row" style="gap:4px;align-items:center">${esc(a)} <input type="number" min="0" max="20000" data-mbnby="${i}" value="${esc((D.nBy || [])[i] ?? '')}" placeholder="${Math.round((+D.n || 0) / D.arms.filter(Boolean).length)}" style="width:72px"></span>`).join('')}</div>` : ''}</div>
     <div class="mb-list">${D.arms.map((a, i) => `<div class="row" style="gap:6px"><input type="text" data-mbarm="${i}" value="${esc(a)}" style="max-width:260px"><button class="btn ghost small" type="button" data-mbarmdel="${i}">✕</button></div>`).join('')}<button class="btn ghost small" type="button" id="mbArmAdd">+ Group</button></div>
     <h3>Visits</h3><p class="legend-note">Each variable is collected once (at the first visit) unless you tick other visits for it in step 3.</p>
     <div class="mb-list">${D.visits.map((x, i) => `<div class="row" style="gap:6px" draggable="true" data-mbdragvis="${i}" title="Drag to reorder"><span style="cursor:grab;color:var(--muted)">⠿</span><input type="text" data-mbvis="${i}" value="${esc(x.name)}" style="max-width:220px"><span class="legend-note">column suffix _${esc(tagOf(x.name))}</span>${i ? `<span class="legend-note">day</span><input type="number" min="0" data-mbvday="${i}" value="${esc(x.day ?? '')}" placeholder="e.g. 90" style="width:74px" title="Days after the anchor date (for the due date and its window)"><span class="legend-note">±</span><input type="number" min="0" data-mbvtol="${i}" value="${esc(x.tol ?? '')}" placeholder="7" style="width:60px" title="Window, in days">` : '<span class="legend-note">day 0</span>'}${i ? `<button class="btn ghost small" type="button" data-mbvismove="${i}" title="Earlier">↑</button>` : ''}<button class="btn ghost small" type="button" data-mbvisdel="${i}">✕</button></div>`).join('')}<button class="btn ghost small" type="button" id="mbVisAdd">+ Visit</button></div>
@@ -44820,10 +44825,10 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
     const one = key => { const t = ((G.targets[v.id] || {})[g] || {})[key], forced = ((SIG[v.id] || {})[g] || {})[key];
       if (v.type === 'num') { if (mode === 'range') { const c = ((G.rt[v.id] || {})[g] || {})[key] || {}, L = limits(v, 'range');
           return `<input type="number" step="any" data-grt="${v.id}|${g}|${key}|lo" value="${esc(c.lo ?? '')}" placeholder="${esc(L.lo ?? 'min')}" style="width:62px" title="Min"><span class="legend-note">–</span><input type="number" step="any" data-grt="${v.id}|${g}|${key}|hi" value="${esc(c.hi ?? '')}" placeholder="${esc(L.hi ?? 'max')}" style="width:62px" title="Max">${forced !== undefined ? `<span class="gen-forced" title="Centre used for the difference asked">→ ${+(+forced).toFixed(2)}</span>` : ''}`; }
-        return `<input type="number" step="any" data-gt="${v.id}|${g}|${key}" value="${esc(t ?? '')}" placeholder="${esc(e.mean ?? '')}" style="width:72px" title="Mean"><span class="legend-note" title="SD of this group at this visit (empty: the SD of the variable)">±</span><input type="number" step="any" min="0" data-gsdt="${v.id}|${g}|${key}" value="${esc((((G.sdt[v.id] || {})[g] || {})[key]) ?? '')}" placeholder="${esc(+sdOf(v).toFixed(2))}" style="width:58px" title="SD of this group${key !== 'once' ? ' at this visit' : ''} (empty: the SD of the variable)">${forced !== undefined ? `<span class="gen-forced" title="Mean used for the difference asked">→ ${+(+forced).toFixed(2)}</span>` : ''}`; }
+        return `<input type="number" step="any" data-gt="${v.id}|${g}|${key}" value="${esc(t ?? '')}" placeholder="${esc(bgOf(v, g, key).mean ?? e.mean ?? '')}" style="width:72px" title="Mean (empty: the expected value of this group, else of the variable)"><span class="legend-note" title="SD of this group at this visit (empty: the SD of the variable)">±</span><input type="number" step="any" min="0" data-gsdt="${v.id}|${g}|${key}" value="${esc((((G.sdt[v.id] || {})[g] || {})[key]) ?? '')}" placeholder="${esc(bgOf(v, g, key).sd ?? +sdOf(v).toFixed(2))}" style="width:58px" title="SD of this group${key !== 'once' ? ' at this visit' : ''} (empty: the SD of the variable)">${forced !== undefined ? `<span class="gen-forced" title="Mean used for the difference asked">→ ${+(+forced).toFixed(2)}</span>` : ''}`; }
       const fz = forced !== undefined ? `<span class="gen-forced" title="% used for the difference asked">→ ${forced.map(x => +(100 * x).toFixed(1)).join(', ')}%</span>` : '';
-      if (v.type === 'yn' || v.cats.length === 2) return `<input type="number" min="0" max="100" step="any" data-gtp="${v.id}|${g}|${key}" value="${esc(Array.isArray(t) ? +(t[0]).toFixed(1) : '')}" placeholder="${esc(((e.pct || [])[0]) ?? 50)}" style="width:70px" title="% ${esc(v.cats[0])}">${fz}`;
-      return `<input type="text" data-gtc="${v.id}|${g}|${key}" value="${esc(Array.isArray(t) ? t.join(', ') : '')}" placeholder="${esc((e.pct || []).join(', '))}" style="width:130px" title="% of ${esc(v.cats.join(', '))}">${fz}`; };
+      if (v.type === 'yn' || v.cats.length === 2) return `<input type="number" min="0" max="100" step="any" data-gtp="${v.id}|${g}|${key}" value="${esc(Array.isArray(t) ? +(t[0]).toFixed(1) : '')}" placeholder="${esc(((bgOf(v, g, key).pct || [])[0] ?? '') !== '' ? bgOf(v, g, key).pct[0] : ((e.pct || [])[0]) ?? 50)}" style="width:70px" title="% ${esc(v.cats[0])}">${fz}`;
+      return `<input type="text" data-gtc="${v.id}|${g}|${key}" value="${esc(Array.isArray(t) ? t.join(', ') : '')}" placeholder="${esc(((bgOf(v, g, key).pct || []).some(x => x !== '') ? bgOf(v, g, key).pct : (e.pct || [])).join(', '))}" style="width:130px" title="% of ${esc(v.cats.join(', '))}">${fz}`; };
     return keys.map(key => `<div class="gen-cell">${keys.length > 1 || key !== 'once' ? `<span class="legend-note">${esc(visitName(D, key))}</span>` : ''}${one(key)}</div>`).join('');
   }
   // the name of a variable and its own settings: how numbers are made, the difference between the groups, missing values, draw again
@@ -44840,6 +44845,7 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
     const tail = (linkI >= 0 ? `<div class="gen-vlink">${linkRow(D, D.vars.filter(x => ['num', 'calc', 'yn', 'cat'].includes(x.type)), G.corr[linkI], linkI)}<div class="legend-note">The settings above are replaced by this link (Values: drawn by the generator to undo).</div></div>` : '')
       + (myIfs.length ? `<div class="gen-vifs">${myIfs.map(([r, i]) => ifRow(D, r, i)).join('')}</div>` : '');
     return `<div class="gen-vhead"><b>${esc(v.label)}</b>${v.unit ? ` <span class="legend-note">(${esc(v.unit)})</span>` : ''}${card ? '' : '<br>'}<span class="gen-ctls">${from} ${how} ${sig}
+      ${[G.targets, G.sdt, G.rt].some(o => o && o[v.id] && Object.keys(o[v.id]).length) ? `<button class="btn ghost small" type="button" data-gfromexp="${v.id}" title="Clear the values typed here for this variable: it is drawn from the expected values (of each group if entered in 🧱 Build, else of the variable)">↺ Expected values</button>` : ''}
       <button class="btn ghost small" type="button" data-gifadd="${v.id}" title="If another variable has a value (e.g. Diabetes = Yes, Age ≥ 60), then this variable is set, drawn from a mean ± SD, changed, given a category in a % of patients, or left empty">＋ If…</button>
       <label class="gen-ctl">missing % <input type="number" min="0" max="100" step="any" data-gmiss="${v.id}" value="${esc(GX('miss', v) ?? '')}" placeholder="${esc(G.missAll)}" style="width:54px"></label>
       <button class="btn ghost small ${moreOpen(v) ? 'on' : ''}" type="button" data-gmore="${v.id}" title="Shape, rounding, effect size, pattern over the visits, subgroup">⋯ More${moreCount(v) ? ` (${moreCount(v)})` : ''}</button>
@@ -45178,8 +45184,9 @@ function exportAll(){const a=all(),h=['id','date',...F.map(f=>f.lab)],csv=[h.joi
     if (b.id === 'genGo') { try { resStamp++; last = generate(D); toast(`${last.length} simulated patients`); } catch (err) { console.error(err); toast('Could not generate: ' + err.message); } return render(); }
     if (b.id === 'genXlsx' && last) { U.saveUrl(URL.createObjectURL(B.buildWorkbook(D, fill(D))), fileName(D)); toast('Simulated master sheet saved'); return; }
     if (b.id === 'genSend' || b.id === 'genSend2') { send(D); return; }
+    if (b.dataset.gfromexp) { const id = b.dataset.gfromexp; [G.targets, G.sdt, G.rt].forEach(o => { if (o) delete o[id]; }); save(); U.toast('Drawn from the expected values again'); render(); live(D0()); return; }
     if (b.dataset.gifadd !== undefined) { (G.ifs = G.ifs || []).push({ if: { v: '', op: '>=', val: '' }, then: { v: b.dataset.gifadd || '', kind: '' } }); save(); return render(); }
-    if (b.dataset.gifdel !== undefined) { G.ifs.splice(+b.dataset.gifdel, 1); save(); return live(D0()); }
+    if (b.dataset.gifdel !== undefined) { G.ifs.splice(+b.dataset.gifdel, 1); save(); render(); live(D0()); return; }
     if (b.id === 'genCorrAdd') { (G.corr = G.corr || []).push({ a: '', b: '', r: 0.4 }); save(); return render(); }
     if (b.dataset.gcdel !== undefined) { G.corr.splice(+b.dataset.gcdel, 1); save(); return render(); }
     if (b.id === 'genPower') { const out = $('#genPowerOut'); out.textContent = 'Simulating…'; setTimeout(() => { try { powerOut = power(D); } catch (err) { console.error(err); powerOut = 'Failed: ' + esc(err.message); } out.innerHTML = powerOut; }, 30); return; }

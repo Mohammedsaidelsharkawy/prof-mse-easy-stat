@@ -150,14 +150,19 @@ const Stats = (() => {
     return { F, df1, df2, p, msw, etaSq: ssb / (ssb + ssw) };
   }
 
+  // the studentized-range quantile: jStat's, else (when it does not converge) by bisection on its distribution function
+  function qTukey(p, k, df) { if (!(df > 0) || !(k >= 2)) return NaN; try { const q = jStat.tukey.inv(p, k, df); if (isFinite(q) && q > 0) return q; } catch (e) { /* bisection below */ }
+    const d = Math.min(df, 5000), F = x => { try { return jStat.tukey.cdf(x, k, d); } catch (e) { return NaN; } }; let lo = 0, hi = 60;
+    for (let i = 0; i < 100; i++) { const m = (lo + hi) / 2, c = F(m); if (!isFinite(c)) return NaN; if (c < p) lo = m; else hi = m; if (hi - lo < 1e-9) break; } return (lo + hi) / 2; }
+  const ptukeyUp = (q, k, df) => { try { const c = jStat.tukey.cdf(q, k, df); return isFinite(c) ? Math.min(1, Math.max(0, 1 - c)) : NaN; } catch (e) { return NaN; } };
   function tukey(groups) {
     const a = anova(groups), k = groups.length, out = [];
-    const qc = jStat.tukey.inv(CONF, k, a.df2);
+    const qc = qTukey(CONF, k, a.df2);
     for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) {
       const d = mean(groups[i]) - mean(groups[j]);
       const se = Math.sqrt(a.msw / 2 * (1 / groups[i].length + 1 / groups[j].length));
       const q = se === 0 ? 0 : Math.abs(d) / se;
-      const p = Math.min(1, Math.max(0, 1 - jStat.tukey.cdf(q, k, a.df2)));
+      const p = ptukeyUp(q, k, a.df2);
       out.push({ i, j, diff: d, lo: d - qc * se, hi: d + qc * se, p });
     }
     return out;
@@ -312,8 +317,8 @@ const Stats = (() => {
       const a = groups[i], b = groups[j], va = variance(a) / a.length, vb = variance(b) / b.length;
       const d = mean(a) - mean(b), se = Math.sqrt(va + vb);
       const df = (va + vb) ** 2 / (va * va / (a.length - 1) + vb * vb / (b.length - 1));
-      const q = Math.abs(d) / se * Math.SQRT2, qc = jStat.tukey.inv(CONF, k, df) / Math.SQRT2;
-      out.push({ i, j, diff: d, lo: d - qc * se, hi: d + qc * se, p: Math.min(1, Math.max(0, 1 - jStat.tukey.cdf(q, k, df))) });
+      const q = Math.abs(d) / se * Math.SQRT2, qc = qTukey(CONF, k, df) / Math.SQRT2;
+      out.push({ i, j, diff: d, lo: d - qc * se, hi: d + qc * se, p: ptukeyUp(q, k, df) });
     }
     return out;
   }

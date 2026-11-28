@@ -250,6 +250,9 @@ This writes `Prof_MSE_Easy_Stat.html` at the repository root.
 
 ## Newest additions
 
+**Fixed: “tukey.inv failed to converge”** — Tukey and Games-Howell comparisons (three groups or more) no longer stop the analysis: when jStat's studentized-range quantile does not converge, it is found by bisection (results that worked before are unchanged).
+**Generate: the expected values when a box is empty** — each empty group box shows (in grey) the value it will use: the expected value of that group (🧱 Build → Expected values in each group), else of the variable (Expected values); **↺ Expected values** on a variable clears what was typed for it in Generate.
+**🧱 Build → 2 · Groups & visits**: the total number of patients and the number in each group (moved from 1 · Study).
 **🧱 Build → Variables → 🎲 Generate this variable**: under each variable's editor, the full card of 🎲 Generate the data for it (values drawn or made from another variable, Generate by, SD, min/max, difference between groups, ＋ If…, missing %, ⋯ More, Redraw, the targets of each group and visit) and, with 🎲 Generate and show its results, its output as in Generate (asked vs obtained, the data of each group — editable case by case — the summary, the comparisons, the comment and the figure); the same settings and patients as in Generate.
 **🧱 Build → Variables**: the selected variables move to a section picked from a list (or ＋ New section…); each section has ＋ (a new variable in it) and ↑ ↓; **drag and drop** a variable onto another variable or a section, and a visit onto another visit; **Collected at: ✓ All / First only**.
 **Number of groups** in 🧱 Build (Groups & visits) and in 🎲 Generate (top line): groups added as Group A, B, C… or removed from the end.
